@@ -135,9 +135,14 @@ const DATA_FORMATS: &[&str] = &[
     "bitstamp",
     "bitfinex",
     "coinbase",
+    "coinbase-level3",
+    "kraken-l3",
+    "hyperliquid-node",
     "tardis-l2",
+    "iex-deep-plus",
 ];
 const BBO: &[&str] = &["none", "change", "full"];
+const DQ_FAIL_ON: &[&str] = &["warn", "fail", "never"];
 const TRAJ: &[&str] = &["none", "ahead", "full"];
 const TRADES: &[&str] = &["before", "after"];
 const MODE: &[&str] = &["faithful", "corrected"];
@@ -290,8 +295,8 @@ pub(crate) const COMMANDS: &[Cmd] = &[
                 "venue",
                 Kind::Str,
                 "venue",
-                "venue rule set (nasdaq, cme, coinbase, crypto_l3, generic; generic resolves to crypto_l3 for Bitstamp, \
-                 Bitfinex and Coinbase captures)",
+                "venue rule set (nasdaq, cme, coinbase, crypto_l3, iex, generic; generic resolves to crypto_l3 for the \
+                 crypto L3 formats: bitstamp, bitfinex, coinbase, coinbase-level3, kraken-l3, hyperliquid-node)",
             ),
             r("out", Kind::Str, "out", "output dataset directory"),
             f("symbols", Kind::StrList, "symbols", "symbol filter"),
@@ -313,7 +318,8 @@ pub(crate) const COMMANDS: &[Cmd] = &[
                 "option",
                 Kind::KeyValue,
                 "options",
-                "format option KEY=VALUE (repeatable)",
+                "format option KEY=VALUE, VALUE parsed as JSON when it parses (repeatable; e.g. depth, \
+                 checksum_precision for kraken-l3; snapshot_block, max_block_gap_ms for hyperliquid-node)",
             ),
             f(
                 "strict",
@@ -365,7 +371,12 @@ pub(crate) const COMMANDS: &[Cmd] = &[
                 "compare derived trades with source prints",
             ),
             f("parity-bbo", Kind::Path, "parity_bbo", "et bbo.csv reference"),
-            f("venue", Kind::Str, "venue", "venue rule override"),
+            f(
+                "venue",
+                Kind::Str,
+                "venue",
+                "rule set override (nasdaq, cme, coinbase, crypto_l3, iex, generic; default the manifest's rule_set)",
+            ),
             f(
                 "strict",
                 Kind::Flag,
@@ -861,6 +872,73 @@ pub(crate) const COMMANDS: &[Cmd] = &[
                 "leaderboard_sort_horizon_ns",
                 "zoo leaderboard sort horizon (default 60s)",
             ),
+        ],
+        positional: &[],
+        globals: Globals::None,
+        hidden: false,
+    },
+    Cmd {
+        path: &["dq"],
+        imp: Implementation::Python,
+        about: "data-quality checks of a dataset: JSON and HTML report",
+        flags: &[
+            r("data", Kind::Path, "dataset", "dataset directory"),
+            r(
+                "out",
+                Kind::Str,
+                "out",
+                "output directory (dq_report.json, dq_report.html)",
+            ),
+            f(
+                "compare",
+                Kind::Path,
+                "compare",
+                "second dataset of the same sessions (cross-source parity)",
+            ),
+            f("checks", Kind::StrList, "checks", "run only these check ids"),
+            f(
+                "fail-on",
+                Kind::Enum(DQ_FAIL_ON),
+                "fail_on",
+                "exit 1 when a check reaches this status (default warn)",
+            ),
+            f(
+                "max-evidence",
+                Kind::Int,
+                "max_evidence",
+                "evidence rows kept per table (default 20)",
+            ),
+            f(
+                "stale-ns",
+                Kind::Dur,
+                "stale_ns",
+                "quiet book interval with prints that counts as stale (default 60s)",
+            ),
+            f(
+                "latency-outlier-ns",
+                Kind::Dur,
+                "latency_outlier_ns",
+                "ts_recv - ts_event outlier threshold (default 10 x p99, at least 1ms)",
+            ),
+            f(
+                "session-tolerance-ns",
+                Kind::Dur,
+                "session_tolerance_ns",
+                "slack at the session open and close (default 5m)",
+            ),
+            f(
+                "no-replay",
+                Kind::NoFlag,
+                "replay",
+                "skip the exact replay (no crossed-book, print-through or trade-parity checks)",
+            ),
+            f(
+                "verify-sources",
+                Kind::Flag,
+                "verify_sources",
+                "re-hash the raw input files recorded in the manifest",
+            ),
+            f("title", Kind::Str, "title", "HTML report title"),
         ],
         positional: &[],
         globals: Globals::None,

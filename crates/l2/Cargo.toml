@@ -31,6 +31,7 @@ parquet.workspace = true
 sha2.workspace = true
 hex.workspace = true
 indexmap.workspace = true
+flate2.workspace = true
 
 [dev-dependencies]
 queuetruth-book.workspace = true

@@ -689,6 +689,15 @@ def report(spec: s.ReportSpec | dict[str, Any]) -> m.ReportSummary:
     return render(_validate(s.ReportSpec, spec))
 
 
+def dq(spec: Any) -> Any:
+    """`dq`: the data-quality battery of `queuetruth.dq` over one dataset (and, with `compare`, a second dataset of
+    the same sessions). `spec` is a `queuetruth.dq.DqSpec` or a dict of its fields; returns the `qt.dq_report`
+    (`queuetruth.dq.DqReport`) and, with `spec.out`, writes `dq_report.json` and `dq_report.html` there."""
+    from queuetruth.dq import run
+
+    return run(spec)
+
+
 def referee(spec: s.RefereeSpec | dict[str, Any]) -> m.RefereeReport:
     """`referee run` (`queuetruth.score.run_referee`)."""
     from queuetruth.score import run_referee
@@ -1513,6 +1522,7 @@ __all__ = [
     "calibrate",
     "calibrate_live",
     "dataset_kind",
+    "dq",
     "export",
     "export_replay_schedule",
     "extract_features",

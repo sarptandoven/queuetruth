@@ -98,8 +98,10 @@ Logs and progress go to stderr only.
    (`etcsv`: et's `mbo.csv` + `trades.csv` + `instruments.csv`), our own normalized Parquet, and the crypto L3
    captures et reads (Bitstamp `live_orders`/`live_trades`/`detail_order_book` JSONL, Bitfinex `book_R0`/`trades`
    JSONL, Coinbase `full` JSONL). Plus Tardis `incremental_book_L2` + `trades` CSV(.gz) as an **L2-only** dataset
-   (usable for zoo simulation and markouts, never as exact truth). Kraken L3 is out of scope for v0.1
-.
+   (usable for zoo simulation and markouts, never as exact truth). 0.2.0 (schema 1.2, 3.12) adds the order-level
+   crypto sources Coinbase Exchange `level3` (`coinbase_level3`), Kraken WebSocket v2 `level3` (`kraken_l3`, a
+   depth-window source: exact inside the subscribed window only) and Hyperliquid node outputs
+   (`hyperliquid_node`), and IEX DEEP+ (`iex_deep_plus`, 3.12.2).
 2. **Exact replay**: per-instrument venue-faithful FIFO book (port of et), event atomicity at `F_LAST`, invariant
    counters, queue-rank oracle with sweep grouping, derived BBO (change-only or full) / depth / trades, data-quality
    report, parity checks against source trades and BBO.
@@ -370,8 +372,9 @@ pub struct VenueRules {
 pub const fn rules(v: Venue) -> VenueRules;
 // rule sets are named; `crypto_l3` = generic with supports_hidden_orders =
 // false (Bitfinex hidden orders opt-in and flagged); it runs on Venue::Generic record semantics.
-pub enum RuleSet { Generic, Nasdaq, Cme, Coinbase, CryptoL3 }   // names generic|nasdaq|cme|coinbase|crypto_l3
-pub const fn rules_for(rs: RuleSet) -> VenueRules;              // FromStr: every Venue alias + crypto_l3 / crypto-l3
+// 1.2: `iex` = IEX DEEP+ (3.12.2): the nasdaq values with rule_set iex; it runs on Venue::Nasdaq record semantics.
+pub enum RuleSet { Generic, Nasdaq, Cme, Coinbase, CryptoL3, Iex }  // names generic|nasdaq|cme|coinbase|crypto_l3|iex
+pub const fn rules_for(rs: RuleSet) -> VenueRules;  // FromStr: every Venue alias + crypto_l3 / crypto-l3 + iex / iexg
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -461,13 +464,23 @@ compares the first 1,000 `next_u64` of seeds 0, 1 and `stable_seed(7, [b"a", b"b
 
 1.1 rows: `iceberg_refresh_loses_priority` = nasdaq false,
 cme true, coinbase false, generic false; `hidden_lower_priority` = nasdaq true, others false. Column `crypto_l3`
-(Bitstamp, Bitfinex, Coinbase L3 captures; M25 resolved by E38): the `generic` values with
-`supports_hidden_orders = false`; `validation` Assumed. The dataset manifest's `rule_set` (3.10) selects it;
-`ingest --venue generic` resolves to `crypto_l3` for Bitstamp, Bitfinex and Coinbase captures, and replay reads
+(Bitstamp, Bitfinex, Coinbase `full` L3 captures; 1.2: Coinbase Exchange `level3`, Kraken `level3`, Hyperliquid
+node outputs; M25 resolved by E38): the `generic` values with `supports_hidden_orders = false`; `validation`
+Assumed. The dataset manifest's `rule_set` (3.10) selects it; `ingest --venue generic` resolves to `crypto_l3` for
+every crypto L3 format (`bitstamp`, `bitfinex`, `coinbase`, `coinbase_level3`, `kraken_l3`, `hyperliquid_node`;
+not `tardis_l2`), `qt_crypto::write` records it in the manifest (0.2.0; 0.1 crypto datasets carry no `rule_set`
+and replay as `generic`), and replay reads
 `manifest.rule_set` (`qt_replay::run`, `rules_for(effective_rule_set())`). (1) CME: an `M` keeps priority only on a
 size decrease at the same price below the post-fill remaining size (5.1.1); (2) where `hidden_lower_priority`
 holds, a side-N print can fill a shadow only under the A3d rule of 5.2.4a, governed by `HiddenPrintPolicy`
 (default `behind_and_through` on Nasdaq, `ignore` elsewhere).
+
+1.2 column `iex` (IEX DEEP+, 3.12.2): every value equal to `nasdaq` (FIFO by price, display, time; `modify_records_present`
+false; `trades_have_aggressor` true; `supports_hidden_orders` true; `fill_removal_shares_sequence` true;
+`sequence_meaningful` true; `hidden_lower_priority` true; `iceberg_refresh_loses_priority` false) except `rule_set`
+= `iex`; `validation` RealData (one public day, 3.12.2). Each value cites DEEP+ v1.06, IEX-TP v1.26 or the IEX
+Rule Book in `qt_types::IEX_RULES`. `iex` runs on `Venue::Nasdaq` records, so the manifest carries `venue = nasdaq`
+and `rule_set = iex`.
 
 ### 3.3 Dataset directory (output of `ingest`, input of every engine command)
 
@@ -840,12 +853,13 @@ required unless marked `?` (nullable/optional). `Files` = list of `{name, rows?,
 | `qt.live_validation` | path, n_orders, n_events, errors [str], warnings [str] |
 | `qt.doctor` | python, platform, machine, core_version, schemas_ok, postgres?, docker?, problems [str] |
 | `qt.bench` | data, records, wall_s [float], records_per_s_median |
+| `qt.dq_report` | (1.2, `queuetruth dq`, written as `<out>/dq_report.json` next to `dq_report.html`) engine_version, spec (DqSpec echo, 4.2), dataset {path, dataset_id?, kind?, source_format?, venue?, source_venue?, rule_set?, validation_status?, partitions, records, session_dates [str], symbols [str]}, compare? (same shape), status (`pass`/`warn`/`fail`: the worst check; `skip` counts as pass), gate_failed (status reached `spec.fail_on`), counts {pass, warn, fail, skip}, checks [{id, title, status (`pass`/`warn`/`fail`/`skip`), summary, metrics {str: any}, evidence [{name, columns [str], rows [[any]], total, truncated}], notes [str]}] (ids in report order: `dq_counters`, `sequence`, `crossed_book`, `stale_book`, `orphan_refs`, `size_price`, `trade_parity`, `timestamps`, `session_coverage`, `symbology`, `snapshots`, `vintage`, `cross_source`, `rate_drift`), files (Files: the HTML page), warnings [str] |
 | `qt.dataset`, `qt.upload`, `qt.api_key`, `qt.api_key_created`, `qt.usage_report`, `qt.tenant`, `qt.meta`, `qt.health`, `qt.page` | defined in section 4.5; `qt.api_key_created.secret` is nullable (null in idempotent replays) |
-| `qt.<spec>_spec` (14 files: calibration, export, feature, hazard_fit, ingest, live_import, mirror, referee, replay, report, scorecard, shadow_sample, why, zoo) | JSON Schemas of the 4.2 spec objects, generated from `specs.py` (as built) |
+| `qt.<spec>_spec` (16 files: calibration, dq (1.2), export, feature, hazard_fit, ingest, live_calibration, live_import, mirror, referee, replay, report, scorecard, shadow_sample, why, zoo) | JSON Schemas of the 4.2 spec objects, generated from `specs.py` (as built) |
 
 Schema 1.1 document fields (all optional, absent in 1.0 documents; JSON
 `schema_version` stays the integer 1):
-- `qt.dataset_manifest`: `rule_set?` (`generic`/`nasdaq`/`cme`/`coinbase`/`crypto_l3`), `source_vintage?` [{sha256,
+- `qt.dataset_manifest`: `rule_set?` (`generic`/`nasdaq`/`cme`/`coinbase`/`crypto_l3`; 1.2: `iex`), `source_vintage?` [{sha256,
   dbn_version?, dataset?, dbn_schema?, start_ns?, end_ns?}] (DBN metadata).
 - `qt.replay_summary`: `shadow_diagnostics?` {hidden_print_fills, hidden_at_px_with_display_ahead, taker_fills,
   crossed_unfilled, behind_exec_with_ahead, excluded_requested, excluded_matched, excluded_records, twins_linked,
@@ -897,6 +911,76 @@ HazardFitSpec `zoo_shadows` (null); ReportSpec `leaderboard_sort_horizon_ns` (nu
 Not in 1.1 (requested, open): `ZooSpec`/CLI flag for the calibrate-live grid (R-E4); a `qt.zoo_summary` headline
 (R-G2). (The scorer writes `qt.score_markouts`, `qt.score_orders` and `qt.score_fills` in the 1.1 layout, with
 `mo_bps`/`mo_net_ccy` and `price_exp`/`size_exp` filled.)
+
+### 3.12 Schema 1.2 (0.2.0)
+
+Schema 1.2 is additive like 1.1 (JSON `schema_version` stays 1). It adds:
+
+- `IngestSpec.format` values `coinbase_level3`, `kraken_l3`, `hyperliquid_node` (`qt_crypto`, 4.1) and
+  `iex_deep_plus` (`qt_ingest::iex`, 3.12.2). The crypto ones take their tuning through `options` (4.1 `qt_crypto`),
+  not new spec fields, so no `run_id` default table entry is needed.
+- `qt.dq_report` and its spec `DqSpec` (`qt.dq_spec`) for `queuetruth dq` (3.10, 4.2, 4.4), registered in
+  `queuetruth.schemas` (`DOC_MODELS`, `SPEC_MODELS`; re-exported by `queuetruth.dq.model`) with JSON Schemas and
+  samples in `schemas/`. They are Python-only (no `qt_schema` mirror; listed in the Rust round-trip test's
+  `PYTHON_ONLY`), and `DqSpec` is not hashed into a `run_id`.
+- `RuleSet::Iex` (`iex`) and the manifest `rule_set` value `iex` (3.1, 3.2, 3.10).
+- `qt.data_quality.source_specific` INFO counters (never affect the verdict; `qt_ingest::dq::INFO_SOURCE_COUNTERS`):
+  `iex_modify_maintain_priority`, `iex_modify_reset_priority`, `iex_modify_noop`, `iex_duplicate_messages`,
+  `iex_other_protocol_segments`.
+- Crypto ingest warnings: `qt_crypto::Prepared::notes` (each source's exactness caveats in plain words) are written
+  as ingest warnings (`qt.ingest_summary.warnings`, and `qt.data_quality.reasons` as `warning: ...`).
+
+#### 3.12.1 Crypto L3 sources
+
+Per-format capture layout, record mapping and exactness limits: `docs/how-to/crypto-l3-sources.md`. In short:
+`coinbase_level3` is exact from a REST level-3 snapshot until the next sequence gap (a later snapshot re-seeds);
+`kraken_l3` is exact only inside the subscribed depth window (10/100/1000 levels per side, CRC32-checked after every
+message; `window_truncated_depth` is always in `source_specific`, so a Kraken dataset is never `clean`; no execution
+records, so fills cannot be attributed); `hyperliquid_node` is exact from an L4 snapshot, with fills attributed to
+maker and taker `oid`s from `node_fills`. A product or coin without a snapshot is warm-up only (a whole-range feed
+gap).
+
+#### 3.12.2 IEX DEEP+
+
+`iex_deep_plus`: IEX HIST DEEP+ (feed code `DPLS`, published T+1 at IEX HIST as one gzipped pcapng capture of the
+multicast stream per trading day) read order by order by `qt_ingest::iex`. Sources: IEX DEEP+ Specification v1.06
+(2026-10-07/08; Message Protocol ID 0x8005) and IEX Transport Specification v1.26 (2026-06-02; IEX-TP framing and
+sequencing); rule values cite the Investors Exchange Rule Book (2026-10-02). Guide and real-data run:
+`docs/how-to/iex-public-demo.md`.
+
+- Layers: `capture` (pcap / pcapng, gzip or raw; inflation cap raised to 512 GiB for this format) -> `transport`
+  (Ethernet / IPv4 / UDP, IEX-TP header and message blocks) -> `feed` (A/B duplicate removal and sequencing per
+  channel and session) -> `message` (DEEP+ layouts) -> `mapper` (MBO records and source prints); `synth` builds
+  synthetic captures for tests.
+- Spec: `venue` must resolve to rule set `iex` (`iex` or `iexg`), else `QT-CONFIG-001`; `tz` America/New_York (the
+  `nasdaq` default of 3.3, records go to the US/Eastern date of `ts_event`; session 09:30-16:00 unless `open_s` /
+  `close_s`); `price_exp` in -12..=-4 (DEEP+ prices have 4 decimals, scaled exactly; default -9); sizes in shares;
+  tick default 0.01; no `instruments` file. `source_venue` = `iex`; the manifest carries `venue = nasdaq`,
+  `rule_set = iex`.
+- Records: `sequence` = the IEX-TP message sequence number (the `T`/`F`/`C` of one message share it), so sequence
+  gaps are real feed gaps (`sequence_meaningful`), detected over the whole feed before the symbol filter;
+  `channel_id` = IEX-TP Channel ID; `ts_event` = the message Timestamp (UTC ns); `ts_recv` = the segment Send Time
+  (the Timestamp when the Send Time is earlier, counted `iex_send_time_before_event`); `F_LAST` on the last record
+  of a message per instrument; `instrument_id` = order of first appearance of the symbol in the whole feed.
+- Mapping: Add Order `a` -> `A`; Order Modify `M` with Modify Flags bit 0 = 1 (maintain priority) at the same price
+  and a smaller size -> `C` of the decrease (priority kept, Rule 11.220(a)(3)); same price and size -> nothing
+  (`iex_modify_noop`); bit 0 = 0 (reset) -> `C` of the remaining size + `A` (same id, back of the queue); bit 0 = 1
+  with a new price or a larger size -> `C` + `A`, counted `iex_modify_maintain_unrepresentable`; to size 0 -> `C`;
+  Order Delete `R` -> `C` of the remaining size; Order Executed `L` -> `T` (aggressor = opposite of the resting
+  side) + `F` + `C` of the resting order (with the single-price-cross flag 0x08 the `T` has side `N`, print kind
+  `cross`); Trade `T` (non-displayed against non-displayed) -> `T` side `N` (hidden print); Clear Book `C` -> `R`;
+  system, directory, status, halt, short-sale, retail-liquidity, security-event and trade-break messages -> no
+  records. `iex` datasets carry no `M` records.
+- Not visible in DEEP+: non-displayed orders and the hidden parts of reserve orders (their executions are hidden
+  prints), routed executions.
+- Validation: `real_data` on the strength of 2026-10-09 (`20261009_IEXTP1_DPLS1.0.pcap.gz`, SPY, AAPL, NVDA, TSLA;
+  `scripts/iex/stream_subset.py`): full stream 330,703,432 DEEP+ messages, 0 sequence gaps, 0 duplicates; ingest
+  4,435,281 records, verdict `clean`; replay invariants all 0; rank oracle 21,301 displayed executions, every one at
+  FIFO rank 0, 0 price-priority violations; control: treating the 1,742 same-price reset-priority modifies as
+  priority-keeping puts 33 executions behind the head. The channelized variant `DPLC` (16 channels, since
+  2026-08-07) uses the same messages and is sequenced per channel, but no `DPLC` day has been run.
+- Licensing: IEX HIST data may be redistributed with IEX's attribution line (`qt_ingest::iex::ATTRIBUTION`, terms
+  `TERMS_URL`; section 9 and `docs/data-and-licensing.md`). No IEX data is committed.
 
 ## 4. Public APIs
 
@@ -1011,12 +1095,27 @@ pub mod time;    // us_eastern_midnight_utc_ns(date) (DST rules as et `time.rs`)
 ```
 
 **`qt_crypto`**: `pub fn ingest(spec: &specs::IngestSpec) -> QtResult<json::IngestSummary>` for formats
-`bitstamp | bitfinex | coinbase | tardis_l2`; modules `bitstamp`, `bitfinex`, `coinbase`, `tardis` each exposing a
+`bitstamp | bitfinex | coinbase | tardis_l2` and (1.2) `coinbase_level3 | kraken_l3 | hyperliquid_node`; modules
+`bitstamp`, `bitfinex`, `coinbase`, `tardis` and (1.2) `coinbase_l3`, `kraken_l3`, `hyperliquid` (shared helpers
+in `l3util`) each exposing a
 pure converter `fn convert(lines: impl Iterator<Item = QtResult<String>>, cfg: &Config) -> QtResult<(Vec<MboEvent>|Vec<L2Row>, Vec<TradeRow>, Counters)>`
 (`Counters = BTreeMap<String, u64>`), plus `prepare(spec) -> QtResult<Prepared>` and `write(&Prepared, out)`.
 Rules: `ts_recv` falls back to `ts_event` when the capture has no receive time; Coinbase
 `full` is deduplicated by `(product_id, sequence)` (counter `duplicates_dropped`); `source_specific` keeps only
 non-zero counters; default `size_exp = -8`, tz `UTC`, `open_s = 0`, `close_s` = length of the day.
+`options` (anything else is `QT-CONFIG-001`): `taker_window_us` (bitstamp; integer or null), `flags`, `max_size`
+(bitfinex), `warmup_depth` (coinbase, default 10), `currency` (all); 1.2: `depth` (kraken_l3: 10\|100\|1000,
+default the subscribe acknowledgement's depth, else 10 with `depth_assumed`), `checksum_precision` (kraken_l3:
+`{symbol: [price_decimals, qty_decimals]}` from Kraken's `instrument` channel, used to rebuild the CRC32 input),
+`snapshot_block` (hyperliquid_node: block height of a single L4 snapshot; default `capture_meta.json`
+`snapshot_block`, else the digits of the snapshot file name), `max_block_gap_ms` (hyperliquid_node: a `block_time`
+step above it is a feed gap; default 5000, 0 = off). Input resolution: a capture directory expands to its data
+files in the source's read order (`coinbase_level3`: `book`, `level3`, `heartbeat`; `kraken_l3`: `level3`) plus
+`capture_meta.json`; for `hyperliquid_node` directories are walked recursively (at most 6 levels) and files named
+`l4*.json[.gz]` are L4 snapshots (`Inputs::snapshots`, read whole, at most 1 GiB inflated). `Prepared` gains
+`notes: Vec<String>` (1.2): the source's exactness caveats (window truth, warm-up products, no execution records),
+which `write` adds as ingest warnings (summary `warnings` and `data_quality.reasons`); `write` also records
+`Prepared::rule_set` as the manifest's `rule_set` (3.2), which 0.1 did not.
 
 **`qt_replay`**
 ```rust
@@ -1257,7 +1356,7 @@ field is `str | null` and execution-only (excluded from `run_id` and summary ech
 
 | Spec | Fields (default) |
 |---|---|
-| `IngestSpec` | format (itch\|dbn\|etcsv\|parquet\|bitstamp\|bitfinex\|coinbase\|tardis_l2), inputs [FileRef], venue (str), source_venue (null = from format), out (str), symbols ([str]\|null), session_date ("YYYY-MM-DD"\|null), midnight_utc_ns (int\|null), tz ("America/New_York"\|"UTC"\|null; null = venue default of 3.3), instruments (FileRef\|null; etcsv instruments.csv), price_exp (-9), size_exp (null = format default: 0 qt_ingest, -8 crypto), tick_size (decimal str\|null), lot_size (decimal str\|null), options (object: e.g. bitstamp taker_window_us 100; qt_ingest `open_s`, `close_s`), strict (false; must make the verdict gate apply in every format, Open conflicts); 1.1: open_s, close_s (int\|null = venue default, 3.3) |
+| `IngestSpec` | format (itch\|dbn\|etcsv\|parquet\|bitstamp\|bitfinex\|coinbase\|tardis_l2; 1.2: coinbase_level3\|kraken_l3\|hyperliquid_node\|iex_deep_plus (venue must resolve to `iex`, 3.12.2)), inputs [FileRef], venue (str), source_venue (null = from format), out (str), symbols ([str]\|null), session_date ("YYYY-MM-DD"\|null), midnight_utc_ns (int\|null), tz ("America/New_York"\|"UTC"\|null; null = venue default of 3.3), instruments (FileRef\|null; etcsv instruments.csv), price_exp (-9), size_exp (null = format default: 0 qt_ingest, -8 crypto), tick_size (decimal str\|null), lot_size (decimal str\|null), options (object: e.g. bitstamp taker_window_us 100; qt_ingest `open_s`, `close_s`; crypto keys in 4.1 `qt_crypto`), strict (false; must make the verdict gate apply in every format, Open conflicts); 1.1: open_s, close_s (int\|null = venue default, 3.3) |
 | `ReplaySpec` | dataset (DatasetRef), out (str\|null), venue (str\|null override), shadows (FileRef\|null), amends (FileRef\|null), latency (LatencyModel zeros), rank_oracle (false), sweep_gap_ns (2_000_000), bbo ("change"), depth_levels (0), trajectory ("ahead"), race_window_ns (0), real_orders (false), l2 (L2Config\|null = do not write l2), parity_trades (false), parity_bbo (FileRef\|null), strict (false), threads (1), seed (0); 1.1: fill_rule ("exact"\|"et", "exact"), hidden_print_policy ("ignore"\|"behind"\|"behind_and_through"\|null = venue default), exclude_order_ids ([{instrument_id, order_id, session_date (null = any)}]; the Python API also accepts bare integer ids) |
 | `L2Config` | depth_levels (10), cadence_ns (0), trade_position ("before"), include_counts (true), emit_hidden_trades (true) |
 | `ShadowSampleSpec` | dataset, out, n, seed (0), allocation ("equal" per instrument-day \| "proportional" to records), sides (["B","A"]), placements ([{offset_ticks:0,weight:0.6},{-1,0.2},{-2,0.1},{1,0.1}]), qty ([{kind:"lots",lots:1,weight:0.5},{kind:"median_order_size",weight:0.5}]), window_open_s (300), window_close_s (600), lifetime_ns (300_000_000_000), latency_ns (0) |
@@ -1273,6 +1372,7 @@ field is `str | null` and execution-only (excluded from `run_id` and summary ech
 | `RefereeSpec` | dataset, schedule (FileRef qt.shadow_spec), sim_fills (FileRef: canonical live dir or qt.shadow_fills parquet), simulator ({name, version\|null}; as built default {name: "unknown"}, unratified), tolerance ({max_discordant:0, max_qty_mismatch:0, max_abs_ttf_err_ns:0}), out |
 | `WhySpec` | dataset, shadows (FileRef\|null), shadow_id (str\|null), live (FileRef\|null), order_key (str\|null), max_events (5000), out (str\|null); 1.1: exclude_order_ids (as ReplaySpec) |
 | `ExportSpec` | target (hftbacktest\|nautilus\|l2_npz\|latency_npz), calibration (FileRef\|null), dataset\|null, instrument_id\|null, session_date\|null, live\|null, l2 (L2Config), feed_latency_ns (0, built), out, force (false; 1.1: write a refused calibration with the NOT VALIDATED header, 5.10) |
+| `DqSpec` | (1.2, `queuetruth.dq.model`; `qt.dq_spec`) dataset (DatasetRef path), out (str\|null = return the report, write nothing), compare (DatasetRef\|null: a second dataset of the same sessions for `cross_source`), checks ([str]\|null = all; unknown id is `QT-CONFIG-001`), fail_on ("warn"\|"fail"\|"never", "warn"), max_evidence (20, 0..10,000), stale_ns (60_000_000_000), latency_outlier_ns (int\|null = 10 x p99, at least 1 ms), session_tolerance_ns (300_000_000_000), replay (true: run the exact replay for the book checks), verify_sources (false: re-hash recorded raw inputs), title (str\|null) |
 | `LiveCalibrationSpec` | (registered in `specs.py`) dataset, live (FileRef dir), family (power\|power2\|power3\|databento\|nt_prob_touch\|nt_queue_l2_prob_touch), out, entry ("exchange_ack"), latency (null), mode ("faithful"), exchange ("partial"), l2 (L2Config), horizons_ns ([1e8, 1e9, 1e10] as ints), window_ns (60 s), grid (null = family default), train, test (WindowSpec; chronological split), particles (100), bootstrap ({b:200, block:"auto", seed:0}), seed (0), threads (1), self_exclude (true), match_window_ns (1_000_000) |
 
 ### 4.3 Python API (`queuetruth`)
@@ -1300,6 +1400,7 @@ qt.validate_live(path: str) -> list[str]                  # warnings; raises qt.
 qt.score(spec, **kw) -> qt.schemas.ScorecardSummary   # kw window_ns, match_window_ns, self_exclude override the
                                                         # spec fields and are folded into the spec before run_id
 qt.report(spec) -> qt.schemas.ReportSummary
+qt.dq(spec) -> queuetruth.dq.DqReport                     # 1.2; also queuetruth.dq.run(spec), write(report, out)
 qt.referee(spec) -> qt.schemas.RefereeReport
 qt.referee_fixtures(out: str) -> list[str]
 qt.why(spec, *, model: str | None = None, zoo: str | None = None, divergence_tol: float | None = None) -> qt.schemas.WhyTrace
@@ -1416,10 +1517,11 @@ Global flags (before or after the subcommand): `--format human|json` (default hu
 error|warn|info|debug` (warn), `--threads N` (1; outputs MUST NOT depend on N), `--seed N` (0), `--quiet`.
 Durations accept `250us`, `100ms`, `1s`, `10s`, `1m`, `5m` or integer ns. Lists are comma-separated. CLI enum values
 use hyphens where the Spec value has underscores (`no-partial` = `no_partial`, `exchange-ack` = `exchange_ack`,
-`real-orders` = `real_orders`, `tardis-l2` = `tardis_l2`, `ibkr-flex` = `ibkr_flex`, `l2-npz` = `l2_npz`); every flag
-maps to the same-named Spec field with hyphens replaced by underscores unless the table says otherwise.
+`real-orders` = `real_orders`, `tardis-l2` = `tardis_l2`, `coinbase-level3` = `coinbase_level3`, `kraken-l3` =
+`kraken_l3`, `hyperliquid-node` = `hyperliquid_node`, `iex-deep-plus` = `iex_deep_plus`, `ibkr-flex` = `ibkr_flex`,
+`l2-npz` = `l2_npz`); every flag maps to the same-named Spec field with hyphens replaced by underscores unless the table says otherwise.
 Irregular flag -> field mappings: `--midnight-ns` -> `midnight_utc_ns`; `--option K=V` ->
-`options.K`; `--in` -> `inputs[].path`; `--data` -> `dataset.path`; `--out` -> `out`; `--shadows`
+`options.K` (V parsed as JSON when it parses, else a string); `--in` -> `inputs[].path`; `--data` -> `dataset.path`; `--out` -> `out`; `--shadows`
 -> `shadows.path`; `--amends` -> `amends.path`; `--depth` -> `depth_levels`; `--date` -> `session_date`;
 `--latency F,D,G` -> `latency.{feed_ns,decision_ns,gateway_ns}`; `--jitter-ns` -> `latency.jitter_ns`; `--l2-depth`
 -> `l2.depth_levels`; `--l2-cadence-ns` -> `l2.cadence_ns`; `--l2-trades` -> `l2.trade_position`; `--write-l2` ->
@@ -1438,7 +1540,7 @@ Irregular flag -> field mappings: `--midnight-ns` -> `midnight_utc_ns`; `--optio
 `leaderboard_sort_horizon_ns`; `--fix-*` (live import) -> `fix.*`; `--zoo-shadows` -> `zoo_shadows`. `--format` is
 also accepted as `--output-format`; `ingest --format` also as `--input-format`.
 
-Grammar as built. `crates/cli/tests/golden/cli_parse.json` (58 parsed
+Grammar as built. `crates/cli/tests/golden/cli_parse.json` (64 parsed
 command lines with their command JSON) is authoritative for flag -> field mapping; the table lists every command
 path and flag (from `queuetruth <cmd> --help`). Global flags on every command: `--format human|json`, `--log-level
 error|warn|info|debug` (warn), `--threads N` (1), `--seed N` (0), `--quiet`, `--verbose` (human output: every
@@ -1467,6 +1569,7 @@ and zoo ones are folded into the spec too (`fold_replay_options`), so they chang
 | `live validate` | python | `--live` |  |
 | `score` | python | `--live`, `--out` | `--sim-log`, `--sim exact`, `--sim-model`, `--data`, `--entry exchange-ack\|send-plus-latency`, `--latency`, `--jitter-ns`, `--markout-horizons`, `--markout-refs`, `--ttf-horizons`, `--bootstrap-b`, `--bootstrap-block auto\|day\|30min`, `--fdr bh\|by`, `--q`, `--fill-rate-margin`, `--markout-margin-ticks`, `--markout-horizon`, `--fail-abs-bias`, `--fail-not-equivalent`, `--perm-b`, `--l2-depth`, `--l2-cadence-ns`, `--l2-trades before\|after`, `--window`, `--match-window-ns`, `--no-self-exclude` |
 | `report` | python | `--in`, `--out` | `--title`, `--max-why`, `--sort-horizon` |
+| `dq` | python | `--data`, `--out` | `--compare`, `--checks`, `--fail-on warn\|fail\|never`, `--max-evidence`, `--stale-ns`, `--latency-outlier-ns`, `--session-tolerance-ns`, `--no-replay`, `--verify-sources`, `--title` |
 | `referee run` | hybrid | `--data`, `--schedule`, `--sim-fills`, `--out` | `--simulator`, `--max-discordant`, `--max-qty-mismatch`, `--max-ttf-err-ns` |
 | `referee fixtures` | native | `--out` |  |
 | `fixtures synth` | native | `--out` | `--venue cme\|nasdaq`, `--sessions` |
@@ -1493,7 +1596,8 @@ Summary schemas and gates (exit 1) are unchanged from v0.1-draft except: `score`
 `verdict.gates_passed = false` (including the `own_orders_in_l2_depth` gate, 5.7.3) and 2 when nothing was scored
 (NOT SCORED); `export hftbacktest|nautilus` exit 1 with `QT-CALIB-001` when the calibration is refused unless
 `--force` (5.10); `export replay-schedule --target hftbacktest|nautilus` writes a replay adapter for the user's
-backtester (5.10); `fixtures synth` writes the quickstart dataset (`--venue cme|nasdaq`, `--sessions 1..5`);
+backtester (5.10); `dq` (1.2) writes `dq_report.json` (`qt.dq_report`) and `dq_report.html` and exits 1 when
+`gate_failed` (the worst check status reached `--fail-on`, default `warn`); `fixtures synth` writes the quickstart dataset (`--venue cme|nasdaq`, `--sessions 1..5`);
 `bench replay|l2|itch` are hidden and emit `qt.bench` (7.1); `jobs` uses `Client().jobs`; `mcp serve` runs
 `queuetruth.mcp.server.serve`. Human output is answer-first (`why_explain` / `why_suggestion` for why).
 
@@ -2074,7 +2178,8 @@ for its level. Faithful mode keeps the behaviour above. As built only `nt_queue_
 
 5.3.5 **hftbacktest npz export** (`write_hbt_npz`): structured array, 64-byte records, numpy dtype
 `[("ev","<u8"),("exch_ts","<i8"),("local_ts","<i8"),("px","<f8"),("qty","<f8"),("order_id","<u8"),("ival","<i8"),("fval","<f8")]`,
-written as `np.savez_compressed(path, data=arr)` layout (zip with `data.npy`). Flags: `EXCH_EVENT = 1<<31`,
+written in the `np.savez_compressed(path, data=arr)` layout (zip with one DEFLATE-compressed `data.npy` member, by
+the in-crate writer `qt_l2::zipw`; CRC-32 checked, fixed 1980-01-01 timestamp). Flags: `EXCH_EVENT = 1<<31`,
 `LOCAL_EVENT = 1<<30`, `BUY_EVENT = 1<<29`, `SELL_EVENT = 1<<28`; kinds `DEPTH = 1`, `TRADE = 2`,
 `DEPTH_CLEAR = 3`, `DEPTH_SNAPSHOT = 4`. Depth row -> `DEPTH | (BUY_EVENT if bid else SELL_EVENT) | EXCH | LOCAL`,
 `px = price * 10^price_exp`, `qty = new_qty * 10^size_exp`; trade -> `TRADE | (BUY_EVENT if aggressor B else

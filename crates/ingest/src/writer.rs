@@ -129,6 +129,7 @@ pub struct DatasetWriter {
     source_format: String,
     source_venue: String,
     validation: ValidationStatus,
+    rule_set: Option<qt_types::RuleSet>,
     instruments: Vec<Instrument>,
     routes: HashMap<u32, Vec<(Ts, Ts, i32)>>,
     inputs: Vec<InputFile>,
@@ -167,6 +168,7 @@ impl DatasetWriter {
             source_format: source_format.to_owned(),
             source_venue: venue.name().to_owned(),
             validation: rules(venue).validation,
+            rule_set: None,
             instruments: Vec::new(),
             routes: HashMap::new(),
             inputs: Vec::new(),
@@ -209,6 +211,12 @@ impl DatasetWriter {
     /// Validation label written to the manifest (default: the venue rules' label).
     pub fn set_validation_status(&mut self, v: ValidationStatus) {
         self.validation = v;
+    }
+
+    /// Rule set written to the manifest when it is not the venue's own (schema 1.1 `rule_set`, e.g. `iex` on
+    /// `Venue::Nasdaq` records); `None` or the venue's own rule set writes nothing.
+    pub fn set_rule_set(&mut self, rs: Option<qt_types::RuleSet>) {
+        self.rule_set = rs.filter(|&r| r != qt_types::RuleSet::from(self.venue));
     }
 
     /// Rows kept in memory before spilling (minimum 1).
@@ -463,6 +471,7 @@ impl DatasetWriter {
                 .collect::<IndexMap<_, _>>(),
             created_by: format!("queuetruth {}", qt_schema::ENGINE_VERSION),
             validation_status: self.validation,
+            rule_set: self.rule_set,
             ..Default::default()
         };
         files.push(write_json(&self.root, "manifest.json", &manifest)?);

@@ -53,6 +53,8 @@ directory with `orders.parquet` (`qt.live_orders`), `events.parquet` (`qt.live_e
 | [`qt.dataset`](#qtdataset) | A service dataset. |
 | [`qt.dataset_manifest`](#qtdataset_manifest) | `manifest.json` of a dataset directory (SPEC 3.3). |
 | [`qt.doctor`](#qtdoctor) | Result of `doctor`. |
+| [`qt.dq_report`](#qtdq_report) | 1.2: `qt.dq_report` (`queuetruth dq`, `dq_report.json`): `status` = the worst check status (`pass` when every check passed or was skipped); `gate_failed` = the status reached `spec.fail_on`. |
+| [`qt.dq_spec`](#qtdq_spec) | 1.2: `queuetruth dq` spec (`qt.dq_spec`; checks in `queuetruth.dq`). `dataset`: the dataset to check; `out`: output directory for `dq_report.json` and `dq_report.html` (null = return the report, write nothing); `compare`: a second dataset of the same session(s) for the cross-source parity check; `checks`: run only these check ids (null = all); `fail_on`: the CLI exits 1 when any check reaches this status (`warn`: warn or fail; `fail`: fail only; `never`); `max_evidence`: evidence rows kept per table; `stale_ns`: a book with no update for longer than this while trades print is stale; `latency_outlier_ns`: `ts_recv - ts_event` above this is an outlier (null = 10 x p99, at least 1 ms); `session_tolerance_ns`: slack at the session open and close before coverage warns; `replay`: run the exact replay for the book checks (crossed books, prints through the book, trade parity, replay counters); `verify_sources`: re-hash the raw input files recorded in the manifest when they still exist (otherwise only their size is compared); `title`: HTML title. |
 | [`qt.error`](#qterror) | CLI / API error object (exit code 2). |
 | [`qt.estimate`](#qtestimate) | Cost and time estimate of a job. |
 | [`qt.export_spec`](#qtexport_spec) | `export`: config snippets and npz files. |
@@ -537,7 +539,7 @@ Data-quality counters and verdict (SPEC 5.1.5).
 | `price_exp_by_instrument` | object | yes |  |  |
 | `created_by` | string | yes |  |  |
 | `validation_status` | one of "real_data", "synthetic_only", "assumed", "fixture_only" | yes |  |  |
-| `rule_set` | one of "generic", "nasdaq", "cme", "coinbase", "crypto_l3" or null | no | `null` |  |
+| `rule_set` | one of "generic", "nasdaq", "cme", "coinbase", "crypto_l3", "iex" or null | no | `null` |  |
 | `source_vintage` | array of SourceVintage or null | no | `null` |  |
 
 **`FeedGap`** (in `qt.dataset`)
@@ -618,7 +620,7 @@ File: `schemas/json/qt.dataset_manifest.schema.json`.
 | `price_exp_by_instrument` | object | yes |  |  |
 | `created_by` | string | yes |  |  |
 | `validation_status` | one of "real_data", "synthetic_only", "assumed", "fixture_only" | yes |  |  |
-| `rule_set` | one of "generic", "nasdaq", "cme", "coinbase", "crypto_l3" or null | no | `null` |  |
+| `rule_set` | one of "generic", "nasdaq", "cme", "coinbase", "crypto_l3", "iex" or null | no | `null` |  |
 | `source_vintage` | array of SourceVintage or null | no | `null` |  |
 
 **`InputFile`** (in `qt.dataset_manifest`)
@@ -686,6 +688,123 @@ Result of `doctor`.
 | `postgres` | string or null | no | `null` |  |
 | `docker` | string or null | no | `null` |  |
 | `problems` | array of string | yes |  |  |
+
+### qt.dq_report
+
+File: `schemas/json/qt.dq_report.schema.json`.
+
+1.2: `qt.dq_report` (`queuetruth dq`, `dq_report.json`): `status` = the worst check status (`pass` when every check passed or was skipped); `gate_failed` = the status reached `spec.fail_on`.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.dq_report" | yes | `"qt.dq_report"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `engine_version` | string | yes |  |  |
+| `spec` | object | yes |  |  |
+| `dataset` | DqDataset | yes |  |  |
+| `compare` | DqDataset or null | no | `null` |  |
+| `status` | one of "pass", "warn", "fail" | yes |  |  |
+| `gate_failed` | boolean | yes |  |  |
+| `counts` | DqCounts | yes |  |  |
+| `checks` | array of DqCheck | yes |  |  |
+| `files` | array of FileEntry | yes |  |  |
+| `warnings` | array of string | no |  |  |
+
+**`DqCheck`** (in `qt.dq_report`)
+
+One dq check: `status` (`pass`/`warn`/`fail`/`skip`), a one-line `summary`, the numbers behind it (`metrics`), evidence tables and caveats (`notes`).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `id` | string | yes |  |  |
+| `title` | string | yes |  |  |
+| `status` | one of "pass", "warn", "fail", "skip" | yes |  |  |
+| `summary` | string | yes |  |  |
+| `metrics` | object | no |  |  |
+| `evidence` | array of DqEvidence | no |  |  |
+| `notes` | array of string | no |  |  |
+
+**`DqCounts`** (in `qt.dq_report`)
+
+dq checks per status.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `pass` | integer | yes |  |  |
+| `warn` | integer | yes |  |  |
+| `fail` | integer | yes |  |  |
+| `skip` | integer | yes |  |  |
+
+**`DqDataset`** (in `qt.dq_report`)
+
+The dataset checked by `dq`, as its manifest describes it.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `path` | string | yes |  |  |
+| `dataset_id` | string or null | yes |  |  |
+| `kind` | string or null | yes |  |  |
+| `source_format` | string or null | yes |  |  |
+| `venue` | string or null | yes |  |  |
+| `source_venue` | string or null | yes |  |  |
+| `rule_set` | string or null | no | `null` |  |
+| `validation_status` | string or null | yes |  |  |
+| `partitions` | integer | yes |  |  |
+| `records` | integer | yes |  |  |
+| `session_dates` | array of string | yes |  |  |
+| `symbols` | array of string | yes |  |  |
+
+**`DqEvidence`** (in `qt.dq_report`)
+
+One evidence table of a dq check: the first `max_evidence` rows of `total` (`truncated` when rows were dropped). Timestamps are integer ns, prices integer fixed point in the instrument's `price_exp`.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `name` | string | yes |  |  |
+| `columns` | array of string | yes |  |  |
+| `rows` | array of array of any | yes |  |  |
+| `total` | integer | yes |  |  |
+| `truncated` | boolean | yes |  |  |
+
+**`FileEntry`** (in `qt.dq_report`)
+
+One output file: name relative to the output directory, row count for tables, size and sha256.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `name` | string | yes |  |  |
+| `rows` | integer or null | no | `null` |  |
+| `bytes` | integer | yes |  |  |
+| `sha256` | string | yes |  |  |
+
+### qt.dq_spec
+
+File: `schemas/json/qt.dq_spec.schema.json`.
+
+1.2: `queuetruth dq` spec (`qt.dq_spec`; checks in `queuetruth.dq`). `dataset`: the dataset to check; `out`: output directory for `dq_report.json` and `dq_report.html` (null = return the report, write nothing); `compare`: a second dataset of the same session(s) for the cross-source parity check; `checks`: run only these check ids (null = all); `fail_on`: the CLI exits 1 when any check reaches this status (`warn`: warn or fail; `fail`: fail only; `never`); `max_evidence`: evidence rows kept per table; `stale_ns`: a book with no update for longer than this while trades print is stale; `latency_outlier_ns`: `ts_recv - ts_event` above this is an outlier (null = 10 x p99, at least 1 ms); `session_tolerance_ns`: slack at the session open and close before coverage warns; `replay`: run the exact replay for the book checks (crossed books, prints through the book, trade parity, replay counters); `verify_sources`: re-hash the raw input files recorded in the manifest when they still exist (otherwise only their size is compared); `title`: HTML title.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `dataset` | PathRef | yes |  |  |
+| `out` | string or null | no | `null` |  |
+| `compare` | PathRef or null | no | `null` |  |
+| `checks` | array of string or null | no | `null` |  |
+| `fail_on` | one of "warn", "fail", "never" | no | `"warn"` |  |
+| `max_evidence` | integer | no | `20` |  |
+| `stale_ns` | integer | no | `60000000000` |  |
+| `latency_outlier_ns` | integer or null | no | `null` |  |
+| `session_tolerance_ns` | integer | no | `300000000000` |  |
+| `replay` | boolean | no | `true` |  |
+| `verify_sources` | boolean | no | `false` |  |
+| `title` | string or null | no | `null` |  |
+
+**`PathRef`** (in `qt.dq_spec`)
+
+Local path reference (CLI, Python API, MCP local mode).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `path` | string | yes |  |  |
 
 ### qt.error
 
@@ -1185,7 +1304,7 @@ File: `schemas/json/qt.ingest_spec.schema.json`.
 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `format` | one of "itch", "dbn", "etcsv", "parquet", "bitstamp", "bitfinex", "coinbase", "tardis_l2" | yes |  |  |
+| `format` | one of "itch", "dbn", "etcsv", "parquet", "bitstamp", "bitfinex", "coinbase", "tardis_l2", "iex_deep_plus", "coinbase_level3", "kraken_l3", "hyperliquid_node" | yes |  |  |
 | `inputs` | array of PathRef or UploadRef or JobFileRef | yes |  |  |
 | `venue` | string | yes |  |  |
 | `source_venue` | string or null | no | `null` |  |
@@ -1299,7 +1418,7 @@ Data-quality counters and verdict (SPEC 5.1.5).
 | `price_exp_by_instrument` | object | yes |  |  |
 | `created_by` | string | yes |  |  |
 | `validation_status` | one of "real_data", "synthetic_only", "assumed", "fixture_only" | yes |  |  |
-| `rule_set` | one of "generic", "nasdaq", "cme", "coinbase", "crypto_l3" or null | no | `null` |  |
+| `rule_set` | one of "generic", "nasdaq", "cme", "coinbase", "crypto_l3", "iex" or null | no | `null` |  |
 | `source_vintage` | array of SourceVintage or null | no | `null` |  |
 
 **`FeedGap`** (in `qt.ingest_summary`)

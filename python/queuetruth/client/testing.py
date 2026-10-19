@@ -474,7 +474,20 @@ class FakeService:
                 "max_jobs_running": 2,
                 "rate_limits": {"read": "120/min", "write": "30/min", "submit": "10/min"},
             },
-            "formats": ["itch", "dbn", "etcsv", "parquet", "bitstamp", "bitfinex", "coinbase", "tardis_l2"],
+            "formats": [
+                "itch",
+                "dbn",
+                "etcsv",
+                "parquet",
+                "bitstamp",
+                "bitfinex",
+                "coinbase",
+                "tardis_l2",
+                "iex_deep_plus",
+                "coinbase_level3",
+                "kraken_l3",
+                "hyperliquid_node",
+            ],
             "zero_egress": False,
         }
         return httpx.Response(200, json=doc)

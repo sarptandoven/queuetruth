@@ -1,5 +1,6 @@
 //! Dataset format and order-level ingest (SPEC 3.3, 4.1 `qt_ingest`, 5.1.6a, 8.10): `Dataset` / `Partition`
-//! (streaming, feed order), `DatasetWriter`, and `ingest()` for ITCH 5.0, DBN MBO, the et CSV layout and our Parquet.
+//! (streaming, feed order), `DatasetWriter`, and `ingest()` for ITCH 5.0, IEX DEEP+, DBN MBO, the et CSV layout and
+//! our Parquet.
 //!
 //! A dataset directory holds `manifest.json`, `instruments.parquet`, one Parquet file per
 //! `(session_date, instrument_id)` partition under `mbo/` (or `l2/`), optional `trades_source/` prints and
@@ -19,6 +20,7 @@ use qt_types::{Instrument, MboEvent, QtError, QtResult, Ts, VenueRules};
 
 pub mod dq;
 pub mod guard;
+pub mod iex;
 mod ingest_impl;
 mod seqgap;
 pub mod spill;

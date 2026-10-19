@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.dq_spec",
+  "$defs": {
+    "PathRef": {
+      "additionalProperties": false,
+      "description": "Local path reference (CLI, Python API, MCP local mode).",
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "PathRef",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "1.2: `queuetruth dq` spec (`qt.dq_spec`; checks in `queuetruth.dq`). `dataset`: the dataset to check; `out`:\noutput directory for `dq_report.json` and `dq_report.html` (null = return the report, write nothing); `compare`:\na second dataset of the same session(s) for the cross-source parity check; `checks`: run only these check ids\n(null = all); `fail_on`: the CLI exits 1 when any check reaches this status (`warn`: warn or fail; `fail`: fail\nonly; `never`); `max_evidence`: evidence rows kept per table; `stale_ns`: a book with no update for longer than\nthis while trades print is stale; `latency_outlier_ns`: `ts_recv - ts_event` above this is an outlier (null =\n10 x p99, at least 1 ms); `session_tolerance_ns`: slack at the session open and close before coverage warns;\n`replay`: run the exact replay for the book checks (crossed books, prints through the book, trade parity, replay\ncounters); `verify_sources`: re-hash the raw input files recorded in the manifest when they still exist\n(otherwise only their size is compared); `title`: HTML title.",
+  "properties": {
+    "dataset": {
+      "$ref": "#/$defs/PathRef"
+    },
+    "out": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Out"
+    },
+    "compare": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PathRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "checks": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Checks"
+    },
+    "fail_on": {
+      "default": "warn",
+      "enum": [
+        "warn",
+        "fail",
+        "never"
+      ],
+      "title": "Fail On",
+      "type": "string"
+    },
+    "max_evidence": {
+      "default": 20,
+      "maximum": 10000,
+      "minimum": 0,
+      "title": "Max Evidence",
+      "type": "integer"
+    },
+    "stale_ns": {
+      "default": 60000000000,
+      "exclusiveMinimum": 0,
+      "title": "Stale Ns",
+      "type": "integer"
+    },
+    "latency_outlier_ns": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Latency Outlier Ns"
+    },
+    "session_tolerance_ns": {
+      "default": 300000000000,
+      "minimum": 0,
+      "title": "Session Tolerance Ns",
+      "type": "integer"
+    },
+    "replay": {
+      "default": true,
+      "title": "Replay",
+      "type": "boolean"
+    },
+    "verify_sources": {
+      "default": false,
+      "title": "Verify Sources",
+      "type": "boolean"
+    },
+    "title": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Title"
+    }
+  },
+  "required": [
+    "dataset"
+  ],
+  "type": "object"
+}

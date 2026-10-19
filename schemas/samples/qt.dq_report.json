@@ -1,0 +1,94 @@
+{
+  "sample": {
+    "schema": "qt.dq_report",
+    "schema_version": 1,
+    "engine_version": "x",
+    "spec": {
+      "k": 1
+    },
+    "dataset": {
+      "path": "x",
+      "dataset_id": "x",
+      "kind": "x",
+      "source_format": "x",
+      "venue": "x",
+      "source_venue": "x",
+      "rule_set": "x",
+      "validation_status": "x",
+      "partitions": 1,
+      "records": 1,
+      "session_dates": [
+        "x"
+      ],
+      "symbols": [
+        "x"
+      ]
+    },
+    "compare": {
+      "path": "x",
+      "dataset_id": "x",
+      "kind": "x",
+      "source_format": "x",
+      "venue": "x",
+      "source_venue": "x",
+      "rule_set": "x",
+      "validation_status": "x",
+      "partitions": 1,
+      "records": 1,
+      "session_dates": [
+        "x"
+      ],
+      "symbols": [
+        "x"
+      ]
+    },
+    "status": "pass",
+    "gate_failed": true,
+    "counts": {
+      "pass": 1,
+      "warn": 1,
+      "fail": 1,
+      "skip": 1
+    },
+    "checks": [
+      {
+        "id": "x",
+        "title": "x",
+        "status": "pass",
+        "summary": "x",
+        "metrics": {
+          "k": 1
+        },
+        "evidence": [
+          {
+            "name": "x",
+            "columns": [
+              "x"
+            ],
+            "rows": [
+              [
+                1
+              ]
+            ],
+            "total": 1,
+            "truncated": true
+          }
+        ],
+        "notes": [
+          "x"
+        ]
+      }
+    ],
+    "files": [
+      {
+        "name": "x",
+        "rows": 1,
+        "bytes": 1,
+        "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      }
+    ],
+    "warnings": [
+      "x"
+    ]
+  }
+}

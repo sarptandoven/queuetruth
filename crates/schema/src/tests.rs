@@ -906,11 +906,13 @@ fn doc_roundtrip(name: &str, v: &Value) -> Option<Value> {
     })
 }
 
-/// Service-only documents of SPEC 4.5 without a Rust mirror.
-const PYTHON_ONLY: [&str; 9] = [
+/// Service-only documents of SPEC 4.5 and the Python-only `dq` documents (1.2) without a Rust mirror.
+const PYTHON_ONLY: [&str; 11] = [
     "qt.api_key",
     "qt.api_key_created",
     "qt.dataset",
+    "qt.dq_report",
+    "qt.dq_spec",
     "qt.health",
     "qt.meta",
     "qt.page",

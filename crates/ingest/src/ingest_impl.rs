@@ -28,12 +28,17 @@ use qt_schema::json::{DataQuality, FeedGap, IngestSummary, InputFile};
 use qt_schema::rows::{TradeKind, TradeRow};
 use qt_schema::specs::{IngestFormat, IngestSpec, SessionTz};
 use qt_schema::{codec, io as qio, spec_echo};
-use qt_types::{Instrument, MboEvent, QtError, QtResult, Ts, Venue, VenueRules, flags, rules};
+use qt_types::{Instrument, MboEvent, QtError, QtResult, RuleSet, Ts, Venue, VenueRules, flags, rules_for};
 use serde_json::Value;
 
 use crate::dbn::{DbnReader, Symbology, utc_day};
 use crate::dq::MboDqScan;
 use crate::etcsv::{CsvKind, MboCsvReader, detect, first_trade_ts, read_instruments_csv, read_trades_csv};
+use crate::guard::GuardLimits;
+use crate::iex::{
+    CaptureReader, FeedEvent, FeedReader as IexFeed, MapOutput as IexMapOutput, Mapper as IexMapper, MsgCtx,
+    ParseError as IexParseError, parse as iex_parse,
+};
 use crate::itch::{MapOutput, Mapper, Reader, parse, stock_str};
 use crate::seqgap::{FastMap, SeqGaps};
 use crate::time::{Date, format_date, midnight_utc_ns, parse_date, session_date_of, session_date_of_midnight, tz_name};
@@ -53,6 +58,8 @@ fn cfg(msg: impl Into<String>) -> QtError {
 /// Spec values shared by every format.
 struct Common {
     venue: Venue,
+    /// Rule set (`venue` is its record-semantics venue; `iex` runs on `Venue::Nasdaq`).
+    rule_set: RuleSet,
     rules: VenueRules,
     format: &'static str,
     price_exp: i8,
@@ -100,7 +107,19 @@ fn check_window(open_s: u32, close_s: u32, what: &str) -> QtResult<()> {
 
 impl Common {
     fn new(spec: &IngestSpec, format: &'static str) -> QtResult<Self> {
-        let venue: Venue = spec.venue.parse()?;
+        let rule_set = if format == IEX_FORMAT {
+            let rs: RuleSet = spec.venue.parse()?;
+            if rs != RuleSet::Iex {
+                return Err(cfg(format!(
+                    "venue: format {IEX_FORMAT} is IEX DEEP+ data and uses rule set iex, got {:?}",
+                    spec.venue
+                )));
+            }
+            rs
+        } else {
+            RuleSet::from(spec.venue.parse::<Venue>()?)
+        };
+        let venue = rule_set.venue();
         if !(-12..=0).contains(&spec.price_exp) {
             return Err(cfg(format!("price_exp: must be in -12..=0, got {}", spec.price_exp)));
         }
@@ -184,14 +203,15 @@ impl Common {
         };
         let (open_s, close_s) = (open_set.unwrap_or(open_d), close_set.unwrap_or(close_d));
         check_window(open_s, close_s, "")?;
-        let source_venue = spec.source_venue.clone().unwrap_or_else(|| venue.name().to_owned());
+        let source_venue = spec.source_venue.clone().unwrap_or_else(|| rule_set.name().to_owned());
         let symbols = spec
             .symbols
             .as_ref()
             .map(|v| v.iter().map(|s| s.trim().to_ascii_uppercase()).collect());
         Ok(Self {
             venue,
-            rules: rules(venue),
+            rule_set,
+            rules: rules_for(rule_set),
             format,
             price_exp: spec.price_exp,
             size_exp,
@@ -267,6 +287,8 @@ impl Common {
     fn writer(&self, out: &Path, kind: DatasetKind) -> QtResult<DatasetWriter> {
         let mut w = DatasetWriter::create(out, kind, self.venue, self.format)?;
         w.set_source_venue(&self.source_venue);
+        w.set_rule_set(Some(self.rule_set));
+        w.set_validation_status(self.rules.validation);
         if let Some(n) = self.memory_rows {
             w.set_memory_rows(n);
         }
@@ -465,6 +487,7 @@ pub(crate) fn ingest(spec: &IngestSpec) -> QtResult<IngestSummary> {
         IngestFormat::Dbn => ingest_dbn(spec, &inputs, &out)?,
         IngestFormat::Etcsv => ingest_etcsv(spec, &inputs, &out)?,
         IngestFormat::Parquet => ingest_parquet(spec, &inputs, &out)?,
+        IngestFormat::IexDeepPlus => ingest_iex(spec, &inputs, &out)?,
         other => {
             return Err(cfg(format!(
                 "format: {:?} is ingested by qt_crypto::ingest, not qt_ingest",
@@ -726,6 +749,220 @@ fn ingest_itch(spec: &IngestSpec, inputs: &[PathBuf], out: &Path) -> QtResult<In
     w.set_instruments(instruments);
     job.join(&mut w)?;
     w.finish(scan.finish())
+}
+
+// ---- IEX DEEP+ --------------------------------------------------------------------------------------------------
+
+/// `IngestSpec.format` name of IEX DEEP+.
+const IEX_FORMAT: &str = "iex_deep_plus";
+
+/// IEX HIST days are 8-18 GB of gzip inflating about 4.5x: the absolute inflation cap is raised for this format
+/// (the ratio guard is unchanged).
+const IEX_MAX_INFLATED: u64 = 512 << 30;
+
+/// One transport message seen by the sequence-gap detector (all messages, kept or not, before the symbol filter).
+#[derive(Clone, Copy)]
+struct IexObs {
+    seq: u64,
+    channel: u16,
+    ts: Ts,
+    kept: Option<u32>,
+    /// A new IEX-TP session on the channel: its numbering restarts.
+    reset: bool,
+}
+
+#[derive(Default)]
+struct IexBlock {
+    mbo: Vec<MboEvent>,
+    trades: Vec<TradeRow>,
+    obs: Vec<IexObs>,
+}
+
+/// Mapper and transport counters of one input.
+struct IexDone {
+    mapper: IexMapper,
+    feed: Vec<(String, u64)>,
+    feed_stats: crate::iex::FeedStats,
+}
+
+/// IEX DEEP+ pcap / pcapng (gzip or raw). Timestamps are UTC ns, so records route to the local date (default
+/// America/New_York) of their `ts_event`; `instrument_id`s are assigned per symbol in order of first appearance and
+/// shared by every input of the ingest. Record `sequence` is the IEX-TP message sequence number and gaps are
+/// detected over the whole feed (`sequence_meaningful` of the `iex` rule set).
+fn ingest_iex(spec: &IngestSpec, inputs: &[PathBuf], out: &Path) -> QtResult<IngestSummary> {
+    let c = Common::new(spec, IEX_FORMAT)?;
+    no_instruments_file(spec, IEX_FORMAT)?;
+    let mut mapper = IexMapper::new(spec.symbols.as_deref(), c.price_exp)?;
+    let limits = GuardLimits {
+        max_bytes: IEX_MAX_INFLATED,
+        ..GuardLimits::default()
+    };
+    let mut w = c.writer(out, DatasetKind::Mbo)?;
+    let job = InputsJob::start(inputs);
+    let mut scan = MboDqScan::new();
+    let mut gaps = SeqGaps::new(c.rules.sequence_meaningful);
+    let mut dates = Dates::new();
+    let mut tpl = Templates::default();
+    let mut feed_totals: BTreeMap<String, u64> = BTreeMap::new();
+    let mut fs_total = crate::iex::FeedStats::default();
+    for path in inputs {
+        mapper.reset_book();
+        let (tx, rx) = std::sync::mpsc::sync_channel::<QtResult<IexBlock>>(4);
+        let path_owned = path.clone();
+        let producer = std::thread::spawn(move || -> QtResult<IexDone> {
+            let mut feed = IexFeed::new(CaptureReader::open(&path_owned, limits)?);
+            let mut block = IexBlock::default();
+            let mut one = IexMapOutput::default();
+            let mut last_ts: Ts = 0;
+            let res = feed.for_each(|ev| {
+                match ev {
+                    FeedEvent::NewSession { channel, send_time, .. } => block.obs.push(IexObs {
+                        seq: 0,
+                        channel: u16::try_from(channel).unwrap_or(u16::MAX),
+                        ts: send_time,
+                        kept: None,
+                        reset: true,
+                    }),
+                    FeedEvent::Message(m) => {
+                        let channel = u16::try_from(m.channel).unwrap_or(u16::MAX);
+                        let ctx = MsgCtx {
+                            seq: m.seq,
+                            channel,
+                            send_time: m.send_time,
+                        };
+                        let mut kept = None;
+                        match iex_parse(m.data) {
+                            Ok(msg) => {
+                                mapper.apply(ctx, &msg, &mut one)?;
+                                if let Some(t) = msg.ts() {
+                                    last_ts = t;
+                                }
+                                kept = one.mbo.first().map(|e| e.instrument_id);
+                                block.mbo.append(&mut one.mbo);
+                                block.trades.append(&mut one.trades);
+                            }
+                            Err(e) => mapper.note_unparsed(matches!(e, IexParseError::Short { .. })),
+                        }
+                        block.obs.push(IexObs {
+                            seq: m.seq,
+                            channel,
+                            ts: last_ts,
+                            kept,
+                            reset: false,
+                        });
+                    }
+                }
+                if block.mbo.len() >= 32_768 || block.obs.len() >= 65_536 {
+                    let full = std::mem::take(&mut block);
+                    if tx.send(Ok(full)).is_err() {
+                        return Err(QtError::Engine("IEX writer stopped".into()));
+                    }
+                }
+                Ok(())
+            });
+            match res {
+                Ok(()) => {
+                    let _ = tx.send(Ok(block));
+                }
+                Err(e) => {
+                    let _ = tx.send(Err(e));
+                }
+            }
+            Ok(IexDone {
+                feed: feed.named(),
+                feed_stats: feed.stats.clone(),
+                mapper,
+            })
+        });
+        let mut failure = None;
+        for block in rx.iter() {
+            let block = match block {
+                Ok(b) => b,
+                Err(e) => {
+                    failure = Some(e);
+                    break;
+                }
+            };
+            for o in &block.obs {
+                let date = dates.of(&c, o.ts)?;
+                let probe = MboEvent {
+                    ts_event: o.ts,
+                    ts_recv: o.ts,
+                    action: b'N',
+                    side: b'N',
+                    sequence: o.seq,
+                    channel_id: o.channel,
+                    flags: if o.reset { flags::SNAPSHOT } else { 0 },
+                    ..MboEvent::default()
+                };
+                gaps.observe(&probe, date, o.kept);
+            }
+            // OC-28: side-N prints flagged single-price cross are cross prints, not hidden prints.
+            let crosses: std::collections::HashSet<(u32, u64)> = block
+                .trades
+                .iter()
+                .filter(|t| t.kind == TradeKind::Cross)
+                .map(|t| (t.instrument_id, t.sequence))
+                .collect();
+            for e in &block.mbo {
+                let date = dates.of(&c, e.ts_event)?;
+                scan.record(e, date, &c.rules);
+                if e.action == b'T' && e.side == b'N' && crosses.contains(&(e.instrument_id, e.sequence)) {
+                    scan.cross_print();
+                }
+                w.push_mbo_at(e, date)?;
+                tpl.see(date, e.instrument_id);
+            }
+            for t in &block.trades {
+                let date = dates.of(&c, t.ts_event)?;
+                w.push_source_trade_at(t, date)?;
+            }
+        }
+        drop(rx);
+        let done = producer
+            .join()
+            .map_err(|_| QtError::Engine("IEX reader thread panicked".into()))??;
+        if let Some(e) = failure {
+            return Err(e);
+        }
+        mapper = done.mapper;
+        for (k, v) in done.feed {
+            *feed_totals.entry(k).or_insert(0) += v;
+        }
+        let f = done.feed_stats;
+        fs_total.duplicate_messages += f.duplicate_messages;
+        fs_total.other_protocol_segments += f.other_protocol_segments;
+    }
+    let stats = mapper.finish().clone();
+    let a = &stats.anomalies;
+    let dq = scan.counters_mut();
+    dq.unknown_order_refs += a.unknown_order_ref;
+    dq.duplicate_adds += a.duplicate_order_ref;
+    for (k, v) in a.named() {
+        if k != "iex_unknown_order_ref" && k != "iex_duplicate_order_ref" {
+            scan.add_source(k, v);
+        }
+    }
+    for (k, v) in &feed_totals {
+        scan.add_source(k, *v);
+    }
+    scan.add_source("iex_symbols_not_found", stats.symbols_not_found.len() as u64);
+    // INFO counters (dq::INFO_SOURCE_COUNTERS): volumes, never part of the verdict.
+    scan.add_source("iex_modify_maintain_priority", stats.modify_maintain_priority);
+    scan.add_source("iex_modify_reset_priority", stats.modify_reset_priority);
+    scan.add_source("iex_modify_noop", stats.modify_noop);
+    scan.add_source("iex_duplicate_messages", fs_total.duplicate_messages);
+    scan.add_source("iex_other_protocol_segments", fs_total.other_protocol_segments);
+    for (i, info) in mapper.instruments.iter().enumerate() {
+        if info.selected {
+            tpl.symbol.insert(i as u32 + 1, info.symbol.clone());
+        }
+    }
+    tpl.apply(&c, &mut scan, &mut w)?;
+    job.join(&mut w)?;
+    let mut dq = scan.finish();
+    gaps.finish(&mut dq);
+    w.finish(dq)
 }
 
 // ---- DBN --------------------------------------------------------------------------------------------------------

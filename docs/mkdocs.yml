@@ -46,6 +46,9 @@ nav:
       - Import fills from my venue or broker: how-to/import-live-logs.md
       - Explain one fill: how-to/explain-one-fill.md
       - Use queuetruth from an agent (MCP): how-to/use-from-an-agent.md
+      - Check a feed before you trust it: how-to/check-a-feed.md
+      - Ingest order-level crypto feeds: how-to/crypto-l3-sources.md
+      - Replay a public IEX DEEP+ day: how-to/iex-public-demo.md
   - Reference:
       - CLI: reference/cli.md
       - Python API: reference/python-api.md

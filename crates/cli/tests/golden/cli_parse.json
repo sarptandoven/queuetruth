@@ -125,6 +125,185 @@
   {
     "argv": [
       "queuetruth",
+      "ingest",
+      "--format",
+      "coinbase-level3",
+      "--in",
+      "capture",
+      "--venue",
+      "generic",
+      "--out",
+      "ds"
+    ],
+    "command": {
+      "path": [
+        "ingest"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "format": "coinbase_level3",
+        "inputs": [
+          {
+            "path": "capture"
+          }
+        ],
+        "venue": "generic",
+        "out": "ds"
+      },
+      "implementation": "native"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "ingest",
+      "--format",
+      "kraken-l3",
+      "--in",
+      "level3.jsonl.gz",
+      "--venue",
+      "crypto_l3",
+      "--out",
+      "ds",
+      "--option",
+      "depth=1000",
+      "--option",
+      "checksum_precision={\"BTC/USD\":[1,8]}"
+    ],
+    "command": {
+      "path": [
+        "ingest"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "format": "kraken_l3",
+        "inputs": [
+          {
+            "path": "level3.jsonl.gz"
+          }
+        ],
+        "venue": "crypto_l3",
+        "out": "ds",
+        "options": {
+          "depth": 1000,
+          "checksum_precision": {
+            "BTC/USD": [
+              1,
+              8
+            ]
+          }
+        }
+      },
+      "implementation": "native"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "ingest",
+      "--format",
+      "hyperliquid-node",
+      "--in",
+      "hl/data",
+      "--venue",
+      "generic",
+      "--out",
+      "ds",
+      "--symbols",
+      "BTC",
+      "--option",
+      "snapshot_block=812345678",
+      "--option",
+      "max_block_gap_ms=5000"
+    ],
+    "command": {
+      "path": [
+        "ingest"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "format": "hyperliquid_node",
+        "inputs": [
+          {
+            "path": "hl/data"
+          }
+        ],
+        "venue": "generic",
+        "out": "ds",
+        "symbols": [
+          "BTC"
+        ],
+        "options": {
+          "snapshot_block": 812345678,
+          "max_block_gap_ms": 5000
+        }
+      },
+      "implementation": "native"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "ingest",
+      "--format",
+      "iex-deep-plus",
+      "--in",
+      "20261007_IEXTP1_DEEP1.0.pcap.gz",
+      "--venue",
+      "iex",
+      "--out",
+      "ds",
+      "--symbols",
+      "AAPL"
+    ],
+    "command": {
+      "path": [
+        "ingest"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "format": "iex_deep_plus",
+        "inputs": [
+          {
+            "path": "20261007_IEXTP1_DEEP1.0.pcap.gz"
+          }
+        ],
+        "venue": "iex",
+        "out": "ds",
+        "symbols": [
+          "AAPL"
+        ]
+      },
+      "implementation": "native"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
       "--format",
       "json",
       "ingest",
@@ -1779,6 +1958,100 @@
         "title": "My report",
         "max_why": 5,
         "leaderboard_sort_horizon_ns": 10000000000
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "dq",
+      "--data",
+      "ds",
+      "--out",
+      "dq"
+    ],
+    "command": {
+      "path": [
+        "dq"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "dataset": {
+          "path": "ds"
+        },
+        "out": "dq"
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "dq",
+      "--data",
+      "itch_ds",
+      "--out",
+      "dq",
+      "--compare",
+      "dbn_ds",
+      "--checks",
+      "sequence,cross_source,vintage",
+      "--fail-on",
+      "fail",
+      "--max-evidence",
+      "50",
+      "--stale-ns",
+      "30s",
+      "--latency-outlier-ns",
+      "5ms",
+      "--session-tolerance-ns",
+      "10m",
+      "--no-replay",
+      "--verify-sources",
+      "--title",
+      "Nasdaq 2019-12-30",
+      "--format",
+      "json"
+    ],
+    "command": {
+      "path": [
+        "dq"
+      ],
+      "global": {
+        "format": "json",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "dataset": {
+          "path": "itch_ds"
+        },
+        "out": "dq",
+        "compare": {
+          "path": "dbn_ds"
+        },
+        "checks": [
+          "sequence",
+          "cross_source",
+          "vintage"
+        ],
+        "fail_on": "fail",
+        "max_evidence": 50,
+        "stale_ns": 30000000000,
+        "latency_outlier_ns": 5000000,
+        "session_tolerance_ns": 600000000000,
+        "replay": false,
+        "verify_sources": true,
+        "title": "Nasdaq 2019-12-30"
       },
       "implementation": "python"
     }

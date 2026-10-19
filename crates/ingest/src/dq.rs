@@ -9,9 +9,19 @@ use qt_types::{MboEvent, VenueRules, flags};
 
 /// `source_specific` counters reported for information only, never part of the verdict: zero-share ITCH
 /// opening / closing crosses (sent for every issue after each cross), ITCH cross prints (OC-28: a
-/// `Q` print is neither a hidden print nor an anomaly) and DBN instrument ids remapped from the definitions
-/// (Databento re-issues remap ids routinely).
-pub const INFO_SOURCE_COUNTERS: [&str; 3] = ["itch_zero_share_cross", "cross_prints", "dbn_instrument_id_remapped"];
+/// `Q` print is neither a hidden print nor an anomaly), DBN instrument ids remapped from the definitions
+/// (Databento re-issues remap ids routinely) and the IEX DEEP+ volumes of priority-maintaining / priority-resetting /
+/// no-op Order Modify messages, A/B duplicate messages dropped and segments of other IEX-TP protocols.
+pub const INFO_SOURCE_COUNTERS: [&str; 8] = [
+    "itch_zero_share_cross",
+    "cross_prints",
+    "dbn_instrument_id_remapped",
+    "iex_modify_maintain_priority",
+    "iex_modify_reset_priority",
+    "iex_modify_noop",
+    "iex_duplicate_messages",
+    "iex_other_protocol_segments",
+];
 
 /// Whether a `source_specific` counter is an INFO counter (`INFO_SOURCE_COUNTERS`).
 pub fn is_info_source_counter(name: &str) -> bool {

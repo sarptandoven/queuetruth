@@ -191,7 +191,9 @@ What to keep in mind when reading these:
   (`scripts/realdata/itch_subset.py` streams one public day file and keeps the messages of the chosen symbols, the
   raw file is never stored; `scripts/realdata/itch_realbytes.py` runs the checks). `make reproduce`
   (`scripts/repro/reproduce.py`) computes the published leaderboard, RD-9, RD-10 and the oracle from the raw bytes
-  alone; on the same build the leaderboard and RD-9 equal the same runs on the CSV conversion cell for cell.
+  alone; on the same build the leaderboard and RD-9 equal the same runs on the CSV conversion cell for cell, and its
+  rerun on the 0.1.0 commit (`4be5240`) reproduced the leaderboard, the four calibrations, the learned model and the
+  oracle identically ([provenance](RESULTS.md#provenance)).
   `make reproduce-breadth` runs the 36-symbol breadth study. RD-7, RD-11, RD-12 and RD-13 have not been repeated on
   the ITCH-ingested datasets. The CSV conversion merges hidden and cross prints, so the hidden-print rule
   ([A3](concepts/audit-rules.md#a3-hidden-prints)) is checked on real data only from the raw files.

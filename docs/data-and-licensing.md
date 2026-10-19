@@ -99,9 +99,11 @@ Short summaries of the terms as we read them on 2026-10-18. Follow the links for
 
   IEX keeps its proprietary rights, and the data covers trading on IEX only. These are the most permissive terms we
   found for real order-level data, which makes IEX DEEP+ the intended public demo source: event-level traces and
-  example datasets built from it can be published when every artifact carries the line above. v0.1 has no IEX reader;
-  a DEEP+ pcap reader is planned. DEEP+ does not show non-displayed orders, so their executions appear as trades
-  without a resting order, which maps onto queuetruth's hidden-print handling.
+  example datasets built from it can be published when every artifact carries the line above. queuetruth 0.2.0
+  reads DEEP+ pcap files (`ingest --format iex-deep-plus`, rule set `iex`; see
+  [Replay a public IEX DEEP+ day](how-to/iex-public-demo.md)), and `scripts/iex/stream_subset.py` records the
+  attribution line in its subset manifest. DEEP+ does not show non-displayed orders, so their executions appear as
+  trades without a resting order, which maps onto queuetruth's hidden-print handling.
 - **Binance Vision** ([binance-public-data terms](https://github.com/binance/binance-public-data/blob/master/TERMS_AND_CONDITIONS.md),
   added 2026-09-30). The public archive (`data.binance.vision`: trades, aggregated trades and klines, no order book)
   is licensed under Creative Commons Attribution-NonCommercial-ShareAlike 4.0, and commercial licensing is excluded.
@@ -121,7 +123,8 @@ Short summaries of the terms as we read them on 2026-10-18. Follow the links for
   sequence number, so dropped authenticated messages cannot be detected from the sequence; and Kraken L3 is exact
   only within the subscribed depth (10, 100 or 1,000 levels), sends no delete when a level leaves that window, adds
   orders again when they re-enter it, and excludes in-flight orders, unmatched market orders, untriggered stops and
-  hidden iceberg quantity. v0.1 has no Kraken L3 reader.
+  hidden iceberg quantity. queuetruth 0.2.0 reads both captures (`coinbase-level3`, `kraken-l3`; see
+  [Ingest order-level crypto feeds](how-to/crypto-l3-sources.md)).
 - **Bitstamp, Bitfinex.** We found no primary market-data redistribution terms. Ask the venue.
 
 ## Third-party capture and normalization tools
@@ -178,7 +181,7 @@ credentials).
 - Models or reports derived from Coinbase or Tardis data are never offered by the service to anyone but the customer
   who uploaded the data.
 - Do not upload Binance Vision archive files: their terms prohibit hosting. Reports of IEX HIST data must carry
-  IEX's attribution line when shared; v0.1 does not add it automatically.
+  IEX's attribution line when shared; queuetruth does not add it to datasets or reports automatically.
 
 ## For firms: a derived-data register
 

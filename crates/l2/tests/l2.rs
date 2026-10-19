@@ -483,36 +483,51 @@ fn le32(b: &[u8], o: usize) -> u32 {
     u32::from_le_bytes(b[o..o + 4].try_into().unwrap())
 }
 
-/// The bytes of the only member of a (non-ZIP64) zip archive, checked to be STORED, named `name`, with matching
-/// local / central sizes, a DOS 1980-01-01 timestamp and an end-of-central-directory record that covers the file.
-fn stored_zip_single_member(z: &[u8], name: &str) -> Vec<u8> {
+/// The uncompressed bytes of the only member of a (non-ZIP64) zip archive, checked to be DEFLATE (as
+/// `np.savez_compressed` writes it), named `name`, with no data descriptor, matching local / central method, CRC and
+/// sizes, a DOS 1980-01-01 timestamp and an end-of-central-directory record that covers the file. The member is
+/// inflated with `flate2::read::DeflateDecoder`, which must consume exactly the compressed size.
+fn deflated_zip_single_member(z: &[u8], name: &str) -> Vec<u8> {
     let eocd = z.len() - 22;
     assert_eq!(le32(z, eocd), 0x0605_4b50, "EOCD at the end (no comment)");
     assert_eq!((le16(z, eocd + 8), le16(z, eocd + 10)), (1, 1), "one entry");
     let (cd_size, cd_off) = (le32(z, eocd + 12) as usize, le32(z, eocd + 16) as usize);
     assert_eq!(cd_off + cd_size, eocd);
     assert_eq!(le32(z, cd_off), 0x0201_4b50);
-    assert_eq!(le16(z, cd_off + 10), 0, "STORED");
+    assert_eq!(le16(z, cd_off + 8), 0, "flags: no data descriptor");
+    assert_eq!(le16(z, cd_off + 10), 8, "DEFLATE");
     assert_eq!(
         (le16(z, cd_off + 12), le16(z, cd_off + 14)),
         (0, 0x21),
         "1980-01-01 00:00"
     );
+    let csize = le32(z, cd_off + 20) as usize;
     let size = le32(z, cd_off + 24) as usize;
-    assert_eq!(le32(z, cd_off + 20) as usize, size, "stored: compressed = uncompressed");
     let nl = le16(z, cd_off + 28);
     assert_eq!(&z[cd_off + 46..cd_off + 46 + nl], name.as_bytes());
     let lh = le32(z, cd_off + 42) as usize;
     assert_eq!((lh, le32(z, lh)), (0, 0x0403_4b50));
-    assert_eq!(le16(z, lh + 8), 0, "STORED");
+    assert_eq!((le16(z, lh + 6), le16(z, lh + 8)), (0, 8), "local: flags 0, DEFLATE");
     assert_eq!(le32(z, lh + 14), le32(z, cd_off + 16), "same CRC");
-    assert_eq!(le32(z, lh + 22) as usize, size);
+    assert_eq!(
+        (le32(z, lh + 18) as usize, le32(z, lh + 22) as usize),
+        (csize, size),
+        "same sizes"
+    );
     let data = lh + 30 + le16(z, lh + 26) + le16(z, lh + 28);
-    assert_eq!(data + size, cd_off, "member data ends at the central directory");
-    let member = &z[data..data + size];
+    assert_eq!(data + csize, cd_off, "member data ends at the central directory");
+    let mut dec = flate2::read::DeflateDecoder::new(&z[data..data + csize]);
+    let mut member = Vec::new();
+    std::io::Read::read_to_end(&mut dec, &mut member).unwrap();
+    assert_eq!(
+        dec.total_in() as usize,
+        csize,
+        "deflate stream ends at the compressed size"
+    );
+    assert_eq!(member.len(), size, "uncompressed size");
     // Bitwise CRC-32 (independent of the writer's table implementation).
     let mut crc = !0u32;
-    for &b in member {
+    for &b in &member {
         crc ^= u32::from(b);
         for _ in 0..8 {
             crc = if crc & 1 != 0 {
@@ -522,8 +537,8 @@ fn stored_zip_single_member(z: &[u8], name: &str) -> Vec<u8> {
             };
         }
     }
-    assert_eq!(le32(z, cd_off + 16), !crc, "CRC-32 of the member");
-    member.to_vec()
+    assert_eq!(le32(z, cd_off + 16), !crc, "CRC-32 of the uncompressed member");
+    member
 }
 
 #[test]
@@ -552,7 +567,7 @@ fn npz_layout_header_dtype_and_64_byte_records() {
     let fe2 = write_hbt_npz(&rows, &i, 1_000, &dir.join("again.npz")).unwrap();
     assert_eq!(fe.sha256, fe2.sha256, "byte-reproducible");
     assert_eq!(fe.rows, Some(5)); // clear, snapshot, depth ask, trade, depth ask
-    let npy = stored_zip_single_member(&std::fs::read(&p).unwrap(), "data.npy");
+    let npy = deflated_zip_single_member(&std::fs::read(&p).unwrap(), "data.npy");
     assert_eq!(&npy[..8], b"\x93NUMPY\x01\x00");
     let hl = usize::from(u16::from_le_bytes([npy[8], npy[9]]));
     assert_eq!((10 + hl) % 64, 0, "header padded to 64 bytes");
@@ -888,4 +903,32 @@ fn bench_l2_builder() {
         evs.len(),
         evs.len() as f64 / s / 1e6
     );
+}
+
+/// npz sizes per day-instrument of the committed `synth_small` fixture (default L2 config, 1 us feed latency).
+/// `cargo test -p queuetruth-l2 --test l2 -- --ignored npz_sizes_on_synth_small --nocapture`.
+#[test]
+#[ignore]
+fn npz_sizes_on_synth_small() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/synth_small");
+    let ds = Dataset::open(&root).unwrap();
+    let dir = scratch("npz-sizes");
+    let mut total = 0u64;
+    for p in ds.partitions() {
+        let rows = synthesize_partition(p, &ds, &L2Config::default()).unwrap();
+        let inst = ds.instrument(p.instrument_id, p.session_date).unwrap();
+        let path = dir.join(format!("{}-{}.npz", p.instrument_id, p.session_date));
+        let fe = write_hbt_npz(&rows, inst, 1_000, &path).unwrap();
+        println!(
+            "instrument {} date {}: {} events, npy {} B, npz {} B",
+            p.instrument_id,
+            p.session_date,
+            fe.rows.unwrap(),
+            fe.rows.unwrap() * 64,
+            fe.bytes
+        );
+        total += fe.bytes;
+    }
+    println!("total npz {total} B over {} partitions", ds.partitions().len());
+    std::fs::remove_dir_all(dir).ok();
 }

@@ -34,6 +34,11 @@ invariants, trade parity and the rank oracle; see [How queuetruth is tested](tes
 parity checks yet. `assumed` means the rules follow documentation and the predecessor engine's captures, without a
 parity run. Every output that depends on a rule set carries its label.
 
+Two more named rule sets reuse these columns. `crypto_l3` is `generic` without hidden orders (a side-`N` trade
+consumes displayed queue); `--venue generic` resolves to it for every crypto order-level format, and the dataset
+manifest records it (`rule_set`). `iex` (0.2.0) has the `nasdaq` values and runs on Nasdaq record semantics; it is
+validated on real data (one public day, below).
+
 ## Nasdaq TotalView-ITCH 5.0 (`--format itch`, venue `nasdaq`)
 
 - **Message mapping.** Add Order and Add Order with MPID become `A`. Order Executed becomes a `T` print (aggressor
@@ -81,6 +86,22 @@ parity run. Every output that depends on a rule set carries its label.
 - **Validation: synthetic only.** No Databento key is used by the project; the DBN reader is tested by round trips
   of generated files (O-PAR-2).
 
+## IEX DEEP+ (`--format iex-deep-plus`, venue `iex`)
+
+IEX publishes every trading day of its order-by-order DEEP+ feed for free, and allows redistribution with its
+attribution line. The reader follows the IEX DEEP+ Specification v1.06 and the IEX Transport Specification v1.26.
+Every DEEP+ Order Modify says whether the order kept its time priority (Modify Flags bit 0), so priority is read,
+not inferred: a maintained-priority size decrease at the same price becomes a partial `C` and keeps the queue
+position; a reset becomes `C` of the remainder plus `A` with the same id at the back of the queue. `iex` datasets
+therefore carry no `M` records. Order Executed becomes `T` (aggressor = the opposite of the resting side) + `F` + `C`;
+a Trade between non-displayed orders becomes a side-`N` hidden print; Clear Book becomes `R`. Record `sequence` is the
+IEX-TP message sequence number, so gaps are real feed gaps, and A/B duplicates are dropped per channel. DEEP+ does not
+show non-displayed orders or the hidden parts of reserve orders, and routed executions are not reported.
+
+- **Validation: real data.** One public day (2026-10-09; SPY, AAPL, NVDA, TSLA; 4,435,281 records) from the raw
+  pcap: verdict clean, every replay invariant 0, and all 21,301 displayed executions at FIFO rank 0 of their price
+  level. Steps and the full result table: [Replay a public IEX DEEP+ day](how-to/iex-public-demo.md).
+
 ## Crypto order-level captures (venue `generic` or `coinbase`)
 
 These readers port the predecessor engine's converters for captures you record yourself. Each line of a capture is
@@ -103,7 +124,12 @@ one feed message plus your receive time `recv_ns`.
   cancel; with `level2` lines present, the reader marks the warm-up period until every level of the top of book has
   been observed from empty, and reports it as a feed gap. Coinbase now requires an authenticated connection for the
   `full`, `level2` and `level3` channels, and authenticated messages do not increment the sequence number, so the
-  gap check cannot see a dropped authenticated message. The compact `level3` channel is not read in v0.1.
+  gap check cannot see a dropped authenticated message. The compact `level3` channel is read by `coinbase-level3`
+  (below).
+- **0.2.0 sources** (`--format coinbase-level3`, `kraken-l3`, `hyperliquid-node`): Coinbase Exchange `level3` with
+  REST level-3 snapshots, Kraken WebSocket v2 `level3` (exact only inside the subscribed depth window, CRC32-checked)
+  and Hyperliquid node outputs with an L4 snapshot. Capture layout, record mapping and limits:
+  [Ingest order-level crypto feeds](how-to/crypto-l3-sources.md). **Validation: synthetic fixtures only.**
 - **Validation: assumed.** Each reader was checked on one capture by the predecessor engine at most. queuetruth
   replayed one 10-minute public capture per venue (2026-10-12, BTC-USD): Bitstamp 77,272 records and Bitfinex 51,701
   records, equal to the predecessor's converted counts, with every invariant 0 and, on Bitstamp, 0 crossed books
@@ -126,14 +152,13 @@ against the predecessor (`make realdata`) replay the two public Nasdaq days from
 (`make reproduce`) ingests the raw ITCH bytes (`--format itch`). `--format parquet` reads queuetruth's own normalized
 `qt.mbo` tables.
 
-## Out of scope in v0.1
+## Out of scope
 
 Pro-rata and allocation matching, auctions (orders resting through them are censored), halts, CME implied
-liquidity, iceberg reconstruction beyond the displayed slice, and Kraken L3. Kraken's authenticated `level3`
-channel is exact only within the subscribed depth (10, 100 or 1,000 levels): it sends no delete when a level leaves
-that window and adds orders again when they re-enter it, so a reader would have to refuse queue-rank truth beyond the
-depth. IEX DEEP+ (free daily pcaps with a maintain-or-reset priority flag on modifies) is not read in v0.1; a reader
-is planned. See [Data and licensing](data-and-licensing.md#vendor-notes) for the terms of both.
+liquidity, and iceberg reconstruction beyond the displayed slice. Kraken L3 is read since 0.2.0, but only as a
+depth-window source: Kraken sends no delete when a level leaves the subscribed window, so queue-rank truth stops at
+the window. See [Data and licensing](data-and-licensing.md#vendor-notes) for the terms of IEX, Kraken and the other
+sources.
 
 ## Adding a venue
 

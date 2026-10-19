@@ -1289,7 +1289,11 @@
               "bitstamp",
               "bitfinex",
               "coinbase",
-              "tardis_l2"
+              "tardis_l2",
+              "iex_deep_plus",
+              "coinbase_level3",
+              "kraken_l3",
+              "hyperliquid_node"
             ],
             "title": "Format",
             "type": "string"
@@ -1411,7 +1415,8 @@
                   "nasdaq",
                   "cme",
                   "coinbase",
-                  "crypto_l3"
+                  "crypto_l3",
+                  "iex"
                 ],
                 "type": "string"
               },
@@ -2457,7 +2462,11 @@
                   "bitstamp",
                   "bitfinex",
                   "coinbase",
-                  "tardis_l2"
+                  "tardis_l2",
+                  "iex_deep_plus",
+                  "coinbase_level3",
+                  "kraken_l3",
+                  "hyperliquid_node"
                 ],
                 "type": "string"
               },

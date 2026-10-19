@@ -42,10 +42,18 @@ fn dataset_path(r: &DatasetRef) -> QtResult<&Path> {
 /// `ingest` for every format: MBO formats through `qt_ingest`, crypto and Tardis through `qt_crypto`.
 pub fn ingest(spec: &IngestSpec) -> QtResult<IngestSummary> {
     match spec.format {
-        IngestFormat::Itch | IngestFormat::Dbn | IngestFormat::Etcsv | IngestFormat::Parquet => qt_ingest::ingest(spec),
-        IngestFormat::Bitstamp | IngestFormat::Bitfinex | IngestFormat::Coinbase | IngestFormat::TardisL2 => {
-            qt_crypto::ingest(spec)
-        }
+        IngestFormat::Itch
+        | IngestFormat::Dbn
+        | IngestFormat::Etcsv
+        | IngestFormat::Parquet
+        | IngestFormat::IexDeepPlus => qt_ingest::ingest(spec),
+        IngestFormat::Bitstamp
+        | IngestFormat::Bitfinex
+        | IngestFormat::Coinbase
+        | IngestFormat::CoinbaseLevel3
+        | IngestFormat::KrakenL3
+        | IngestFormat::HyperliquidNode
+        | IngestFormat::TardisL2 => qt_crypto::ingest(spec),
     }
 }
 

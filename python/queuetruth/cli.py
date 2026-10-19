@@ -700,6 +700,35 @@ def _trust(doc: Doc) -> Any:
         return None
 
 
+_DQ_MARK = {"pass": "ok  ", "warn": "WARN", "fail": "FAIL", "skip": "skip"}
+
+
+def _render_dq(doc: Doc, args: Doc) -> str | None:
+    """`dq`: the overall status first, then one line per check (status, id, summary) and the report files."""
+    checks = doc.get("checks")
+    if not isinstance(checks, list):
+        return None
+    c = doc.get("counts") or {}
+    ds = doc.get("dataset") or {}
+    lines = [
+        f"data quality: {str(doc.get('status', '?')).upper()} ({c.get('pass', 0)} pass, {c.get('warn', 0)} warn, "
+        f"{c.get('fail', 0)} fail, {c.get('skip', 0)} skipped) over {ds.get('path')} "
+        f"({ds.get('records', 0):,} records, {len(ds.get('session_dates') or [])} date(s), "
+        f"{len(ds.get('symbols') or [])} symbol(s))",
+        "",
+    ]
+    width = max((len(str(ch.get("id"))) for ch in checks), default=0)
+    for ch in checks:
+        mark = _DQ_MARK.get(str(ch.get("status")), "?")
+        lines.append(f"  {mark}  {str(ch.get('id')).ljust(width)}  {ch.get('summary')}")
+    out = args.get("out")
+    if out:
+        lines += ["", f"report: {Path(out) / 'dq_report.html'} (JSON: {Path(out) / 'dq_report.json'})"]
+    if doc.get("gate_failed"):
+        lines.append(f"gate --fail-on {(doc.get('spec') or {}).get('fail_on', 'warn')}: failed (exit 1)")
+    return "\n".join(lines)
+
+
 def _dur(ns: Any) -> str:
     from queuetruth.api import fmt_dur
 
@@ -729,6 +758,8 @@ def render(
             text = _render_score(doc, args, extra)
         elif isinstance(doc, dict) and (key[0] == "calibrate" or key == ("calibrate-live",)):
             text = _render_calibration(doc, args, path)
+        elif isinstance(doc, dict) and key == ("dq",):
+            text = _render_dq(doc, args)
     except Exception:  # a view never fails a command that succeeded
         log.debug("human view failed; plain rendering", exc_info=True)
         text = None
@@ -997,6 +1028,9 @@ def _dispatch(cmd: Doc, ctx: Doc | None = None) -> tuple[Doc | None, bool]:
         return doc, not summary.verdict.gates_passed
     if key == ("report",):
         return _plain(api.report(args)), False
+    if key == ("dq",):
+        rep = api.dq(args)
+        return _plain(rep), bool(rep.gate_failed)
     if key == ("referee", "run"):
         rep = api.referee(args)
         return _plain(rep), not bool(rep.pass_)

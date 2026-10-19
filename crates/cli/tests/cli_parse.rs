@@ -322,6 +322,46 @@ fn v1_1_flags_deserialize_into_the_spec_mirrors() {
     assert_eq!(fs.cancel_away_ticks, Some(0));
 }
 
+/// Schema 1.2 ingest formats: each CLI spelling deserializes into its `IngestFormat` (and options stay JSON).
+#[test]
+fn v1_2_ingest_formats_deserialize_into_the_spec_mirror() {
+    use qt_schema::specs::{IngestFormat, IngestSpec};
+    for (cli, want) in [
+        ("coinbase-level3", IngestFormat::CoinbaseLevel3),
+        ("kraken-l3", IngestFormat::KrakenL3),
+        ("hyperliquid-node", IngestFormat::HyperliquidNode),
+        ("iex-deep-plus", IngestFormat::IexDeepPlus),
+    ] {
+        let a: Vec<String> = [
+            "queuetruth",
+            "ingest",
+            "--format",
+            cli,
+            "--in",
+            "x",
+            "--venue",
+            "generic",
+            "--out",
+            "o",
+            "--option",
+            "checksum_precision={\"BTC/USD\":[1,8]}",
+            "--option",
+            "depth=100",
+        ]
+        .iter()
+        .map(|s| (*s).to_owned())
+        .collect();
+        let c = parse_ok(&a);
+        assert_eq!(c.implementation, Implementation::Native);
+        let mut v = c.args.clone();
+        v.as_object_mut().map(|o| o.remove("_cli"));
+        let spec: IngestSpec = serde_json::from_value(v).expect("IngestSpec");
+        assert_eq!(spec.format, want, "{cli}");
+        assert_eq!(spec.options["depth"], 100);
+        assert_eq!(spec.options["checksum_precision"]["BTC/USD"][1], 8);
+    }
+}
+
 #[test]
 fn global_format_and_ingest_format_are_told_apart() {
     let a: Vec<String> = [

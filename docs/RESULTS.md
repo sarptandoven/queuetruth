@@ -37,24 +37,36 @@ verified by the CSV runs.
 | `.realdata/repro/phase1/results.json` (public raw-bytes reproduction) | `dc74725450766f49` | `scripts/repro/reproduce.py`, threads 4, 1,387 s | 2026-10-19 07:38 |
 | `.realdata/repro/phase1/headline/headline-2019-12-30.json` / `-2020-01-30.json` | `fb9703bb8fa6bfa4` / `2ab595da18c8a29a` | `reproduce.py` (headline step) | 2026-10-19 07:16 / 07:26 |
 | `.realdata/repro/phase1/decompose.json` (raw bytes vs CSV vs published) | `a750ce7076b874ec` | `scripts/repro/compare_published.py` functions, CSV control run | 2026-10-19 07:40 |
+| `.realdata/repro/results.json` (raw-bytes reproduction on commit `4be5240`) | `446c6b09ba71dbd8` | `make reproduce` (`scripts/repro/reproduce.py`), threads 4, 1,162 s | 2026-10-19 08:25 |
 | `.realdata/repro/breadth/breadth.json` (36 more symbols by tier) | `3771d1dd179fc32e` | `scripts/repro/breadth.py`, threads 4 | 2026-10-19 07:48 |
 
 `scripts/realdata/summarize.py --results .realdata/results.json --headline .realdata/headline/headline.json --bench
 .realdata/bench.json` prints every table below from those files. The engine is queuetruth 0.1.0 as built in the
-working tree on 2026-10-18 (no commit exists yet), all builds after the zoo, calibration and feature engines stopped
+working tree on 2026-10-18 (before the 0.1.0 commit `4be5240`), all builds after the zoo, calibration and feature engines stopped
 detecting sequence gaps per partition (section 6). The latest full `make realdata` (`results.json` above, finished
 2026-10-19 02:02 local time, UTC-4) ran after the self-exclusion fix of the scorer; it reproduces every RD-1 .. RD-12
 number of the earlier 01:35 UTC run that this page also quotes, except where a section says otherwise. The headline,
 oracle, RD-9 and RD-13 rerun files loaded the extension built at 21:30 on 2026-10-18, and the RD-13 rerun used
-`queuetruth-core` built at 21:46. The engine was still changing between these runs and no commit ties them together, so treat this page as pre-release numbers until they are rerun on the release commit. The qtbench quick suite (section 7) ran
-on the 20:03 build.
+`queuetruth-core` built at 21:46. The engine was still changing between these runs; the raw-bytes results were since rerun on the 0.1.0 commit
+(below), the et-artifact runs (RD-1 .. RD-13) were not. The qtbench quick suite (section 7) ran on the 20:03 build.
 
 The raw-bytes runs (sections 2, 3 raw rows, 4, 4b, RD-9, RD-10) are newer than everything above and ran on one
 build: `_core.abi3.so` sha256 `812f1e881489aec8...` (built 2026-10-19 03:10 local, after the per-shadow #312 ruling
 and the NautilusTrader-verified faithful NT models), source-tree hash `fa118807fb672aa7...` (sha256 over the Rust and
-Python sources and lock files, recorded by `reproduce.py` because no commit exists yet). Two pieces loaded the next
-build (`4671359193252d96...`, 03:20, which changed only the crypto readers and Python files outside the zoo and
-replay): the day-two oracle subprocess and the day-two half of the breadth run.
+Python sources and lock files, recorded by `reproduce.py`; these runs predate the first commit). Two pieces loaded
+the next build (`4671359193252d96...`, 03:20, which changed only the crypto readers and Python files outside the zoo
+and replay): the day-two oracle subprocess and the day-two half of the breadth run.
+
+Release-commit rerun: `make reproduce` on commit `4be5240` (queuetruth 0.1.0; git HEAD recorded before and after the
+run) with the installed extension `4671359193252d96...`, unchanged during the run, wrote `.realdata/repro/results.json`
+(sha256 `446c6b09ba71dbd8cc8ca1d6889584a156639ac5c90fe050264e28bb229263cc`; 2026-10-19 08:05 to 08:25 UTC, 1,162 s at
+4 threads). All 12 steps completed (6 `pass`: subset, ingest and replay on both days; 6 `recorded`: leaderboard and
+oracle on both days, calibration, learned model). Compared with the published run
+(`.realdata/repro/phase1/results.json`), the leaderboard on both days, the four calibrations (power3, Databento,
+`nt_prob_touch`, `nt_queue_l2_prob_touch`), the learned model and the oracle are identical; only wall times differ.
+(`reproduce.py` flags `build_changed_during_run` because the source-tree hash changed: unrelated files were added to
+the working tree during the run; the extension and git HEAD did not change.) RD-13 is still pending a re-measurement
+on a quiet machine.
 
 ## 1. Exactness against the earlier prototype (RD-1 .. RD-7)
 

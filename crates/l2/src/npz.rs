@@ -1,9 +1,9 @@
 //! hftbacktest event `.npz` export (SPEC 5.3.5): a structured array of 64-byte records with numpy dtype
 //! `[("ev","<u8"),("exch_ts","<i8"),("local_ts","<i8"),("px","<f8"),("qty","<f8"),("order_id","<u8"),("ival","<i8"),
-//! ("fval","<f8")]`, saved as `np.savez(path, data=arr)` does: a zip archive with one STORED (uncompressed) member
+//! ("fval","<f8")]`, saved as `np.savez_compressed(path, data=arr)` does: a zip archive with one DEFLATE member
 //! `data.npy` (NPY format 1.0, header padded to a multiple of 64 bytes), written by the in-crate `zipw` writer
-//! (ZIP64 only for a member of 4 GiB or more). Zip timestamps are fixed (1980-01-01) so the file is
-//! byte-reproducible. A trade row without an aggressor that is not a hidden print takes its side from
+//! (raw deflate, level 6; ZIP64 only for a member of 4 GiB or more). Zip timestamps and compressor settings are fixed
+//! (1980-01-01) so the file is byte-reproducible. A trade row without an aggressor that is not a hidden print takes its side from
 //! the prevailing visible BBO (at the bid: sell, at the ask: buy) and is omitted if neither applies. Each npz gets an
 //! orders sidecar `<stem>.orders.json` (format of the hftbacktest cross-check driver, O-ZOO-3). Prices and sizes become `price * 10^price_exp`, `size * 10^size_exp` (division by
 //! the exact power of ten for negative exponents); hidden trades are omitted.
@@ -208,7 +208,8 @@ pub fn write_hbt_npz(rows: &[L2Row], inst: &Instrument, feed_latency_ns: Dur, pa
     }
     let f = std::fs::File::create(path).map_err(|e| err(&e))?;
     let w = std::io::BufWriter::with_capacity(1 << 20, f);
-    crate::zipw::write_stored_zip(w, &[("data.npy", npy.as_slice())], false).map_err(|e| err(&e))?;
+    crate::zipw::write_zip(w, &[("data.npy", npy.as_slice())], crate::zipw::Method::Deflate, false)
+        .map_err(|e| err(&e))?;
     drop(npy);
     let bytes = std::fs::metadata(path).map_err(|e| err(&e))?.len();
     write_hbt_orders(path, inst, &[])?;

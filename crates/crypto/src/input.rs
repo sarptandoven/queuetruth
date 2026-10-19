@@ -31,6 +31,8 @@ pub struct CaptureMeta {
     pub symbols: Vec<String>,
     /// Bitfinex conf flags (`flags`).
     pub flags: Option<u64>,
+    /// Hyperliquid: block height of the L4 snapshot (`snapshot_block`).
+    pub snapshot_block: Option<u64>,
 }
 
 /// Resolved inputs: data files in read order, plus the metadata file if any.
@@ -42,6 +44,115 @@ pub struct Inputs {
     pub meta_path: Option<PathBuf>,
     /// Parsed metadata.
     pub meta: CaptureMeta,
+    /// Hyperliquid L4 snapshot files (`compute-l4-snapshots` output; read whole, not by line).
+    pub snapshots: Vec<PathBuf>,
+}
+
+/// Largest L4 snapshot file accepted (inflated bytes).
+pub const MAX_SNAPSHOT_BYTES: u64 = 1 << 30;
+
+/// Hyperliquid node output directories (`~/hl/data/<name>/hourly/<date>/<hour>`, `*_by_block` variants).
+const HL_STREAMS: [&str; 3] = ["node_raw_book_diffs", "node_order_statuses", "node_fills"];
+
+/// True for a Hyperliquid L4 snapshot file name (`l4*.json[.gz]`, e.g. `l4_snapshot_812345678.json`).
+pub fn is_l4_snapshot(p: &Path) -> bool {
+    let n = p
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    n.starts_with("l4") && (n.ends_with(".json") || n.ends_with(".json.gz"))
+}
+
+/// Block height in an L4 snapshot file name: the last run of digits of its stem after the `l4` prefix.
+pub fn snapshot_height_from_name(p: &Path) -> Option<u64> {
+    let stem = stem_of(p);
+    let rest = if stem.to_ascii_lowercase().starts_with("l4") {
+        &stem[2..]
+    } else {
+        &stem[..]
+    };
+    let digits: String = rest
+        .chars()
+        .rev()
+        .skip_while(|c| !c.is_ascii_digit())
+        .take_while(char::is_ascii_digit)
+        .collect();
+    digits.chars().rev().collect::<String>().parse().ok()
+}
+
+fn is_hl_file(p: &Path) -> bool {
+    p.components().any(|c| {
+        c.as_os_str()
+            .to_str()
+            .is_some_and(|s| HL_STREAMS.iter().any(|h| s.starts_with(h)))
+    })
+}
+
+/// Files under `dir` (recursively, at most `depth` levels), sorted by path with numeric file names (hours) in
+/// numeric order.
+fn walk(dir: &Path, depth: usize, out: &mut Vec<PathBuf>) -> QtResult<()> {
+    let rd = std::fs::read_dir(dir).map_err(|e| QtError::InputMissing {
+        path: dir.display().to_string(),
+        msg: e.to_string(),
+    })?;
+    let mut v: Vec<PathBuf> = rd.filter_map(|e| e.ok().map(|e| e.path())).collect();
+    v.sort_by_key(|p| {
+        let n = p.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+        (n.parse::<u64>().unwrap_or(u64::MAX), n)
+    });
+    for p in v {
+        if p.is_dir() {
+            if depth > 0 {
+                walk(&p, depth - 1, out)?;
+            }
+        } else if p.is_file() {
+            out.push(p);
+        }
+    }
+    Ok(())
+}
+
+/// Reads a whole (plain or gzip) file of at most `MAX_SNAPSHOT_BYTES` inflated bytes as UTF-8.
+pub fn read_whole(path: &Path) -> QtResult<String> {
+    let loc = path.display().to_string();
+    let miss = |e: io::Error| QtError::InputMissing {
+        path: loc.clone(),
+        msg: e.to_string(),
+    };
+    let mut f = File::open(path).map_err(miss)?;
+    let compressed = f.metadata().map(|m| m.len()).unwrap_or(0);
+    let mut magic = [0u8; 2];
+    let k = f.read(&mut magic).map_err(miss)?;
+    let f = File::open(path).map_err(miss)?;
+    let limit = if k == 2 && magic == [0x1f, 0x8b] {
+        inflate_limit(compressed).min(MAX_SNAPSHOT_BYTES)
+    } else {
+        MAX_SNAPSHOT_BYTES
+    };
+    let mut r: Box<dyn Read> = if k == 2 && magic == [0x1f, 0x8b] {
+        Box::new(flate2::read::MultiGzDecoder::new(f))
+    } else {
+        Box::new(f)
+    };
+    let mut buf = Vec::new();
+    (&mut r)
+        .take(limit.saturating_add(1))
+        .read_to_end(&mut buf)
+        .map_err(|e| QtError::InputFormat {
+            location: loc.clone(),
+            msg: e.to_string(),
+        })?;
+    if buf.len() as u64 > limit {
+        return Err(QtError::InputFormat {
+            location: loc,
+            msg: format!("file larger than {limit} bytes (split the snapshot per coin)"),
+        });
+    }
+    String::from_utf8(buf).map_err(|_| QtError::InputFormat {
+        location: loc,
+        msg: "invalid UTF-8".into(),
+    })
 }
 
 /// File-name stems in et's read order per format (a capture directory is expanded in this order, then any other
@@ -51,6 +162,9 @@ fn preferred_order(format: &str) -> &'static [&'static str] {
         "bitstamp" => &["live_orders", "live_trades", "detail_order_book", "order_book"],
         "bitfinex" => &["book_R0", "book_P0", "trades", "hb"],
         "coinbase" => &["full", "matches", "level2", "level2_batch"],
+        "coinbase_level3" => &["book", "level3", "heartbeat"],
+        "kraken_l3" => &["level3"],
+        "hyperliquid_node" => &[],
         _ => &["incremental_book_L2", "trades"],
     }
 }
@@ -83,7 +197,24 @@ pub fn resolve(inputs: &[FileRef], format: &str) -> QtResult<Inputs> {
             path: p.to_string(),
             msg: e.to_string(),
         })?;
-        if md.is_dir() {
+        if md.is_dir() && format == "hyperliquid_node" {
+            let mut found = Vec::new();
+            walk(&path, 6, &mut found)?;
+            let meta = path.join("capture_meta.json");
+            if meta.is_file() && out.meta_path.is_none() {
+                out.meta_path = Some(meta.clone());
+            }
+            for f in found {
+                if f == meta {
+                    continue;
+                }
+                if is_l4_snapshot(&f) {
+                    out.snapshots.push(f);
+                } else if is_hl_file(&f) || is_data_file(&f) {
+                    out.files.push(f);
+                }
+            }
+        } else if md.is_dir() {
             let mut found: Vec<PathBuf> = std::fs::read_dir(&path)
                 .map_err(|e| QtError::InputMissing {
                     path: p.to_string(),
@@ -105,6 +236,8 @@ pub fn resolve(inputs: &[FileRef], format: &str) -> QtResult<Inputs> {
                 .extend(data.iter().filter(|f| !order.contains(&stem_of(f).as_str())).cloned());
         } else if path.file_name().and_then(|n| n.to_str()) == Some("capture_meta.json") {
             out.meta_path = Some(path);
+        } else if format == "hyperliquid_node" && is_l4_snapshot(&path) {
+            out.snapshots.push(path);
         } else {
             out.files.push(path);
         }
@@ -142,6 +275,12 @@ pub fn read_meta(path: &Path) -> QtResult<CaptureMeta> {
             meta.symbols = a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect();
             break;
         }
+    }
+    if let Some(b) = v.get("snapshot_block") {
+        meta.snapshot_block = Some(b.as_u64().ok_or_else(|| QtError::InputFormat {
+            location: loc.clone(),
+            msg: "snapshot_block is not a non-negative integer".into(),
+        })?);
     }
     if let Some(f) = v.get("flags") {
         meta.flags = Some(f.as_u64().ok_or_else(|| QtError::InputFormat {

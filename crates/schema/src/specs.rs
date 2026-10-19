@@ -335,6 +335,14 @@ pub enum IngestFormat {
     Coinbase,
     /// Tardis L2 CSV.
     TardisL2,
+    /// IEX HIST DEEP+ (IEX-TP over pcap / pcap.gz), order by order (`qt_ingest::iex`).
+    IexDeepPlus,
+    /// Coinbase Exchange `level3` channel capture (`qt_crypto`; QT-CONFIG-001 until implemented).
+    CoinbaseLevel3,
+    /// Kraken L3 (WebSocket v2 `level3`) capture (`qt_crypto`; QT-CONFIG-001 until implemented).
+    KrakenL3,
+    /// Hyperliquid node order-status / fills output (`qt_crypto`; QT-CONFIG-001 until implemented).
+    HyperliquidNode,
 }
 
 /// Session time zone.

@@ -6,6 +6,51 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ## [Unreleased]
 
+### 0.2.0 (unreleased)
+
+Schema 1.2 (additive; JSON `schema_version` stays 1). Design: [spec 3.12](docs/design/spec.md).
+
+#### Added
+
+- `queuetruth dq` (and `queuetruth.api.dq`, `queuetruth.dq.run`): a data-quality battery over any ingested MBO
+  dataset, with an optional second dataset of the same sessions for cross-source parity. Fourteen checks (sequence,
+  crossed and stale books, orphan references, sizes and prices, trade parity, timestamps, session coverage,
+  symbology, snapshots, vintage, cross-source parity, rate drift, plus the ingest and replay counters), each `pass`,
+  `warn`, `fail` or `skip` with its numbers and the first offending rows. Writes `dq_report.json` (`qt.dq_report`)
+  and a self-contained `dq_report.html`; exits 1 when a check reaches `--fail-on` (default `warn`). Guide:
+  [Check a feed before you trust it](docs/how-to/check-a-feed.md).
+- Order-level crypto sources for `queuetruth ingest`: `--format coinbase-level3` (Coinbase Exchange WebSocket
+  `level3` plus REST level-3 snapshots), `kraken-l3` (Kraken WebSocket v2 `level3`; exact inside the subscribed depth
+  window only, CRC32-checked after every message) and `hyperliquid-node` (a non-validator node's raw book diffs,
+  fills and order statuses plus an L4 snapshot). New `--option` keys: `depth`, `checksum_precision` (Kraken),
+  `snapshot_block`, `max_block_gap_ms` (Hyperliquid). Each source's exactness caveats are written as ingest
+  warnings. Guide: [Ingest order-level crypto feeds](docs/how-to/crypto-l3-sources.md).
+- IEX DEEP+: `--format iex-deep-plus` reads IEX HIST DEEP+ pcap / pcapng files (gzip or raw) order by order under
+  the new `iex` rule set: IEX-TP sequencing and A/B de-duplication per channel, and the DEEP+ Order Modify priority
+  bit mapped exactly (a maintained-priority size decrease keeps the queue position, a reset goes to the back). IEX
+  HIST data may be redistributed with IEX's attribution line, so this is the public demo source
+  ([Replay a public IEX DEEP+ day](docs/how-to/iex-public-demo.md), `scripts/iex/stream_subset.py`). Real-data run
+  on 2026-10-09 (SPY, AAPL, NVDA, TSLA; 4,435,281 records): verdict `clean`, every replay invariant 0, and all
+  21,301 displayed executions at FIFO rank 0 of their price level; the `iex` rule set is labelled `real_data`.
+- Schema 1.2 documents `qt.dq_report` and `qt.dq_spec` are registered with the other JSON Schemas
+  (`queuetruth schema list`); the HTTP API's ingest format lists (`/v1/meta`, dataset creation) include the four new
+  formats.
+
+#### Changed
+
+- Crypto L3 datasets now record their resolved rule set in the manifest (`rule_set: crypto_l3` for Bitstamp,
+  Bitfinex, Coinbase and the new sources when ingested with `--venue generic`). In 0.1 the manifest carried no
+  `rule_set`, so replay used `generic`, under which side-`N` prints consume no displayed queue (hidden liquidity);
+  under `crypto_l3` they do. Re-ingesting an old crypto capture can therefore change replay, shadow and zoo
+  results; datasets ingested by 0.1 keep replaying as `generic` unless re-ingested or replayed with
+  `--venue crypto_l3`.
+
+#### Security
+
+- Dropped the `zip` crate (RUSTSEC-2026-0367, -0368, -0369): hftbacktest `.npz` files are written by a small
+  in-crate zip writer (DEFLATE, matching np.savez_compressed; CRC-32 known-answer and numpy round-trip tested).
+  queuetruth never extracted archives, so it was not exposed; `cargo audit` is clean.
+
 ### 0.1.0 (not released yet)
 
 First public version. Validated on real data for Nasdaq TotalView-ITCH (two public days, four symbols); everything
@@ -22,7 +67,9 @@ else is tested on synthetic data and fixtures, as listed under "Known limitation
   sampler) and on 2,997 of 3,000 per day of the prototype's mirror shadows on its CSV conversion.
 - Public reproduction from the raw Nasdaq files alone (`make reproduce`, `scripts/repro/reproduce.py`): the
   leaderboard and RD-9 from the raw bytes are identical to the same runs on the CSV conversion with the same build,
-  and RD-10 to the earlier CSV run. Against the earlier published leaderboard, every change comes from engine changes: the bounds
+  and RD-10 to the earlier CSV run. Rerun on commit `4be5240`, `make reproduce` reproduced the leaderboard on both
+  days, all four calibrations, the learned model and the oracle identically (1,162 s; `.realdata/repro/results.json`
+  sha256 `446c6b09ba71dbd8...`). Against the earlier published leaderboard, every change comes from engine changes: the bounds
   (`trade_through_only` now -6.0 .. -15.8 pp, `front_of_queue` +0.9 .. +3.3 pp), the verified faithful NautilusTrader
   models, and faithful hftbacktest shadows that reach the #312 event now left out per shadow (179 to 342 of 3,000
   per model, 6.0% to 11.4%); the hftbacktest rows moved by at most 0.1 pp.

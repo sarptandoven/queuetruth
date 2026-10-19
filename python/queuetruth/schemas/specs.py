@@ -185,7 +185,21 @@ def _horizons() -> list[int]:
 class IngestSpec(SpecModel):
     """`ingest`: source files -> normalized dataset (SPEC 3.3)."""
 
-    format: Literal["itch", "dbn", "etcsv", "parquet", "bitstamp", "bitfinex", "coinbase", "tardis_l2"]
+    #: 1.2 adds `iex_deep_plus` (qt_ingest) and `coinbase_level3`, `kraken_l3`, `hyperliquid_node` (qt_crypto).
+    format: Literal[
+        "itch",
+        "dbn",
+        "etcsv",
+        "parquet",
+        "bitstamp",
+        "bitfinex",
+        "coinbase",
+        "tardis_l2",
+        "iex_deep_plus",
+        "coinbase_level3",
+        "kraken_l3",
+        "hyperliquid_node",
+    ]
     inputs: Annotated[list[FileRef], Field(min_length=1)]
     venue: str
     source_venue: str | None = None
@@ -623,6 +637,38 @@ class LiveCalibrationSpec(SpecModel):
 
 
 #: Top-level spec models and their JSON Schema names (`schemas/json/<name>.schema.json`).
+#: `DqSpec` defaults (schema 1.2).
+DQ_DEFAULT_STALE_NS = 60_000_000_000
+DQ_DEFAULT_SESSION_TOLERANCE_NS = 300_000_000_000
+DQ_DEFAULT_MAX_EVIDENCE = 20
+
+
+class DqSpec(SpecModel):
+    """1.2: `queuetruth dq` spec (`qt.dq_spec`; checks in `queuetruth.dq`). `dataset`: the dataset to check; `out`:
+    output directory for `dq_report.json` and `dq_report.html` (null = return the report, write nothing); `compare`:
+    a second dataset of the same session(s) for the cross-source parity check; `checks`: run only these check ids
+    (null = all); `fail_on`: the CLI exits 1 when any check reaches this status (`warn`: warn or fail; `fail`: fail
+    only; `never`); `max_evidence`: evidence rows kept per table; `stale_ns`: a book with no update for longer than
+    this while trades print is stale; `latency_outlier_ns`: `ts_recv - ts_event` above this is an outlier (null =
+    10 x p99, at least 1 ms); `session_tolerance_ns`: slack at the session open and close before coverage warns;
+    `replay`: run the exact replay for the book checks (crossed books, prints through the book, trade parity, replay
+    counters); `verify_sources`: re-hash the raw input files recorded in the manifest when they still exist
+    (otherwise only their size is compared); `title`: HTML title."""
+
+    dataset: PathRef
+    out: str | None = None
+    compare: PathRef | None = None
+    checks: list[str] | None = None
+    fail_on: Literal["warn", "fail", "never"] = "warn"
+    max_evidence: int = Field(default=DQ_DEFAULT_MAX_EVIDENCE, ge=0, le=10_000)
+    stale_ns: int = Field(default=DQ_DEFAULT_STALE_NS, gt=0)
+    latency_outlier_ns: int | None = Field(default=None, gt=0)
+    session_tolerance_ns: int = Field(default=DQ_DEFAULT_SESSION_TOLERANCE_NS, ge=0)
+    replay: bool = True
+    verify_sources: bool = False
+    title: str | None = None
+
+
 SPEC_MODELS: dict[str, type[SpecModel]] = {
     "qt.ingest_spec": IngestSpec,
     "qt.replay_spec": ReplaySpec,
@@ -639,9 +685,13 @@ SPEC_MODELS: dict[str, type[SpecModel]] = {
     "qt.why_spec": WhySpec,
     "qt.export_spec": ExportSpec,
     "qt.live_calibration_spec": LiveCalibrationSpec,
+    "qt.dq_spec": DqSpec,
 }
 
 __all__ = [
+    "DQ_DEFAULT_MAX_EVIDENCE",
+    "DQ_DEFAULT_SESSION_TOLERANCE_NS",
+    "DQ_DEFAULT_STALE_NS",
     "SPEC_MODELS",
     "BlockWindow",
     "BootstrapSpec",
@@ -649,6 +699,7 @@ __all__ = [
     "CalibrationSpec",
     "DatasetIdRef",
     "DatasetRef",
+    "DqSpec",
     "EquivalenceSpec",
     "ExcludeOrderId",
     "ExportSpec",

@@ -55,6 +55,7 @@ section below is the command's own `--help` text.
 | [`queuetruth live validate`](#queuetruth-live-validate) | validate a canonical live log |
 | [`queuetruth score`](#queuetruth-score) | score a simulator against the live log |
 | [`queuetruth report`](#queuetruth-report) | static HTML report from output directories |
+| [`queuetruth dq`](#queuetruth-dq) | data-quality checks of a dataset: JSON and HTML report |
 | [`queuetruth referee`](#queuetruth-referee) | exact-FIFO referee |
 | [`queuetruth referee run`](#queuetruth-referee-run) | exact-FIFO regression oracle for another simulator |
 | [`queuetruth referee fixtures`](#queuetruth-referee-fixtures) | write the synthetic referee bug-class fixtures |
@@ -88,9 +89,9 @@ ingest source files into a normalized dataset
 Usage: queuetruth ingest [OPTIONS] --format <format> --in <PATH> --venue <VALUE> --out <VALUE>
 
 Options:
-      --format <format>             source format (also --input-format) [possible values: itch, dbn, etcsv, parquet, bitstamp, bitfinex, coinbase, tardis-l2]
+      --format <format>             source format (also --input-format) [possible values: itch, dbn, etcsv, parquet, bitstamp, bitfinex, coinbase, coinbase-level3, kraken-l3, hyperliquid-node, tardis-l2, iex-deep-plus]
       --in <PATH>                   input file (repeatable)
-      --venue <VALUE>               venue rule set (nasdaq, cme, coinbase, crypto_l3, generic; generic resolves to crypto_l3 for Bitstamp, Bitfinex and Coinbase captures)
+      --venue <VALUE>               venue rule set (nasdaq, cme, coinbase, crypto_l3, iex, generic; generic resolves to crypto_l3 for the crypto L3 formats: bitstamp, bitfinex, coinbase, coinbase-level3, kraken-l3, hyperliquid-node)
       --out <VALUE>                 output dataset directory
       --symbols <A,...>             symbol filter
       --date <VALUE>                session date YYYY-MM-DD
@@ -102,7 +103,7 @@ Options:
       --tick-size <VALUE>           tick size (decimal)
       --lot-size <VALUE>            lot size (decimal)
       --source-venue <VALUE>        source venue label
-      --option <KEY=VALUE>          format option KEY=VALUE (repeatable)
+      --option <KEY=VALUE>          format option KEY=VALUE, VALUE parsed as JSON when it parses (repeatable; e.g. depth, checksum_precision for kraken-l3; snapshot_block, max_block_gap_ms for hyperliquid-node)
       --strict                      exit 1 unless the data-quality verdict is clean
   -h, --help                        Print help
       --log-level <log_level>       stderr log level (default warn) [possible values: error, warn, info, debug]
@@ -160,7 +161,7 @@ Options:
       --parity-bbo <PATH>
           et bbo.csv reference
       --venue <VALUE>
-          venue rule override
+          rule set override (nasdaq, cme, coinbase, crypto_l3, iex, generic; default the manifest's rule_set)
       --strict
           exit 1 on any invariant, anomaly or parity mismatch
       --fill-rule <fill-rule>
@@ -822,6 +823,54 @@ Options:
       --seed <seed>                 random seed (default 0)
       --threads <threads>           worker threads (outputs do not depend on it; default 1)
       --verbose                     human output: every summary field after the answer
+```
+
+## queuetruth dq
+
+```text
+data-quality checks of a dataset: JSON and HTML report
+
+Usage: queuetruth dq [OPTIONS] --data <PATH> --out <VALUE>
+
+Options:
+      --data <PATH>
+          dataset directory
+      --out <VALUE>
+          output directory (dq_report.json, dq_report.html)
+      --compare <PATH>
+          second dataset of the same sessions (cross-source parity)
+      --checks <A,...>
+          run only these check ids
+      --fail-on <fail-on>
+          exit 1 when a check reaches this status (default warn) [possible values: warn, fail, never]
+      --max-evidence <N>
+          evidence rows kept per table (default 20)
+      --stale-ns <DURATION>
+          quiet book interval with prints that counts as stale (default 60s)
+      --latency-outlier-ns <DURATION>
+          ts_recv - ts_event outlier threshold (default 10 x p99, at least 1ms)
+      --session-tolerance-ns <DURATION>
+          slack at the session open and close (default 5m)
+      --no-replay
+          skip the exact replay (no crossed-book, print-through or trade-parity checks)
+      --verify-sources
+          re-hash the raw input files recorded in the manifest
+      --title <VALUE>
+          HTML report title
+  -h, --help
+          Print help
+      --log-level <log_level>
+          stderr log level (default warn) [possible values: error, warn, info, debug]
+      --output-format <human|json>
+          output format (also --format human|json) [possible values: human, json]
+      --quiet
+          no progress or warnings on stderr
+      --seed <seed>
+          random seed (default 0)
+      --threads <threads>
+          worker threads (outputs do not depend on it; default 1)
+      --verbose
+          human output: every summary field after the answer
 ```
 
 ## queuetruth referee

@@ -1,0 +1,43 @@
+{
+  "sample": {
+    "dataset": {
+      "path": "x"
+    },
+    "out": "x",
+    "compare": {
+      "path": "x"
+    },
+    "checks": [
+      "x"
+    ],
+    "fail_on": "warn",
+    "max_evidence": 1,
+    "stale_ns": 1,
+    "latency_outlier_ns": 1,
+    "session_tolerance_ns": 1,
+    "replay": true,
+    "verify_sources": true,
+    "title": "x"
+  },
+  "minimal": {
+    "dataset": {
+      "path": "x"
+    }
+  },
+  "defaults": {
+    "dataset": {
+      "path": "x"
+    },
+    "out": null,
+    "compare": null,
+    "checks": null,
+    "fail_on": "warn",
+    "max_evidence": 20,
+    "stale_ns": 60000000000,
+    "latency_outlier_ns": null,
+    "session_tolerance_ns": 300000000000,
+    "replay": true,
+    "verify_sources": false,
+    "title": null
+  }
+}

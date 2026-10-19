@@ -1,0 +1,385 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.dq_report",
+  "$defs": {
+    "DqCheck": {
+      "additionalProperties": false,
+      "description": "One dq check: `status` (`pass`/`warn`/`fail`/`skip`), a one-line `summary`, the numbers behind it\n(`metrics`), evidence tables and caveats (`notes`).",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "pass",
+            "warn",
+            "fail",
+            "skip"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "metrics": {
+          "additionalProperties": true,
+          "title": "Metrics",
+          "type": "object"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/DqEvidence"
+          },
+          "title": "Evidence",
+          "type": "array"
+        },
+        "notes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Notes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "status",
+        "summary"
+      ],
+      "title": "DqCheck",
+      "type": "object"
+    },
+    "DqCounts": {
+      "additionalProperties": false,
+      "description": "dq checks per status.",
+      "properties": {
+        "pass": {
+          "title": "Pass",
+          "type": "integer"
+        },
+        "warn": {
+          "title": "Warn",
+          "type": "integer"
+        },
+        "fail": {
+          "title": "Fail",
+          "type": "integer"
+        },
+        "skip": {
+          "title": "Skip",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "pass",
+        "warn",
+        "fail",
+        "skip"
+      ],
+      "title": "DqCounts",
+      "type": "object"
+    },
+    "DqDataset": {
+      "additionalProperties": false,
+      "description": "The dataset checked by `dq`, as its manifest describes it.",
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "dataset_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Dataset Id"
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Kind"
+        },
+        "source_format": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Source Format"
+        },
+        "venue": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Venue"
+        },
+        "source_venue": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Source Venue"
+        },
+        "rule_set": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rule Set"
+        },
+        "validation_status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Validation Status"
+        },
+        "partitions": {
+          "title": "Partitions",
+          "type": "integer"
+        },
+        "records": {
+          "title": "Records",
+          "type": "integer"
+        },
+        "session_dates": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Session Dates",
+          "type": "array"
+        },
+        "symbols": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Symbols",
+          "type": "array"
+        }
+      },
+      "required": [
+        "path",
+        "dataset_id",
+        "kind",
+        "source_format",
+        "venue",
+        "source_venue",
+        "validation_status",
+        "partitions",
+        "records",
+        "session_dates",
+        "symbols"
+      ],
+      "title": "DqDataset",
+      "type": "object"
+    },
+    "DqEvidence": {
+      "additionalProperties": false,
+      "description": "One evidence table of a dq check: the first `max_evidence` rows of `total` (`truncated` when rows were\ndropped). Timestamps are integer ns, prices integer fixed point in the instrument's `price_exp`.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "columns": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Columns",
+          "type": "array"
+        },
+        "rows": {
+          "items": {
+            "items": {},
+            "type": "array"
+          },
+          "title": "Rows",
+          "type": "array"
+        },
+        "total": {
+          "title": "Total",
+          "type": "integer"
+        },
+        "truncated": {
+          "title": "Truncated",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "columns",
+        "rows",
+        "total",
+        "truncated"
+      ],
+      "title": "DqEvidence",
+      "type": "object"
+    },
+    "FileEntry": {
+      "additionalProperties": false,
+      "description": "One output file: name relative to the output directory, row count for tables, size and sha256.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "rows": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rows"
+        },
+        "bytes": {
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "bytes",
+        "sha256"
+      ],
+      "title": "FileEntry",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "1.2: `qt.dq_report` (`queuetruth dq`, `dq_report.json`): `status` = the worst check status (`pass` when every\ncheck passed or was skipped); `gate_failed` = the status reached `spec.fail_on`.",
+  "properties": {
+    "schema": {
+      "const": "qt.dq_report",
+      "default": "qt.dq_report",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "engine_version": {
+      "title": "Engine Version",
+      "type": "string"
+    },
+    "spec": {
+      "additionalProperties": true,
+      "title": "Spec",
+      "type": "object"
+    },
+    "dataset": {
+      "$ref": "#/$defs/DqDataset"
+    },
+    "compare": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DqDataset"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "status": {
+      "enum": [
+        "pass",
+        "warn",
+        "fail"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "gate_failed": {
+      "title": "Gate Failed",
+      "type": "boolean"
+    },
+    "counts": {
+      "$ref": "#/$defs/DqCounts"
+    },
+    "checks": {
+      "items": {
+        "$ref": "#/$defs/DqCheck"
+      },
+      "title": "Checks",
+      "type": "array"
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/FileEntry"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "engine_version",
+    "spec",
+    "dataset",
+    "status",
+    "gate_failed",
+    "counts",
+    "checks",
+    "files"
+  ],
+  "type": "object"
+}

@@ -6,7 +6,7 @@ Shared documents (`qt.job`, `qt.upload`, ...) come from `queuetruth.schemas.mode
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -14,7 +14,23 @@ from queuetruth.schemas import models as m
 from queuetruth.schemas import specs as sp
 
 Hex64 = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
-INGEST_FORMATS = ("itch", "dbn", "etcsv", "parquet", "bitstamp", "bitfinex", "coinbase", "tardis_l2")
+#: `IngestSpec.format` values the service accepts (schema 1.2 adds `iex_deep_plus`, `coinbase_level3`, `kraken_l3`,
+#: `hyperliquid_node`).
+IngestFormat = Literal[
+    "itch",
+    "dbn",
+    "etcsv",
+    "parquet",
+    "bitstamp",
+    "bitfinex",
+    "coinbase",
+    "tardis_l2",
+    "iex_deep_plus",
+    "coinbase_level3",
+    "kraken_l3",
+    "hyperliquid_node",
+]
+INGEST_FORMATS: tuple[str, ...] = get_args(IngestFormat)
 
 
 class Body(BaseModel):
@@ -56,7 +72,7 @@ class UploadComplete(Body):
 class IngestOptions(Body):
     """`IngestSpec` minus `inputs` and `out` (inputs are the dataset's uploads; the worker picks the output)."""
 
-    format: Literal["itch", "dbn", "etcsv", "parquet", "bitstamp", "bitfinex", "coinbase", "tardis_l2"] | None = None
+    format: IngestFormat | None = None
     venue: str | None = None
     source_venue: str | None = None
     symbols: list[str] | None = None
@@ -77,7 +93,7 @@ class DatasetCreate(Body):
 
     name: Annotated[str, Field(min_length=1, max_length=200)]
     kind: Literal["mbo", "l2"]
-    format: Literal["itch", "dbn", "etcsv", "parquet", "bitstamp", "bitfinex", "coinbase", "tardis_l2"]
+    format: IngestFormat
     venue: Annotated[str, Field(min_length=1, max_length=64)]
     upload_ids: Annotated[list[str], Field(min_length=1, max_length=1000)]
     ingest: IngestOptions | None = None

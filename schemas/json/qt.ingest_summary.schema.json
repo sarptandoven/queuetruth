@@ -222,7 +222,8 @@
                 "nasdaq",
                 "cme",
                 "coinbase",
-                "crypto_l3"
+                "crypto_l3",
+                "iex"
               ],
               "type": "string"
             },

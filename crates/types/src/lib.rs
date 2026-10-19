@@ -304,10 +304,13 @@ pub enum RuleSet {
     /// Crypto L3 feeds (Bitstamp, Bitfinex): `generic` without hidden orders, so side-`N` trades consume displayed
     /// queue. Bitfinex hidden orders are opt-in and flagged in the feed.
     CryptoL3,
+    /// IEX DEEP+ (schema 1.2): US equities price-display-time priority with Nasdaq-style records (no `M`; the DEEP+
+    /// Order Modify priority bit becomes a partial `C` or a `C` + `A`), so it runs on `Venue::Nasdaq` records.
+    Iex,
 }
 
 impl RuleSet {
-    /// Canonical lower-case name (`generic`, `nasdaq`, `cme`, `coinbase`, `crypto_l3`).
+    /// Canonical lower-case name (`generic`, `nasdaq`, `cme`, `coinbase`, `crypto_l3`, `iex`).
     pub const fn name(self) -> &'static str {
         match self {
             Self::Generic => "generic",
@@ -315,14 +318,15 @@ impl RuleSet {
             Self::Cme => "cme",
             Self::Coinbase => "coinbase",
             Self::CryptoL3 => "crypto_l3",
+            Self::Iex => "iex",
         }
     }
 
-    /// The record-semantics venue this rule set runs on (`crypto_l3` -> `Generic`).
+    /// The record-semantics venue this rule set runs on (`crypto_l3` -> `Generic`, `iex` -> `Nasdaq`).
     pub const fn venue(self) -> Venue {
         match self {
             Self::Generic | Self::CryptoL3 => Venue::Generic,
-            Self::Nasdaq => Venue::Nasdaq,
+            Self::Nasdaq | Self::Iex => Venue::Nasdaq,
             Self::Cme => Venue::Cme,
             Self::Coinbase => Venue::Coinbase,
         }
@@ -349,14 +353,16 @@ impl std::fmt::Display for RuleSet {
 impl std::str::FromStr for RuleSet {
     type Err = QtError;
 
-    /// Every `Venue` alias plus `crypto_l3` / `crypto-l3` (case-insensitive); anything else is `QT-CONFIG-001`.
-    /// `bitstamp` and `bitfinex` keep mapping to `generic` (as `Venue::from_str`); pick `crypto_l3` explicitly.
+    /// Every `Venue` alias plus `crypto_l3` / `crypto-l3` and `iex` / `iexg` (case-insensitive); anything else is
+    /// `QT-CONFIG-001`. `bitstamp` and `bitfinex` keep mapping to `generic` (as `Venue::from_str`); pick `crypto_l3`
+    /// explicitly.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.trim().to_ascii_lowercase().as_str() {
             "crypto_l3" | "crypto-l3" => Ok(Self::CryptoL3),
+            "iex" | "iexg" => Ok(Self::Iex),
             other => other.parse::<Venue>().map(Self::from).map_err(|_| {
                 QtError::Config(format!(
-                    "venue: unknown rule set {other:?} (use nasdaq|cme|coinbase|generic|crypto_l3)"
+                    "venue: unknown rule set {other:?} (use nasdaq|cme|coinbase|generic|crypto_l3|iex)"
                 ))
             }),
         }
@@ -515,8 +521,52 @@ pub const fn rules_for(rs: RuleSet) -> VenueRules {
             r.supports_hidden_orders = false;
             r
         }
+        RuleSet::Iex => IEX_RULES,
     }
 }
+
+/// `iex` (schema 1.2): IEX DEEP+ as mapped by `qt_ingest::iex`. Citations: "DEEP+" = IEX DEEP+ Specification v1.06
+/// (2026-10-07/08); "IEX-TP" = IEX Transport Specification v1.26 (2026-06-02); "Rule" = Investors Exchange Rule Book
+/// (2026-10-02). The values equal `rules(Venue::Nasdaq)` except `rule_set` (and `validation`), which is why `iex`
+/// runs on `Venue::Nasdaq` records.
+const IEX_RULES: VenueRules = VenueRules {
+    venue: Venue::Nasdaq,
+    // DEEP+ p.22 Order Modify: "Modify Flags - Bit 0 - Priority: 0 = Reset Priority, 1 = Maintain Priority". The
+    // reader turns a reset into `C` (old remaining) + `A` (same order id, back of the queue) and a maintained size
+    // decrease into a partial `C` (Rule 11.220(a)(3): the unexecuted / reduced size keeps its priority), so `iex`
+    // datasets carry no `M` records and a stray `M` is a data error.
+    modify_records_present: false,
+    modify_priority: PriorityRule::AlwaysLose,
+    // DEEP+ p.13 System Event `O` "Start of Messages ... the first message sent in any trading session": a HIST day
+    // starts from an empty book, with no snapshot; DEEP+ p.27 Clear Book `C` maps to `R` for its symbol.
+    snapshot_begins_with_clear: false,
+    snapshot_records_flagged: false,
+    // DEEP+ p.24 Order Executed `L` names the resting displayed order ("A displayed order that was executed
+    // against"), so the aggressor is the opposite side.
+    trades_have_aggressor: true,
+    // DEEP+ p.3: "Non-displayed orders and non-displayed portions of reserve orders are not represented in DEEP+ ...
+    // Trades resulting from either displayed or non-displayed orders matching on IEX will be reported"; p.25 Trade
+    // `T` ("A non-displayed order on the book that executed against another non-displayed order") is a side-`N`
+    // print that consumes no displayed queue.
+    supports_hidden_orders: true,
+    // One DEEP+ message is one IEX-TP sequence number; the `T`, `F` and `C` of an `L` share it.
+    fill_removal_shares_sequence: true,
+    utc_midnight_snapshot: false,
+    // IEX-TP p.6: "First Message Sequence Number ... If there is more than one message in a segment, all subsequent
+    // messages are implicitly numbered sequentially": record `sequence` is that number, so gaps are real feed gaps.
+    sequence_meaningful: true,
+    // Real data: the 2026-10-09 DPLS day (SPY, AAPL, NVDA, TSLA; 330.7 M feed messages, 4.44 M records) replays
+    // with every invariant at 0 and all 21,301 displayed executions at the head of their FIFO level (rank oracle);
+    // ignoring the reset-priority bit would put 33 of them behind the head (docs/how-to/iex-public-demo.md).
+    validation: ValidationStatus::RealData,
+    rule_set: RuleSet::Iex,
+    // Rule 11.220(a)(1)(C)(v): a replenished reserve order gets a new timestamp; DEEP+ publishes that as a
+    // reset-priority Modify, which the reader already maps to `C` + `A`, so no `M` is ever a refresh.
+    iceberg_refresh_loses_priority: false,
+    // Rule 11.220(a)(1)(B): "Displayed orders and displayed portions of orders will have precedence over
+    // non-displayed orders and non-displayed portions of orders at a given price."
+    hidden_lower_priority: true,
+};
 
 /// Meaning of a timestamp column.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]

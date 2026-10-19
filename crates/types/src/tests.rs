@@ -459,3 +459,32 @@ fn rng_kat_file_matches() {
     assert_eq!(committed, doc, "schemas/rng_kat.json differs from qt_types output");
     assert_eq!(committed["streams"][0]["next_u64"].as_array().map(Vec::len), Some(1000));
 }
+
+/// Schema 1.2: the `iex` rule set (IEX DEEP+) runs on Nasdaq record semantics and differs from `nasdaq` only in its
+/// name and validation label.
+#[test]
+fn iex_rule_set() {
+    let r = rules_for(RuleSet::Iex);
+    assert_eq!(r.rule_set, RuleSet::Iex);
+    assert_eq!(r.venue, Venue::Nasdaq);
+    assert_eq!(RuleSet::Iex.venue(), Venue::Nasdaq);
+    assert!(!r.modify_records_present, "Order Modify becomes C or C + A");
+    assert!(r.trades_have_aggressor && r.supports_hidden_orders && r.hidden_lower_priority);
+    assert!(r.sequence_meaningful, "IEX-TP message sequence numbers");
+    let n = rules(Venue::Nasdaq);
+    assert_eq!(
+        VenueRules {
+            rule_set: RuleSet::Nasdaq,
+            validation: n.validation,
+            ..r
+        },
+        n
+    );
+    for s in ["iex", "IEX", " iexg "] {
+        assert_eq!(s.parse::<RuleSet>().ok(), Some(RuleSet::Iex), "{s}");
+    }
+    assert!("iex".parse::<Venue>().is_err(), "iex is a rule set, not a record venue");
+    assert_eq!(RuleSet::Iex.to_string(), "iex");
+    assert_eq!(serde_json::to_string(&RuleSet::Iex).ok().as_deref(), Some("\"iex\""));
+    assert_eq!(serde_json::from_str::<RuleSet>("\"iex\"").ok(), Some(RuleSet::Iex));
+}

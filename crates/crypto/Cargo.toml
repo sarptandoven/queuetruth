@@ -1,6 +1,6 @@
 [package]
 name = "queuetruth-crypto"
-description = "Crypto L3 capture converters (Bitstamp, Bitfinex, Coinbase) and Tardis L2 CSV ingest."
+description = "Crypto order-level capture converters (Bitstamp, Bitfinex, Coinbase full and level3, Kraken L3, Hyperliquid node) and Tardis L2 CSV ingest."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

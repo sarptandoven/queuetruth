@@ -1,8 +1,11 @@
-//! Minimal, dependency-free ZIP writer for the `.npz` export: STORED members only (no compression), CRC-32
-//! (IEEE 802.3, reflected polynomial `0xEDB88320`) computed in-crate, local file headers, central directory and
-//! end-of-central-directory record (APPNOTE 6.3.10). Every timestamp is the DOS epoch 1980-01-01 00:00:00 and no
-//! extra time fields are written, so equal inputs give byte-identical archives. ZIP64 fields are written only when
-//! a member is 4 GiB or larger (or an offset or count overflows the 32/16-bit fields); this writer never extracts.
+//! Minimal ZIP writer for the `.npz` export: STORED (method 0) or DEFLATE (method 8, raw deflate from `flate2`'s
+//! pure-Rust miniz_oxide backend at level 6, the zlib default that `numpy.savez_compressed` / `zipfile.ZIP_DEFLATED`
+//! use) members, CRC-32 (IEEE 802.3, reflected polynomial `0xEDB88320`) computed in-crate, local file headers, central
+//! directory and end-of-central-directory record (APPNOTE 6.3.10). Each member is compressed into memory first, so
+//! the CRC and both sizes are known before its local header is written (no data descriptor, general-purpose flags 0).
+//! Every timestamp is the DOS epoch 1980-01-01 00:00:00, no extra time fields are written and the compressor settings
+//! are fixed, so equal inputs give byte-identical archives. ZIP64 fields are written only when a member (compressed or
+//! not) is 4 GiB or larger (or an offset or count overflows the 32/16-bit fields); this writer never extracts.
 
 use std::io::{self, Write};
 
@@ -14,13 +17,50 @@ const U16_SENTINEL: u64 = 0xFFFF;
 const DOS_TIME: u16 = 0;
 /// DOS date 1980-01-01 (`(year - 1980) << 9 | month << 5 | day`).
 const DOS_DATE: u16 = (1 << 5) | 1;
-/// "Version needed to extract": 2.0 (STORED) and 4.5 (ZIP64).
+/// "Version needed to extract": 2.0 (STORED, DEFLATE) and 4.5 (ZIP64).
 const VERSION_20: u16 = 20;
 const VERSION_45: u16 = 45;
 /// "Version made by": host 3 (UNIX) in the high byte, so the external attributes carry the file mode.
 const MADE_BY_UNIX: u16 = 3 << 8;
 /// External attributes: regular file, mode 0644.
 const EXTERNAL_ATTRS: u32 = 0o100_644 << 16;
+/// zlib's default level (`Z_DEFAULT_COMPRESSION`), as used by Python's `zipfile.ZIP_DEFLATED`.
+const DEFLATE_LEVEL: u32 = 6;
+
+/// How member data is stored.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Method {
+    /// Method 0: the bytes as they are (`np.savez`). Kept and tested; no exporter writes it since npz went DEFLATE.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "np.savez-style option, exercised by the zipw tests")
+    )]
+    Stored,
+    /// Method 8: raw deflate, level 6 (`np.savez_compressed`).
+    Deflate,
+}
+
+impl Method {
+    fn code(self) -> u16 {
+        match self {
+            Method::Stored => 0,
+            Method::Deflate => 8,
+        }
+    }
+}
+
+/// The member data as it goes into the archive.
+fn encode(method: Method, data: &[u8]) -> io::Result<std::borrow::Cow<'_, [u8]>> {
+    match method {
+        Method::Stored => Ok(std::borrow::Cow::Borrowed(data)),
+        Method::Deflate => {
+            let buf = Vec::with_capacity(data.len() / 4 + 64);
+            let mut e = flate2::write::DeflateEncoder::new(buf, flate2::Compression::new(DEFLATE_LEVEL));
+            e.write_all(data)?;
+            Ok(std::borrow::Cow::Owned(e.finish()?))
+        }
+    }
+}
 
 const fn crc_tables() -> [[u32; 256]; 8] {
     let mut t = [[0u32; 256]; 8];
@@ -110,19 +150,27 @@ fn invalid(msg: String) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidInput, msg)
 }
 
-/// Where each member's local header starts, and the member's size / CRC.
+/// Where each member's local header starts, and the member's sizes / CRC.
 struct Placed<'a> {
     name: &'a str,
+    /// Uncompressed size.
     size: u64,
+    /// Size of the data in the archive.
+    csize: u64,
     crc: u32,
     offset: u64,
     /// Sizes go to the ZIP64 extra field.
     big: bool,
 }
 
-/// Writes a ZIP archive of STORED `members` (`(name, bytes)`, in order) to `w`; returns the archive length.
-/// `force_zip64` writes the ZIP64 fields even when nothing overflows (tests only).
-pub(crate) fn write_stored_zip<W: Write>(w: W, members: &[(&str, &[u8])], force_zip64: bool) -> io::Result<u64> {
+/// Writes a ZIP archive of `members` (`(name, bytes)`, in order, each stored with `method`) to `w`; returns the archive
+/// length. `force_zip64` writes the ZIP64 fields even when nothing overflows (tests only).
+pub(crate) fn write_zip<W: Write>(
+    w: W,
+    members: &[(&str, &[u8])],
+    method: Method,
+    force_zip64: bool,
+) -> io::Result<u64> {
     let mut o = Out { w, pos: 0 };
     let mut placed = Vec::with_capacity(members.len());
     for &(name, data) in members {
@@ -131,11 +179,14 @@ pub(crate) fn write_stored_zip<W: Write>(w: W, members: &[(&str, &[u8])], force_
         if name.is_empty() || name.starts_with('/') || name.contains('\\') {
             return Err(invalid(format!("zip member name {name:?}")));
         }
+        let enc = encode(method, data)?;
         let size = data.len() as u64;
-        let big = force_zip64 || size >= U32_SENTINEL;
+        let csize = enc.len() as u64;
+        let big = force_zip64 || size >= U32_SENTINEL || csize >= U32_SENTINEL;
         let p = Placed {
             name,
             size,
+            csize,
             crc: crc32(data),
             offset: o.pos,
             big,
@@ -144,11 +195,11 @@ pub(crate) fn write_stored_zip<W: Write>(w: W, members: &[(&str, &[u8])], force_
         o.u32(0x0403_4b50)?;
         o.u16(if big { VERSION_45 } else { VERSION_20 })?;
         o.u16(0)?; // flags: sizes known up front, no data descriptor; names are ASCII
-        o.u16(0)?; // method: STORED
+        o.u16(method.code())?;
         o.u16(DOS_TIME)?;
         o.u16(DOS_DATE)?;
         o.u32(p.crc)?;
-        o.u32(field32(size, big))?; // compressed size
+        o.u32(field32(csize, big))?; // compressed size
         o.u32(field32(size, big))?; // uncompressed size
         o.u16(name_len)?;
         o.u16(if big { 20 } else { 0 })?;
@@ -157,9 +208,9 @@ pub(crate) fn write_stored_zip<W: Write>(w: W, members: &[(&str, &[u8])], force_
             o.u16(0x0001)?;
             o.u16(16)?;
             o.u64(size)?; // uncompressed
-            o.u64(size)?; // compressed
+            o.u64(csize)?; // compressed
         }
-        o.bytes(data)?;
+        o.bytes(&enc)?;
         placed.push(p);
     }
     let cd_offset = o.pos;
@@ -172,11 +223,11 @@ pub(crate) fn write_stored_zip<W: Write>(w: W, members: &[(&str, &[u8])], force_
         o.u16(MADE_BY_UNIX | needed)?;
         o.u16(needed)?;
         o.u16(0)?; // flags
-        o.u16(0)?; // method: STORED
+        o.u16(method.code())?;
         o.u16(DOS_TIME)?;
         o.u16(DOS_DATE)?;
         o.u32(p.crc)?;
-        o.u32(field32(p.size, p.big))?;
+        o.u32(field32(p.csize, p.big))?;
         o.u32(field32(p.size, p.big))?;
         o.u16(u16::try_from(p.name.len()).unwrap_or(u16::MAX))?;
         o.u16(extra)?;
@@ -192,7 +243,7 @@ pub(crate) fn write_stored_zip<W: Write>(w: W, members: &[(&str, &[u8])], force_
             o.u16(z64_len)?;
             if p.big {
                 o.u64(p.size)?; // uncompressed
-                o.u64(p.size)?; // compressed
+                o.u64(p.csize)?; // compressed
             }
             if far {
                 o.u64(p.offset)?;
@@ -288,9 +339,11 @@ mod tests {
         usize::try_from(v).unwrap()
     }
 
-    /// A strict reader of what `write_stored_zip` produces: walks EOCD (and the ZIP64 locator / record when present)
-    /// to the central directory, resolves ZIP64 extra fields, and checks each local header, size and CRC.
-    fn read_back(z: &[u8]) -> Vec<(String, Vec<u8>)> {
+    /// A strict reader of what `write_zip` produces: walks EOCD (and the ZIP64 locator / record when present) to the
+    /// central directory, resolves ZIP64 extra fields, checks each local header against its central entry, inflates
+    /// DEFLATE members with `flate2::read::DeflateDecoder` (which must consume exactly the compressed size), and checks
+    /// the uncompressed size and a bitwise CRC-32. Returns `(name, uncompressed bytes)` and the method of every member.
+    fn read_back(z: &[u8]) -> (Vec<(String, Vec<u8>)>, Vec<u16>) {
         let eocd = z.len() - 22;
         assert_eq!(le32(z, eocd), 0x0605_4b50);
         assert_eq!(le16(z, eocd + 20), 0, "no comment");
@@ -309,11 +362,14 @@ mod tests {
             assert_eq!(cd_off + cd_size, eocd as u64);
         }
         let mut out = Vec::new();
+        let mut methods = Vec::new();
         let mut p = us(cd_off);
         let mut expect_local = 0u64;
         for _ in 0..n {
             assert_eq!(le32(z, p), 0x0201_4b50);
-            assert_eq!(le16(z, p + 10), 0, "STORED");
+            assert_eq!(le16(z, p + 8), 0, "flags: no data descriptor");
+            let method = u16::try_from(le16(z, p + 10)).unwrap();
+            assert!(method == 0 || method == 8, "STORED or DEFLATE");
             assert_eq!((le16(z, p + 12), le16(z, p + 14)), (0, 0x21));
             let crc = le32(z, p + 16);
             let (mut csize, mut usize_, mut off) = (le32(z, p + 20), le32(z, p + 24), le32(z, p + 42));
@@ -335,11 +391,15 @@ mod tests {
                 }
                 assert_eq!(len, 0, "no unused ZIP64 bytes");
             }
-            assert_eq!(csize, usize_);
+            if method == 0 {
+                assert_eq!(csize, usize_);
+            }
             assert_eq!(off, expect_local, "members are contiguous");
             let l = us(off);
             assert_eq!(le32(z, l), 0x0403_4b50);
-            assert_eq!(le16(z, l + 8), 0);
+            assert_eq!(le16(z, l + 6), 0, "local flags");
+            assert_eq!(le16(z, l + 8), u64::from(method), "local method = central method");
+            assert_eq!((le16(z, l + 10), le16(z, l + 12)), (0, 0x21));
             assert_eq!(le32(z, l + 14), crc);
             let lnl = us(le16(z, l + 26));
             let lxl = us(le16(z, l + 28));
@@ -353,49 +413,117 @@ mod tests {
                 assert_eq!((le32(z, l + 18), le32(z, l + 22)), (csize, usize_));
             }
             let d = l + 30 + lnl + lxl;
-            let data = z[d..d + us(csize)].to_vec();
+            let raw = &z[d..d + us(csize)];
+            let data = if method == 8 {
+                let mut dec = flate2::read::DeflateDecoder::new(raw);
+                let mut v = Vec::new();
+                std::io::Read::read_to_end(&mut dec, &mut v).unwrap();
+                assert_eq!(
+                    dec.total_in(),
+                    csize,
+                    "the deflate stream ends exactly at the compressed size"
+                );
+                v
+            } else {
+                raw.to_vec()
+            };
+            assert_eq!(data.len() as u64, usize_, "uncompressed size");
             assert_eq!(u64::from(crc32_bitwise(&data)), crc);
-            expect_local = (d + data.len()) as u64;
+            expect_local = (d + raw.len()) as u64;
             out.push((name, data));
+            methods.push(method);
             p = x + cl;
         }
         assert_eq!(expect_local, cd_off, "central directory follows the last member");
         assert_eq!(p as u64, cd_off + cd_size);
-        out
+        (out, methods)
     }
 
-    fn zip_bytes(members: &[(&str, &[u8])], force_zip64: bool) -> Vec<u8> {
+    fn zip_bytes(members: &[(&str, &[u8])], method: Method, force_zip64: bool) -> Vec<u8> {
         let mut v = Vec::new();
-        let n = write_stored_zip(&mut v, members, force_zip64).unwrap();
+        let n = write_zip(&mut v, members, method, force_zip64).unwrap();
         assert_eq!(n, v.len() as u64);
         v
+    }
+
+    /// xorshift64 bytes: incompressible for deflate.
+    fn noise(n: usize) -> Vec<u8> {
+        let mut x = 0x9e37_79b9_7f4a_7c15u64;
+        (0..n)
+            .map(|_| {
+                x ^= x << 13;
+                x ^= x >> 7;
+                x ^= x << 17;
+                (x >> 32) as u8
+            })
+            .collect()
     }
 
     #[test]
     fn layout_round_trips_and_is_byte_deterministic() {
         let big: Vec<u8> = (0u32..100_000).map(|i| (i % 251) as u8).collect();
-        let members: [(&str, &[u8]); 3] = [("data.npy", &big), ("empty.npy", b""), ("b/c.txt", b"hello")];
-        for force in [false, true] {
-            let a = zip_bytes(&members, force);
-            assert_eq!(a, zip_bytes(&members, force), "byte-deterministic");
-            let back = read_back(&a);
-            let want: Vec<(String, Vec<u8>)> = members.iter().map(|(n, d)| (n.to_string(), d.to_vec())).collect();
-            assert_eq!(back, want, "force_zip64 {force}");
+        let rnd = noise(70_000);
+        let members: [(&str, &[u8]); 4] = [
+            ("data.npy", &big),
+            ("empty.npy", b""),
+            ("b/c.txt", b"hello"),
+            ("noise.bin", &rnd),
+        ];
+        let want: Vec<(String, Vec<u8>)> = members.iter().map(|(n, d)| (n.to_string(), d.to_vec())).collect();
+        for method in [Method::Stored, Method::Deflate] {
+            for force in [false, true] {
+                let a = zip_bytes(&members, method, force);
+                assert_eq!(a, zip_bytes(&members, method, force), "byte-deterministic");
+                let (back, methods) = read_back(&a);
+                assert_eq!(back, want, "{method:?} force_zip64 {force}");
+                assert_eq!(methods, vec![method.code(); members.len()]);
+            }
         }
-        // Exact size of the plain layout: 30 + name + data per local header, 46 + name per central entry, 22 EOCD.
-        let a = zip_bytes(&members[..1], false);
+        // Exact size of the plain STORED layout: 30 + name + data per local header, 46 + name per central entry, 22 EOCD.
+        let a = zip_bytes(&members[..1], Method::Stored, false);
         assert_eq!(a.len(), 30 + 8 + big.len() + 46 + 8 + 22);
         assert_eq!(&a[..4], b"PK\x03\x04");
-        // Empty archive: just the EOCD.
+        // DEFLATE compresses the periodic member and does not blow up the incompressible one (stored blocks).
+        let d = zip_bytes(&members[..1], Method::Deflate, false);
+        assert!(d.len() < big.len() / 20, "deflated {} of {}", d.len(), big.len());
+        let d = zip_bytes(&[("noise.bin", &rnd)], Method::Deflate, false);
+        assert!(
+            d.len() < 30 + 9 + rnd.len() + rnd.len() / 100 + 46 + 9 + 22,
+            "{}",
+            d.len()
+        );
+        // Empty archive: just the EOCD, whatever the method.
+        for method in [Method::Stored, Method::Deflate] {
+            assert_eq!(
+                zip_bytes(&[], method, false),
+                b"PK\x05\x06\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0".to_vec()
+            );
+        }
+    }
+
+    /// The compressor output is pinned: a change of flate2 / miniz_oxide (backend, version or level) that would change
+    /// the bytes of the published npz files fails here rather than silently changing every artifact hash.
+    #[test]
+    fn deflate_bytes_are_pinned() {
+        // The empty input is one final fixed-Huffman block holding only end-of-block (as zlib writes it).
+        assert_eq!(encode(Method::Deflate, b"").unwrap().as_ref(), b"\x03\x00");
+        let big: Vec<u8> = (0u32..100_000).map(|i| (i % 251) as u8).collect();
+        let mut members: Vec<(&str, &[u8])> = vec![("data.npy", &big)];
+        let rnd = noise(5_000);
+        members.push(("noise.bin", &rnd));
+        let z = zip_bytes(&members, Method::Deflate, false);
+        use sha2::Digest;
         assert_eq!(
-            zip_bytes(&[], false),
-            b"PK\x05\x06\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0".to_vec()
+            hex::encode(sha2::Sha256::digest(&z)),
+            "72d9a77ac66cdb0b15d91eff14a7c23b94fe9d387e0c369fd71b63009075eaa1",
+            "deflate output changed: {} bytes",
+            z.len()
         );
     }
 
     #[test]
     fn golden_bytes_of_a_tiny_archive() {
-        let z = zip_bytes(&[("a", b"x")], false);
+        let z = zip_bytes(&[("a", b"x")], Method::Stored, false);
         let mut want = Vec::new();
         // Local header: sig, ver 20, flags 0, STORED, time 0, date 0x21, crc("x"), sizes 1/1, name len 1, extra 0.
         want.extend_from_slice(b"PK\x03\x04\x14\x00\x00\x00\x00\x00\x00\x00\x21\x00");
@@ -414,27 +542,59 @@ mod tests {
     }
 
     #[test]
-    fn bad_member_names_are_refused() {
-        for name in ["", "/abs", "a\\b"] {
-            let e = write_stored_zip(Vec::new(), &[(name, b"x")], false).unwrap_err();
-            assert_eq!(e.kind(), io::ErrorKind::InvalidInput);
-        }
-        let long = "n".repeat(70_000);
-        assert!(write_stored_zip(Vec::new(), &[(long.as_str(), b"x")], false).is_err());
+    fn golden_bytes_of_a_tiny_deflate_archive() {
+        let z = zip_bytes(&[("a", b"x")], Method::Deflate, false);
+        // "x" as one final fixed-Huffman block: literal 'x' then end-of-block (zlib -15 gives the same 3 bytes).
+        let stream = b"\xab\x00\x00";
+        let mut want = Vec::new();
+        // Local header: sig, ver 20, flags 0, DEFLATE (8), time 0, date 0x21, crc("x"), sizes 3/1, name len 1, extra 0.
+        want.extend_from_slice(b"PK\x03\x04\x14\x00\x00\x00\x08\x00\x00\x00\x21\x00");
+        want.extend_from_slice(&crc32(b"x").to_le_bytes());
+        want.extend_from_slice(b"\x03\x00\x00\x00\x01\x00\x00\x00\x01\x00\x00\x00a");
+        want.extend_from_slice(stream);
+        // Central entry: made by UNIX 2.0, needed 2.0, flags 0, DEFLATE, ..., sizes 3/1, offset 0.
+        want.extend_from_slice(b"PK\x01\x02\x14\x03\x14\x00\x00\x00\x08\x00\x00\x00\x21\x00");
+        want.extend_from_slice(&crc32(b"x").to_le_bytes());
+        want.extend_from_slice(b"\x03\x00\x00\x00\x01\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00");
+        want.extend_from_slice(&(0o100_644u32 << 16).to_le_bytes());
+        want.extend_from_slice(b"\x00\x00\x00\x00a");
+        // EOCD: 1 entry, central directory of 47 bytes at offset 34.
+        want.extend_from_slice(b"PK\x05\x06\x00\x00\x00\x00\x01\x00\x01\x00\x2f\x00\x00\x00\x22\x00\x00\x00\x00\x00");
+        assert_eq!(z, want);
     }
 
-    /// Archives for the manual numpy / zipfile check (`np.load(p)["data"]`), in the OS temp dir.
+    #[test]
+    fn bad_member_names_are_refused() {
+        for name in ["", "/abs", "a\\b"] {
+            for method in [Method::Stored, Method::Deflate] {
+                let e = write_zip(Vec::new(), &[(name, b"x")], method, false).unwrap_err();
+                assert_eq!(e.kind(), io::ErrorKind::InvalidInput);
+            }
+        }
+        let long = "n".repeat(70_000);
+        assert!(write_zip(Vec::new(), &[(long.as_str(), b"x")], Method::Deflate, false).is_err());
+    }
+
+    /// Archives for the manual numpy / zipfile check (`np.load(p)["data"]`, `zipfile.ZipFile(p).testzip()`), in
+    /// `$TMPDIR/qt-l2-zipw`.
     #[test]
     fn writes_npz_samples_for_numpy() {
         let events: Vec<u8> = (0u8..=255).cycle().take(3 * crate::EVENT_SIZE).collect();
         let npy = crate::npy_bytes(&events);
         let dir = std::env::temp_dir().join("qt-l2-zipw");
         std::fs::create_dir_all(&dir).unwrap();
-        for (file, force) in [("plain.npz", false), ("zip64.npz", true)] {
+        for (file, method, force) in [
+            ("plain.npz", Method::Stored, false),
+            ("zip64.npz", Method::Stored, true),
+            ("deflate.npz", Method::Deflate, false),
+            ("deflate_zip64.npz", Method::Deflate, true),
+        ] {
             let f = std::fs::File::create(dir.join(file)).unwrap();
-            write_stored_zip(f, &[("data.npy", &npy)], force).unwrap();
+            write_zip(f, &[("data.npy", &npy)], method, force).unwrap();
             let z = std::fs::read(dir.join(file)).unwrap();
-            assert_eq!(read_back(&z), vec![("data.npy".to_string(), npy.clone())]);
+            let (back, methods) = read_back(&z);
+            assert_eq!(back, vec![("data.npy".to_string(), npy.clone())]);
+            assert_eq!(methods, vec![method.code()]);
         }
     }
 }

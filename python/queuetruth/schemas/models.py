@@ -131,8 +131,8 @@ class PartitionEntry(QtModel):
 
 
 VenueName = Literal["generic", "nasdaq", "cme", "coinbase"]
-#: 1.1: rule-set names (`qt_types::RuleSet`): every venue plus `crypto_l3`.
-RuleSetName = Literal["generic", "nasdaq", "cme", "coinbase", "crypto_l3"]
+#: 1.1: rule-set names (`qt_types::RuleSet`): every venue plus `crypto_l3`; 1.2 adds `iex` (IEX DEEP+).
+RuleSetName = Literal["generic", "nasdaq", "cme", "coinbase", "crypto_l3", "iex"]
 ValidationStatusName = Literal["real_data", "synthetic_only", "assumed", "fixture_only"]
 
 
@@ -1362,6 +1362,79 @@ class Upload(QtDoc):
     created_at: str
 
 
+#: 1.2 `qt.dq_report` check statuses, best to worst (`skip` = not applicable or not run; never worse than `pass`).
+DqStatus = Literal["pass", "warn", "fail", "skip"]
+
+
+class DqEvidence(QtModel):
+    """One evidence table of a dq check: the first `max_evidence` rows of `total` (`truncated` when rows were
+    dropped). Timestamps are integer ns, prices integer fixed point in the instrument's `price_exp`."""
+
+    name: str
+    columns: list[str]
+    rows: list[list[Any]]
+    total: int
+    truncated: bool
+
+
+class DqCheck(QtModel):
+    """One dq check: `status` (`pass`/`warn`/`fail`/`skip`), a one-line `summary`, the numbers behind it
+    (`metrics`), evidence tables and caveats (`notes`)."""
+
+    id: str
+    title: str
+    status: DqStatus
+    summary: str
+    metrics: dict[str, Any] = Field(default_factory=dict)
+    evidence: list[DqEvidence] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
+
+
+class DqDataset(QtModel):
+    """The dataset checked by `dq`, as its manifest describes it."""
+
+    path: str
+    dataset_id: str | None
+    kind: str | None
+    source_format: str | None
+    venue: str | None
+    source_venue: str | None
+    rule_set: str | None = None
+    validation_status: str | None
+    partitions: int
+    records: int
+    session_dates: list[str]
+    symbols: list[str]
+
+
+class DqCounts(QtModel):
+    """dq checks per status."""
+
+    pass_: int = Field(alias="pass")
+    warn: int
+    fail: int
+    skip: int
+
+
+class DqReport(QtDoc):
+    """1.2: `qt.dq_report` (`queuetruth dq`, `dq_report.json`): `status` = the worst check status (`pass` when every
+    check passed or was skipped); `gate_failed` = the status reached `spec.fail_on`."""
+
+    SCHEMA: ClassVar[str] = "qt.dq_report"
+    schema_: Literal["qt.dq_report"] = _tag("qt.dq_report")
+    schema_version: Literal[1] = 1
+    engine_version: str
+    spec: dict[str, Any]
+    dataset: DqDataset
+    compare: DqDataset | None = None
+    status: Literal["pass", "warn", "fail"]
+    gate_failed: bool
+    counts: DqCounts
+    checks: list[DqCheck]
+    files: list[FileEntry]
+    warnings: list[str] = Field(default_factory=list)
+
+
 class Dataset(QtDoc):
     """A service dataset."""
 
@@ -1479,6 +1552,7 @@ DOC_MODELS: dict[str, type[QtDoc]] = {
         LiveValidation,
         Doctor,
         Bench,
+        DqReport,
         Dataset,
         Upload,
         ApiKey,
@@ -1503,5 +1577,5 @@ def parse_document(data: dict[str, Any]) -> QtDoc:
 
 __all__ = sorted(
     [n for n, v in list(globals().items()) if isinstance(v, type) and issubclass(v, QtModel)]
-    + ["DOC_MODELS", "Files", "HMap", "Timings", "parse_document"]
+    + ["DOC_MODELS", "DqStatus", "Files", "HMap", "Timings", "parse_document"]
 )
