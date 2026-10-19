@@ -103,12 +103,16 @@ def test_errors_are_qt_errors(synth: Path, tmp_path: Path) -> None:
 
 
 def test_gil_released_during_native_work(synth: Path) -> None:
-    """While a replay runs in another thread, this thread keeps executing Python bytecode."""
+    """While replays run in another thread, this thread keeps executing Python bytecode.
+
+    The worker repeats the replay until at least 0.25 s of native work has run, so the window stays long enough to
+    measure however fast one replay of the fixture is."""
     window: dict[str, float] = {}
 
     def work() -> None:
         window["start"] = time.perf_counter()
-        qt.replay({"dataset": {"path": str(synth)}, "bbo": "full", "rank_oracle": True})
+        while time.perf_counter() - window["start"] < 0.25:
+            qt.replay({"dataset": {"path": str(synth)}, "bbo": "full", "rank_oracle": True})
         window["end"] = time.perf_counter()
 
     th = threading.Thread(target=work)
