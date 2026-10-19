@@ -6,58 +6,15 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ## [Unreleased]
 
-### 0.2.0 (unreleased)
+## [0.1.0] - 2026-10-19
 
-Schema 1.2 (additive; JSON `schema_version` stays 1). Design: [spec 3.12](docs/design/spec.md).
-
-#### Added
-
-- `queuetruth dq` (and `queuetruth.api.dq`, `queuetruth.dq.run`): a data-quality battery over any ingested MBO
-  dataset, with an optional second dataset of the same sessions for cross-source parity. Fourteen checks (sequence,
-  crossed and stale books, orphan references, sizes and prices, trade parity, timestamps, session coverage,
-  symbology, snapshots, vintage, cross-source parity, rate drift, plus the ingest and replay counters), each `pass`,
-  `warn`, `fail` or `skip` with its numbers and the first offending rows. Writes `dq_report.json` (`qt.dq_report`)
-  and a self-contained `dq_report.html`; exits 1 when a check reaches `--fail-on` (default `warn`). Guide:
-  [Check a feed before you trust it](docs/how-to/check-a-feed.md).
-- Order-level crypto sources for `queuetruth ingest`: `--format coinbase-level3` (Coinbase Exchange WebSocket
-  `level3` plus REST level-3 snapshots), `kraken-l3` (Kraken WebSocket v2 `level3`; exact inside the subscribed depth
-  window only, CRC32-checked after every message) and `hyperliquid-node` (a non-validator node's raw book diffs,
-  fills and order statuses plus an L4 snapshot). New `--option` keys: `depth`, `checksum_precision` (Kraken),
-  `snapshot_block`, `max_block_gap_ms` (Hyperliquid). Each source's exactness caveats are written as ingest
-  warnings. Guide: [Ingest order-level crypto feeds](docs/how-to/crypto-l3-sources.md).
-- IEX DEEP+: `--format iex-deep-plus` reads IEX HIST DEEP+ pcap / pcapng files (gzip or raw) order by order under
-  the new `iex` rule set: IEX-TP sequencing and A/B de-duplication per channel, and the DEEP+ Order Modify priority
-  bit mapped exactly (a maintained-priority size decrease keeps the queue position, a reset goes to the back). IEX
-  HIST data may be redistributed with IEX's attribution line, so this is the public demo source
-  ([Replay a public IEX DEEP+ day](docs/how-to/iex-public-demo.md), `scripts/iex/stream_subset.py`). Real-data run
-  on 2026-10-09 (SPY, AAPL, NVDA, TSLA; 4,435,281 records): verdict `clean`, every replay invariant 0, and all
-  21,301 displayed executions at FIFO rank 0 of their price level; the `iex` rule set is labelled `real_data`.
-- Schema 1.2 documents `qt.dq_report` and `qt.dq_spec` are registered with the other JSON Schemas
-  (`queuetruth schema list`); the HTTP API's ingest format lists (`/v1/meta`, dataset creation) include the four new
-  formats.
-
-#### Changed
-
-- Crypto L3 datasets now record their resolved rule set in the manifest (`rule_set: crypto_l3` for Bitstamp,
-  Bitfinex, Coinbase and the new sources when ingested with `--venue generic`). In 0.1 the manifest carried no
-  `rule_set`, so replay used `generic`, under which side-`N` prints consume no displayed queue (hidden liquidity);
-  under `crypto_l3` they do. Re-ingesting an old crypto capture can therefore change replay, shadow and zoo
-  results; datasets ingested by 0.1 keep replaying as `generic` unless re-ingested or replayed with
-  `--venue crypto_l3`.
-
-#### Security
-
-- Dropped the `zip` crate (RUSTSEC-2026-0367, -0368, -0369): hftbacktest `.npz` files are written by a small
-  in-crate zip writer (DEFLATE, matching np.savez_compressed; CRC-32 known-answer and numpy round-trip tested).
-  queuetruth never extracted archives, so it was not exposed; `cargo audit` is clean.
-
-### 0.1.0 (not released yet)
-
-First public version. Validated on real data for Nasdaq TotalView-ITCH (two public days, four symbols); everything
+First public version. Validated on real data for Nasdaq TotalView-ITCH (two public days, four symbols) and IEX
+DEEP+ (one public day, four symbols); everything
 else is tested on synthetic data and fixtures, as listed under "Known limitations". Evidence:
-[docs/RESULTS.md](docs/RESULTS.md) and [How queuetruth is tested](docs/testing.md).
+[docs/RESULTS.md](docs/RESULTS.md) and [How queuetruth is tested](docs/testing.md). Data schema 1.2
+(design: [spec 3.12](docs/design/spec.md)).
 
-#### Real-data results
+### Real-data results
 
 - Exact replay of 16,754,562 records of two public Nasdaq ITCH days (2019-12-30, 2020-01-30; AAPL, MSFT, SPY, TSLA)
   from the raw bytes with queuetruth's own ITCH reader: 0 invariant violations, 0 trade-parity mismatches over 633,287
@@ -109,7 +66,7 @@ else is tested on synthetic data and fixtures, as listed under "Known limitation
 - Learned fill model: Brier skill over climatology on the held-out day 0.095 [0.072, 0.122] at 1 s and 0.115
   [0.102, 0.128] at 10 s.
 
-#### Added
+### Added
 
 - **Ingest** into one partitioned Parquet dataset format: Nasdaq TotalView-ITCH 5.0, Databento DBN MBO (versions 1
   to 3), the earlier prototype's CSV layout (`etcsv`), our own normalized Parquet, crypto L3 captures (Bitstamp, Bitfinex, Coinbase)
@@ -154,8 +111,38 @@ else is tested on synthetic data and fixtures, as listed under "Known limitation
   handler raises (any 4xx problem, and 5xx) are not stored under an idempotency key, so a retry with the same key
   works once the cause is fixed.
 
-#### Security
+- `queuetruth dq` (and `queuetruth.api.dq`, `queuetruth.dq.run`): a data-quality battery over any ingested MBO
+  dataset, with an optional second dataset of the same sessions for cross-source parity. Fourteen checks (sequence,
+  crossed and stale books, orphan references, sizes and prices, trade parity, timestamps, session coverage,
+  symbology, snapshots, vintage, cross-source parity, rate drift, plus the ingest and replay counters), each `pass`,
+  `warn`, `fail` or `skip` with its numbers and the first offending rows. Writes `dq_report.json` (`qt.dq_report`)
+  and a self-contained `dq_report.html`; exits 1 when a check reaches `--fail-on` (default `warn`). Guide:
+  [Check a feed before you trust it](docs/how-to/check-a-feed.md).
+- Order-level crypto sources for `queuetruth ingest`: `--format coinbase-level3` (Coinbase Exchange WebSocket
+  `level3` plus REST level-3 snapshots), `kraken-l3` (Kraken WebSocket v2 `level3`; exact inside the subscribed depth
+  window only, CRC32-checked after every message) and `hyperliquid-node` (a non-validator node's raw book diffs,
+  fills and order statuses plus an L4 snapshot). New `--option` keys: `depth`, `checksum_precision` (Kraken),
+  `snapshot_block`, `max_block_gap_ms` (Hyperliquid). Each source's exactness caveats are written as ingest
+  warnings. Guide: [Ingest order-level crypto feeds](docs/how-to/crypto-l3-sources.md).
+- IEX DEEP+: `--format iex-deep-plus` reads IEX HIST DEEP+ pcap / pcapng files (gzip or raw) order by order under
+  the new `iex` rule set: IEX-TP sequencing and A/B de-duplication per channel, and the DEEP+ Order Modify priority
+  bit mapped exactly (a maintained-priority size decrease keeps the queue position, a reset goes to the back). IEX
+  HIST data may be redistributed with IEX's attribution line, so this is the public demo source
+  ([Replay a public IEX DEEP+ day](docs/how-to/iex-public-demo.md), `scripts/iex/stream_subset.py`). Real-data run
+  on 2026-10-09 (SPY, AAPL, NVDA, TSLA; 4,435,281 records): verdict `clean`, every replay invariant 0, and all
+  21,301 displayed executions at FIFO rank 0 of their price level; the `iex` rule set is labelled `real_data`.
+- Schema 1.2 documents `qt.dq_report` and `qt.dq_spec` are registered with the other JSON Schemas
+  (`queuetruth schema list`); the HTTP API's ingest format lists (`/v1/meta`, dataset creation) include the four new
+  formats.
+- Crypto L3 datasets record their resolved rule set in the manifest (`rule_set: crypto_l3` for Bitstamp, Bitfinex,
+  Coinbase and the order-level sources when ingested with `--venue generic`), so side-`N` prints consume displayed
+  queue; a manifest without `rule_set` replays as `generic`.
 
+### Security
+
+- Dropped the `zip` crate (RUSTSEC-2026-0367, -0368, -0369): hftbacktest `.npz` files are written by a small
+  in-crate zip writer (DEFLATE, matching np.savez_compressed; CRC-32 known-answer and numpy round-trip tested).
+  queuetruth never extracted archives, so it was not exposed; `cargo audit` is clean.
 - The service was hardened after a security review; every finding was reproduced, fixed and kept as a regression test
   (`service/tests/security/`): tenant isolation that never fails open (the api and the worker refuse to start
   unless connected as their own unprivileged role, `FORCE ROW LEVEL SECURITY` plus explicit tenant filters, signed
@@ -166,7 +153,7 @@ else is tested on synthetic data and fixtures, as listed under "Known limitation
   stack publishing the api and the store on 127.0.0.1 by default; hash-pinned image dependencies, digest-pinned base
   images, and `cargo-audit` and `pip-audit` in CI.
 
-#### Packaging
+### Packaging
 
 - One abi3 wheel per platform (`cp311-abi3`, CPython 3.11 and later) built with maturin, plus an sdist. Wheels carry
   `LICENSE`, `NOTICE`, the hftbacktest MIT licence and the licences of every bundled Rust crate.
@@ -178,13 +165,13 @@ else is tested on synthetic data and fixtures, as listed under "Known limitation
 - PyPI uploads use Trusted Publishing with PEP 740 attestations; every artifact also gets a GitHub build-provenance
   attestation.
 
-#### Project
+### Project
 
 - Contributor guide (`CONTRIBUTING.md`, DCO sign-off), security policy (`SECURITY.md`), code of conduct, issue and
   pull request templates. The design specification and a summary of how the project was built and verified are in
   `docs/design/`.
 
-#### Known limitations
+### Known limitations
 
 - The Databento model is re-implemented from its public tutorial and has not been checked against Databento's own
   code. The NautilusTrader models are checked against nautilus_trader 1.231.0 on a delta-fed L2 book only; on an
@@ -193,10 +180,12 @@ else is tested on synthetic data and fixtures, as listed under "Known limitation
 - Real-data validation covers two Nasdaq days: four very liquid symbols in full, plus 36 more symbols in five
   liquidity tiers (first-fill bias only, no fill quantity). Other venues and other regimes are not shown.
 - DBN/CME semantics are synthetic only (Databento's DBN test files decode, but no real CME session was replayed).
-- Crypto L3 readers are checked on one 10-minute capture per venue (counters, not fill fidelity).
+- The Bitstamp and Bitfinex readers are checked on one 10-minute capture per venue (counters, not fill fidelity);
+  the Coinbase `level3`, Kraken L3 and Hyperliquid node readers on synthetic fixtures only.
 - Live-log and QuickFIX importers are tested on fixtures written from public format documentation and the engines'
   sources, not on real account exports.
-- Performance was measured on a loaded machine; the book-only replay (4.30M records/s) misses its 8M target there
-  (RD-13 recorded as failing until re-measured on a quiet machine).
+- Performance is measured on one Apple silicon laptop with Low Power Mode on (every SPEC 7.1 throughput target met;
+  real day one replays at 8.56M records/s). Other hardware is unmeasured, and `fit-hazard` (172 s against 120 s) and
+  the Python binding's overhead over the CLI (18% against 5%) still miss their targets.
 - Exact truth covers displayed liquidity on FIFO venues only; hidden liquidity, auctions, pro-rata books and
   own-order queue interaction are out of scope.

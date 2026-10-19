@@ -98,7 +98,7 @@ Logs and progress go to stderr only.
    (`etcsv`: et's `mbo.csv` + `trades.csv` + `instruments.csv`), our own normalized Parquet, and the crypto L3
    captures et reads (Bitstamp `live_orders`/`live_trades`/`detail_order_book` JSONL, Bitfinex `book_R0`/`trades`
    JSONL, Coinbase `full` JSONL). Plus Tardis `incremental_book_L2` + `trades` CSV(.gz) as an **L2-only** dataset
-   (usable for zoo simulation and markouts, never as exact truth). 0.2.0 (schema 1.2, 3.12) adds the order-level
+   (usable for zoo simulation and markouts, never as exact truth). Schema 1.2 (3.12) adds the order-level
    crypto sources Coinbase Exchange `level3` (`coinbase_level3`), Kraken WebSocket v2 `level3` (`kraken_l3`, a
    depth-window source: exact inside the subscribed window only) and Hyperliquid node outputs
    (`hyperliquid_node`), and IEX DEEP+ (`iex_deep_plus`, 3.12.2).
@@ -468,8 +468,8 @@ cme true, coinbase false, generic false; `hidden_lower_priority` = nasdaq true, 
 node outputs; M25 resolved by E38): the `generic` values with `supports_hidden_orders = false`; `validation`
 Assumed. The dataset manifest's `rule_set` (3.10) selects it; `ingest --venue generic` resolves to `crypto_l3` for
 every crypto L3 format (`bitstamp`, `bitfinex`, `coinbase`, `coinbase_level3`, `kraken_l3`, `hyperliquid_node`;
-not `tardis_l2`), `qt_crypto::write` records it in the manifest (0.2.0; 0.1 crypto datasets carry no `rule_set`
-and replay as `generic`), and replay reads
+not `tardis_l2`), `qt_crypto::write` records it in the manifest (schema 1.2; a manifest without `rule_set`
+replays as `generic`), and replay reads
 `manifest.rule_set` (`qt_replay::run`, `rules_for(effective_rule_set())`). (1) CME: an `M` keeps priority only on a
 size decrease at the same price below the post-fill remaining size (5.1.1); (2) where `hidden_lower_priority`
 holds, a side-N print can fill a shadow only under the A3d rule of 5.2.4a, governed by `HiddenPrintPolicy`
@@ -912,7 +912,7 @@ Not in 1.1 (requested, open): `ZooSpec`/CLI flag for the calibrate-live grid (R-
 (R-G2). (The scorer writes `qt.score_markouts`, `qt.score_orders` and `qt.score_fills` in the 1.1 layout, with
 `mo_bps`/`mo_net_ccy` and `price_exp`/`size_exp` filled.)
 
-### 3.12 Schema 1.2 (0.2.0)
+### 3.12 Schema 1.2
 
 Schema 1.2 is additive like 1.1 (JSON `schema_version` stays 1). It adds:
 

@@ -69,7 +69,7 @@ tables, and every artifact named: [docs/RESULTS.md](docs/RESULTS.md).
   calibrations, the learned model and the oracle identically. The checks that compare with the prototype's outputs
   need its artifacts, which are not public. Commands and provenance: [docs/RESULTS.md](docs/RESULTS.md).
 
-New in 0.2.0 (unreleased): order-level ingest of IEX DEEP+ (free public data, redistributable with IEX's attribution;
+Also in 0.1.0: order-level ingest of IEX DEEP+ (free public data, redistributable with IEX's attribution;
 [guide](docs/how-to/iex-public-demo.md)), Coinbase Exchange `level3`, Kraken L3 and Hyperliquid node captures
 ([guide](docs/how-to/crypto-l3-sources.md)), and `queuetruth dq`, a data-quality report for any dataset
 ([guide](docs/how-to/check-a-feed.md)).
@@ -157,9 +157,9 @@ for row in z.leaderboard:  # fill-rate bias vs exact at 60 s, with its 95% CI
 | Learned L2 fill model | Brier skill over climatology on the held-out day, lower 95% bound above 0 at 1 s and 10 s | validated |
 | Scorer | 3,000 real orders per day reproduced exactly by the exact arm on both days | validated |
 | Databento DBN / CME | Databento's DBN test files decode in every version; no real CME session | decoding only |
-| Exact book and replay, IEX DEEP+ (0.2.0) | 1 public day (2026-10-09; SPY, AAPL, NVDA, TSLA) from the raw pcap: verdict clean, invariants 0, all 21,301 displayed executions at FIFO rank 0 | validated on one day |
+| Exact book and replay, IEX DEEP+ | 1 public day (2026-10-09; SPY, AAPL, NVDA, TSLA) from the raw pcap: verdict clean, invariants 0, all 21,301 displayed executions at FIFO rank 0 | validated on one day |
 | Crypto L3 (Bitstamp, Bitfinex) | one 10-minute capture per venue, record counts equal to the prototype's converter | counters only |
-| Crypto L3: Coinbase `level3`, Kraken L3, Hyperliquid node (0.2.0) | synthetic fixtures and property tests; no real capture has been run | fixture only |
+| Crypto L3: Coinbase `level3`, Kraken L3, Hyperliquid node | synthetic fixtures and property tests; no real capture has been run | fixture only |
 | Live-log and QuickFIX importers | fixtures from public format docs and the engines' sources | fixture only |
 | HTTP service, MCP server | contract, tenancy, security regression and idempotency tests on an ephemeral Postgres 16 | validated on macOS arm64 |
 

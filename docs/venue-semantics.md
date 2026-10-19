@@ -36,7 +36,7 @@ parity run. Every output that depends on a rule set carries its label.
 
 Two more named rule sets reuse these columns. `crypto_l3` is `generic` without hidden orders (a side-`N` trade
 consumes displayed queue); `--venue generic` resolves to it for every crypto order-level format, and the dataset
-manifest records it (`rule_set`). `iex` (0.2.0) has the `nasdaq` values and runs on Nasdaq record semantics; it is
+manifest records it (`rule_set`). `iex` has the `nasdaq` values and runs on Nasdaq record semantics; it is
 validated on real data (one public day, below).
 
 ## Nasdaq TotalView-ITCH 5.0 (`--format itch`, venue `nasdaq`)
@@ -126,7 +126,7 @@ one feed message plus your receive time `recv_ns`.
   `full`, `level2` and `level3` channels, and authenticated messages do not increment the sequence number, so the
   gap check cannot see a dropped authenticated message. The compact `level3` channel is read by `coinbase-level3`
   (below).
-- **0.2.0 sources** (`--format coinbase-level3`, `kraken-l3`, `hyperliquid-node`): Coinbase Exchange `level3` with
+- **Order-level crypto sources** (`--format coinbase-level3`, `kraken-l3`, `hyperliquid-node`): Coinbase Exchange `level3` with
   REST level-3 snapshots, Kraken WebSocket v2 `level3` (exact only inside the subscribed depth window, CRC32-checked)
   and Hyperliquid node outputs with an L4 snapshot. Capture layout, record mapping and limits:
   [Ingest order-level crypto feeds](how-to/crypto-l3-sources.md). **Validation: synthetic fixtures only.**
@@ -155,7 +155,7 @@ against the predecessor (`make realdata`) replay the two public Nasdaq days from
 ## Out of scope
 
 Pro-rata and allocation matching, auctions (orders resting through them are censored), halts, CME implied
-liquidity, and iceberg reconstruction beyond the displayed slice. Kraken L3 is read since 0.2.0, but only as a
+liquidity, and iceberg reconstruction beyond the displayed slice. Kraken L3 is read, but only as a
 depth-window source: Kraken sends no delete when a level leaves the subscribed window, so queue-rank truth stops at
 the window. See [Data and licensing](data-and-licensing.md#vendor-notes) for the terms of IEX, Kraken and the other
 sources.

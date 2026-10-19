@@ -179,7 +179,7 @@ artifact is in [Results](RESULTS.md); the summary:
 | RD-10 | Learned model skill on the held-out day | Brier skill over climatology 0.095 [0.072, 0.122] at 1 s and 0.115 [0.102, 0.128] at 10 s (L2-only features) |
 | RD-11 | Scorer on real orders used as "live" | the exact arm with self-exclusion reproduces all 3,000 orders per day (250 / 2,750 / 0 / 0 and 195 / 2,805 / 0 / 0), with the live filled quantity and first-fill time on every order |
 | RD-12 | Crypto capture replay counters | one 10-minute Bitstamp and Bitfinex capture: record counts equal, invariants 0 |
-| RD-13 | Performance | **fails** under load: book-only replay 4.30M records/s against the 8M target; ingest and zoo targets met; see [Performance](#performance) |
+| RD-13 | Performance | book-only replay of real day one from Parquet at 8.56M to 8.60M records/s against the 8M target (Low Power Mode on); see [Performance](#performance) |
 
 What to keep in mind when reading these:
 
@@ -210,12 +210,13 @@ What to keep in mind when reading these:
 
 ## Performance
 
-Measured on an Apple M1 Pro (8 cores, 16 GB) while other builds were running and Low Power Mode was on, so these are
-lower bounds: book-only replay from Parquet 4.26M to 4.30M records/s (target 8M, missed; RD-13 is recorded as failing
-until a quiet-machine re-measure), ITCH parse and map 9.6M
-messages/s (target 5M, met), the zoo for 17 models and 3,000 shadows of day one in 7.6 to 9.0 s at 4 threads (target 90 s, met). The
-full table, with every missed target, is in [Results](RESULTS.md), section 7; a quiet-machine baseline is still to be
-recorded.
+Measured on an Apple M1 Pro (8 cores, 16 GB) with Low Power Mode on, so these are lower bounds. Every SPEC 7.1
+throughput target is met: book-only replay from Parquet 14.5M records/s on synthetic data and 8.56M to 8.60M on real
+day one (target 8M), replay with Parquet sinks 6.25M (target 4M), ITCH parse and map 16.7M messages/s (target 5M),
+ITCH ingest 4.56M messages/s (target 2.5M), replay with 100,000 shadows 5.28M records/s (target 5M). The zoo for 17
+models and 3,000 shadows of day one takes 7.6 to 9.0 s at 4 threads (target 90 s). Two targets are still missed:
+`fit-hazard` (172 s against 120 s) and the Python binding's overhead over the CLI (18% against 5%). The full table is
+in [Results](RESULTS.md), section 7; a quiet-machine baseline for the regression gate is still to be recorded.
 
 ## What is not tested yet
 

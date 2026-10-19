@@ -99,7 +99,7 @@ Short summaries of the terms as we read them on 2026-10-18. Follow the links for
 
   IEX keeps its proprietary rights, and the data covers trading on IEX only. These are the most permissive terms we
   found for real order-level data, which makes IEX DEEP+ the intended public demo source: event-level traces and
-  example datasets built from it can be published when every artifact carries the line above. queuetruth 0.2.0
+  example datasets built from it can be published when every artifact carries the line above. queuetruth
   reads DEEP+ pcap files (`ingest --format iex-deep-plus`, rule set `iex`; see
   [Replay a public IEX DEEP+ day](how-to/iex-public-demo.md)), and `scripts/iex/stream_subset.py` records the
   attribution line in its subset manifest. DEEP+ does not show non-displayed orders, so their executions appear as
@@ -123,7 +123,7 @@ Short summaries of the terms as we read them on 2026-10-18. Follow the links for
   sequence number, so dropped authenticated messages cannot be detected from the sequence; and Kraken L3 is exact
   only within the subscribed depth (10, 100 or 1,000 levels), sends no delete when a level leaves that window, adds
   orders again when they re-enter it, and excludes in-flight orders, unmatched market orders, untriggered stops and
-  hidden iceberg quantity. queuetruth 0.2.0 reads both captures (`coinbase-level3`, `kraken-l3`; see
+  hidden iceberg quantity. queuetruth reads both captures (`coinbase-level3`, `kraken-l3`; see
   [Ingest order-level crypto feeds](how-to/crypto-l3-sources.md)).
 - **Bitstamp, Bitfinex.** We found no primary market-data redistribution terms. Ask the venue.
 
