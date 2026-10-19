@@ -60,9 +60,10 @@ else is tested on synthetic data and fixtures, as listed under "Known limitation
   its own shadow only, by that shadow, which takes the order's exact queue place and is filled by the order's
   executions, while every other shadow still sees the order on the tape. An earlier build, before the root-cause fix
   of the self-exclusion path, disagreed with live on 10 orders on day one (242 / 2,748 / 8 / 2).
-- Performance: RD-13 fails under load. The book-only replay measured 4.30M records/s against its 8M target on a
-  loaded machine; ingest (1.69M records/s) and zoo (9.0 s for 17 models x 3,000 shadows) targets are met. A
-  quiet-machine re-measure is pending.
+- Performance (RD-13 passes): the book-only replay of real day one from Parquet runs at 8.56M to 8.60M records/s
+  against its 8M target, with Low Power Mode on. Every SPEC 7.1 throughput target is met with byte-identical outputs
+  (synthetic replay 14.5M records/s, with Parquet sinks 6.25M, ITCH ingest 4.56M messages/s, 100,000 shadows 5.28M
+  records/s); the zoo runs 17 models x 3,000 shadows in 9.0 s.
 - Learned fill model: Brier skill over climatology on the held-out day 0.095 [0.072, 0.122] at 1 s and 0.115
   [0.102, 0.128] at 10 s.
 
