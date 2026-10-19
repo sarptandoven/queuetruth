@@ -121,7 +121,10 @@ def wipe(sub: str):
 
 def core_kernels(ctx: Ctx, data: Path | None, n_records: int | None, tag: str) -> Group:
     """In-process Rust kernels (PROPOSED bench subcommands). data=None -> synthetic records generated in memory."""
-    src = ["--data", str(data)] if data else ["--synth-records", str(n_records), "--seed", "7"]
+    # synthetic: one dataset per size, shared by the group's cases (written by the first run, untimed; scratch is
+    # deleted after the suite) instead of one copy per case working directory
+    synth = ["--synth-records", str(n_records), "--seed", "7", "--scratch", str(ctx.scratch / f"synth-{n_records}-7")]
+    src = ["--data", str(data)] if data else synth
     rep = ["--warmup", "1", "--repeat", "3", "--format", "json"]
     c = str(ctx.core)
 
@@ -348,8 +351,8 @@ def analysis_group(ctx: Ctx, data: Path, shadows: Path, tag: str, train: str, te
                 "qt.calibration_result",
             ),
             case(
-                "calib_survival_power3",
-                lambda w: ["calibrate", "survival", "--family", "power3", *common, "--out", str(w / "out")],
+                "calib_survival_databento",
+                lambda w: ["calibrate", "survival", "--family", "databento", *common, "--out", str(w / "out")],
                 "qt.calibration_result",
             ),
             case(

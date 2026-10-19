@@ -144,7 +144,31 @@ fn doc(label: String, records: u64, wall_s: Vec<f64>) -> Bench {
     }
 }
 
-/// `--data` or a synthetic dataset (4 Nasdaq instruments) written once to scratch (untimed, reused).
+/// Events (F_LAST batches) per instrument and session of a `--synth-records` dataset. Sessions start at 09:30 ET
+/// with a 50 ms mean event gap, so 450,000 events span about 22,500 s and end before the 16:00 close of their own
+/// local date (2M records stay one session). Larger datasets add sessions, one local day each with its own
+/// `qt.instruments` rows, instead of letting timestamps run past midnight into a date no instrument row covers.
+const SYNTH_EVENTS_PER_SESSION: u64 = 450_000;
+
+/// Synthetic bench data for about `n` records: 4 Nasdaq instruments over as many sessions as
+/// `per_session` events per instrument and session require (events split evenly over the sessions).
+fn synth_output(n: u64, seed: u64, per_session: u64) -> qt_testkit::SynthOutput {
+    let mut cfg = qt_testkit::SynthConfig::for_venue(Venue::Nasdaq, seed);
+    cfg.instruments = 4;
+    let (sessions, events) = synth_layout(n, per_session);
+    cfg.events_per_instrument = events;
+    qt_testkit::generate_sessions(&cfg, sessions)
+}
+
+/// `(sessions, events per instrument and session)` of `synth_output`.
+fn synth_layout(n: u64, per_session: u64) -> (u32, u64) {
+    // events count F_LAST batches (about 1.1-1.3 records each); the reported work is the true record count.
+    let total = (n / 4 * 10 / 12).max(1);
+    let sessions = total.div_ceil(per_session.max(1));
+    (u32::try_from(sessions).unwrap_or(u32::MAX), total.div_ceil(sessions))
+}
+
+/// `--data` or a synthetic dataset (`synth_output`) written once to scratch (untimed, reused).
 fn dataset(a: &BenchArgs) -> QtResult<(PathBuf, String)> {
     if let Some(d) = &a.data {
         return Ok((d.clone(), d.display().to_string()));
@@ -152,16 +176,13 @@ fn dataset(a: &BenchArgs) -> QtResult<(PathBuf, String)> {
     let n = a
         .synth_records
         .ok_or_else(|| QtError::Usage("bench: give --data DIR or --synth-records N".into()))?;
+    // `-d` = multi-session layout; datasets cached by older builds (one session past midnight) are not reused.
     let root = a
         .scratch
         .clone()
-        .unwrap_or_else(|| PathBuf::from(format!(".scratch/bench/synth-{n}-{}", a.seed)));
+        .unwrap_or_else(|| PathBuf::from(format!(".scratch/bench/synth-{n}-{}-d", a.seed)));
     if !root.join("manifest.json").exists() {
-        let mut cfg = qt_testkit::SynthConfig::for_venue(Venue::Nasdaq, a.seed);
-        cfg.instruments = 4;
-        // events count F_LAST batches (about 1.1-1.3 records each); the reported work is the true record count.
-        cfg.events_per_instrument = (n / 4 * 10 / 12).max(1);
-        let out = qt_testkit::generate(&cfg);
+        let out = synth_output(n, a.seed, SYNTH_EVENTS_PER_SESSION);
         qt_testkit::write_dataset(&out, &root)?;
     }
     Ok((root, format!("synth:{n}:seed{}", a.seed)))
@@ -514,4 +535,60 @@ fn write_raw(bytes: &[u8], path: &Path) -> QtResult<()> {
         path: path.display().to_string(),
         msg: e.to_string(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+
+    use super::*;
+
+    fn scratch(name: &str) -> PathBuf {
+        let p = std::env::temp_dir().join(format!("qt-bench-{name}-{}", std::process::id()));
+        if p.exists() {
+            std::fs::remove_dir_all(&p).expect("clean scratch");
+        }
+        p
+    }
+
+    /// 10M records (the gate suite's `synth10m`) span several sessions, each ending before its own close; 2M and
+    /// smaller stay one session (unchanged data).
+    #[test]
+    fn synth_layout_keeps_each_session_inside_its_day() {
+        assert_eq!(synth_layout(200_000, SYNTH_EVENTS_PER_SESSION), (1, 41_666));
+        assert_eq!(synth_layout(2_000_000, SYNTH_EVENTS_PER_SESSION).0, 1);
+        let (sessions, per) = synth_layout(10_000_000, SYNTH_EVENTS_PER_SESSION);
+        assert_eq!((sessions, per), (5, 416_667));
+        let cfg = qt_testkit::SynthConfig::for_venue(Venue::Nasdaq, 7);
+        let sr = qt_testkit::calendar::session_rules(Venue::Nasdaq);
+        let span_s = SYNTH_EVENTS_PER_SESSION as f64 * cfg.mean_gap_ns as f64 / 1e9;
+        assert!(f64::from(sr.open_s) + span_s < f64::from(sr.close_s), "span {span_s} s");
+    }
+
+    /// A forced multi-day synthetic bench dataset (small N, small per-session cap): one instrument row per
+    /// instrument and session date, every partition covered, and `bench replay` / `bench l2` replay every record.
+    #[test]
+    fn multi_day_synthetic_dataset_replays() {
+        let out = synth_output(4_000, 7, 100);
+        let dates: BTreeSet<i32> = out.instruments.iter().map(|r| r.session_date).collect();
+        assert_eq!((dates.len(), out.instruments.len()), (9, 36));
+        let root = scratch("multiday");
+        qt_testkit::write_dataset(&out, &root).expect("write dataset");
+        let ds = Dataset::open(&root).expect("open");
+        assert_eq!(ds.partitions().len(), 36);
+        for p in ds.partitions() {
+            assert!(ds.instrument(p.instrument_id, p.session_date).is_some());
+        }
+        let n = out.events.len() as u64;
+        let data = root.display().to_string();
+        for (kind, mode) in [("replay", "book"), ("replay", "sinks"), ("l2", "book")] {
+            let mut args = serde_json::json!({"data": data, "mode": mode, "warmup": 0, "repeat": 1});
+            if mode == "sinks" {
+                args["out"] = Value::from(root.join("sinks").display().to_string());
+            }
+            let b = run(kind, &args).unwrap_or_else(|e| panic!("{kind} {mode}: {e}"));
+            assert_eq!(b.records, n, "{kind} {mode}");
+        }
+        std::fs::remove_dir_all(&root).expect("clean");
+    }
 }
