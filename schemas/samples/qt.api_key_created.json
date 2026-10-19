@@ -1,0 +1,15 @@
+{
+  "sample": {
+    "schema": "qt.api_key_created",
+    "schema_version": 1,
+    "id": "x",
+    "prefix": "x",
+    "scopes": [
+      "read"
+    ],
+    "created_at": "x",
+    "last_used_at": "x",
+    "revoked_at": "x",
+    "secret": "x"
+  }
+}

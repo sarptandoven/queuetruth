@@ -1,0 +1,40 @@
+[package]
+name = "queuetruth-py"
+description = "PyO3 extension module queuetruth._core (abi3-py311)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+# Built by maturin as `queuetruth._core` (pyproject.toml `module-name`); the #[pymodule] is named `_core`.
+name = "qt_py"
+path = "src/lib.rs"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+gate = []
+# Enabled by maturin (pyproject.toml); off for plain cargo builds so they link against libpython normally.
+extension-module = ["pyo3/extension-module"]
+
+[dependencies]
+queuetruth-types.workspace = true
+queuetruth-schema.workspace = true
+queuetruth-book.workspace = true
+queuetruth-ingest.workspace = true
+queuetruth-crypto.workspace = true
+queuetruth-l2.workspace = true
+queuetruth-replay.workspace = true
+queuetruth-zoo.workspace = true
+queuetruth-calib.workspace = true
+queuetruth-features.workspace = true
+queuetruth-cli.workspace = true
+pyo3.workspace = true
+pyo3-arrow.workspace = true
+arrow-array.workspace = true
+arrow-schema.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true

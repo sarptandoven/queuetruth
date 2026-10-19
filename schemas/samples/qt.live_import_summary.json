@@ -1,0 +1,53 @@
+{
+  "sample": {
+    "schema": "qt.live_import_summary",
+    "schema_version": 1,
+    "venue": "x",
+    "inputs": [
+      {
+        "path": "x",
+        "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      }
+    ],
+    "n_orders": 1,
+    "n_events": 1,
+    "n_fills": 1,
+    "dedupe_dropped": 1,
+    "unmatched_fills": 1,
+    "warnings": [
+      "x"
+    ],
+    "validation_status": "real",
+    "files": [
+      {
+        "name": "x",
+        "rows": 1,
+        "bytes": 1,
+        "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      }
+    ],
+    "coverage": {
+      "fills_only": true,
+      "n_fills_only_orders": 1
+    },
+    "entry_fallback_share": 0.5,
+    "unmapped_instruments": [
+      {
+        "venue": "x",
+        "instrument": "x",
+        "n_orders": 1
+      }
+    ],
+    "instrument_scales": [
+      {
+        "venue": "x",
+        "instrument": "x",
+        "instrument_id": 1,
+        "price_exp": 1,
+        "size_exp": 1,
+        "scale_source": "instrument_map",
+        "n_orders": 1
+      }
+    ]
+  }
+}

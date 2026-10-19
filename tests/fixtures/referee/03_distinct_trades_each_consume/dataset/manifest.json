@@ -1,0 +1,33 @@
+{
+  "schema": "qt.dataset_manifest",
+  "schema_version": 1,
+  "dataset_id": "5841ec5a22879274fae7c8170b2477f61d895058c7b7030638a93d9d96cbbb6f",
+  "kind": "mbo",
+  "source_format": "synthetic",
+  "venue": "cme",
+  "source_venue": "cme",
+  "inputs": [],
+  "partitions": [
+    {
+      "instrument_id": 1,
+      "session_date": 20619,
+      "files": [
+        {
+          "path": "mbo/date=2026-06-15/instrument_id=1/part-00000.parquet",
+          "rows": 16,
+          "sha256": "af979d769836e5644a07823bbb6b93381c06d68353b93fb0740c1074dd8ef9f6"
+        }
+      ],
+      "rows": 16,
+      "ts_min": 1781532000000000000,
+      "ts_max": 1781532000030000000
+    }
+  ],
+  "price_exp_by_instrument": {
+    "1": -9
+  },
+  "created_by": "queuetruth-testkit 0.1.0",
+  "validation_status": "fixture_only",
+  "rule_set": null,
+  "source_vintage": null
+}

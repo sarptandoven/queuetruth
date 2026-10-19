@@ -1,0 +1,60 @@
+{
+  "sample": {
+    "schema": "qt.zoo_summary",
+    "schema_version": 1,
+    "run_id": "0123456789abcdef",
+    "spec": {
+      "k": 1
+    },
+    "n_shadows": 1,
+    "models": [
+      "x"
+    ],
+    "leaderboard": [
+      {
+        "model_id": "x",
+        "brier": {
+          "1000000000": 0.5
+        },
+        "logloss": {
+          "1000000000": 0.5
+        },
+        "fill_rate_bias": {
+          "1000000000": {
+            "value": 0.5,
+            "ci_lo": 0.5,
+            "ci_hi": 0.5
+          }
+        },
+        "overfill_bias": {
+          "value": 0.5,
+          "ci_lo": 0.5,
+          "ci_hi": 0.5
+        },
+        "qty_bias": 0.5,
+        "ttf_log_ratio_median": 0.5,
+        "ttf_iad": 0.5,
+        "qtrack_mae": 0.5,
+        "mcnemar": {
+          "b": 1,
+          "c": 1,
+          "p_exact": 0.5
+        }
+      }
+    ],
+    "files": [
+      {
+        "name": "x",
+        "rows": 1,
+        "bytes": 1,
+        "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      }
+    ],
+    "warnings": [
+      "x"
+    ],
+    "hbt_312_aborts": {
+      "k": 1
+    }
+  }
+}

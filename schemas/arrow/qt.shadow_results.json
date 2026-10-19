@@ -1,0 +1,165 @@
+{
+  "name": "qt.shadow_results",
+  "metadata": {
+    "qt.engine_version": "0.1.0",
+    "qt.schema": "qt.shadow_results",
+    "qt.schema_version": "1.1"
+  },
+  "fields": [
+    {
+      "name": "shadow_id",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "instrument_id",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "side",
+      "type": "uint8",
+      "nullable": false
+    },
+    {
+      "name": "price",
+      "type": "int64",
+      "nullable": true
+    },
+    {
+      "name": "qty",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "ts_submit",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": false
+    },
+    {
+      "name": "ts_live",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": false
+    },
+    {
+      "name": "ts_activated_event",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": true
+    },
+    {
+      "name": "ts_cancel_effective",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": true
+    },
+    {
+      "name": "queue_ahead_at_live",
+      "type": "uint64",
+      "nullable": true
+    },
+    {
+      "name": "rank_at_live",
+      "type": "uint32",
+      "nullable": true
+    },
+    {
+      "name": "level_qty_at_live",
+      "type": "uint64",
+      "nullable": true
+    },
+    {
+      "name": "ts_first_fill",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": true
+    },
+    {
+      "name": "ts_last_fill",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": true
+    },
+    {
+      "name": "ts_full_fill",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": true
+    },
+    {
+      "name": "filled_qty",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "n_fills",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "queue_ahead_at_first_fill",
+      "type": "uint64",
+      "nullable": true
+    },
+    {
+      "name": "first_fill_reason",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "queue_depleted",
+        "trade_through",
+        "crossed",
+        "crossed_at_live",
+        "never"
+      ]
+    },
+    {
+      "name": "end_state",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "filled",
+        "cancelled",
+        "amended_to_filled",
+        "censored_session_end",
+        "censored_clear",
+        "censored_gap",
+        "open_at_end",
+        "rejected_would_cross",
+        "rejected_no_touch"
+      ]
+    },
+    {
+      "name": "latency_applied_ns",
+      "type": "int64",
+      "nullable": false
+    },
+    {
+      "name": "ambiguous_race",
+      "type": "bool",
+      "nullable": false
+    },
+    {
+      "name": "out_of_session",
+      "type": "bool",
+      "nullable": false
+    },
+    {
+      "name": "dq_flags",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "ts_planned_end",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": true,
+      "since": "1.1"
+    },
+    {
+      "name": "planned_end_kind",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "cancel",
+        "session_close",
+        "none"
+      ],
+      "since": "1.1"
+    }
+  ]
+}

@@ -1,0 +1,94 @@
+{
+  "name": "qt.score_fills",
+  "metadata": {
+    "qt.engine_version": "0.1.0",
+    "qt.schema": "qt.score_fills",
+    "qt.schema_version": "1.1"
+  },
+  "fields": [
+    {
+      "name": "order_key",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "arm",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "live",
+        "sim"
+      ]
+    },
+    {
+      "name": "fill_seq",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "ts",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": false
+    },
+    {
+      "name": "qty",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "px",
+      "type": "int64",
+      "nullable": true
+    },
+    {
+      "name": "liquidity",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "maker",
+        "taker",
+        "unknown"
+      ]
+    },
+    {
+      "name": "side",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "buy",
+        "sell"
+      ],
+      "since": "1.1"
+    },
+    {
+      "name": "instrument_id",
+      "type": "uint32",
+      "nullable": true,
+      "since": "1.1"
+    },
+    {
+      "name": "fee",
+      "type": "float64",
+      "nullable": true,
+      "since": "1.1"
+    },
+    {
+      "name": "fee_ccy",
+      "type": "utf8",
+      "nullable": true,
+      "since": "1.1"
+    },
+    {
+      "name": "price_exp",
+      "type": "int8",
+      "nullable": true,
+      "since": "1.1"
+    },
+    {
+      "name": "size_exp",
+      "type": "int8",
+      "nullable": true,
+      "since": "1.1"
+    }
+  ]
+}

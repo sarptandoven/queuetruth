@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.page",
+  "additionalProperties": false,
+  "description": "One page of a list endpoint.",
+  "properties": {
+    "schema": {
+      "const": "qt.page",
+      "default": "qt.page",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "data": {
+      "items": {},
+      "title": "Data",
+      "type": "array"
+    },
+    "has_more": {
+      "title": "Has More",
+      "type": "boolean"
+    },
+    "next_cursor": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Next Cursor"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "data",
+    "has_more",
+    "next_cursor"
+  ],
+  "type": "object"
+}

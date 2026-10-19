@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.live_calibration_test",
+  "$defs": {
+    "LiveCalibrationGridPoint": {
+      "additionalProperties": false,
+      "description": "Train log-likelihood at one grid value.",
+      "properties": {
+        "theta": {
+          "title": "Theta",
+          "type": "number"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        },
+        "loglik": {
+          "title": "Loglik",
+          "type": "number"
+        }
+      },
+      "required": [
+        "theta",
+        "value",
+        "loglik"
+      ],
+      "title": "LiveCalibrationGridPoint",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "1.1 (3.11 #11): `live_calibration_test.json` of `calibrate-live` (fitted model, grid profile, held-out\ndiscordance; same fields as `HeldOutDiscordance`).",
+  "properties": {
+    "schema": {
+      "const": "qt.live_calibration_test",
+      "default": "qt.live_calibration_test",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "model_id": {
+      "title": "Model Id",
+      "type": "string"
+    },
+    "grid": {
+      "items": {
+        "$ref": "#/$defs/LiveCalibrationGridPoint"
+      },
+      "title": "Grid",
+      "type": "array"
+    },
+    "n": {
+      "title": "N",
+      "type": "integer"
+    },
+    "b": {
+      "title": "B",
+      "type": "integer"
+    },
+    "c": {
+      "title": "C",
+      "type": "integer"
+    },
+    "fill_rate_bias": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Fill Rate Bias"
+    },
+    "ci_lo": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Ci Lo"
+    },
+    "ci_hi": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Ci Hi"
+    },
+    "p_exact": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "P Exact"
+    },
+    "p_clustered": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "P Clustered"
+    },
+    "clustered_method": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Clustered Method"
+    },
+    "n_clusters": {
+      "title": "N Clusters",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "model_id",
+    "grid",
+    "n",
+    "b",
+    "c",
+    "fill_rate_bias",
+    "ci_lo",
+    "ci_hi",
+    "p_exact",
+    "p_clustered",
+    "clustered_method",
+    "n_clusters"
+  ],
+  "type": "object"
+}

@@ -1,0 +1,20 @@
+# Build context exclusions for deploy/docker/Dockerfile (context = repository root).
+target/
+.venv/
+.realdata/
+.scratch/
+.hypothesis/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+**/__pycache__/
+**/.qt-store/
+*.so
+*.dylib
+*.pyd
+dist/
+.git/
+# never send secrets into the build context
+**/.env
+**/.env.*
+!deploy/compose/.env.example

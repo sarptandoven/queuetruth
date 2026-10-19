@@ -1,0 +1,2 @@
+venue,instrument,instrument_id,session_date,price_exp,size_exp,tick_size,lot_size
+deribit,BTC-PERPETUAL,101,,-1,0,0.5,10

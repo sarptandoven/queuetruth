@@ -1,0 +1,35 @@
+{
+  "sample": {
+    "schema": "qt.data_quality",
+    "schema_version": 1,
+    "records": 1,
+    "maybe_bad_book_records": 1,
+    "bad_ts_recv_records": 1,
+    "snapshot_records": 1,
+    "pre_snapshot_rows_skipped": 1,
+    "unknown_order_refs": 1,
+    "duplicate_adds": 1,
+    "unexpected_modifies": 1,
+    "sequence_gaps": 1,
+    "sequence_regressions": 1,
+    "out_of_order_ts_event": 1,
+    "crossed_books_after_last": 1,
+    "hidden_prints": 1,
+    "off_price_executions": 1,
+    "feed_gaps": [
+      {
+        "instrument_id": 1,
+        "ts_start": 1,
+        "ts_end": 1,
+        "reason": "x"
+      }
+    ],
+    "source_specific": {
+      "k": 1
+    },
+    "verdict": "clean",
+    "reasons": [
+      "x"
+    ]
+  }
+}

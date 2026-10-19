@@ -1,0 +1,70 @@
+{
+  "name": "qt.score_markouts",
+  "metadata": {
+    "qt.engine_version": "0.1.0",
+    "qt.schema": "qt.score_markouts",
+    "qt.schema_version": "1.1"
+  },
+  "fields": [
+    {
+      "name": "order_key",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "arm",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "live",
+        "sim"
+      ]
+    },
+    {
+      "name": "fill_seq",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "horizon_ns",
+      "type": "int64",
+      "nullable": false
+    },
+    {
+      "name": "ref",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "mid",
+        "microprice"
+      ]
+    },
+    {
+      "name": "mo_ticks",
+      "type": "float64",
+      "nullable": true
+    },
+    {
+      "name": "mo_ccy",
+      "type": "float64",
+      "nullable": true
+    },
+    {
+      "name": "mm_ticks",
+      "type": "float64",
+      "nullable": true
+    },
+    {
+      "name": "mo_bps",
+      "type": "float64",
+      "nullable": true,
+      "since": "1.1"
+    },
+    {
+      "name": "mo_net_ccy",
+      "type": "float64",
+      "nullable": true,
+      "since": "1.1"
+    }
+  ]
+}

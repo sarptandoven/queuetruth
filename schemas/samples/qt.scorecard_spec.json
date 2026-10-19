@@ -1,0 +1,123 @@
+{
+  "sample": {
+    "live": {
+      "path": "x"
+    },
+    "sim": {
+      "kind": "external",
+      "log": {
+        "path": "x"
+      }
+    },
+    "dataset": {
+      "path": "x"
+    },
+    "out": "x",
+    "entry": "exchange_ack",
+    "latency": {
+      "feed_ns": 1,
+      "decision_ns": 1,
+      "gateway_ns": 1,
+      "jitter_ns": 1
+    },
+    "markout_horizons_ns": [
+      1
+    ],
+    "markout_refs": [
+      "mid"
+    ],
+    "ttf_horizons_ns": [
+      1
+    ],
+    "bootstrap": {
+      "b": 1,
+      "block": "auto",
+      "seed": 1
+    },
+    "fdr": {
+      "method": "bh",
+      "q": 0.5
+    },
+    "equivalence": {
+      "fill_rate_margin": 0.5,
+      "markout_margin_ticks": 0.5,
+      "markout_horizon_ns": 1
+    },
+    "gates": {
+      "max_abs_fill_rate_bias": 0.5,
+      "require_equivalence": true
+    },
+    "perm_b": 1,
+    "window_ns": 1,
+    "match_window_ns": 1,
+    "self_exclude": true,
+    "markout_past_end": "last_quote"
+  },
+  "minimal": {
+    "live": {
+      "path": "x"
+    },
+    "sim": {
+      "kind": "external",
+      "log": {
+        "path": "x"
+      }
+    }
+  },
+  "defaults": {
+    "live": {
+      "path": "x"
+    },
+    "sim": {
+      "kind": "external",
+      "log": {
+        "path": "x"
+      }
+    },
+    "dataset": null,
+    "out": null,
+    "entry": "exchange_ack",
+    "latency": null,
+    "markout_horizons_ns": [
+      50000000,
+      100000000,
+      1000000000,
+      10000000000,
+      15000000000,
+      60000000000,
+      300000000000
+    ],
+    "markout_refs": [
+      "mid"
+    ],
+    "ttf_horizons_ns": [
+      100000000,
+      1000000000,
+      10000000000,
+      60000000000
+    ],
+    "bootstrap": {
+      "b": 1000,
+      "block": "auto",
+      "seed": 0
+    },
+    "fdr": {
+      "method": "bh",
+      "q": 0.05
+    },
+    "equivalence": {
+      "fill_rate_margin": 0.02,
+      "markout_margin_ticks": 0.25,
+      "markout_horizon_ns": 1000000000
+    },
+    "gates": {
+      "max_abs_fill_rate_bias": null,
+      "require_equivalence": false
+    },
+    "perm_b": 2000,
+    "window_ns": 60000000000,
+    "match_window_ns": 1000000,
+    "self_exclude": true,
+    "markout_past_end": null
+  }
+}

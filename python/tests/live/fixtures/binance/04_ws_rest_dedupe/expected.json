@@ -1,0 +1,113 @@
+{
+  "schema": "qtdev.live_expected",
+  "schema_version": 1,
+  "venue": "binance",
+  "import_spec": {
+    "venue": "binance",
+    "account": "acct1",
+    "instrument_map": null,
+    "inputs": [
+      "user_data_stream.jsonl",
+      "myTrades.json"
+    ]
+  },
+  "inputs": [
+    "myTrades.json",
+    "user_data_stream.jsonl"
+  ],
+  "row_order": "orders sorted by order_key; events sorted by (order_key, event_seq)",
+  "compare_ignore_columns": [
+    "raw"
+  ],
+  "edge_cases": [
+    "ws_rest_duplicate_fill",
+    "dedupe"
+  ],
+  "notes": [
+    "Multi-input merge: dedupe key (instrument, trade id). importer convention: keep the WS row (it carries ts_local_recv and the order context); SPEC does not say which source wins."
+  ],
+  "orders": [
+    {
+      "order_key": "binance:acct1:5000301",
+      "venue": "binance",
+      "account": "acct1",
+      "instrument": "BTCUSDT",
+      "instrument_id": null,
+      "venue_order_id": "5000301",
+      "client_order_id": "qtM-0001",
+      "client_order_id_chain": null,
+      "side": "sell",
+      "order_type": "limit",
+      "tif": "gtc",
+      "post_only": false,
+      "reduce_only": null,
+      "orig_qty": 5000000,
+      "qty_str": "0.05000000",
+      "limit_px": 60050000000000,
+      "px_str": "60050.00000000",
+      "price_exp": -9,
+      "size_exp": -8,
+      "strategy_tag": null,
+      "validation_status": "fixture_only",
+      "raw": null
+    }
+  ],
+  "events": [
+    {
+      "order_key": "binance:acct1:5000301",
+      "event_seq": 1,
+      "event_type": "ack",
+      "qty": 5000000,
+      "px": 60050000000000,
+      "leaves_qty": 5000000,
+      "cum_qty": 0,
+      "fill_id": null,
+      "ref_fill_id": null,
+      "liquidity": null,
+      "fee": null,
+      "fee_ccy": null,
+      "amend_keeps_priority": null,
+      "ts_local_send": null,
+      "ts_exchange": 1792071200000000000,
+      "ts_local_recv": 1792071200000900000,
+      "ts_exchange_kind": "match_time",
+      "ts_precision": "ms",
+      "source": "ws",
+      "reason": null,
+      "derived": false,
+      "raw": null
+    },
+    {
+      "order_key": "binance:acct1:5000301",
+      "event_seq": 2,
+      "event_type": "fill",
+      "qty": 5000000,
+      "px": 60050000000000,
+      "leaves_qty": 0,
+      "cum_qty": 5000000,
+      "fill_id": "77000301",
+      "ref_fill_id": null,
+      "liquidity": "maker",
+      "fee": 3.0025,
+      "fee_ccy": "USDT",
+      "amend_keeps_priority": null,
+      "ts_local_send": null,
+      "ts_exchange": 1792071203000000000,
+      "ts_local_recv": 1792071203000900000,
+      "ts_exchange_kind": "match_time",
+      "ts_precision": "ms",
+      "source": "ws",
+      "reason": null,
+      "derived": false,
+      "raw": null
+    }
+  ],
+  "summary": {
+    "n_orders": 1,
+    "n_events": 2,
+    "n_fills": 1,
+    "dedupe_dropped": 1,
+    "unmatched_fills": 0,
+    "warnings_contains": []
+  }
+}

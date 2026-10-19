@@ -1,0 +1,4 @@
+{"type":"snapshot","product_id":"BTC-USD","recv_ns":1791676800000000000,"bids":[["100.00","0.5"],["99.99","1"]],"asks":[["100.01","0.25"],["100.02","3"]]}
+{"type":"l2update","product_id":"BTC-USD","time":"2026-10-11T00:00:01.000002Z","recv_ns":1792000000000000000,"changes":[["buy","100.00","0.3"],["sell","100.01","0"]]}
+{"type":"l2update","product_id":"BTC-USD","time":"2026-10-11T00:00:03Z","recv_ns":1792000000000000000,"changes":[["buy","100.00","0"],["buy","99.99","0"]]}
+{"type":"l2update","product_id":"BTC-USD","time":"2026-10-11T00:00:04Z","recv_ns":1792000000000000000,"changes":[["sell","100.02","0"],["sell","100.01","0.1"]]}

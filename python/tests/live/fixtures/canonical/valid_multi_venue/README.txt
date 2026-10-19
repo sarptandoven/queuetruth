@@ -1,0 +1,1 @@
+Valid canonical live dir = union of fix44/01, binance/01, okx/01 golden rows. Expected: queuetruth.live.validate -> no errors; warnings = the 3 orig_qty!=cum+leaves cases after qty-down amends (binance 5000001, okx ...0001, fix44 OID-1) unless SPEC fixes that rule.

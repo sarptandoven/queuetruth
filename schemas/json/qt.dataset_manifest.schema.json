@@ -1,0 +1,322 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.dataset_manifest",
+  "$defs": {
+    "InputFile": {
+      "additionalProperties": false,
+      "description": "Provenance of one ingest input.",
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "bytes": {
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "bytes",
+        "sha256"
+      ],
+      "title": "InputFile",
+      "type": "object"
+    },
+    "PartitionEntry": {
+      "additionalProperties": false,
+      "description": "One (instrument, session date) partition; `session_date` in days since 1970-01-01.",
+      "properties": {
+        "instrument_id": {
+          "title": "Instrument Id",
+          "type": "integer"
+        },
+        "session_date": {
+          "title": "Session Date",
+          "type": "integer"
+        },
+        "files": {
+          "items": {
+            "$ref": "#/$defs/PartitionFile"
+          },
+          "title": "Files",
+          "type": "array"
+        },
+        "rows": {
+          "title": "Rows",
+          "type": "integer"
+        },
+        "ts_min": {
+          "title": "Ts Min",
+          "type": "integer"
+        },
+        "ts_max": {
+          "title": "Ts Max",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "instrument_id",
+        "session_date",
+        "files",
+        "rows",
+        "ts_min",
+        "ts_max"
+      ],
+      "title": "PartitionEntry",
+      "type": "object"
+    },
+    "PartitionFile": {
+      "additionalProperties": false,
+      "description": "One Parquet file of a partition, path relative to the dataset root.",
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "rows": {
+          "title": "Rows",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "rows",
+        "sha256"
+      ],
+      "title": "PartitionFile",
+      "type": "object"
+    },
+    "SourceVintage": {
+      "additionalProperties": false,
+      "description": "1.1: data vintage of one source file (DBN metadata; null fields when the format has none).",
+      "properties": {
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "dbn_version": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dbn Version"
+        },
+        "dataset": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dataset"
+        },
+        "dbn_schema": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dbn Schema"
+        },
+        "start_ns": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Ns"
+        },
+        "end_ns": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End Ns"
+        },
+        "publisher_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Publisher Id"
+        }
+      },
+      "required": [
+        "sha256"
+      ],
+      "title": "SourceVintage",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`manifest.json` of a dataset directory (SPEC 3.3).",
+  "properties": {
+    "schema": {
+      "const": "qt.dataset_manifest",
+      "default": "qt.dataset_manifest",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "dataset_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Dataset Id",
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "mbo",
+        "l2"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "source_format": {
+      "title": "Source Format",
+      "type": "string"
+    },
+    "venue": {
+      "enum": [
+        "generic",
+        "nasdaq",
+        "cme",
+        "coinbase"
+      ],
+      "title": "Venue",
+      "type": "string"
+    },
+    "source_venue": {
+      "title": "Source Venue",
+      "type": "string"
+    },
+    "inputs": {
+      "items": {
+        "$ref": "#/$defs/InputFile"
+      },
+      "title": "Inputs",
+      "type": "array"
+    },
+    "partitions": {
+      "items": {
+        "$ref": "#/$defs/PartitionEntry"
+      },
+      "title": "Partitions",
+      "type": "array"
+    },
+    "price_exp_by_instrument": {
+      "patternProperties": {
+        "^-?[0-9]+$": {
+          "type": "integer"
+        }
+      },
+      "title": "Price Exp By Instrument",
+      "type": "object"
+    },
+    "created_by": {
+      "title": "Created By",
+      "type": "string"
+    },
+    "validation_status": {
+      "enum": [
+        "real_data",
+        "synthetic_only",
+        "assumed",
+        "fixture_only"
+      ],
+      "title": "Validation Status",
+      "type": "string"
+    },
+    "rule_set": {
+      "anyOf": [
+        {
+          "enum": [
+            "generic",
+            "nasdaq",
+            "cme",
+            "coinbase",
+            "crypto_l3"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Rule Set"
+    },
+    "source_vintage": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/SourceVintage"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Vintage"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "dataset_id",
+    "kind",
+    "source_format",
+    "venue",
+    "source_venue",
+    "inputs",
+    "partitions",
+    "price_exp_by_instrument",
+    "created_by",
+    "validation_status"
+  ],
+  "type": "object"
+}

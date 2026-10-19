@@ -1,0 +1,85 @@
+{
+  "name": "qt.score_tests",
+  "metadata": {
+    "qt.engine_version": "0.1.0",
+    "qt.schema": "qt.score_tests",
+    "qt.schema_version": "1.1"
+  },
+  "fields": [
+    {
+      "name": "test_id",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "family",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "primary",
+        "secondary"
+      ]
+    },
+    {
+      "name": "stratum_kind",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "stratum",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "statistic",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "value",
+      "type": "float64",
+      "nullable": false
+    },
+    {
+      "name": "p_value",
+      "type": "float64",
+      "nullable": true
+    },
+    {
+      "name": "p_adj",
+      "type": "float64",
+      "nullable": true
+    },
+    {
+      "name": "adj_method",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "none",
+        "holm",
+        "bh",
+        "by"
+      ]
+    },
+    {
+      "name": "ci_lo",
+      "type": "float64",
+      "nullable": true
+    },
+    {
+      "name": "ci_hi",
+      "type": "float64",
+      "nullable": true
+    },
+    {
+      "name": "n",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "note",
+      "type": "utf8",
+      "nullable": true
+    }
+  ]
+}

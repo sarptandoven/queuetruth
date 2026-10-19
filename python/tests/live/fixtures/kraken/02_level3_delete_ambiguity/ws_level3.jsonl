@@ -1,0 +1,4 @@
+{"channel":"level3","type":"update","data":[{"checksum":1111111111,"symbol":"BTC/USD","bids":[{"event":"add","order_id":"OQTGGG-GGGGG-GGGGG8","limit_price":59950.0,"order_qty":0.01,"timestamp":"2026-10-15T17:00:20.010000001Z"}],"asks":[]}]}
+{"channel":"level3","type":"update","data":[{"checksum":2222222222,"symbol":"BTC/USD","bids":[{"event":"add","order_id":"OQTHHH-HHHHH-HHHHH9","limit_price":59940.0,"order_qty":0.02,"timestamp":"2026-10-15T17:00:20.020000002Z"}],"asks":[]}]}
+{"channel":"level3","type":"update","data":[{"checksum":3333333333,"symbol":"BTC/USD","bids":[{"event":"delete","order_id":"OQTGGG-GGGGG-GGGGG8","limit_price":59950.0,"order_qty":0.01,"timestamp":"2026-10-15T17:00:20.010000001Z"}],"asks":[]}]}
+{"channel":"level3","type":"update","data":[{"checksum":4444444444,"symbol":"BTC/USD","bids":[{"event":"delete","order_id":"OQTHHH-HHHHH-HHHHH9","limit_price":59940.0,"order_qty":0.02,"timestamp":"2026-10-15T17:00:20.020000002Z"}],"asks":[]}]}

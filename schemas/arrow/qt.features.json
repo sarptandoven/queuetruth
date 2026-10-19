@@ -1,0 +1,70 @@
+{
+  "name": "qt.features",
+  "metadata": {
+    "qt.engine_version": "0.1.0",
+    "qt.schema": "qt.features",
+    "qt.schema_version": "1.1"
+  },
+  "fields": [
+    {
+      "name": "order_ref",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "population",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "shadows",
+        "real_orders"
+      ]
+    },
+    {
+      "name": "instrument_id",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "session_date",
+      "type": "date32",
+      "nullable": false
+    },
+    {
+      "name": "ts_landmark",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": false
+    },
+    {
+      "name": "landmark_ns",
+      "type": "int64",
+      "nullable": false
+    },
+    {
+      "name": "side_sign",
+      "type": "int8",
+      "nullable": false
+    },
+    {
+      "name": "event_ns",
+      "type": "int64",
+      "nullable": false
+    },
+    {
+      "name": "cause",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "fill",
+        "cancel",
+        "censor"
+      ]
+    },
+    {
+      "name": "midnight_utc_ns",
+      "type": "int64",
+      "nullable": true,
+      "since": "1.1"
+    }
+  ]
+}

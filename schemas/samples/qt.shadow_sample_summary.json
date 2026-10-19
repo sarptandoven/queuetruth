@@ -1,0 +1,24 @@
+{
+  "sample": {
+    "schema": "qt.shadow_sample_summary",
+    "schema_version": 1,
+    "spec": {
+      "k": 1
+    },
+    "n": 1,
+    "by_instrument": {
+      "7": 1
+    },
+    "by_placement": {
+      "7": 1
+    },
+    "files": [
+      {
+        "name": "x",
+        "rows": 1,
+        "bytes": 1,
+        "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      }
+    ]
+  }
+}

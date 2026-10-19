@@ -1,0 +1,137 @@
+{
+  "sample": {
+    "kind": "alloc",
+    "family": "power",
+    "dataset": {
+      "path": "x"
+    },
+    "shadows": {
+      "path": "x"
+    },
+    "live": {
+      "path": "x"
+    },
+    "train": {
+      "dates": [
+        "2020-01-02"
+      ],
+      "blocks": {
+        "index": [
+          1
+        ],
+        "n_blocks": 1
+      }
+    },
+    "test": {
+      "dates": [
+        "2020-01-02"
+      ],
+      "blocks": {
+        "index": [
+          1
+        ],
+        "n_blocks": 1
+      }
+    },
+    "out": "x",
+    "mode": "faithful",
+    "exchange": "partial",
+    "l2": {
+      "depth_levels": 1,
+      "cadence_ns": 1,
+      "trade_position": "before",
+      "include_counts": true,
+      "emit_hidden_trades": true
+    },
+    "horizons_ns": [
+      1
+    ],
+    "h_max_ns": 1,
+    "grid": {
+      "alloc": {
+        "lo": 0.5,
+        "hi": 0.5,
+        "n": 1
+      },
+      "databento": {
+        "lo": 0.5,
+        "hi": 0.5,
+        "n": 1
+      },
+      "survival": {
+        "lo": 0.5,
+        "hi": 0.5,
+        "n": 1
+      }
+    },
+    "bootstrap": {
+      "b": 1,
+      "block": "auto",
+      "seed": 1
+    },
+    "particles": 1,
+    "seed": 1,
+    "threads": 1
+  },
+  "minimal": {
+    "kind": "alloc",
+    "family": "power"
+  },
+  "defaults": {
+    "kind": "alloc",
+    "family": "power",
+    "dataset": null,
+    "shadows": null,
+    "live": null,
+    "train": {
+      "dates": null,
+      "blocks": null
+    },
+    "test": {
+      "dates": null,
+      "blocks": null
+    },
+    "out": null,
+    "mode": "faithful",
+    "exchange": "partial",
+    "l2": {
+      "depth_levels": 10,
+      "cadence_ns": 0,
+      "trade_position": "before",
+      "include_counts": true,
+      "emit_hidden_trades": true
+    },
+    "horizons_ns": [
+      100000000,
+      1000000000,
+      10000000000,
+      60000000000
+    ],
+    "h_max_ns": 300000000000,
+    "grid": {
+      "alloc": {
+        "lo": -3.0,
+        "hi": 4.0,
+        "n": 141
+      },
+      "databento": {
+        "lo": -0.99,
+        "hi": 0.99,
+        "n": 199
+      },
+      "survival": {
+        "lo": -0.98,
+        "hi": 0.9,
+        "n": 25
+      }
+    },
+    "bootstrap": {
+      "b": 200,
+      "block": "auto",
+      "seed": 0
+    },
+    "particles": 100,
+    "seed": 0,
+    "threads": 1
+  }
+}

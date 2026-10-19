@@ -1,0 +1,34 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "queuetruth-service"
+version = "0.1.0"
+description = "Self-hostable HTTP service for queuetruth: FastAPI, Postgres (data + PgQueuer), S3-compatible store."
+requires-python = ">=3.11"
+license = "Apache-2.0"
+authors = [{ name = "Sarp Tandoven" }]
+dependencies = [
+    "queuetruth",
+    "fastapi>=0.115,<1",
+    "uvicorn[standard]>=0.30",
+    "psycopg[binary,pool]>=3.2,<4",
+    "pgqueuer>=1.4,<2",
+    "boto3>=1.35",
+    "httpx>=0.27,<1",
+    "pydantic-settings>=2.4",
+]
+
+[project.urls]
+Homepage = "https://github.com/sarptandoven/queuetruth"
+Repository = "https://github.com/sarptandoven/queuetruth"
+
+[project.scripts]
+queuetruth-service = "queuetruth_service.admin:main"
+
+[tool.uv.sources]
+queuetruth = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["queuetruth_service"]

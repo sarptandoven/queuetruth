@@ -1,0 +1,5 @@
+# cargo-audit configuration (SPEC 8.10 supply-chain check; CI job `supply-chain`).
+# Accepted advisories go in `ignore`, one RUSTSEC id each, with a comment saying why and until when.
+[advisories]
+ignore = []
+informational_warnings = ["unmaintained", "unsound"]

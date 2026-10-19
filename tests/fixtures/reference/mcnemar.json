@@ -1,0 +1,1439 @@
+{
+  "reference": "mcnemar",
+  "oracle": [
+    "O-STAT-1"
+  ],
+  "generator": "scripts/reference/gen_mcnemar.py",
+  "description": "McNemar reference values (SPEC 5.7.5, oracle O-STAT-1) -> tests/fixtures/reference/mcnemar.json.\n\nFor each 2x2 table (rows live filled/not, columns sim filled/not; b = live_only, c = sim_only):\n- SPEC formulas computed here independently: `chi2_cc = (|b - c| - 1)^2 / (b + c)` (0 if b + c = 0),\n  `p_chi2 = chi2.sf(chi2_cc, 1)`, `p_exact = min(1, 2 * sum_{i<=min(b,c)} C(b+c, i) / 2^(b+c))` in exact rational\n  arithmetic, `odds_ratio = c / b`, Wald CI `exp(ln(c/b) +- 1.96 sqrt(1/b + 1/c))` (null if b or c is 0).\n- `statsmodels.stats.contingency_tables.mcnemar(exact=True)` and `(exact=False, correction=True)`, and\n  `scipy.stats.binomtest(min(b, c), b + c, 0.5).pvalue`; the generator asserts they agree with the SPEC values.\nTables: the SPEC golden (3, 12), hand edge cases, and 50 random tables from the SPEC 3.1 RNG.",
+  "software": {
+    "python": "3.13.9",
+    "numpy": "2.5.3",
+    "scipy": "1.18.1",
+    "statsmodels": "0.15.0"
+  },
+  "tolerance": {
+    "p_exact": "rel 1e-13",
+    "chi2_cc": "rel 1e-14",
+    "p_chi2": "rel 1e-12",
+    "or_ci": "rel 1e-12"
+  },
+  "cases": [
+    {
+      "name": "golden_b3_c12",
+      "n11": 40,
+      "b": 3,
+      "c": 12,
+      "n00": 45,
+      "spec": {
+        "chi2_cc": 4.266666666666667,
+        "p_chi2": 0.038867103812417245,
+        "p_exact": 0.03515625,
+        "odds_ratio": 4.0,
+        "or_ci_lo": 1.1287601312649644,
+        "or_ci_hi": 14.174845086058559
+      },
+      "statsmodels_exact": {
+        "statistic": 3.0,
+        "pvalue": 0.03515625
+      },
+      "scipy_binomtest_pvalue": 0.03515625,
+      "statsmodels_chi2_corrected": {
+        "statistic": 4.266666666666667,
+        "pvalue": 0.038867103812417245
+      }
+    },
+    {
+      "name": "zero_discordant",
+      "n11": 10,
+      "b": 0,
+      "c": 0,
+      "n00": 10,
+      "spec": {
+        "chi2_cc": 0.0,
+        "p_chi2": 1.0,
+        "p_exact": 1.0,
+        "odds_ratio": null,
+        "or_ci_lo": null,
+        "or_ci_hi": null
+      },
+      "statsmodels_exact": {
+        "statistic": 0.0,
+        "pvalue": 1.0
+      },
+      "scipy_binomtest_pvalue": 1.0,
+      "statsmodels_chi2_corrected": {
+        "statistic": null,
+        "pvalue": null,
+        "note": "0/0 in statsmodels"
+      }
+    },
+    {
+      "name": "b0_c5",
+      "n11": 7,
+      "b": 0,
+      "c": 5,
+      "n00": 9,
+      "spec": {
+        "chi2_cc": 3.2,
+        "p_chi2": 0.07363827012030295,
+        "p_exact": 0.0625,
+        "odds_ratio": null,
+        "or_ci_lo": null,
+        "or_ci_hi": null
+      },
+      "statsmodels_exact": {
+        "statistic": 0.0,
+        "pvalue": 0.0625
+      },
+      "scipy_binomtest_pvalue": 0.0625,
+      "statsmodels_chi2_corrected": {
+        "statistic": 3.2,
+        "pvalue": 0.07363827012030295
+      }
+    },
+    {
+      "name": "b5_c0",
+      "n11": 7,
+      "b": 5,
+      "c": 0,
+      "n00": 9,
+      "spec": {
+        "chi2_cc": 3.2,
+        "p_chi2": 0.07363827012030295,
+        "p_exact": 0.0625,
+        "odds_ratio": null,
+        "or_ci_lo": null,
+        "or_ci_hi": null
+      },
+      "statsmodels_exact": {
+        "statistic": 0.0,
+        "pvalue": 0.0625
+      },
+      "scipy_binomtest_pvalue": 0.0625,
+      "statsmodels_chi2_corrected": {
+        "statistic": 3.2,
+        "pvalue": 0.07363827012030295
+      }
+    },
+    {
+      "name": "b1_c1",
+      "n11": 3,
+      "b": 1,
+      "c": 1,
+      "n00": 3,
+      "spec": {
+        "chi2_cc": 0.5,
+        "p_chi2": 0.47950012218695337,
+        "p_exact": 1.0,
+        "odds_ratio": 1.0,
+        "or_ci_lo": 0.06254565041285011,
+        "or_ci_hi": 15.988322023981196
+      },
+      "statsmodels_exact": {
+        "statistic": 1.0,
+        "pvalue": 1.0
+      },
+      "scipy_binomtest_pvalue": 1.0,
+      "statsmodels_chi2_corrected": {
+        "statistic": 0.5,
+        "pvalue": 0.47950012218695337
+      }
+    },
+    {
+      "name": "b4_c4_equal",
+      "n11": 20,
+      "b": 4,
+      "c": 4,
+      "n00": 20,
+      "spec": {
+        "chi2_cc": 0.125,
+        "p_chi2": 0.7236736098317629,
+        "p_exact": 1.0,
+        "odds_ratio": 1.0,
+        "or_ci_lo": 0.25009128416010445,
+        "or_ci_hi": 3.998539986542738
+      },
+      "statsmodels_exact": {
+        "statistic": 4.0,
+        "pvalue": 1.0
+      },
+      "scipy_binomtest_pvalue": 1.0,
+      "statsmodels_chi2_corrected": {
+        "statistic": 0.125,
+        "pvalue": 0.7236736098317629
+      }
+    },
+    {
+      "name": "b2_c3",
+      "n11": 0,
+      "b": 2,
+      "c": 3,
+      "n00": 0,
+      "spec": {
+        "chi2_cc": 0.0,
+        "p_chi2": 1.0,
+        "p_exact": 1.0,
+        "odds_ratio": 1.5,
+        "or_ci_lo": 0.2506339143499162,
+        "or_ci_hi": 8.977236803071749
+      },
+      "statsmodels_exact": {
+        "statistic": 2.0,
+        "pvalue": 1.0
+      },
+      "scipy_binomtest_pvalue": 1.0,
+      "statsmodels_chi2_corrected": {
+        "statistic": 0.0,
+        "pvalue": 1.0
+      }
+    },
+    {
+      "name": "large_b250_c300",
+      "n11": 1000,
+      "b": 250,
+      "c": 300,
+      "n00": 2000,
+      "spec": {
+        "chi2_cc": 4.365454545454545,
+        "p_chi2": 0.03667469760670496,
+        "p_exact": 0.036578745549102704,
+        "odds_ratio": 1.2,
+        "or_ci_lo": 1.0145824864123567,
+        "or_ci_hi": 1.4193030328090455
+      },
+      "statsmodels_exact": {
+        "statistic": 250.0,
+        "pvalue": 0.03657874554910271
+      },
+      "scipy_binomtest_pvalue": 0.03657874554910271,
+      "statsmodels_chi2_corrected": {
+        "statistic": 4.365454545454545,
+        "pvalue": 0.03667469760670496
+      }
+    },
+    {
+      "name": "large_b1000_c1100",
+      "n11": 5000,
+      "b": 1000,
+      "c": 1100,
+      "n00": 5000,
+      "spec": {
+        "chi2_cc": 4.667142857142857,
+        "p_chi2": 0.030745034758993248,
+        "p_exact": 0.030720707864242296,
+        "odds_ratio": 1.1,
+        "or_ci_lo": 1.0097185370713864,
+        "or_ci_hi": 1.1983537546111764
+      },
+      "statsmodels_exact": {
+        "statistic": 1000.0,
+        "pvalue": 0.03072070786424251
+      },
+      "scipy_binomtest_pvalue": 0.03072070786424251,
+      "statsmodels_chi2_corrected": {
+        "statistic": 4.667142857142857,
+        "pvalue": 0.030745034758993248
+      }
+    },
+    {
+      "name": "random_00",
+      "n11": 3,
+      "b": 5,
+      "c": 4,
+      "n00": 495,
+      "spec": {
+        "chi2_cc": 0.0,
+        "p_chi2": 1.0,
+        "p_exact": 1.0,
+        "odds_ratio": 0.8,
+        "or_ci_lo": 0.21482070648574292,
+        "or_ci_hi": 2.979228634286589
+      },
+      "statsmodels_exact": {
+        "statistic": 4.0,
+        "pvalue": 1.0
+      },
+      "scipy_binomtest_pvalue": 1.0,
+      "statsmodels_chi2_corrected": {
+        "statistic": 0.0,
+        "pvalue": 1.0
+      }
+    },
+    {
+      "name": "random_01",
+      "n11": 291,
+      "b": 4,
+      "c": 31,
+      "n00": 381,
+      "spec": {
+        "chi2_cc": 19.314285714285713,
+        "p_chi2": 1.1087370209737704e-05,
+        "p_exact": 3.4654513001441956e-06,
+        "odds_ratio": 7.75,
+        "or_ci_lo": 2.7356928554735975,
+        "or_ci_hi": 21.955132821225313
+      },
+      "statsmodels_exact": {
+        "statistic": 4.0,
+        "pvalue": 3.4654513001441956e-06
+      },
+      "scipy_binomtest_pvalue": 3.4654513001441956e-06,
+      "statsmodels_chi2_corrected": {
+        "statistic": 19.314285714285713,
+        "pvalue": 1.1087370209737704e-05
+      }
+    },
+    {
+      "name": "random_02",
+      "n11": 395,
+      "b": 93,
+      "c": 109,
+      "n00": 489,
+      "spec": {
+        "chi2_cc": 1.113861386138614,
+        "p_chi2": 0.2912441065676313,
+        "p_exact": 0.2912226705584375,
+        "odds_ratio": 1.1720430107526882,
+        "or_ci_lo": 0.8887572474900967,
+        "or_ci_hi": 1.5456243231023923
+      },
+      "statsmodels_exact": {
+        "statistic": 93.0,
+        "pvalue": 0.29122267055843765
+      },
+      "scipy_binomtest_pvalue": 0.29122267055843765,
+      "statsmodels_chi2_corrected": {
+        "statistic": 1.113861386138614,
+        "pvalue": 0.2912441065676313
+      }
+    },
+    {
+      "name": "random_03",
+      "n11": 288,
+      "b": 5,
+      "c": 6,
+      "n00": 430,
+      "spec": {
+        "chi2_cc": 0.0,
+        "p_chi2": 1.0,
+        "p_exact": 1.0,
+        "odds_ratio": 1.2,
+        "or_ci_lo": 0.36622133716552596,
+        "or_ci_hi": 3.9320483376126827
+      },
+      "statsmodels_exact": {
+        "statistic": 5.0,
+        "pvalue": 1.0
+      },
+      "scipy_binomtest_pvalue": 1.0,
+      "statsmodels_chi2_corrected": {
+        "statistic": 0.0,
+        "pvalue": 1.0
+      }
+    },
+    {
+      "name": "random_04",
+      "n11": 453,
+      "b": 9,
+      "c": 15,
+      "n00": 93,
+      "spec": {
+        "chi2_cc": 1.0416666666666667,
+        "p_chi2": 0.30743416592739237,
+        "p_exact": 0.30745625495910645,
+        "odds_ratio": 1.6666666666666667,
+        "or_ci_lo": 0.7293635765087809,
+        "or_ci_hi": 3.808495333800557
+      },
+      "statsmodels_exact": {
+        "statistic": 9.0,
+        "pvalue": 0.30745625495910645
+      },
+      "scipy_binomtest_pvalue": 0.30745625495910645,
+      "statsmodels_chi2_corrected": {
+        "statistic": 1.0416666666666667,
+        "pvalue": 0.30743416592739237
+      }
+    },
+    {
+      "name": "random_05",
+      "n11": 462,
+      "b": 87,
+      "c": 9,
+      "n00": 282,
+      "spec": {
+        "chi2_cc": 61.760416666666664,
+        "p_chi2": 3.87894086099485e-15,
+        "p_exact": 3.640258907444359e-17,
+        "odds_ratio": 0.10344827586206896,
+        "or_ci_lo": 0.05207978043204959,
+        "or_ci_hi": 0.2054836961687545
+      },
+      "statsmodels_exact": {
+        "statistic": 9.0,
+        "pvalue": 3.640258907444359e-17
+      },
+      "scipy_binomtest_pvalue": 3.640258907444359e-17,
+      "statsmodels_chi2_corrected": {
+        "statistic": 61.760416666666664,
+        "pvalue": 3.87894086099485e-15
+      }
+    },
+    {
+      "name": "random_06",
+      "n11": 451,
+      "b": 6,
+      "c": 6,
+      "n00": 269,
+      "spec": {
+        "chi2_cc": 0.08333333333333333,
+        "p_chi2": 0.7728299926844475,
+        "p_exact": 1.0,
+        "odds_ratio": 1.0,
+        "or_ci_lo": 0.322514711216447,
+        "or_ci_hi": 3.100633754746391
+      },
+      "statsmodels_exact": {
+        "statistic": 6.0,
+        "pvalue": 1.0
+      },
+      "scipy_binomtest_pvalue": 1.0,
+      "statsmodels_chi2_corrected": {
+        "statistic": 0.08333333333333333,
+        "pvalue": 0.7728299926844475
+      }
+    },
+    {
+      "name": "random_07",
+      "n11": 1,
+      "b": 16,
+      "c": 6,
+      "n00": 331,
+      "spec": {
+        "chi2_cc": 3.6818181818181817,
+        "p_chi2": 0.05500883362926573,
+        "p_exact": 0.052478790283203125,
+        "odds_ratio": 0.375,
+        "or_ci_lo": 0.14673782049919698,
+        "or_ci_hi": 0.9583418884211217
+      },
+      "statsmodels_exact": {
+        "statistic": 6.0,
+        "pvalue": 0.052478790283203125
+      },
+      "scipy_binomtest_pvalue": 0.052478790283203125,
+      "statsmodels_chi2_corrected": {
+        "statistic": 3.6818181818181817,
+        "pvalue": 0.05500883362926573
+      }
+    },
+    {
+      "name": "random_08",
+      "n11": 436,
+      "b": 151,
+      "c": 148,
+      "n00": 297,
+      "spec": {
+        "chi2_cc": 0.013377926421404682,
+        "p_chi2": 0.9079196418925198,
+        "p_exact": 0.9079449711619311,
+        "odds_ratio": 0.9801324503311258,
+        "or_ci_lo": 0.7813137914867879,
+        "or_ci_hi": 1.2295439177696144
+      },
+      "statsmodels_exact": {
+        "statistic": 148.0,
+        "pvalue": 0.9079449711619317
+      },
+      "scipy_binomtest_pvalue": 0.9079449711619317,
+      "statsmodels_chi2_corrected": {
+        "statistic": 0.013377926421404682,
+        "pvalue": 0.9079196418925198
+      }
+    },
+    {
+      "name": "random_09",
+      "n11": 139,
+      "b": 3,
+      "c": 0,
+      "n00": 14,
+      "spec": {
+        "chi2_cc": 1.3333333333333333,
+        "p_chi2": 0.24821307898992026,
+        "p_exact": 0.25,
+        "odds_ratio": null,
+        "or_ci_lo": null,
+        "or_ci_hi": null
+      },
+      "statsmodels_exact": {
+        "statistic": 0.0,
+        "pvalue": 0.25
+      },
+      "scipy_binomtest_pvalue": 0.25,
+      "statsmodels_chi2_corrected": {
+        "statistic": 1.3333333333333333,
+        "pvalue": 0.24821307898992026
+      }
+    },
+    {
+      "name": "random_10",
+      "n11": 500,
+      "b": 5,
+      "c": 38,
+      "n00": 176,
+      "spec": {
+        "chi2_cc": 23.813953488372093,
+        "p_chi2": 1.0611045233272881e-06,
+        "p_exact": 2.4995097192004323e-07,
+        "odds_ratio": 7.6,
+        "or_ci_lo": 2.9913480204057787,
+        "or_ci_hi": 19.309020416877065
+      },
+      "statsmodels_exact": {
+        "statistic": 5.0,
+        "pvalue": 2.4995097192004323e-07
+      },
+      "scipy_binomtest_pvalue": 2.4995097192004323e-07,
+      "statsmodels_chi2_corrected": {
+        "statistic": 23.813953488372093,
+        "pvalue": 1.0611045233272881e-06
+      }
+    },
+    {
+      "name": "random_11",
+      "n11": 161,
+      "b": 46,
+      "c": 126,
+      "n00": 219,
+      "spec": {
+        "chi2_cc": 36.28488372093023,
+        "p_chi2": 1.7048104180069141e-09,
+        "p_exact": 8.489989677999222e-10,
+        "odds_ratio": 2.739130434782609,
+        "or_ci_lo": 1.9542349532020653,
+        "or_ci_hi": 3.8392699539319834
+      },
+      "statsmodels_exact": {
+        "statistic": 46.0,
+        "pvalue": 8.489989677999224e-10
+      },
+      "scipy_binomtest_pvalue": 8.489989677999224e-10,
+      "statsmodels_chi2_corrected": {
+        "statistic": 36.28488372093023,
+        "pvalue": 1.7048104180069141e-09
+      }
+    },
+    {
+      "name": "random_12",
+      "n11": 491,
+      "b": 10,
+      "c": 4,
+      "n00": 187,
+      "spec": {
+        "chi2_cc": 1.7857142857142858,
+        "p_chi2": 0.18144920772141646,
+        "p_exact": 0.1795654296875,
+        "odds_ratio": 0.4,
+        "or_ci_lo": 0.12545070713955989,
+        "or_ci_hi": 1.2754013400817676
+      },
+      "statsmodels_exact": {
+        "statistic": 4.0,
+        "pvalue": 0.1795654296875
+      },
+      "scipy_binomtest_pvalue": 0.1795654296875,
+      "statsmodels_chi2_corrected": {
+        "statistic": 1.7857142857142858,
+        "pvalue": 0.18144920772141646
+      }
+    },
+    {
+      "name": "random_13",
+      "n11": 86,
+      "b": 17,
+      "c": 9,
+      "n00": 179,
+      "spec": {
+        "chi2_cc": 1.8846153846153846,
+        "p_chi2": 0.1698105050855175,
+        "p_exact": 0.16863754391670227,
+        "odds_ratio": 0.5294117647058824,
+        "or_ci_lo": 0.23599088329929277,
+        "or_ci_hi": 1.1876595090901823
+      },
+      "statsmodels_exact": {
+        "statistic": 9.0,
+        "pvalue": 0.16863754391670227
+      },
+      "scipy_binomtest_pvalue": 0.16863754391670227,
+      "statsmodels_chi2_corrected": {
+        "statistic": 1.8846153846153846,
+        "pvalue": 0.1698105050855175
+      }
+    },
+    {
+      "name": "random_14",
+      "n11": 265,
+      "b": 169,
+      "c": 123,
+      "n00": 152,
+      "spec": {
+        "chi2_cc": 6.934931506849315,
+        "p_chi2": 0.008452829992613623,
+        "p_exact": 0.008341548748822048,
+        "odds_ratio": 0.727810650887574,
+        "or_ci_lo": 0.576940791459328,
+        "or_ci_hi": 0.9181329373600661
+      },
+      "statsmodels_exact": {
+        "statistic": 123.0,
+        "pvalue": 0.008341548748822009
+      },
+      "scipy_binomtest_pvalue": 0.008341548748822009,
+      "statsmodels_chi2_corrected": {
+        "statistic": 6.934931506849315,
+        "pvalue": 0.008452829992613623
+      }
+    },
+    {
+      "name": "random_15",
+      "n11": 390,
+      "b": 7,
+      "c": 0,
+      "n00": 424,
+      "spec": {
+        "chi2_cc": 5.142857142857143,
+        "p_chi2": 0.023342202012890813,
+        "p_exact": 0.015625,
+        "odds_ratio": null,
+        "or_ci_lo": null,
+        "or_ci_hi": null
+      },
+      "statsmodels_exact": {
+        "statistic": 0.0,
+        "pvalue": 0.015625
+      },
+      "scipy_binomtest_pvalue": 0.015625,
+      "statsmodels_chi2_corrected": {
+        "statistic": 5.142857142857143,
+        "pvalue": 0.023342202012890813
+      }
+    },
+    {
+      "name": "random_16",
+      "n11": 476,
+      "b": 18,
+      "c": 1,
+      "n00": 319,
+      "spec": {
+        "chi2_cc": 13.473684210526315,
+        "p_chi2": 0.00024193279086066012,
+        "p_exact": 7.62939453125e-05,
+        "odds_ratio": 0.05555555555555555,
+        "or_ci_lo": 0.0074162604435117,
+        "or_ci_hi": 0.4161692778449617
+      },
+      "statsmodels_exact": {
+        "statistic": 1.0,
+        "pvalue": 7.62939453125e-05
+      },
+      "scipy_binomtest_pvalue": 7.62939453125e-05,
+      "statsmodels_chi2_corrected": {
+        "statistic": 13.473684210526315,
+        "pvalue": 0.00024193279086066012
+      }
+    },
+    {
+      "name": "random_17",
+      "n11": 300,
+      "b": 4,
+      "c": 26,
+      "n00": 344,
+      "spec": {
+        "chi2_cc": 14.7,
+        "p_chi2": 0.00012604645012081404,
+        "p_exact": 5.947612226009369e-05,
+        "odds_ratio": 6.5,
+        "or_ci_lo": 2.268487505004257,
+        "or_ci_hi": 18.62474441970563
+      },
+      "statsmodels_exact": {
+        "statistic": 4.0,
+        "pvalue": 5.9476122260093696e-05
+      },
+      "scipy_binomtest_pvalue": 5.9476122260093696e-05,
+      "statsmodels_chi2_corrected": {
+        "statistic": 14.7,
+        "pvalue": 0.00012604645012081404
+      }
+    },
+    {
+      "name": "random_18",
+      "n11": 65,
+      "b": 2,
+      "c": 4,
+      "n00": 248,
+      "spec": {
+        "chi2_cc": 0.16666666666666666,
+        "p_chi2": 0.6830913983096086,
+        "p_exact": 0.6875,
+        "odds_ratio": 2.0,
+        "or_ci_lo": 0.3663146516848934,
+        "or_ci_hi": 10.919574146438535
+      },
+      "statsmodels_exact": {
+        "statistic": 2.0,
+        "pvalue": 0.6875
+      },
+      "scipy_binomtest_pvalue": 0.6875,
+      "statsmodels_chi2_corrected": {
+        "statistic": 0.16666666666666666,
+        "pvalue": 0.6830913983096086
+      }
+    },
+    {
+      "name": "random_19",
+      "n11": 103,
+      "b": 3,
+      "c": 17,
+      "n00": 330,
+      "spec": {
+        "chi2_cc": 8.45,
+        "p_chi2": 0.0036504344044418786,
+        "p_exact": 0.0025768280029296875,
+        "odds_ratio": 5.666666666666667,
+        "or_ci_lo": 1.6606373008417314,
+        "or_ci_hi": 19.336619197241248
+      },
+      "statsmodels_exact": {
+        "statistic": 3.0,
+        "pvalue": 0.0025768280029296875
+      },
+      "scipy_binomtest_pvalue": 0.0025768280029296875,
+      "statsmodels_chi2_corrected": {
+        "statistic": 8.45,
+        "pvalue": 0.0036504344044418786
+      }
+    },
+    {
+      "name": "random_20",
+      "n11": 330,
+      "b": 15,
+      "c": 185,
+      "n00": 330,
+      "spec": {
+        "chi2_cc": 142.805,
+        "p_chi2": 6.484357139847887e-33,
+        "p_exact": 1.9794233967752223e-38,
+        "odds_ratio": 12.333333333333334,
+        "or_ci_lo": 7.287199214730326,
+        "or_ci_hi": 20.873741286451192
+      },
+      "statsmodels_exact": {
+        "statistic": 15.0,
+        "pvalue": 1.9794233967752223e-38
+      },
+      "scipy_binomtest_pvalue": 1.9794233967752223e-38,
+      "statsmodels_chi2_corrected": {
+        "statistic": 142.805,
+        "pvalue": 6.484357139847887e-33
+      }
+    },
+    {
+      "name": "random_21",
+      "n11": 339,
+      "b": 4,
+      "c": 0,
+      "n00": 352,
+      "spec": {
+        "chi2_cc": 2.25,
+        "p_chi2": 0.13361440253771611,
+        "p_exact": 0.125,
+        "odds_ratio": null,
+        "or_ci_lo": null,
+        "or_ci_hi": null
+      },
+      "statsmodels_exact": {
+        "statistic": 0.0,
+        "pvalue": 0.125
+      },
+      "scipy_binomtest_pvalue": 0.125,
+      "statsmodels_chi2_corrected": {
+        "statistic": 2.25,
+        "pvalue": 0.13361440253771611
+      }
+    },
+    {
+      "name": "random_22",
+      "n11": 491,
+      "b": 32,
+      "c": 12,
+      "n00": 186,
+      "spec": {
+        "chi2_cc": 8.204545454545455,
+        "p_chi2": 0.004178557568166477,
+        "p_exact": 0.003657766827927844,
+        "odds_ratio": 0.375,
+        "or_ci_lo": 0.19314918886432192,
+        "or_ci_hi": 0.7280641499291118
+      },
+      "statsmodels_exact": {
+        "statistic": 12.0,
+        "pvalue": 0.003657766827927844
+      },
+      "scipy_binomtest_pvalue": 0.003657766827927844,
+      "statsmodels_chi2_corrected": {
+        "statistic": 8.204545454545455,
+        "pvalue": 0.004178557568166477
+      }
+    },
+    {
+      "name": "random_23",
+      "n11": 204,
+      "b": 164,
+      "c": 183,
+      "n00": 313,
+      "spec": {
+        "chi2_cc": 0.9337175792507204,
+        "p_chi2": 0.33389877399048806,
+        "p_exact": 0.33390691440109954,
+        "odds_ratio": 1.1158536585365855,
+        "or_ci_lo": 0.9038127558857335,
+        "or_ci_hi": 1.3776408655012398
+      },
+      "statsmodels_exact": {
+        "statistic": 164.0,
+        "pvalue": 0.3339069144010995
+      },
+      "scipy_binomtest_pvalue": 0.3339069144010995,
+      "statsmodels_chi2_corrected": {
+        "statistic": 0.9337175792507204,
+        "pvalue": 0.33389877399048806
+      }
+    },
+    {
+      "name": "random_24",
+      "n11": 147,
+      "b": 7,
+      "c": 6,
+      "n00": 423,
+      "spec": {
+        "chi2_cc": 0.0,
+        "p_chi2": 1.0,
+        "p_exact": 1.0,
+        "odds_ratio": 0.8571428571428571,
+        "or_ci_lo": 0.2880578316267658,
+        "or_ci_hi": 2.550508255241459
+      },
+      "statsmodels_exact": {
+        "statistic": 6.0,
+        "pvalue": 1.0
+      },
+      "scipy_binomtest_pvalue": 1.0,
+      "statsmodels_chi2_corrected": {
+        "statistic": 0.0,
+        "pvalue": 1.0
+      }
+    },
+    {
+      "name": "random_25",
+      "n11": 179,
+      "b": 17,
+      "c": 4,
+      "n00": 320,
+      "spec": {
+        "chi2_cc": 6.857142857142857,
+        "p_chi2": 0.008828760952818633,
+        "p_exact": 0.007197380065917969,
+        "odds_ratio": 0.23529411764705882,
+        "or_ci_lo": 0.07917235562906783,
+        "or_ci_hi": 0.6992759197249593
+      },
+      "statsmodels_exact": {
+        "statistic": 4.0,
+        "pvalue": 0.007197380065917969
+      },
+      "scipy_binomtest_pvalue": 0.007197380065917969,
+      "statsmodels_chi2_corrected": {
+        "statistic": 6.857142857142857,
+        "pvalue": 0.008828760952818633
+      }
+    },
+    {
+      "name": "random_26",
+      "n11": 210,
+      "b": 18,
+      "c": 145,
+      "n00": 254,
+      "spec": {
+        "chi2_cc": 97.39877300613497,
+        "p_chi2": 5.668114300225269e-23,
+        "p_exact": 7.580929489001173e-26,
+        "odds_ratio": 8.055555555555555,
+        "or_ci_lo": 4.935972720600706,
+        "or_ci_hi": 13.146745126408367
+      },
+      "statsmodels_exact": {
+        "statistic": 18.0,
+        "pvalue": 7.580929489001171e-26
+      },
+      "scipy_binomtest_pvalue": 7.580929489001171e-26,
+      "statsmodels_chi2_corrected": {
+        "statistic": 97.39877300613497,
+        "pvalue": 5.668114300225269e-23
+      }
+    },
+    {
+      "name": "random_27",
+      "n11": 158,
+      "b": 10,
+      "c": 10,
+      "n00": 493,
+      "spec": {
+        "chi2_cc": 0.05,
+        "p_chi2": 0.8230632737581214,
+        "p_exact": 1.0,
+        "odds_ratio": 1.0,
+        "or_ci_lo": 0.4162211093014303,
+        "or_ci_hi": 2.4025691577209094
+      },
+      "statsmodels_exact": {
+        "statistic": 10.0,
+        "pvalue": 1.0
+      },
+      "scipy_binomtest_pvalue": 1.0,
+      "statsmodels_chi2_corrected": {
+        "statistic": 0.05,
+        "pvalue": 0.8230632737581214
+      }
+    },
+    {
+      "name": "random_28",
+      "n11": 241,
+      "b": 21,
+      "c": 17,
+      "n00": 227,
+      "spec": {
+        "chi2_cc": 0.23684210526315788,
+        "p_chi2": 0.6264962743469111,
+        "p_exact": 0.6271025701571489,
+        "odds_ratio": 0.8095238095238095,
+        "or_ci_lo": 0.4270860983333375,
+        "or_ci_hi": 1.5344184714587965
+      },
+      "statsmodels_exact": {
+        "statistic": 17.0,
+        "pvalue": 0.6271025701571489
+      },
+      "scipy_binomtest_pvalue": 0.6271025701571489,
+      "statsmodels_chi2_corrected": {
+        "statistic": 0.23684210526315788,
+        "pvalue": 0.6264962743469111
+      }
+    },
+    {
+      "name": "random_29",
+      "n11": 190,
+      "b": 183,
+      "c": 151,
+      "n00": 31,
+      "spec": {
+        "chi2_cc": 2.877245508982036,
+        "p_chi2": 0.08983958036579794,
+        "p_exact": 0.08968907769598151,
+        "odds_ratio": 0.825136612021858,
+        "or_ci_lo": 0.6651847590103269,
+        "or_ci_hi": 1.0235508545203154
+      },
+      "statsmodels_exact": {
+        "statistic": 151.0,
+        "pvalue": 0.08968907769598174
+      },
+      "scipy_binomtest_pvalue": 0.08968907769598174,
+      "statsmodels_chi2_corrected": {
+        "statistic": 2.877245508982036,
+        "pvalue": 0.08983958036579794
+      }
+    },
+    {
+      "name": "random_30",
+      "n11": 111,
+      "b": 2,
+      "c": 2,
+      "n00": 353,
+      "spec": {
+        "chi2_cc": 0.25,
+        "p_chi2": 0.6170750774519739,
+        "p_exact": 1.0,
+        "odds_ratio": 1.0,
+        "or_ci_lo": 0.140858420921045,
+        "or_ci_hi": 7.099327065156633
+      },
+      "statsmodels_exact": {
+        "statistic": 2.0,
+        "pvalue": 1.0
+      },
+      "scipy_binomtest_pvalue": 1.0,
+      "statsmodels_chi2_corrected": {
+        "statistic": 0.25,
+        "pvalue": 0.6170750774519739
+      }
+    },
+    {
+      "name": "random_31",
+      "n11": 490,
+      "b": 3,
+      "c": 37,
+      "n00": 365,
+      "spec": {
+        "chi2_cc": 27.225,
+        "p_chi2": 1.8110172867751724e-07,
+        "p_exact": 1.946500560734421e-08,
+        "odds_ratio": 12.333333333333334,
+        "or_ci_lo": 3.802722214922949,
+        "or_ci_hi": 40.000584453469806
+      },
+      "statsmodels_exact": {
+        "statistic": 3.0,
+        "pvalue": 1.946500560734421e-08
+      },
+      "scipy_binomtest_pvalue": 1.946500560734421e-08,
+      "statsmodels_chi2_corrected": {
+        "statistic": 27.225,
+        "pvalue": 1.8110172867751724e-07
+      }
+    },
+    {
+      "name": "random_32",
+      "n11": 215,
+      "b": 119,
+      "c": 139,
+      "n00": 310,
+      "spec": {
+        "chi2_cc": 1.3992248062015504,
+        "p_chi2": 0.23685340645132896,
+        "p_exact": 0.23679357177051788,
+        "odds_ratio": 1.1680672268907564,
+        "or_ci_lo": 0.9144479799170285,
+        "or_ci_hi": 1.4920269676357722
+      },
+      "statsmodels_exact": {
+        "statistic": 119.0,
+        "pvalue": 0.23679357177051774
+      },
+      "scipy_binomtest_pvalue": 0.23679357177051774,
+      "statsmodels_chi2_corrected": {
+        "statistic": 1.3992248062015504,
+        "pvalue": 0.23685340645132896
+      }
+    },
+    {
+      "name": "random_33",
+      "n11": 6,
+      "b": 4,
+      "c": 9,
+      "n00": 324,
+      "spec": {
+        "chi2_cc": 1.2307692307692308,
+        "p_chi2": 0.2672574931543847,
+        "p_exact": 0.266845703125,
+        "odds_ratio": 2.25,
+        "or_ci_lo": 0.6928905696352802,
+        "or_ci_hi": 7.3063485373524
+      },
+      "statsmodels_exact": {
+        "statistic": 4.0,
+        "pvalue": 0.266845703125
+      },
+      "scipy_binomtest_pvalue": 0.266845703125,
+      "statsmodels_chi2_corrected": {
+        "statistic": 1.2307692307692308,
+        "pvalue": 0.2672574931543847
+      }
+    },
+    {
+      "name": "random_34",
+      "n11": 405,
+      "b": 6,
+      "c": 27,
+      "n00": 498,
+      "spec": {
+        "chi2_cc": 12.121212121212121,
+        "p_chi2": 0.0004985148935752058,
+        "p_exact": 0.0003240634687244892,
+        "odds_ratio": 4.5,
+        "or_ci_lo": 1.8579242717173512,
+        "or_ci_hi": 10.899260162677216
+      },
+      "statsmodels_exact": {
+        "statistic": 6.0,
+        "pvalue": 0.0003240634687244892
+      },
+      "scipy_binomtest_pvalue": 0.0003240634687244892,
+      "statsmodels_chi2_corrected": {
+        "statistic": 12.121212121212121,
+        "pvalue": 0.0004985148935752058
+      }
+    },
+    {
+      "name": "random_35",
+      "n11": 72,
+      "b": 78,
+      "c": 53,
+      "n00": 16,
+      "spec": {
+        "chi2_cc": 4.396946564885496,
+        "p_chi2": 0.036003337342944926,
+        "p_exact": 0.03559998587055826,
+        "odds_ratio": 0.6794871794871795,
+        "or_ci_lo": 0.4793513981842903,
+        "or_ci_hi": 0.9631823936183396
+      },
+      "statsmodels_exact": {
+        "statistic": 53.0,
+        "pvalue": 0.03559998587055829
+      },
+      "scipy_binomtest_pvalue": 0.03559998587055829,
+      "statsmodels_chi2_corrected": {
+        "statistic": 4.396946564885496,
+        "pvalue": 0.036003337342944926
+      }
+    },
+    {
+      "name": "random_36",
+      "n11": 497,
+      "b": 9,
+      "c": 2,
+      "n00": 197,
+      "spec": {
+        "chi2_cc": 3.272727272727273,
+        "p_chi2": 0.0704404292720881,
+        "p_exact": 0.0654296875,
+        "odds_ratio": 0.2222222222222222,
+        "or_ci_lo": 0.048013172515390265,
+        "or_ci_hi": 1.028524329100591
+      },
+      "statsmodels_exact": {
+        "statistic": 2.0,
+        "pvalue": 0.0654296875
+      },
+      "scipy_binomtest_pvalue": 0.0654296875,
+      "statsmodels_chi2_corrected": {
+        "statistic": 3.272727272727273,
+        "pvalue": 0.0704404292720881
+      }
+    },
+    {
+      "name": "random_37",
+      "n11": 381,
+      "b": 16,
+      "c": 13,
+      "n00": 74,
+      "spec": {
+        "chi2_cc": 0.13793103448275862,
+        "p_chi2": 0.7103465689955667,
+        "p_exact": 0.711071103811264,
+        "odds_ratio": 0.8125,
+        "or_ci_lo": 0.39082648154649424,
+        "or_ci_hi": 1.6891287596167284
+      },
+      "statsmodels_exact": {
+        "statistic": 13.0,
+        "pvalue": 0.711071103811264
+      },
+      "scipy_binomtest_pvalue": 0.711071103811264,
+      "statsmodels_chi2_corrected": {
+        "statistic": 0.13793103448275862,
+        "pvalue": 0.7103465689955667
+      }
+    },
+    {
+      "name": "random_38",
+      "n11": 374,
+      "b": 70,
+      "c": 174,
+      "n00": 71,
+      "spec": {
+        "chi2_cc": 43.47950819672131,
+        "p_chi2": 4.284223087133912e-11,
+        "p_exact": 2.1370144728597155e-11,
+        "odds_ratio": 2.4857142857142858,
+        "or_ci_lo": 1.8835281953370744,
+        "or_ci_hi": 3.280426343232061
+      },
+      "statsmodels_exact": {
+        "statistic": 70.0,
+        "pvalue": 2.1370144728597064e-11
+      },
+      "scipy_binomtest_pvalue": 2.1370144728597064e-11,
+      "statsmodels_chi2_corrected": {
+        "statistic": 43.47950819672131,
+        "pvalue": 4.284223087133912e-11
+      }
+    },
+    {
+      "name": "random_39",
+      "n11": 449,
+      "b": 4,
+      "c": 1,
+      "n00": 262,
+      "spec": {
+        "chi2_cc": 0.8,
+        "p_chi2": 0.37109336952269756,
+        "p_exact": 0.375,
+        "odds_ratio": 0.25,
+        "or_ci_lo": 0.02794153523575402,
+        "or_ci_hi": 2.236813384542483
+      },
+      "statsmodels_exact": {
+        "statistic": 1.0,
+        "pvalue": 0.375
+      },
+      "scipy_binomtest_pvalue": 0.375,
+      "statsmodels_chi2_corrected": {
+        "statistic": 0.8,
+        "pvalue": 0.37109336952269756
+      }
+    },
+    {
+      "name": "random_40",
+      "n11": 104,
+      "b": 39,
+      "c": 30,
+      "n00": 200,
+      "spec": {
+        "chi2_cc": 0.927536231884058,
+        "p_chi2": 0.3355039530729915,
+        "p_exact": 0.33555761823401514,
+        "odds_ratio": 0.7692307692307693,
+        "or_ci_lo": 0.4779050779714405,
+        "or_ci_hi": 1.2381454050310843
+      },
+      "statsmodels_exact": {
+        "statistic": 30.0,
+        "pvalue": 0.3355576182340152
+      },
+      "scipy_binomtest_pvalue": 0.3355576182340152,
+      "statsmodels_chi2_corrected": {
+        "statistic": 0.927536231884058,
+        "pvalue": 0.3355039530729915
+      }
+    },
+    {
+      "name": "random_41",
+      "n11": 29,
+      "b": 167,
+      "c": 161,
+      "n00": 239,
+      "spec": {
+        "chi2_cc": 0.07621951219512195,
+        "p_chi2": 0.7824875316103979,
+        "p_exact": 0.782537534773994,
+        "odds_ratio": 0.9640718562874252,
+        "or_ci_lo": 0.7764123963099288,
+        "or_ci_hi": 1.1970887488438162
+      },
+      "statsmodels_exact": {
+        "statistic": 161.0,
+        "pvalue": 0.7825375347739938
+      },
+      "scipy_binomtest_pvalue": 0.7825375347739938,
+      "statsmodels_chi2_corrected": {
+        "statistic": 0.07621951219512195,
+        "pvalue": 0.7824875316103979
+      }
+    },
+    {
+      "name": "random_42",
+      "n11": 246,
+      "b": 0,
+      "c": 4,
+      "n00": 224,
+      "spec": {
+        "chi2_cc": 2.25,
+        "p_chi2": 0.13361440253771611,
+        "p_exact": 0.125,
+        "odds_ratio": null,
+        "or_ci_lo": null,
+        "or_ci_hi": null
+      },
+      "statsmodels_exact": {
+        "statistic": 0.0,
+        "pvalue": 0.125
+      },
+      "scipy_binomtest_pvalue": 0.125,
+      "statsmodels_chi2_corrected": {
+        "statistic": 2.25,
+        "pvalue": 0.13361440253771611
+      }
+    },
+    {
+      "name": "random_43",
+      "n11": 63,
+      "b": 27,
+      "c": 16,
+      "n00": 307,
+      "spec": {
+        "chi2_cc": 2.3255813953488373,
+        "p_chi2": 0.1272626636204395,
+        "p_exact": 0.12628947438543037,
+        "odds_ratio": 0.5925925925925926,
+        "or_ci_lo": 0.31930192079350617,
+        "or_ci_hi": 1.0997928854387031
+      },
+      "statsmodels_exact": {
+        "statistic": 16.0,
+        "pvalue": 0.12628947438543037
+      },
+      "scipy_binomtest_pvalue": 0.12628947438543037,
+      "statsmodels_chi2_corrected": {
+        "statistic": 2.3255813953488373,
+        "pvalue": 0.1272626636204395
+      }
+    },
+    {
+      "name": "random_44",
+      "n11": 270,
+      "b": 191,
+      "c": 189,
+      "n00": 446,
+      "spec": {
+        "chi2_cc": 0.002631578947368421,
+        "p_chi2": 0.959087330597393,
+        "p_exact": 0.9590963048063921,
+        "odds_ratio": 0.9895287958115183,
+        "or_ci_lo": 0.8092713895029403,
+        "or_ci_hi": 1.2099368029575397
+      },
+      "statsmodels_exact": {
+        "statistic": 189.0,
+        "pvalue": 0.9590963048063924
+      },
+      "scipy_binomtest_pvalue": 0.9590963048063924,
+      "statsmodels_chi2_corrected": {
+        "statistic": 0.002631578947368421,
+        "pvalue": 0.959087330597393
+      }
+    },
+    {
+      "name": "random_45",
+      "n11": 14,
+      "b": 6,
+      "c": 8,
+      "n00": 414,
+      "spec": {
+        "chi2_cc": 0.07142857142857142,
+        "p_chi2": 0.7892680261342813,
+        "p_exact": 0.79052734375,
+        "odds_ratio": 1.3333333333333333,
+        "or_ci_lo": 0.46262480569182624,
+        "or_ci_hi": 3.8428068618569267
+      },
+      "statsmodels_exact": {
+        "statistic": 6.0,
+        "pvalue": 0.79052734375
+      },
+      "scipy_binomtest_pvalue": 0.79052734375,
+      "statsmodels_chi2_corrected": {
+        "statistic": 0.07142857142857142,
+        "pvalue": 0.7892680261342813
+      }
+    },
+    {
+      "name": "random_46",
+      "n11": 249,
+      "b": 28,
+      "c": 9,
+      "n00": 73,
+      "spec": {
+        "chi2_cc": 8.756756756756756,
+        "p_chi2": 0.0030845709899566085,
+        "p_exact": 0.0025632079923525453,
+        "odds_ratio": 0.32142857142857145,
+        "or_ci_lo": 0.15167596290795266,
+        "or_ci_hi": 0.6811647973074789
+      },
+      "statsmodels_exact": {
+        "statistic": 9.0,
+        "pvalue": 0.0025632079923525453
+      },
+      "scipy_binomtest_pvalue": 0.0025632079923525453,
+      "statsmodels_chi2_corrected": {
+        "statistic": 8.756756756756756,
+        "pvalue": 0.0030845709899566085
+      }
+    },
+    {
+      "name": "random_47",
+      "n11": 432,
+      "b": 146,
+      "c": 127,
+      "n00": 276,
+      "spec": {
+        "chi2_cc": 1.1868131868131868,
+        "p_chi2": 0.2759733180137349,
+        "p_exact": 0.27594658076675066,
+        "odds_ratio": 0.8698630136986302,
+        "or_ci_lo": 0.6857477624957962,
+        "or_ci_hi": 1.1034110557604653
+      },
+      "statsmodels_exact": {
+        "statistic": 127.0,
+        "pvalue": 0.2759465807667506
+      },
+      "scipy_binomtest_pvalue": 0.2759465807667506,
+      "statsmodels_chi2_corrected": {
+        "statistic": 1.1868131868131868,
+        "pvalue": 0.2759733180137349
+      }
+    },
+    {
+      "name": "random_48",
+      "n11": 76,
+      "b": 1,
+      "c": 8,
+      "n00": 149,
+      "spec": {
+        "chi2_cc": 4.0,
+        "p_chi2": 0.045500263896358445,
+        "p_exact": 0.0390625,
+        "odds_ratio": 8.0,
+        "or_ci_lo": 1.000547754954372,
+        "or_ci_hi": 63.964962874679124
+      },
+      "statsmodels_exact": {
+        "statistic": 1.0,
+        "pvalue": 0.0390625
+      },
+      "scipy_binomtest_pvalue": 0.0390625,
+      "statsmodels_chi2_corrected": {
+        "statistic": 4.0,
+        "pvalue": 0.045500263896358445
+      }
+    },
+    {
+      "name": "random_49",
+      "n11": 221,
+      "b": 18,
+      "c": 6,
+      "n00": 306,
+      "spec": {
+        "chi2_cc": 5.041666666666667,
+        "p_chi2": 0.024744672046398953,
+        "p_exact": 0.022655844688415527,
+        "odds_ratio": 0.3333333333333333,
+        "or_ci_lo": 0.13231562005399006,
+        "or_ci_hi": 0.8397429650843439
+      },
+      "statsmodels_exact": {
+        "statistic": 6.0,
+        "pvalue": 0.022655844688415527
+      },
+      "scipy_binomtest_pvalue": 0.022655844688415527,
+      "statsmodels_chi2_corrected": {
+        "statistic": 5.041666666666667,
+        "pvalue": 0.024744672046398953
+      }
+    }
+  ]
+}

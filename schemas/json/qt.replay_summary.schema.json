@@ -1,0 +1,810 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.replay_summary",
+  "$defs": {
+    "DataQuality": {
+      "additionalProperties": false,
+      "description": "Data-quality counters and verdict (SPEC 5.1.5).",
+      "properties": {
+        "schema": {
+          "const": "qt.data_quality",
+          "default": "qt.data_quality",
+          "title": "Schema",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "records": {
+          "title": "Records",
+          "type": "integer"
+        },
+        "maybe_bad_book_records": {
+          "title": "Maybe Bad Book Records",
+          "type": "integer"
+        },
+        "bad_ts_recv_records": {
+          "title": "Bad Ts Recv Records",
+          "type": "integer"
+        },
+        "snapshot_records": {
+          "title": "Snapshot Records",
+          "type": "integer"
+        },
+        "pre_snapshot_rows_skipped": {
+          "title": "Pre Snapshot Rows Skipped",
+          "type": "integer"
+        },
+        "unknown_order_refs": {
+          "title": "Unknown Order Refs",
+          "type": "integer"
+        },
+        "duplicate_adds": {
+          "title": "Duplicate Adds",
+          "type": "integer"
+        },
+        "unexpected_modifies": {
+          "title": "Unexpected Modifies",
+          "type": "integer"
+        },
+        "sequence_gaps": {
+          "title": "Sequence Gaps",
+          "type": "integer"
+        },
+        "sequence_regressions": {
+          "title": "Sequence Regressions",
+          "type": "integer"
+        },
+        "out_of_order_ts_event": {
+          "title": "Out Of Order Ts Event",
+          "type": "integer"
+        },
+        "crossed_books_after_last": {
+          "title": "Crossed Books After Last",
+          "type": "integer"
+        },
+        "hidden_prints": {
+          "title": "Hidden Prints",
+          "type": "integer"
+        },
+        "off_price_executions": {
+          "title": "Off Price Executions",
+          "type": "integer"
+        },
+        "feed_gaps": {
+          "items": {
+            "$ref": "#/$defs/FeedGap"
+          },
+          "title": "Feed Gaps",
+          "type": "array"
+        },
+        "source_specific": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Source Specific",
+          "type": "object"
+        },
+        "verdict": {
+          "enum": [
+            "clean",
+            "warnings",
+            "unusable"
+          ],
+          "title": "Verdict",
+          "type": "string"
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        }
+      },
+      "required": [
+        "schema",
+        "schema_version",
+        "records",
+        "maybe_bad_book_records",
+        "bad_ts_recv_records",
+        "snapshot_records",
+        "pre_snapshot_rows_skipped",
+        "unknown_order_refs",
+        "duplicate_adds",
+        "unexpected_modifies",
+        "sequence_gaps",
+        "sequence_regressions",
+        "out_of_order_ts_event",
+        "crossed_books_after_last",
+        "hidden_prints",
+        "off_price_executions",
+        "feed_gaps",
+        "source_specific",
+        "verdict",
+        "reasons"
+      ],
+      "title": "DataQuality",
+      "type": "object"
+    },
+    "FeedGap": {
+      "additionalProperties": false,
+      "description": "A gap in the feed of one instrument.",
+      "properties": {
+        "instrument_id": {
+          "title": "Instrument Id",
+          "type": "integer"
+        },
+        "ts_start": {
+          "title": "Ts Start",
+          "type": "integer"
+        },
+        "ts_end": {
+          "title": "Ts End",
+          "type": "integer"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "instrument_id",
+        "ts_start",
+        "ts_end",
+        "reason"
+      ],
+      "title": "FeedGap",
+      "type": "object"
+    },
+    "FileEntry": {
+      "additionalProperties": false,
+      "description": "One output file: name relative to the output directory, row count for tables, size and sha256.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "rows": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rows"
+        },
+        "bytes": {
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "bytes",
+        "sha256"
+      ],
+      "title": "FileEntry",
+      "type": "object"
+    },
+    "Invariants": {
+      "additionalProperties": false,
+      "description": "The 8 book invariant counters (SPEC 3.5).",
+      "properties": {
+        "cancels_exceeding_resting": {
+          "title": "Cancels Exceeding Resting",
+          "type": "integer"
+        },
+        "fills_exceeding_resting": {
+          "title": "Fills Exceeding Resting",
+          "type": "integer"
+        },
+        "fills_unknown_order": {
+          "title": "Fills Unknown Order",
+          "type": "integer"
+        },
+        "unknown_order_refs": {
+          "title": "Unknown Order Refs",
+          "type": "integer"
+        },
+        "duplicate_adds": {
+          "title": "Duplicate Adds",
+          "type": "integer"
+        },
+        "unexpected_modifies": {
+          "title": "Unexpected Modifies",
+          "type": "integer"
+        },
+        "crossed_books_after_last": {
+          "title": "Crossed Books After Last",
+          "type": "integer"
+        },
+        "negative_spreads": {
+          "title": "Negative Spreads",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cancels_exceeding_resting",
+        "fills_exceeding_resting",
+        "fills_unknown_order",
+        "unknown_order_refs",
+        "duplicate_adds",
+        "unexpected_modifies",
+        "crossed_books_after_last",
+        "negative_spreads"
+      ],
+      "title": "Invariants",
+      "type": "object"
+    },
+    "Parity": {
+      "additionalProperties": false,
+      "description": "Trade and BBO parity against source data (SPEC 5.1.7).",
+      "properties": {
+        "trades_compared": {
+          "title": "Trades Compared",
+          "type": "integer"
+        },
+        "trades_mismatches": {
+          "title": "Trades Mismatches",
+          "type": "integer"
+        },
+        "trades_missing_derived": {
+          "title": "Trades Missing Derived",
+          "type": "integer"
+        },
+        "trades_extra_derived": {
+          "title": "Trades Extra Derived",
+          "type": "integer"
+        },
+        "bbo_compared": {
+          "title": "Bbo Compared",
+          "type": "integer"
+        },
+        "bbo_mismatches": {
+          "title": "Bbo Mismatches",
+          "type": "integer"
+        },
+        "first_mismatches": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "First Mismatches",
+          "type": "array"
+        },
+        "pass": {
+          "title": "Pass",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "trades_compared",
+        "trades_mismatches",
+        "trades_missing_derived",
+        "trades_extra_derived",
+        "bbo_compared",
+        "bbo_mismatches",
+        "first_mismatches",
+        "pass"
+      ],
+      "title": "Parity",
+      "type": "object"
+    },
+    "RankBucket": {
+      "additionalProperties": false,
+      "description": "Rank-oracle statistics of one 30-minute local bucket.",
+      "properties": {
+        "checked": {
+          "title": "Checked",
+          "type": "integer"
+        },
+        "rank0": {
+          "title": "Rank0",
+          "type": "integer"
+        },
+        "rank0_sweep_adjusted": {
+          "title": "Rank0 Sweep Adjusted",
+          "type": "integer"
+        },
+        "rank0_share": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Rank0 Share"
+        },
+        "rank0_share_sweep_adjusted": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Rank0 Share Sweep Adjusted"
+        }
+      },
+      "required": [
+        "checked",
+        "rank0",
+        "rank0_sweep_adjusted",
+        "rank0_share",
+        "rank0_share_sweep_adjusted"
+      ],
+      "title": "RankBucket",
+      "type": "object"
+    },
+    "RankOracle": {
+      "additionalProperties": false,
+      "description": "Rank-oracle summary (SPEC 5.1.4, et semantics).",
+      "properties": {
+        "executions_checked": {
+          "title": "Executions Checked",
+          "type": "integer"
+        },
+        "executions_unknown_order": {
+          "title": "Executions Unknown Order",
+          "type": "integer"
+        },
+        "price_priority_violations": {
+          "title": "Price Priority Violations",
+          "type": "integer"
+        },
+        "fifo_rank_histogram": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 6,
+          "minItems": 6,
+          "title": "Fifo Rank Histogram",
+          "type": "array"
+        },
+        "fifo_rank_histogram_sweep_adjusted": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 6,
+          "minItems": 6,
+          "title": "Fifo Rank Histogram Sweep Adjusted",
+          "type": "array"
+        },
+        "rank0_share": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Rank0 Share"
+        },
+        "rank0_share_sweep_adjusted": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Rank0 Share Sweep Adjusted"
+        },
+        "sweeps": {
+          "title": "Sweeps",
+          "type": "integer"
+        },
+        "sweeps_multi_fill": {
+          "title": "Sweeps Multi Fill",
+          "type": "integer"
+        },
+        "sweep_gap_ns": {
+          "title": "Sweep Gap Ns",
+          "type": "integer"
+        },
+        "first_60s_after_open": {
+          "$ref": "#/$defs/RankWindow"
+        },
+        "rank0_share_by_bucket": {
+          "patternProperties": {
+            "^[0-9]{2}:[0-9]{2}$": {
+              "$ref": "#/$defs/RankBucket"
+            }
+          },
+          "title": "Rank0 Share By Bucket",
+          "type": "object"
+        }
+      },
+      "required": [
+        "executions_checked",
+        "executions_unknown_order",
+        "price_priority_violations",
+        "fifo_rank_histogram",
+        "fifo_rank_histogram_sweep_adjusted",
+        "rank0_share",
+        "rank0_share_sweep_adjusted",
+        "sweeps",
+        "sweeps_multi_fill",
+        "sweep_gap_ns",
+        "first_60s_after_open",
+        "rank0_share_by_bucket"
+      ],
+      "title": "RankOracle",
+      "type": "object"
+    },
+    "RankWindow": {
+      "additionalProperties": false,
+      "description": "Rank-oracle statistics over the first 60 s after the open.",
+      "properties": {
+        "checked": {
+          "title": "Checked",
+          "type": "integer"
+        },
+        "rank_violations": {
+          "title": "Rank Violations",
+          "type": "integer"
+        },
+        "rank_violations_sweep_adjusted": {
+          "title": "Rank Violations Sweep Adjusted",
+          "type": "integer"
+        },
+        "rank0_share": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Rank0 Share"
+        },
+        "rank0_share_sweep_adjusted": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Rank0 Share Sweep Adjusted"
+        }
+      },
+      "required": [
+        "checked",
+        "rank_violations",
+        "rank_violations_sweep_adjusted",
+        "rank0_share",
+        "rank0_share_sweep_adjusted"
+      ],
+      "title": "RankWindow",
+      "type": "object"
+    },
+    "ReplayStats": {
+      "additionalProperties": false,
+      "description": "Replay record / event counters.",
+      "properties": {
+        "records": {
+          "title": "Records",
+          "type": "integer"
+        },
+        "events": {
+          "title": "Events",
+          "type": "integer"
+        },
+        "trades": {
+          "title": "Trades",
+          "type": "integer"
+        },
+        "instruments": {
+          "title": "Instruments",
+          "type": "integer"
+        },
+        "partitions": {
+          "title": "Partitions",
+          "type": "integer"
+        },
+        "snapshot_records": {
+          "title": "Snapshot Records",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "records",
+        "events",
+        "trades",
+        "instruments",
+        "partitions",
+        "snapshot_records"
+      ],
+      "title": "ReplayStats",
+      "type": "object"
+    },
+    "ReplayTimings": {
+      "additionalProperties": false,
+      "description": "Wall-clock timings (excluded from determinism hashes).",
+      "properties": {
+        "wall_s": {
+          "title": "Wall S",
+          "type": "number"
+        },
+        "records_per_s": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Records Per S"
+        }
+      },
+      "required": [
+        "wall_s",
+        "records_per_s"
+      ],
+      "title": "ReplayTimings",
+      "type": "object"
+    },
+    "ShadowCounts": {
+      "additionalProperties": false,
+      "description": "Shadow outcome counters.",
+      "properties": {
+        "n": {
+          "title": "N",
+          "type": "integer"
+        },
+        "n_live": {
+          "title": "N Live",
+          "type": "integer"
+        },
+        "n_filled": {
+          "title": "N Filled",
+          "type": "integer"
+        },
+        "n_partial_only": {
+          "title": "N Partial Only",
+          "type": "integer"
+        },
+        "n_cancelled": {
+          "title": "N Cancelled",
+          "type": "integer"
+        },
+        "n_censored": {
+          "title": "N Censored",
+          "type": "integer"
+        },
+        "n_rejected": {
+          "title": "N Rejected",
+          "type": "integer"
+        },
+        "fills_rows": {
+          "title": "Fills Rows",
+          "type": "integer"
+        },
+        "trajectory_rows": {
+          "title": "Trajectory Rows",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "n",
+        "n_live",
+        "n_filled",
+        "n_partial_only",
+        "n_cancelled",
+        "n_censored",
+        "n_rejected",
+        "fills_rows",
+        "trajectory_rows"
+      ],
+      "title": "ShadowCounts",
+      "type": "object"
+    },
+    "ShadowDiagnostics": {
+      "additionalProperties": false,
+      "description": "1.1 (3.11 #20): shadow fill-rule diagnostics of a replay (audit rulings A1, A3, A5).",
+      "properties": {
+        "hidden_print_fills": {
+          "title": "Hidden Print Fills",
+          "type": "integer"
+        },
+        "hidden_at_px_with_display_ahead": {
+          "title": "Hidden At Px With Display Ahead",
+          "type": "integer"
+        },
+        "taker_fills": {
+          "title": "Taker Fills",
+          "type": "integer"
+        },
+        "crossed_unfilled": {
+          "title": "Crossed Unfilled",
+          "type": "integer"
+        },
+        "behind_exec_with_ahead": {
+          "title": "Behind Exec With Ahead",
+          "type": "integer"
+        },
+        "excluded_requested": {
+          "title": "Excluded Requested",
+          "type": "integer"
+        },
+        "excluded_matched": {
+          "title": "Excluded Matched",
+          "type": "integer"
+        },
+        "excluded_records": {
+          "title": "Excluded Records",
+          "type": "integer"
+        },
+        "twins_linked": {
+          "default": 0,
+          "title": "Twins Linked",
+          "type": "integer"
+        },
+        "twin_fills_with_queue_ahead": {
+          "default": 0,
+          "title": "Twin Fills With Queue Ahead",
+          "type": "integer"
+        },
+        "twin_fills_off_display": {
+          "default": 0,
+          "title": "Twin Fills Off Display",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "hidden_print_fills",
+        "hidden_at_px_with_display_ahead",
+        "taker_fills",
+        "crossed_unfilled",
+        "behind_exec_with_ahead",
+        "excluded_requested",
+        "excluded_matched",
+        "excluded_records"
+      ],
+      "title": "ShadowDiagnostics",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Summary of `replay` (SPEC 5.1.6).",
+  "properties": {
+    "schema": {
+      "const": "qt.replay_summary",
+      "default": "qt.replay_summary",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "run_id": {
+      "pattern": "^[0-9a-f]{16}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "engine_version": {
+      "title": "Engine Version",
+      "type": "string"
+    },
+    "spec": {
+      "additionalProperties": true,
+      "title": "Spec",
+      "type": "object"
+    },
+    "stats": {
+      "$ref": "#/$defs/ReplayStats"
+    },
+    "invariants": {
+      "$ref": "#/$defs/Invariants"
+    },
+    "rank_oracle": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RankOracle"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "parity": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Parity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "shadows": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ShadowCounts"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "data_quality": {
+      "$ref": "#/$defs/DataQuality"
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/FileEntry"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    },
+    "timings": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ReplayTimings"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "shadow_diagnostics": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ShadowDiagnostics"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "run_id",
+    "engine_version",
+    "spec",
+    "stats",
+    "invariants",
+    "data_quality",
+    "files",
+    "warnings"
+  ],
+  "type": "object"
+}

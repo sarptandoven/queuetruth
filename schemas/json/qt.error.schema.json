@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.error",
+  "additionalProperties": false,
+  "description": "CLI / API error object (exit code 2).",
+  "properties": {
+    "schema": {
+      "const": "qt.error",
+      "default": "qt.error",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "code": {
+      "pattern": "^QT-[A-Z]+-[0-9]{3}$",
+      "title": "Code",
+      "type": "string"
+    },
+    "message": {
+      "title": "Message",
+      "type": "string"
+    },
+    "hint": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Hint"
+    },
+    "details": {
+      "additionalProperties": true,
+      "title": "Details",
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "code",
+    "message",
+    "details"
+  ],
+  "type": "object"
+}

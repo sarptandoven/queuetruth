@@ -1,0 +1,12 @@
+{
+  "sample": {
+    "schema": "qt.bench",
+    "schema_version": 1,
+    "data": "x",
+    "records": 1,
+    "wall_s": [
+      0.5
+    ],
+    "records_per_s_median": 0.5
+  }
+}

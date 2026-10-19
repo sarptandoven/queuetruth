@@ -1,0 +1,73 @@
+{
+  "sample": {
+    "features": {
+      "path": "x"
+    },
+    "out": "x",
+    "grid_ns": [
+      1
+    ],
+    "split": {
+      "scheme": "auto",
+      "n_blocks": 3,
+      "embargo_ns": 1
+    },
+    "gbdt": {
+      "max_iter": 1,
+      "learning_rate": 0.5,
+      "max_leaf_nodes": 2,
+      "min_samples_leaf": 1,
+      "l2_regularization": 0.5
+    },
+    "recalibration": "isotonic",
+    "privileged": true,
+    "seed": 1,
+    "bootstrap_b": 1,
+    "zoo_predictions": {
+      "path": "x"
+    },
+    "zoo_shadows": {
+      "path": "x"
+    }
+  },
+  "minimal": {
+    "features": {
+      "path": "x"
+    }
+  },
+  "defaults": {
+    "features": {
+      "path": "x"
+    },
+    "out": null,
+    "grid_ns": [
+      100000000,
+      250000000,
+      500000000,
+      1000000000,
+      2000000000,
+      5000000000,
+      10000000000,
+      30000000000,
+      60000000000
+    ],
+    "split": {
+      "scheme": "auto",
+      "n_blocks": 5,
+      "embargo_ns": 60000000000
+    },
+    "gbdt": {
+      "max_iter": 300,
+      "learning_rate": 0.05,
+      "max_leaf_nodes": 31,
+      "min_samples_leaf": 100,
+      "l2_regularization": 1.0
+    },
+    "recalibration": "isotonic",
+    "privileged": false,
+    "seed": 0,
+    "bootstrap_b": 1000,
+    "zoo_predictions": null,
+    "zoo_shadows": null
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "sample": {
+    "schema": "qt.problem",
+    "schema_version": 1,
+    "type": "x",
+    "title": "x",
+    "status": 1,
+    "detail": "x",
+    "instance": "x",
+    "code": "x",
+    "request_id": "x",
+    "errors": [
+      {
+        "loc": [
+          "x"
+        ],
+        "msg": "x"
+      }
+    ]
+  }
+}

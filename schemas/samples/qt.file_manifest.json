@@ -1,0 +1,17 @@
+{
+  "sample": {
+    "schema": "qt.file_manifest",
+    "schema_version": 1,
+    "job_id": "x",
+    "files": [
+      {
+        "name": "x",
+        "bytes": 1,
+        "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "content_type": "x",
+        "url": "x",
+        "expires_at": "x"
+      }
+    ]
+  }
+}

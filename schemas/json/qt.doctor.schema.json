@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.doctor",
+  "additionalProperties": false,
+  "description": "Result of `doctor`.",
+  "properties": {
+    "schema": {
+      "const": "qt.doctor",
+      "default": "qt.doctor",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "python": {
+      "title": "Python",
+      "type": "string"
+    },
+    "platform": {
+      "title": "Platform",
+      "type": "string"
+    },
+    "machine": {
+      "title": "Machine",
+      "type": "string"
+    },
+    "core_version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Core Version"
+    },
+    "schemas_ok": {
+      "title": "Schemas Ok",
+      "type": "boolean"
+    },
+    "postgres": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Postgres"
+    },
+    "docker": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Docker"
+    },
+    "problems": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Problems",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "python",
+    "platform",
+    "machine",
+    "core_version",
+    "schemas_ok",
+    "problems"
+  ],
+  "type": "object"
+}

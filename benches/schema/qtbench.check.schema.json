@@ -1,0 +1,153 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "qtbench.check",
+ "title": "qtbench.check",
+ "type": "object",
+ "required": [
+  "schema",
+  "schema_version",
+  "threshold",
+  "alpha",
+  "env_comparable",
+  "env_reasons",
+  "rows",
+  "exit_code"
+ ],
+ "properties": {
+  "schema": {
+   "const": "qtbench.check"
+  },
+  "schema_version": {
+   "const": 1
+  },
+  "threshold": {
+   "type": "number"
+  },
+  "alpha": {
+   "type": "number"
+  },
+  "env_comparable": {
+   "type": "boolean"
+  },
+  "env_reasons": {
+   "type": "array",
+   "items": {
+    "type": "string"
+   }
+  },
+  "baseline_env_class": {
+   "type": [
+    "string",
+    "null"
+   ]
+  },
+  "current_env_class": {
+   "type": [
+    "string",
+    "null"
+   ]
+  },
+  "exit_code": {
+   "enum": [
+    0,
+    1,
+    2,
+    3
+   ]
+  },
+  "rows": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "id",
+     "status"
+    ],
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "status": {
+      "enum": [
+       "ok",
+       "regression",
+       "suspect",
+       "improved",
+       "insufficient",
+       "new",
+       "missing",
+       "skipped",
+       "error"
+      ]
+     },
+     "slowdown": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "ci": {
+      "type": [
+       "array",
+       "null"
+      ],
+      "items": {
+       "type": "number"
+      }
+     },
+     "p_slower": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "p_faster": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "min_attainable_p": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "n_base": {
+      "type": "integer"
+     },
+     "n_cur": {
+      "type": "integer"
+     },
+     "base_median": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "cur_median": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "unit": {
+      "type": "string"
+     },
+     "reason": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "errors": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    }
+   }
+  }
+ }
+}

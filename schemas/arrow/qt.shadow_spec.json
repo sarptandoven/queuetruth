@@ -1,0 +1,85 @@
+{
+  "name": "qt.shadow_spec",
+  "metadata": {
+    "qt.engine_version": "0.1.0",
+    "qt.schema": "qt.shadow_spec",
+    "qt.schema_version": "1.1"
+  },
+  "fields": [
+    {
+      "name": "shadow_id",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "instrument_id",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "side",
+      "type": "uint8",
+      "nullable": false
+    },
+    {
+      "name": "price_mode",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "abs",
+        "touch"
+      ]
+    },
+    {
+      "name": "price",
+      "type": "int64",
+      "nullable": true
+    },
+    {
+      "name": "offset_ticks",
+      "type": "int32",
+      "nullable": false
+    },
+    {
+      "name": "qty",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "ts_submit",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": false
+    },
+    {
+      "name": "latency_ns",
+      "type": "int64",
+      "nullable": false
+    },
+    {
+      "name": "ts_cancel",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": true
+    },
+    {
+      "name": "group",
+      "type": "utf8",
+      "nullable": true
+    },
+    {
+      "name": "source",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "sampled",
+        "live_log",
+        "real_order_mirror",
+        "user"
+      ]
+    },
+    {
+      "name": "order_key",
+      "type": "utf8",
+      "nullable": true
+    }
+  ]
+}

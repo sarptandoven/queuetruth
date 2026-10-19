@@ -1,0 +1,17 @@
+[
+  {
+    "symbol": "BTCUSDT",
+    "id": 77000201,
+    "orderId": 5000201,
+    "orderListId": -1,
+    "price": "60001.01000000",
+    "qty": "0.00150000",
+    "quoteQty": "90.00151500",
+    "commission": "0.09000152",
+    "commissionAsset": "USDT",
+    "time": 1792071120000417,
+    "isBuyer": true,
+    "isMaker": false,
+    "isBestMatch": true
+  }
+]

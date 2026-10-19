@@ -1,0 +1,2 @@
+{"data":{"id":7,"timestamp":"1712131200","amount":0.0001,"amount_str":"0.00010000","price":61205.0,"price_str":"61205.00","type":0,"microtimestamp":"1712131200000010","buy_order_id":21,"sell_order_id":2},"channel":"live_trades_btcusd","event":"trade","recv_ns":1712131200000010001}
+{"data":{"id":7,"timestamp":"1712131200","amount":0.7999,"amount_str":"0.79990000","price":61205.0,"price_str":"61205.00","type":0,"microtimestamp":"1712131200000020","buy_order_id":22,"sell_order_id":2},"channel":"live_trades_btcusd","event":"trade","recv_ns":1712131200000020002}

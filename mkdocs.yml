@@ -1,0 +1,5 @@
+# Site configuration for the queuetruth docs (mkdocs-material, dev dependency; Zensical also reads this file).
+# The settings and nav live in docs/mkdocs.yml (owned with the docs, checked by docs/check_docs.py); MkDocs refuses a
+# config file inside docs_dir, so this root file inherits it. Build: make docs-build
+INHERIT: docs/mkdocs.yml
+docs_dir: docs

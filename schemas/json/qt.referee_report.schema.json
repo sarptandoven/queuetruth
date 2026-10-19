@@ -1,0 +1,205 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.referee_report",
+  "$defs": {
+    "Discordant": {
+      "additionalProperties": false,
+      "description": "Discordant fill outcomes.",
+      "properties": {
+        "sim_only": {
+          "title": "Sim Only",
+          "type": "integer"
+        },
+        "exact_only": {
+          "title": "Exact Only",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "sim_only",
+        "exact_only"
+      ],
+      "title": "Discordant",
+      "type": "object"
+    },
+    "RefereeExample": {
+      "additionalProperties": false,
+      "description": "One disagreeing order.",
+      "properties": {
+        "order_key": {
+          "title": "Order Key",
+          "type": "string"
+        },
+        "exact": {
+          "additionalProperties": true,
+          "title": "Exact",
+          "type": "object"
+        },
+        "sim": {
+          "additionalProperties": true,
+          "title": "Sim",
+          "type": "object"
+        }
+      },
+      "required": [
+        "order_key",
+        "exact",
+        "sim"
+      ],
+      "title": "RefereeExample",
+      "type": "object"
+    },
+    "SimulatorEcho": {
+      "additionalProperties": false,
+      "description": "Simulator under test.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Version"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "SimulatorEcho",
+      "type": "object"
+    },
+    "ToleranceEcho": {
+      "additionalProperties": false,
+      "description": "Referee pass thresholds (echo).",
+      "properties": {
+        "max_discordant": {
+          "title": "Max Discordant",
+          "type": "integer"
+        },
+        "max_qty_mismatch": {
+          "title": "Max Qty Mismatch",
+          "type": "integer"
+        },
+        "max_abs_ttf_err_ns": {
+          "title": "Max Abs Ttf Err Ns",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "max_discordant",
+        "max_qty_mismatch",
+        "max_abs_ttf_err_ns"
+      ],
+      "title": "ToleranceEcho",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Result of `referee run` (SPEC 5.8).",
+  "properties": {
+    "schema": {
+      "const": "qt.referee_report",
+      "default": "qt.referee_report",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "spec": {
+      "additionalProperties": true,
+      "title": "Spec",
+      "type": "object"
+    },
+    "simulator": {
+      "$ref": "#/$defs/SimulatorEcho"
+    },
+    "n_orders": {
+      "title": "N Orders",
+      "type": "integer"
+    },
+    "n_both_filled": {
+      "title": "N Both Filled",
+      "type": "integer"
+    },
+    "discordant": {
+      "$ref": "#/$defs/Discordant"
+    },
+    "qty_mismatch": {
+      "title": "Qty Mismatch",
+      "type": "integer"
+    },
+    "max_abs_ttf_err_ns": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Max Abs Ttf Err Ns"
+    },
+    "ttf_err_p50_ns": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Ttf Err P50 Ns"
+    },
+    "by_reason": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "title": "By Reason",
+      "type": "object"
+    },
+    "tolerance": {
+      "$ref": "#/$defs/ToleranceEcho"
+    },
+    "pass": {
+      "title": "Pass",
+      "type": "boolean"
+    },
+    "examples": {
+      "items": {
+        "$ref": "#/$defs/RefereeExample"
+      },
+      "maxItems": 20,
+      "title": "Examples",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "spec",
+    "simulator",
+    "n_orders",
+    "n_both_filled",
+    "discordant",
+    "qty_mismatch",
+    "by_reason",
+    "tolerance",
+    "pass",
+    "examples"
+  ],
+  "type": "object"
+}

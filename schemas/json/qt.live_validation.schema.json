@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.live_validation",
+  "additionalProperties": false,
+  "description": "Result of `live validate`.",
+  "properties": {
+    "schema": {
+      "const": "qt.live_validation",
+      "default": "qt.live_validation",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "path": {
+      "title": "Path",
+      "type": "string"
+    },
+    "n_orders": {
+      "title": "N Orders",
+      "type": "integer"
+    },
+    "n_events": {
+      "title": "N Events",
+      "type": "integer"
+    },
+    "errors": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Errors",
+      "type": "array"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "path",
+    "n_orders",
+    "n_events",
+    "errors",
+    "warnings"
+  ],
+  "type": "object"
+}

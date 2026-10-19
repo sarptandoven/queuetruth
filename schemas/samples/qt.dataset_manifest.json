@@ -1,0 +1,51 @@
+{
+  "sample": {
+    "schema": "qt.dataset_manifest",
+    "schema_version": 1,
+    "dataset_id": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "kind": "mbo",
+    "source_format": "x",
+    "venue": "generic",
+    "source_venue": "x",
+    "inputs": [
+      {
+        "path": "x",
+        "bytes": 1,
+        "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      }
+    ],
+    "partitions": [
+      {
+        "instrument_id": 1,
+        "session_date": 1,
+        "files": [
+          {
+            "path": "x",
+            "rows": 1,
+            "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+          }
+        ],
+        "rows": 1,
+        "ts_min": 1,
+        "ts_max": 1
+      }
+    ],
+    "price_exp_by_instrument": {
+      "7": 1
+    },
+    "created_by": "x",
+    "validation_status": "real_data",
+    "rule_set": "generic",
+    "source_vintage": [
+      {
+        "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "dbn_version": 1,
+        "dataset": "x",
+        "dbn_schema": "x",
+        "start_ns": 1,
+        "end_ns": 1,
+        "publisher_id": 1
+      }
+    ]
+  }
+}

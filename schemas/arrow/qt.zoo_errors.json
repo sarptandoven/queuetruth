@@ -1,0 +1,61 @@
+{
+  "name": "qt.zoo_errors",
+  "metadata": {
+    "qt.engine_version": "0.1.0",
+    "qt.schema": "qt.zoo_errors",
+    "qt.schema_version": "1.1"
+  },
+  "fields": [
+    {
+      "name": "model_id",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "metric",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "horizon_ns",
+      "type": "int64",
+      "nullable": true
+    },
+    {
+      "name": "stratum_kind",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "all",
+        "queue_decile",
+        "liquidity_bucket",
+        "instrument"
+      ]
+    },
+    {
+      "name": "stratum",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "value",
+      "type": "float64",
+      "nullable": false
+    },
+    {
+      "name": "ci_lo",
+      "type": "float64",
+      "nullable": true
+    },
+    {
+      "name": "ci_hi",
+      "type": "float64",
+      "nullable": true
+    },
+    {
+      "name": "n",
+      "type": "uint64",
+      "nullable": false
+    }
+  ]
+}

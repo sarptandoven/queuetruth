@@ -1,0 +1,77 @@
+{
+  "name": "qt.zoo_fills",
+  "metadata": {
+    "qt.engine_version": "0.1.0",
+    "qt.schema": "qt.zoo_fills",
+    "qt.schema_version": "1.1"
+  },
+  "fields": [
+    {
+      "name": "model_id",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "shadow_id",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "fill_seq",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "ts_event",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": false
+    },
+    {
+      "name": "fill_qty",
+      "type": "float64",
+      "nullable": false
+    },
+    {
+      "name": "cum_qty",
+      "type": "float64",
+      "nullable": false
+    },
+    {
+      "name": "queue_ahead_est_before",
+      "type": "float64",
+      "nullable": false
+    },
+    {
+      "name": "reason",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "queue",
+        "trade_through",
+        "crossed",
+        "crossed_at_live",
+        "touch_draw"
+      ]
+    },
+    {
+      "name": "quirk",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "none",
+        "hbt_312",
+        "hbt_nan_reset"
+      ]
+    },
+    {
+      "name": "liquidity",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "maker",
+        "taker"
+      ],
+      "since": "1.1"
+    }
+  ]
+}

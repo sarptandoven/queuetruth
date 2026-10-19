@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.api_key",
+  "additionalProperties": false,
+  "description": "An API key (secret never included).",
+  "properties": {
+    "schema": {
+      "const": "qt.api_key",
+      "default": "qt.api_key",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "prefix": {
+      "title": "Prefix",
+      "type": "string"
+    },
+    "scopes": {
+      "items": {
+        "enum": [
+          "read",
+          "write",
+          "admin"
+        ],
+        "type": "string"
+      },
+      "title": "Scopes",
+      "type": "array"
+    },
+    "created_at": {
+      "title": "Created At",
+      "type": "string"
+    },
+    "last_used_at": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Last Used At"
+    },
+    "revoked_at": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Revoked At"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "id",
+    "prefix",
+    "scopes",
+    "created_at"
+  ],
+  "type": "object"
+}

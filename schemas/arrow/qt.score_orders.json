@@ -1,0 +1,169 @@
+{
+  "name": "qt.score_orders",
+  "metadata": {
+    "qt.engine_version": "0.1.0",
+    "qt.schema": "qt.score_orders",
+    "qt.schema_version": "1.1"
+  },
+  "fields": [
+    {
+      "name": "order_key",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "instrument_id",
+      "type": "uint32",
+      "nullable": true
+    },
+    {
+      "name": "session_date",
+      "type": "date32",
+      "nullable": false
+    },
+    {
+      "name": "side",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "buy",
+        "sell"
+      ]
+    },
+    {
+      "name": "limit_px",
+      "type": "int64",
+      "nullable": false
+    },
+    {
+      "name": "qty",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "ts_entry",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": false
+    },
+    {
+      "name": "live_filled",
+      "type": "bool",
+      "nullable": false
+    },
+    {
+      "name": "live_filled_qty",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "live_ts_first_fill",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": true
+    },
+    {
+      "name": "sim_filled",
+      "type": "bool",
+      "nullable": false
+    },
+    {
+      "name": "sim_filled_qty",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "sim_ts_first_fill",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": true
+    },
+    {
+      "name": "class",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "both",
+        "neither",
+        "live_only",
+        "sim_only"
+      ]
+    },
+    {
+      "name": "live_end",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "filled",
+        "cancelled",
+        "expired",
+        "rejected",
+        "open"
+      ]
+    },
+    {
+      "name": "queue_ahead_at_entry",
+      "type": "uint64",
+      "nullable": true
+    },
+    {
+      "name": "queue_ahead_source",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "exact",
+        "l2_visible",
+        "none"
+      ]
+    },
+    {
+      "name": "queue_decile",
+      "type": "uint8",
+      "nullable": true
+    },
+    {
+      "name": "liquidity_bucket",
+      "type": "uint8",
+      "nullable": true
+    },
+    {
+      "name": "ttf_live_ns",
+      "type": "int64",
+      "nullable": true
+    },
+    {
+      "name": "ttf_sim_ns",
+      "type": "int64",
+      "nullable": true
+    },
+    {
+      "name": "overlap_same_px",
+      "type": "bool",
+      "nullable": false
+    },
+    {
+      "name": "sim_model_id",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "trade_vol_60s",
+      "type": "uint64",
+      "nullable": true
+    },
+    {
+      "name": "legs",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "price_exp",
+      "type": "int8",
+      "nullable": true,
+      "since": "1.1"
+    },
+    {
+      "name": "size_exp",
+      "type": "int8",
+      "nullable": true,
+      "since": "1.1"
+    }
+  ]
+}

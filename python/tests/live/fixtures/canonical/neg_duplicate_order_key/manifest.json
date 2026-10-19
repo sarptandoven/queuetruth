@@ -1,0 +1,14 @@
+{
+  "schema": "qt.live_manifest",
+  "schema_version": 1,
+  "venues": [
+    "fix44"
+  ],
+  "accounts": [
+    "QTACCT01"
+  ],
+  "n_orders": 6,
+  "n_events": 27,
+  "instrument_map_sha256": null,
+  "created_by": "queuetruth live fixtures"
+}

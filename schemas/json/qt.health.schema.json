@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.health",
+  "additionalProperties": false,
+  "description": "Service health.",
+  "properties": {
+    "schema": {
+      "const": "qt.health",
+      "default": "qt.health",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "degraded"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "db": {
+      "title": "Db",
+      "type": "string"
+    },
+    "store": {
+      "title": "Store",
+      "type": "string"
+    },
+    "queue": {
+      "title": "Queue",
+      "type": "string"
+    },
+    "version": {
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "status",
+    "db",
+    "store",
+    "queue",
+    "version"
+  ],
+  "type": "object"
+}

@@ -1,0 +1,2828 @@
+[
+  {
+    "argv": [
+      "queuetruth",
+      "ingest",
+      "--format",
+      "etcsv",
+      "--in",
+      "mbo.csv",
+      "--in",
+      "trades.csv",
+      "--venue",
+      "nasdaq",
+      "--out",
+      "ds",
+      "--symbols",
+      "AAPL,MSFT",
+      "--date",
+      "2019-12-30",
+      "--midnight-ns",
+      "1577682000000000000",
+      "--tz",
+      "America/New_York",
+      "--instruments",
+      "instruments.csv",
+      "--price-exp",
+      "-9",
+      "--size-exp",
+      "0",
+      "--tick-size",
+      "0.01",
+      "--lot-size",
+      "1",
+      "--source-venue",
+      "xnas",
+      "--option",
+      "taker_window_us=100",
+      "--strict",
+      "--format",
+      "json"
+    ],
+    "command": {
+      "path": [
+        "ingest"
+      ],
+      "global": {
+        "format": "json",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "format": "etcsv",
+        "inputs": [
+          {
+            "path": "mbo.csv"
+          },
+          {
+            "path": "trades.csv"
+          }
+        ],
+        "venue": "nasdaq",
+        "out": "ds",
+        "symbols": [
+          "AAPL",
+          "MSFT"
+        ],
+        "session_date": "2019-12-30",
+        "midnight_utc_ns": 1577682000000000000,
+        "tz": "America/New_York",
+        "instruments": {
+          "path": "instruments.csv"
+        },
+        "price_exp": -9,
+        "size_exp": 0,
+        "tick_size": "0.01",
+        "lot_size": "1",
+        "source_venue": "xnas",
+        "options": {
+          "taker_window_us": 100
+        },
+        "strict": true
+      },
+      "implementation": "native"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "ingest",
+      "--format",
+      "coinbase",
+      "--in",
+      "full.jsonl",
+      "--venue",
+      "crypto_l3",
+      "--out",
+      "ds"
+    ],
+    "command": {
+      "path": [
+        "ingest"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "format": "coinbase",
+        "inputs": [
+          {
+            "path": "full.jsonl"
+          }
+        ],
+        "venue": "crypto_l3",
+        "out": "ds"
+      },
+      "implementation": "native"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "--format",
+      "json",
+      "ingest",
+      "--input-format",
+      "tardis-l2",
+      "--in",
+      "book.csv.gz",
+      "--venue",
+      "generic",
+      "--out",
+      "ds"
+    ],
+    "command": {
+      "path": [
+        "ingest"
+      ],
+      "global": {
+        "format": "json",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "format": "tardis_l2",
+        "inputs": [
+          {
+            "path": "book.csv.gz"
+          }
+        ],
+        "venue": "generic",
+        "out": "ds"
+      },
+      "implementation": "native"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "replay",
+      "--data",
+      "ds",
+      "--out",
+      "out",
+      "--shadows",
+      "sh.parquet",
+      "--amends",
+      "am.parquet",
+      "--latency",
+      "100us,1ms,250us",
+      "--jitter-ns",
+      "50us",
+      "--bbo",
+      "full",
+      "--depth",
+      "5",
+      "--rank-oracle",
+      "--sweep-gap-ns",
+      "2ms",
+      "--trajectory",
+      "full",
+      "--race-window-ns",
+      "100",
+      "--real-orders",
+      "--l2-depth",
+      "10",
+      "--l2-cadence-ns",
+      "100ms",
+      "--l2-trades",
+      "after",
+      "--write-l2",
+      "--parity-trades",
+      "--parity-bbo",
+      "bbo.csv",
+      "--venue",
+      "cme",
+      "--strict",
+      "--threads",
+      "4",
+      "--seed",
+      "7",
+      "--fill-rule",
+      "et",
+      "--hidden-print-policy",
+      "behind-and-through",
+      "--exclude-order-ids",
+      "own_ids.txt"
+    ],
+    "command": {
+      "path": [
+        "replay"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 4,
+        "seed": 7,
+        "quiet": false
+      },
+      "args": {
+        "dataset": {
+          "path": "ds"
+        },
+        "out": "out",
+        "shadows": {
+          "path": "sh.parquet"
+        },
+        "amends": {
+          "path": "am.parquet"
+        },
+        "latency": {
+          "feed_ns": 100000,
+          "decision_ns": 1000000,
+          "gateway_ns": 250000,
+          "jitter_ns": 50000
+        },
+        "bbo": "full",
+        "depth_levels": 5,
+        "rank_oracle": true,
+        "sweep_gap_ns": 2000000,
+        "trajectory": "full",
+        "race_window_ns": 100,
+        "real_orders": true,
+        "l2": {
+          "depth_levels": 10,
+          "cadence_ns": 100000000,
+          "trade_position": "after"
+        },
+        "parity_trades": true,
+        "parity_bbo": {
+          "path": "bbo.csv"
+        },
+        "venue": "cme",
+        "strict": true,
+        "fill_rule": "et",
+        "hidden_print_policy": "behind_and_through",
+        "_cli": {
+          "exclude_order_ids": {
+            "path": "own_ids.txt"
+          }
+        },
+        "seed": 7,
+        "threads": 4
+      },
+      "implementation": "native"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "replay",
+      "--data",
+      "ds",
+      "--out",
+      "out",
+      "--write-l2"
+    ],
+    "command": {
+      "path": [
+        "replay"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "dataset": {
+          "path": "ds"
+        },
+        "out": "out",
+        "l2": {}
+      },
+      "implementation": "native"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "shadows",
+      "sample",
+      "--data",
+      "ds",
+      "--n",
+      "100",
+      "--out",
+      "sh.parquet",
+      "--placements",
+      "0:0.6,-1:0.2,-2:0.1,1:0.1",
+      "--qty",
+      "lots:1:0.5,median:0.5",
+      "--lifetime",
+      "5m",
+      "--latency-ns",
+      "250us",
+      "--window-open-s",
+      "300",
+      "--window-close-s",
+      "600",
+      "--allocation",
+      "proportional",
+      "--sides",
+      "B",
+      "--seed",
+      "3"
+    ],
+    "command": {
+      "path": [
+        "shadows",
+        "sample"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 3,
+        "quiet": false
+      },
+      "args": {
+        "dataset": {
+          "path": "ds"
+        },
+        "n": 100,
+        "out": "sh.parquet",
+        "placements": [
+          {
+            "offset_ticks": 0,
+            "weight": 0.6
+          },
+          {
+            "offset_ticks": -1,
+            "weight": 0.2
+          },
+          {
+            "offset_ticks": -2,
+            "weight": 0.1
+          },
+          {
+            "offset_ticks": 1,
+            "weight": 0.1
+          }
+        ],
+        "qty": [
+          {
+            "kind": "lots",
+            "lots": 1,
+            "weight": 0.5
+          },
+          {
+            "kind": "median_order_size",
+            "weight": 0.5
+          }
+        ],
+        "lifetime_ns": 300000000000,
+        "latency_ns": 250000,
+        "window_open_s": 300,
+        "window_close_s": 600,
+        "allocation": "proportional",
+        "sides": [
+          "B"
+        ],
+        "seed": 3
+      },
+      "implementation": "native"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "shadows",
+      "mirror-real",
+      "--data",
+      "ds",
+      "--out",
+      "sh.parquet",
+      "--n",
+      "3000",
+      "--no-stratify"
+    ],
+    "command": {
+      "path": [
+        "shadows",
+        "mirror-real"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "dataset": {
+          "path": "ds"
+        },
+        "out": "sh.parquet",
+        "n": 3000,
+        "stratify": false
+      },
+      "implementation": "native"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "shadows",
+      "from-live",
+      "--live",
+      "live",
+      "--out",
+      "sh.parquet",
+      "--entry",
+      "send-plus-latency",
+      "--latency-ns",
+      "1ms"
+    ],
+    "command": {
+      "path": [
+        "shadows",
+        "from-live"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "live": "live",
+        "out": "sh.parquet",
+        "entry": "send_plus_latency",
+        "latency_ns": 1000000
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "zoo",
+      "--data",
+      "ds",
+      "--shadows",
+      "sh.parquet",
+      "--out",
+      "zoo",
+      "--models",
+      "hbt_power3[n=2],front_of_queue",
+      "--mode",
+      "corrected",
+      "--exchange",
+      "no-partial",
+      "--horizons",
+      "100ms,1s,10s,1m",
+      "--h-max",
+      "5m",
+      "--l2-depth",
+      "20",
+      "--l2-cadence-ns",
+      "0",
+      "--l2-trades",
+      "before",
+      "--particles",
+      "50",
+      "--no-fills",
+      "--write-trajectory",
+      "--latency",
+      "0,0,0",
+      "--jitter-ns",
+      "0",
+      "--bootstrap-b",
+      "200",
+      "--threads",
+      "2"
+    ],
+    "command": {
+      "path": [
+        "zoo"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 2,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "dataset": {
+          "path": "ds"
+        },
+        "shadows": {
+          "path": "sh.parquet"
+        },
+        "out": "zoo",
+        "models": [
+          "hbt_power3[n=2]",
+          "front_of_queue"
+        ],
+        "mode": "corrected",
+        "exchange": "no_partial",
+        "horizons_ns": [
+          100000000,
+          1000000000,
+          10000000000,
+          60000000000
+        ],
+        "h_max_ns": 300000000000,
+        "l2": {
+          "depth_levels": 20,
+          "cadence_ns": 0,
+          "trade_position": "before"
+        },
+        "particles": 50,
+        "write_fills": false,
+        "write_trajectory": true,
+        "latency": {
+          "feed_ns": 0,
+          "decision_ns": 0,
+          "gateway_ns": 0,
+          "jitter_ns": 0
+        },
+        "bootstrap_b": 200,
+        "threads": 2
+      },
+      "implementation": "hybrid"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "zoo",
+      "--data",
+      "ds",
+      "--shadows",
+      "sh.parquet",
+      "--out",
+      "zoo",
+      "--sort-horizon",
+      "10s",
+      "--amends",
+      "sh_amends.parquet",
+      "--exclude-order-ids",
+      "own_ids.txt"
+    ],
+    "command": {
+      "path": [
+        "zoo"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "dataset": {
+          "path": "ds"
+        },
+        "shadows": {
+          "path": "sh.parquet"
+        },
+        "out": "zoo",
+        "amends": {
+          "path": "sh_amends.parquet"
+        },
+        "_cli": {
+          "exclude_order_ids": {
+            "path": "own_ids.txt"
+          },
+          "sort_horizon_ns": 10000000000
+        }
+      },
+      "implementation": "hybrid"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "calibrate",
+      "alloc",
+      "--family",
+      "power3",
+      "--data",
+      "ds",
+      "--shadows",
+      "sh.parquet",
+      "--out",
+      "cal",
+      "--train",
+      "2019-12-30",
+      "--test",
+      "2019-12-31",
+      "--mode",
+      "faithful",
+      "--exchange",
+      "partial",
+      "--l2-depth",
+      "10",
+      "--l2-cadence-ns",
+      "1ms",
+      "--l2-trades",
+      "after",
+      "--bootstrap-b",
+      "100",
+      "--bootstrap-block",
+      "30min",
+      "--particles",
+      "20",
+      "--horizons",
+      "1s,10s",
+      "--h-max",
+      "1m",
+      "--seed",
+      "1"
+    ],
+    "command": {
+      "path": [
+        "calibrate",
+        "alloc"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 1,
+        "quiet": false
+      },
+      "args": {
+        "kind": "alloc",
+        "family": "power3",
+        "dataset": {
+          "path": "ds"
+        },
+        "shadows": {
+          "path": "sh.parquet"
+        },
+        "out": "cal",
+        "train": {
+          "dates": [
+            "2019-12-30"
+          ]
+        },
+        "test": {
+          "dates": [
+            "2019-12-31"
+          ]
+        },
+        "mode": "faithful",
+        "exchange": "partial",
+        "l2": {
+          "depth_levels": 10,
+          "cadence_ns": 1000000,
+          "trade_position": "after"
+        },
+        "bootstrap": {
+          "b": 100,
+          "block": "30min"
+        },
+        "particles": 20,
+        "horizons_ns": [
+          1000000000,
+          10000000000
+        ],
+        "h_max_ns": 60000000000,
+        "seed": 1
+      },
+      "implementation": "hybrid"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "calibrate",
+      "survival",
+      "--family",
+      "databento",
+      "--data",
+      "ds",
+      "--shadows",
+      "sh.parquet",
+      "--out",
+      "cal",
+      "--train",
+      "blocks:0-2/5",
+      "--test",
+      "blocks:3,4/5",
+      "--mode",
+      "corrected",
+      "--exchange",
+      "no-partial",
+      "--l2-depth",
+      "0",
+      "--l2-cadence-ns",
+      "5ms",
+      "--l2-trades",
+      "before",
+      "--bootstrap-b",
+      "10",
+      "--particles",
+      "64",
+      "--horizons",
+      "1s",
+      "--h-max",
+      "10s",
+      "--bootstrap-block",
+      "day"
+    ],
+    "command": {
+      "path": [
+        "calibrate",
+        "survival"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "kind": "survival",
+        "family": "databento",
+        "dataset": {
+          "path": "ds"
+        },
+        "shadows": {
+          "path": "sh.parquet"
+        },
+        "out": "cal",
+        "train": {
+          "blocks": {
+            "index": [
+              0,
+              1,
+              2
+            ],
+            "n_blocks": 5
+          }
+        },
+        "test": {
+          "blocks": {
+            "index": [
+              3,
+              4
+            ],
+            "n_blocks": 5
+          }
+        },
+        "mode": "corrected",
+        "exchange": "no_partial",
+        "l2": {
+          "depth_levels": 0,
+          "cadence_ns": 5000000,
+          "trade_position": "before"
+        },
+        "bootstrap": {
+          "b": 10,
+          "block": "day"
+        },
+        "particles": 64,
+        "horizons_ns": [
+          1000000000
+        ],
+        "h_max_ns": 10000000000
+      },
+      "implementation": "hybrid"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "calibrate",
+      "nt-touch",
+      "--data",
+      "ds",
+      "--shadows",
+      "sh.parquet",
+      "--out",
+      "cal",
+      "--queue-gated",
+      "--bootstrap-block",
+      "day",
+      "--mode",
+      "corrected",
+      "--exchange",
+      "no-partial",
+      "--l2-depth",
+      "0",
+      "--l2-cadence-ns",
+      "5ms",
+      "--l2-trades",
+      "before",
+      "--bootstrap-b",
+      "10",
+      "--particles",
+      "64",
+      "--horizons",
+      "1s",
+      "--h-max",
+      "10s",
+      "--train",
+      "2019-12-30,2019-12-31",
+      "--test",
+      "blocks:4/5"
+    ],
+    "command": {
+      "path": [
+        "calibrate",
+        "nt-touch"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "kind": "nt_touch",
+        "dataset": {
+          "path": "ds"
+        },
+        "shadows": {
+          "path": "sh.parquet"
+        },
+        "out": "cal",
+        "train": {
+          "dates": [
+            "2019-12-30",
+            "2019-12-31"
+          ]
+        },
+        "test": {
+          "blocks": {
+            "index": [
+              4
+            ],
+            "n_blocks": 5
+          }
+        },
+        "mode": "corrected",
+        "exchange": "no_partial",
+        "l2": {
+          "depth_levels": 0,
+          "cadence_ns": 5000000,
+          "trade_position": "before"
+        },
+        "bootstrap": {
+          "b": 10,
+          "block": "day"
+        },
+        "particles": 64,
+        "horizons_ns": [
+          1000000000
+        ],
+        "h_max_ns": 10000000000,
+        "family": "nt_queue_l2_prob_touch"
+      },
+      "implementation": "hybrid"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "calibrate",
+      "nt-touch",
+      "--data",
+      "ds",
+      "--shadows",
+      "sh.parquet",
+      "--out",
+      "cal"
+    ],
+    "command": {
+      "path": [
+        "calibrate",
+        "nt-touch"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "kind": "nt_touch",
+        "dataset": {
+          "path": "ds"
+        },
+        "shadows": {
+          "path": "sh.parquet"
+        },
+        "out": "cal",
+        "family": "nt_prob_touch"
+      },
+      "implementation": "hybrid"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "calibrate",
+      "latency",
+      "--live",
+      "live",
+      "--out",
+      "cal"
+    ],
+    "command": {
+      "path": [
+        "calibrate",
+        "latency"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "kind": "latency",
+        "family": "latency",
+        "live": {
+          "path": "live"
+        },
+        "out": "cal"
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "calibrate-live",
+      "--data",
+      "ds",
+      "--live",
+      "live",
+      "--family",
+      "nt-queue-l2-prob-touch",
+      "--out",
+      "cl",
+      "--entry",
+      "exchange-ack",
+      "--latency",
+      "1ms,0,1ms",
+      "--jitter-ns",
+      "10us",
+      "--mode",
+      "corrected",
+      "--exchange",
+      "partial",
+      "--l2-depth",
+      "5",
+      "--l2-cadence-ns",
+      "0",
+      "--l2-trades",
+      "before",
+      "--horizons",
+      "1s",
+      "--window",
+      "1m",
+      "--train",
+      "2024-01-02",
+      "--test",
+      "2024-01-03",
+      "--particles",
+      "10",
+      "--bootstrap-b",
+      "50",
+      "--bootstrap-block",
+      "auto",
+      "--match-window-ns",
+      "2ms",
+      "--no-self-exclude",
+      "--threads",
+      "2"
+    ],
+    "command": {
+      "path": [
+        "calibrate-live"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 2,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "dataset": {
+          "path": "ds"
+        },
+        "live": {
+          "path": "live"
+        },
+        "family": "nt_queue_l2_prob_touch",
+        "out": "cl",
+        "entry": "exchange_ack",
+        "latency": {
+          "feed_ns": 1000000,
+          "decision_ns": 0,
+          "gateway_ns": 1000000,
+          "jitter_ns": 10000
+        },
+        "mode": "corrected",
+        "exchange": "partial",
+        "l2": {
+          "depth_levels": 5,
+          "cadence_ns": 0,
+          "trade_position": "before"
+        },
+        "horizons_ns": [
+          1000000000
+        ],
+        "window_ns": 60000000000,
+        "train": {
+          "dates": [
+            "2024-01-02"
+          ]
+        },
+        "test": {
+          "dates": [
+            "2024-01-03"
+          ]
+        },
+        "particles": 10,
+        "bootstrap": {
+          "b": 50,
+          "block": "auto"
+        },
+        "match_window_ns": 2000000,
+        "self_exclude": false,
+        "threads": 2
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "features",
+      "--data",
+      "ds",
+      "--out",
+      "feat",
+      "--shadows",
+      "sh.parquet",
+      "--landmarks",
+      "0,1s,5s",
+      "--cancel-away-ticks",
+      "3",
+      "--h-max",
+      "1m",
+      "--no-privileged",
+      "--trackers",
+      "hbt_log2",
+      "--l2-depth",
+      "10",
+      "--l2-cadence-ns",
+      "0",
+      "--l2-trades",
+      "before"
+    ],
+    "command": {
+      "path": [
+        "features"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "dataset": {
+          "path": "ds"
+        },
+        "out": "feat",
+        "shadows": {
+          "path": "sh.parquet"
+        },
+        "landmarks_ns": [
+          0,
+          1000000000,
+          5000000000
+        ],
+        "cancel_away_ticks": 3,
+        "h_max_ns": 60000000000,
+        "privileged": false,
+        "trackers": [
+          "hbt_log2"
+        ],
+        "l2": {
+          "depth_levels": 10,
+          "cadence_ns": 0,
+          "trade_position": "before"
+        }
+      },
+      "implementation": "native"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "features",
+      "--data",
+      "ds",
+      "--out",
+      "feat",
+      "--population",
+      "real-orders",
+      "--n-real",
+      "500"
+    ],
+    "command": {
+      "path": [
+        "features"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "dataset": {
+          "path": "ds"
+        },
+        "out": "feat",
+        "population": "real_orders",
+        "n_real_orders": 500
+      },
+      "implementation": "native"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "fit-hazard",
+      "--features",
+      "feat",
+      "--out",
+      "model",
+      "--split",
+      "blocks",
+      "--n-blocks",
+      "6",
+      "--embargo",
+      "1m",
+      "--privileged",
+      "--recalibration",
+      "none",
+      "--grid",
+      "100ms,1s,10s",
+      "--bootstrap-b",
+      "100",
+      "--zoo-predictions",
+      "zoo/zoo_predictions.parquet",
+      "--zoo-shadows",
+      "zoo/zoo_shadows.parquet",
+      "--seed",
+      "5"
+    ],
+    "command": {
+      "path": [
+        "fit-hazard"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 5,
+        "quiet": false
+      },
+      "args": {
+        "features": {
+          "path": "feat"
+        },
+        "out": "model",
+        "split": {
+          "scheme": "blocks",
+          "n_blocks": 6,
+          "embargo_ns": 60000000000
+        },
+        "privileged": true,
+        "recalibration": "none",
+        "grid_ns": [
+          100000000,
+          1000000000,
+          10000000000
+        ],
+        "bootstrap_b": 100,
+        "zoo_predictions": {
+          "path": "zoo/zoo_predictions.parquet"
+        },
+        "zoo_shadows": {
+          "path": "zoo/zoo_shadows.parquet"
+        },
+        "seed": 5
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "live",
+      "import",
+      "--venue",
+      "ibkr-flex",
+      "--in",
+      "a.xml",
+      "--in",
+      "b.xml",
+      "--out",
+      "live",
+      "--account",
+      "U1",
+      "--instrument-map",
+      "map.csv",
+      "--append",
+      "--tz",
+      "America/Chicago"
+    ],
+    "command": {
+      "path": [
+        "live",
+        "import"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "venue": "ibkr_flex",
+        "inputs": [
+          {
+            "path": "a.xml"
+          },
+          {
+            "path": "b.xml"
+          }
+        ],
+        "out": "live",
+        "account": "U1",
+        "instrument_map": {
+          "path": "map.csv"
+        },
+        "append": true,
+        "tz": "America/Chicago"
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "live",
+      "validate",
+      "--live",
+      "live"
+    ],
+    "command": {
+      "path": [
+        "live",
+        "validate"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "live": "live"
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "live",
+      "import",
+      "--venue",
+      "fix44",
+      "--in",
+      "drop.log",
+      "--out",
+      "live",
+      "--instrument-map",
+      "map.csv",
+      "--fix-delimiter",
+      "|",
+      "--fix-local-ts-regex",
+      "^(\\S+ \\S+)",
+      "--fix-venue-name",
+      "coinbase_fix",
+      "--tz",
+      "UTC",
+      "--fix-checksum",
+      "keep",
+      "--fix-data-dictionary",
+      "FIX44.xml",
+      "--fix-data-dictionary",
+      "custom.xml",
+      "--fix-session-venue",
+      "FIX.4.4-ME-CME=cme",
+      "--fix-instrument-tag",
+      "107"
+    ],
+    "command": {
+      "path": [
+        "live",
+        "import"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "venue": "fix44",
+        "inputs": [
+          {
+            "path": "drop.log"
+          }
+        ],
+        "out": "live",
+        "instrument_map": {
+          "path": "map.csv"
+        },
+        "tz": "UTC",
+        "fix": {
+          "delimiter": "|",
+          "local_ts_regex": "^(\\S+ \\S+)",
+          "venue_name": "coinbase_fix",
+          "checksum": "keep",
+          "data_dictionary": [
+            "FIX44.xml",
+            "custom.xml"
+          ],
+          "session_venues": {
+            "FIX.4.4-ME-CME": "cme"
+          },
+          "instrument_tag": 107
+        }
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "live",
+      "import",
+      "--venue",
+      "sim-nautilus",
+      "--in",
+      "orders.csv",
+      "--in",
+      "fills.csv",
+      "--out",
+      "simlog",
+      "--account",
+      "BT",
+      "--instrument-map",
+      "map.csv",
+      "--option",
+      "venue=binance",
+      "--option",
+      "size_exp=-8"
+    ],
+    "command": {
+      "path": [
+        "live",
+        "import"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "venue": "sim_nautilus",
+        "inputs": [
+          {
+            "path": "orders.csv"
+          },
+          {
+            "path": "fills.csv"
+          }
+        ],
+        "out": "simlog",
+        "account": "BT",
+        "instrument_map": {
+          "path": "map.csv"
+        },
+        "_cli": {
+          "options": {
+            "venue": "binance",
+            "size_exp": -8
+          }
+        }
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "live",
+      "import",
+      "--venue",
+      "sim-hftbacktest",
+      "--in",
+      "snapshots.jsonl",
+      "--out",
+      "simlog"
+    ],
+    "command": {
+      "path": [
+        "live",
+        "import"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "venue": "sim_hftbacktest",
+        "inputs": [
+          {
+            "path": "snapshots.jsonl"
+          }
+        ],
+        "out": "simlog"
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "score",
+      "--live",
+      "live",
+      "--out",
+      "sc",
+      "--sim-log",
+      "simlog",
+      "--data",
+      "ds",
+      "--entry",
+      "exchange-ack",
+      "--markout-horizons",
+      "1s,10s",
+      "--markout-refs",
+      "mid,microprice",
+      "--ttf-horizons",
+      "1s",
+      "--bootstrap-b",
+      "200",
+      "--bootstrap-block",
+      "day",
+      "--fdr",
+      "by",
+      "--q",
+      "0.1",
+      "--fill-rate-margin",
+      "0.03",
+      "--markout-margin-ticks",
+      "0.5",
+      "--markout-horizon",
+      "1s",
+      "--fail-abs-bias",
+      "0.05",
+      "--fail-not-equivalent",
+      "--perm-b",
+      "500",
+      "--window",
+      "30s",
+      "--match-window-ns",
+      "1ms",
+      "--no-self-exclude",
+      "--seed",
+      "9"
+    ],
+    "command": {
+      "path": [
+        "score"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 9,
+        "quiet": false
+      },
+      "args": {
+        "live": {
+          "path": "live"
+        },
+        "sim": {
+          "kind": "external",
+          "log": {
+            "path": "simlog"
+          }
+        },
+        "out": "sc",
+        "dataset": {
+          "path": "ds"
+        },
+        "entry": "exchange_ack",
+        "markout_horizons_ns": [
+          1000000000,
+          10000000000
+        ],
+        "markout_refs": [
+          "mid",
+          "microprice"
+        ],
+        "ttf_horizons_ns": [
+          1000000000
+        ],
+        "bootstrap": {
+          "b": 200,
+          "block": "day",
+          "seed": 9
+        },
+        "fdr": {
+          "method": "by",
+          "q": 0.1
+        },
+        "equivalence": {
+          "fill_rate_margin": 0.03,
+          "markout_margin_ticks": 0.5,
+          "markout_horizon_ns": 1000000000
+        },
+        "gates": {
+          "max_abs_fill_rate_bias": 0.05,
+          "require_equivalence": true
+        },
+        "perm_b": 500,
+        "_cli": {
+          "window_ns": 30000000000,
+          "match_window_ns": 1000000,
+          "self_exclude": false
+        }
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "score",
+      "--live",
+      "live",
+      "--out",
+      "sc",
+      "--sim",
+      "exact",
+      "--data",
+      "ds",
+      "--entry",
+      "send-plus-latency",
+      "--latency",
+      "100us,0,100us",
+      "--jitter-ns",
+      "0"
+    ],
+    "command": {
+      "path": [
+        "score"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "live": {
+          "path": "live"
+        },
+        "sim": {
+          "kind": "exact"
+        },
+        "out": "sc",
+        "dataset": {
+          "path": "ds"
+        },
+        "entry": "send_plus_latency",
+        "latency": {
+          "feed_ns": 100000,
+          "decision_ns": 0,
+          "gateway_ns": 100000,
+          "jitter_ns": 0
+        }
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "score",
+      "--live",
+      "live",
+      "--out",
+      "sc",
+      "--sim-model",
+      "hbt_power3[n=2]",
+      "--data",
+      "ds",
+      "--l2-depth",
+      "5",
+      "--l2-cadence-ns",
+      "10ms",
+      "--l2-trades",
+      "after"
+    ],
+    "command": {
+      "path": [
+        "score"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "live": {
+          "path": "live"
+        },
+        "sim": {
+          "kind": "zoo",
+          "model": "hbt_power3[n=2]",
+          "l2": {
+            "depth_levels": 5,
+            "cadence_ns": 10000000,
+            "trade_position": "after"
+          }
+        },
+        "out": "sc",
+        "dataset": {
+          "path": "ds"
+        }
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "score",
+      "--live",
+      "live",
+      "--out",
+      "sc",
+      "--sim",
+      "exact",
+      "--data",
+      "ds",
+      "--verbose"
+    ],
+    "command": {
+      "path": [
+        "score"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false,
+        "verbose": true
+      },
+      "args": {
+        "live": {
+          "path": "live"
+        },
+        "sim": {
+          "kind": "exact"
+        },
+        "out": "sc",
+        "dataset": {
+          "path": "ds"
+        }
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "report",
+      "--in",
+      "zoo",
+      "--in",
+      "sc",
+      "--out",
+      "r.html",
+      "--title",
+      "My report",
+      "--max-why",
+      "5",
+      "--sort-horizon",
+      "10s"
+    ],
+    "command": {
+      "path": [
+        "report"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "inputs": [
+          "zoo",
+          "sc"
+        ],
+        "out": "r.html",
+        "title": "My report",
+        "max_why": 5,
+        "leaderboard_sort_horizon_ns": 10000000000
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "referee",
+      "run",
+      "--data",
+      "ds",
+      "--schedule",
+      "sched.parquet",
+      "--sim-fills",
+      "fills",
+      "--out",
+      "ref",
+      "--simulator",
+      "mysim@1.2",
+      "--max-discordant",
+      "1",
+      "--max-qty-mismatch",
+      "2",
+      "--max-ttf-err-ns",
+      "1ms"
+    ],
+    "command": {
+      "path": [
+        "referee",
+        "run"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "dataset": {
+          "path": "ds"
+        },
+        "schedule": {
+          "path": "sched.parquet"
+        },
+        "sim_fills": {
+          "path": "fills"
+        },
+        "out": "ref",
+        "simulator": {
+          "name": "mysim",
+          "version": "1.2"
+        },
+        "tolerance": {
+          "max_discordant": 1,
+          "max_qty_mismatch": 2,
+          "max_abs_ttf_err_ns": 1000000
+        }
+      },
+      "implementation": "hybrid"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "referee",
+      "run",
+      "--data",
+      "ds",
+      "--schedule",
+      "sched.parquet",
+      "--sim-fills",
+      "fills",
+      "--out",
+      "ref",
+      "--simulator",
+      "mysim"
+    ],
+    "command": {
+      "path": [
+        "referee",
+        "run"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "dataset": {
+          "path": "ds"
+        },
+        "schedule": {
+          "path": "sched.parquet"
+        },
+        "sim_fills": {
+          "path": "fills"
+        },
+        "out": "ref",
+        "simulator": {
+          "name": "mysim",
+          "version": null
+        }
+      },
+      "implementation": "hybrid"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "referee",
+      "fixtures",
+      "--out",
+      "fx"
+    ],
+    "command": {
+      "path": [
+        "referee",
+        "fixtures"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "out": "fx"
+      },
+      "implementation": "native"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "fixtures",
+      "synth",
+      "--out",
+      "synth",
+      "--venue",
+      "nasdaq",
+      "--sessions",
+      "1"
+    ],
+    "command": {
+      "path": [
+        "fixtures",
+        "synth"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "out": "synth",
+        "venue": "nasdaq",
+        "sessions": 1
+      },
+      "implementation": "native"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "why",
+      "--data",
+      "ds",
+      "--shadows",
+      "sh.parquet",
+      "--shadow-id",
+      "s1",
+      "--max-events",
+      "100",
+      "--out",
+      "why.json"
+    ],
+    "command": {
+      "path": [
+        "why"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "dataset": {
+          "path": "ds"
+        },
+        "shadows": {
+          "path": "sh.parquet"
+        },
+        "shadow_id": "s1",
+        "max_events": 100,
+        "out": "why.json"
+      },
+      "implementation": "native"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "why",
+      "--data",
+      "ds",
+      "--live",
+      "live",
+      "--order-key",
+      "binance:1:42"
+    ],
+    "command": {
+      "path": [
+        "why"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "dataset": {
+          "path": "ds"
+        },
+        "live": {
+          "path": "live"
+        },
+        "order_key": "binance:1:42"
+      },
+      "implementation": "hybrid"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "why",
+      "--data",
+      "ds",
+      "--shadows",
+      "sh.parquet",
+      "--shadow-id",
+      "s1",
+      "--model",
+      "hbt_power3[n=2]",
+      "--zoo",
+      "zoo"
+    ],
+    "command": {
+      "path": [
+        "why"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "dataset": {
+          "path": "ds"
+        },
+        "shadows": {
+          "path": "sh.parquet"
+        },
+        "shadow_id": "s1",
+        "_cli": {
+          "model": "hbt_power3[n=2]",
+          "zoo": "zoo"
+        }
+      },
+      "implementation": "hybrid"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "why",
+      "--data",
+      "ds",
+      "--live",
+      "live",
+      "--order-key",
+      "binance:1:42",
+      "--model",
+      "front_of_queue"
+    ],
+    "command": {
+      "path": [
+        "why"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "dataset": {
+          "path": "ds"
+        },
+        "live": {
+          "path": "live"
+        },
+        "order_key": "binance:1:42",
+        "_cli": {
+          "model": "front_of_queue"
+        }
+      },
+      "implementation": "hybrid"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "export",
+      "hftbacktest",
+      "--calibration",
+      "cal/calibration.json",
+      "--out",
+      "snippet.py"
+    ],
+    "command": {
+      "path": [
+        "export",
+        "hftbacktest"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "target": "hftbacktest",
+        "calibration": {
+          "path": "cal/calibration.json"
+        },
+        "out": "snippet.py"
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "export",
+      "nautilus",
+      "--calibration",
+      "cal/calibration.json",
+      "--out",
+      "n.py",
+      "--force"
+    ],
+    "command": {
+      "path": [
+        "export",
+        "nautilus"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "target": "nautilus",
+        "calibration": {
+          "path": "cal/calibration.json"
+        },
+        "out": "n.py",
+        "force": true
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "export",
+      "l2-npz",
+      "--data",
+      "ds",
+      "--instrument-id",
+      "1",
+      "--date",
+      "2026-06-15",
+      "--out",
+      "x.npz",
+      "--l2-depth",
+      "5",
+      "--l2-cadence-ns",
+      "0",
+      "--l2-trades",
+      "before",
+      "--feed-latency-ns",
+      "1ms"
+    ],
+    "command": {
+      "path": [
+        "export",
+        "l2-npz"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "target": "l2_npz",
+        "dataset": {
+          "path": "ds"
+        },
+        "instrument_id": 1,
+        "session_date": "2026-06-15",
+        "out": "x.npz",
+        "l2": {
+          "depth_levels": 5,
+          "cadence_ns": 0,
+          "trade_position": "before"
+        },
+        "feed_latency_ns": 1000000
+      },
+      "implementation": "native"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "export",
+      "latency-npz",
+      "--live",
+      "live",
+      "--out",
+      "lat.npz"
+    ],
+    "command": {
+      "path": [
+        "export",
+        "latency-npz"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "target": "latency_npz",
+        "live": {
+          "path": "live"
+        },
+        "out": "lat.npz"
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "export",
+      "hftbacktest",
+      "--calibration",
+      "cal",
+      "--force"
+    ],
+    "command": {
+      "path": [
+        "export",
+        "hftbacktest"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "target": "hftbacktest",
+        "calibration": {
+          "path": "cal"
+        },
+        "force": true
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "export",
+      "replay-schedule",
+      "--target",
+      "nautilus",
+      "--schedule",
+      "sc/schedule.parquet",
+      "--amends",
+      "sc/schedule_amends.parquet",
+      "--live",
+      "live",
+      "--out",
+      "replay_strategy.py"
+    ],
+    "command": {
+      "path": [
+        "export",
+        "replay-schedule"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "target": "nautilus",
+        "schedule": {
+          "path": "sc/schedule.parquet"
+        },
+        "amends": {
+          "path": "sc/schedule_amends.parquet"
+        },
+        "live": {
+          "path": "live"
+        },
+        "out": "replay_strategy.py"
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "export",
+      "replay-schedule",
+      "--target",
+      "hftbacktest",
+      "--live",
+      "live",
+      "--data",
+      "ds",
+      "--entry",
+      "send-plus-latency",
+      "--out",
+      "replay_loop.py"
+    ],
+    "command": {
+      "path": [
+        "export",
+        "replay-schedule"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "target": "hftbacktest",
+        "live": {
+          "path": "live"
+        },
+        "dataset": {
+          "path": "ds"
+        },
+        "entry": "send_plus_latency",
+        "out": "replay_loop.py"
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "jobs",
+      "submit",
+      "replay",
+      "--spec",
+      "spec.json",
+      "--idempotency-key",
+      "k1",
+      "--wait",
+      "--timeout",
+      "60"
+    ],
+    "command": {
+      "path": [
+        "jobs",
+        "submit"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "spec": "spec.json",
+        "idempotency_key": "k1",
+        "wait": true,
+        "timeout": 60.0,
+        "kind": "replay"
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "jobs",
+      "status",
+      "job_01J0000000000000000000000",
+      "--timeout",
+      "5"
+    ],
+    "command": {
+      "path": [
+        "jobs",
+        "status"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "timeout": 5.0,
+        "id": "job_01J0000000000000000000000"
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "jobs",
+      "wait",
+      "job_01J0000000000000000000000",
+      "--timeout",
+      "30"
+    ],
+    "command": {
+      "path": [
+        "jobs",
+        "wait"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "timeout": 30.0,
+        "id": "job_01J0000000000000000000000"
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "jobs",
+      "files",
+      "job_01J0000000000000000000000",
+      "--timeout",
+      "5"
+    ],
+    "command": {
+      "path": [
+        "jobs",
+        "files"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "timeout": 5.0,
+        "id": "job_01J0000000000000000000000"
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "jobs",
+      "download",
+      "job_01J0000000000000000000000",
+      "--out",
+      "dl",
+      "--timeout",
+      "120"
+    ],
+    "command": {
+      "path": [
+        "jobs",
+        "download"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "timeout": 120.0,
+        "out": "dl",
+        "id": "job_01J0000000000000000000000"
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "schema",
+      "list"
+    ],
+    "command": {
+      "path": [
+        "schema",
+        "list"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {},
+      "implementation": "native"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "schema",
+      "show",
+      "qt.replay_summary",
+      "--format",
+      "json"
+    ],
+    "command": {
+      "path": [
+        "schema",
+        "show"
+      ],
+      "global": {
+        "format": "json",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "name": "qt.replay_summary"
+      },
+      "implementation": "native"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "doctor",
+      "--quiet",
+      "--log-level",
+      "debug"
+    ],
+    "command": {
+      "path": [
+        "doctor"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "debug",
+        "threads": 1,
+        "seed": 0,
+        "quiet": true
+      },
+      "args": {},
+      "implementation": "hybrid"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "mcp",
+      "serve",
+      "--allow-submit",
+      "--local"
+    ],
+    "command": {
+      "path": [
+        "mcp",
+        "serve"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "allow_submit": true,
+        "local": true
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "bench",
+      "replay",
+      "--data",
+      "ds",
+      "--repeat",
+      "5",
+      "--warmup",
+      "0",
+      "--mode",
+      "rank-oracle",
+      "--source",
+      "memory",
+      "--shadows",
+      "sh.parquet",
+      "--synth-shadows",
+      "3000",
+      "--trajectory",
+      "ahead",
+      "--out",
+      "bo",
+      "--seed",
+      "3"
+    ],
+    "command": {
+      "path": [
+        "bench",
+        "replay"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 3,
+        "quiet": false
+      },
+      "args": {
+        "data": "ds",
+        "repeat": 5,
+        "warmup": 0,
+        "mode": "rank_oracle",
+        "source": "memory",
+        "shadows": "sh.parquet",
+        "synth_shadows": 3000,
+        "trajectory": "ahead",
+        "out": "bo",
+        "seed": 3
+      },
+      "implementation": "native"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "bench",
+      "replay",
+      "--synth-records",
+      "2000000",
+      "--scratch",
+      ".scratch/bench/s2m",
+      "--mode",
+      "sinks",
+      "--out",
+      "bo"
+    ],
+    "command": {
+      "path": [
+        "bench",
+        "replay"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "mode": "sinks",
+        "synth_records": 2000000,
+        "out": "bo",
+        "scratch": ".scratch/bench/s2m"
+      },
+      "implementation": "native"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "bench",
+      "l2",
+      "--data",
+      "ds",
+      "--repeat",
+      "2",
+      "--warmup",
+      "1",
+      "--source",
+      "parquet",
+      "--synth-records",
+      "100",
+      "--scratch",
+      "s",
+      "--l2-depth",
+      "10",
+      "--l2-cadence-ns",
+      "100ms"
+    ],
+    "command": {
+      "path": [
+        "bench",
+        "l2"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "data": "ds",
+        "repeat": 2,
+        "warmup": 1,
+        "source": "parquet",
+        "synth_records": 100,
+        "scratch": "s",
+        "l2_depth": 10,
+        "l2_cadence_ns": 100000000
+      },
+      "implementation": "native"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "bench",
+      "itch",
+      "--synth-messages",
+      "1000000",
+      "--write",
+      "x.itch",
+      "--repeat",
+      "3",
+      "--warmup",
+      "1"
+    ],
+    "command": {
+      "path": [
+        "bench",
+        "itch"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "synth_messages": 1000000,
+        "write": "x.itch",
+        "repeat": 3,
+        "warmup": 1
+      },
+      "implementation": "native"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "features",
+      "--data",
+      "ds",
+      "--out",
+      "feat",
+      "--shadows",
+      "sh.parquet",
+      "--cancel-away-ticks",
+      "0"
+    ],
+    "command": {
+      "path": [
+        "features"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "dataset": {
+          "path": "ds"
+        },
+        "out": "feat",
+        "shadows": {
+          "path": "sh.parquet"
+        },
+        "cancel_away_ticks": 0
+      },
+      "implementation": "native"
+    }
+  }
+]

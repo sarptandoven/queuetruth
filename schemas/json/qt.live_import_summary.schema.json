@@ -1,0 +1,296 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.live_import_summary",
+  "$defs": {
+    "FileEntry": {
+      "additionalProperties": false,
+      "description": "One output file: name relative to the output directory, row count for tables, size and sha256.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "rows": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rows"
+        },
+        "bytes": {
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "bytes",
+        "sha256"
+      ],
+      "title": "FileEntry",
+      "type": "object"
+    },
+    "InstrumentScale": {
+      "additionalProperties": false,
+      "description": "1.1: price / size exponents of one instrument of a live log (`queuetruth.live.instrument_scales`).",
+      "properties": {
+        "venue": {
+          "title": "Venue",
+          "type": "string"
+        },
+        "instrument": {
+          "title": "Instrument",
+          "type": "string"
+        },
+        "instrument_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Instrument Id"
+        },
+        "price_exp": {
+          "title": "Price Exp",
+          "type": "integer"
+        },
+        "size_exp": {
+          "title": "Size Exp",
+          "type": "integer"
+        },
+        "scale_source": {
+          "enum": [
+            "instrument_map",
+            "default"
+          ],
+          "title": "Scale Source",
+          "type": "string"
+        },
+        "n_orders": {
+          "title": "N Orders",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "venue",
+        "instrument",
+        "instrument_id",
+        "price_exp",
+        "size_exp",
+        "scale_source",
+        "n_orders"
+      ],
+      "title": "InstrumentScale",
+      "type": "object"
+    },
+    "LiveCoverage": {
+      "additionalProperties": false,
+      "description": "1.1 (3.11 #14): order-source coverage of a live log: orders known only from fills.",
+      "properties": {
+        "fills_only": {
+          "title": "Fills Only",
+          "type": "boolean"
+        },
+        "n_fills_only_orders": {
+          "title": "N Fills Only Orders",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "fills_only",
+        "n_fills_only_orders"
+      ],
+      "title": "LiveCoverage",
+      "type": "object"
+    },
+    "LiveInput": {
+      "additionalProperties": false,
+      "description": "Provenance of one importer input.",
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "title": "LiveInput",
+      "type": "object"
+    },
+    "UnmappedInstrument": {
+      "additionalProperties": false,
+      "description": "1.1: an instrument without an instrument-map entry (its orders carry `instrument_id = null`).",
+      "properties": {
+        "venue": {
+          "title": "Venue",
+          "type": "string"
+        },
+        "instrument": {
+          "title": "Instrument",
+          "type": "string"
+        },
+        "n_orders": {
+          "title": "N Orders",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "venue",
+        "instrument",
+        "n_orders"
+      ],
+      "title": "UnmappedInstrument",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Summary of `live import`.",
+  "properties": {
+    "schema": {
+      "const": "qt.live_import_summary",
+      "default": "qt.live_import_summary",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "venue": {
+      "title": "Venue",
+      "type": "string"
+    },
+    "inputs": {
+      "items": {
+        "$ref": "#/$defs/LiveInput"
+      },
+      "title": "Inputs",
+      "type": "array"
+    },
+    "n_orders": {
+      "title": "N Orders",
+      "type": "integer"
+    },
+    "n_events": {
+      "title": "N Events",
+      "type": "integer"
+    },
+    "n_fills": {
+      "title": "N Fills",
+      "type": "integer"
+    },
+    "dedupe_dropped": {
+      "title": "Dedupe Dropped",
+      "type": "integer"
+    },
+    "unmatched_fills": {
+      "title": "Unmatched Fills",
+      "type": "integer"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    },
+    "validation_status": {
+      "enum": [
+        "real",
+        "fixture_only",
+        "simulated"
+      ],
+      "title": "Validation Status",
+      "type": "string"
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/FileEntry"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "coverage": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LiveCoverage"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "entry_fallback_share": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Entry Fallback Share"
+    },
+    "unmapped_instruments": {
+      "items": {
+        "$ref": "#/$defs/UnmappedInstrument"
+      },
+      "title": "Unmapped Instruments",
+      "type": "array"
+    },
+    "instrument_scales": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/InstrumentScale"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Instrument Scales"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "venue",
+    "inputs",
+    "n_orders",
+    "n_events",
+    "n_fills",
+    "dedupe_dropped",
+    "unmatched_fills",
+    "warnings",
+    "validation_status",
+    "files"
+  ],
+  "type": "object"
+}

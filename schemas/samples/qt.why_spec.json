@@ -1,0 +1,41 @@
+{
+  "sample": {
+    "dataset": {
+      "path": "x"
+    },
+    "shadows": {
+      "path": "x"
+    },
+    "shadow_id": "x",
+    "live": {
+      "path": "x"
+    },
+    "order_key": "x",
+    "max_events": 1,
+    "out": "x",
+    "exclude_order_ids": [
+      {
+        "instrument_id": 1,
+        "order_id": 1,
+        "session_date": "2020-01-02"
+      }
+    ]
+  },
+  "minimal": {
+    "dataset": {
+      "path": "x"
+    }
+  },
+  "defaults": {
+    "dataset": {
+      "path": "x"
+    },
+    "shadows": null,
+    "shadow_id": null,
+    "live": null,
+    "order_key": null,
+    "max_events": 5000,
+    "out": null,
+    "exclude_order_ids": []
+  }
+}

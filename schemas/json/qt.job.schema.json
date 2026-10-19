@@ -1,0 +1,287 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.job",
+  "$defs": {
+    "Problem": {
+      "additionalProperties": false,
+      "description": "RFC 9457 problem details.",
+      "properties": {
+        "schema": {
+          "const": "qt.problem",
+          "default": "qt.problem",
+          "title": "Schema",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "type": {
+          "title": "Type",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "integer"
+        },
+        "detail": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Detail"
+        },
+        "instance": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Instance"
+        },
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "request_id": {
+          "title": "Request Id",
+          "type": "string"
+        },
+        "errors": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ProblemError"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Errors"
+        }
+      },
+      "required": [
+        "schema",
+        "schema_version",
+        "type",
+        "title",
+        "status",
+        "code",
+        "request_id"
+      ],
+      "title": "Problem",
+      "type": "object"
+    },
+    "ProblemError": {
+      "additionalProperties": false,
+      "description": "One validation error location.",
+      "properties": {
+        "loc": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ]
+          },
+          "title": "Loc",
+          "type": "array"
+        },
+        "msg": {
+          "title": "Msg",
+          "type": "string"
+        }
+      },
+      "required": [
+        "loc",
+        "msg"
+      ],
+      "title": "ProblemError",
+      "type": "object"
+    },
+    "Progress": {
+      "additionalProperties": false,
+      "description": "Job progress.",
+      "properties": {
+        "fraction": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Fraction",
+          "type": "number"
+        },
+        "stage": {
+          "title": "Stage",
+          "type": "string"
+        }
+      },
+      "required": [
+        "fraction",
+        "stage"
+      ],
+      "title": "Progress",
+      "type": "object"
+    },
+    "ResourceRef": {
+      "additionalProperties": false,
+      "description": "The resource a job produces or acts on.",
+      "properties": {
+        "type": {
+          "title": "Type",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "id"
+      ],
+      "title": "ResourceRef",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A service job.",
+  "properties": {
+    "schema": {
+      "const": "qt.job",
+      "default": "qt.job",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "ingest",
+        "replay",
+        "calibration",
+        "scorecard",
+        "report",
+        "dataset_validate",
+        "deletion"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "state": {
+      "enum": [
+        "queued",
+        "running",
+        "succeeded",
+        "failed",
+        "canceled",
+        "expired"
+      ],
+      "title": "State",
+      "type": "string"
+    },
+    "progress": {
+      "$ref": "#/$defs/Progress"
+    },
+    "resource": {
+      "$ref": "#/$defs/ResourceRef"
+    },
+    "created_at": {
+      "title": "Created At",
+      "type": "string"
+    },
+    "started_at": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Started At"
+    },
+    "finished_at": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Finished At"
+    },
+    "error": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Problem"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "usage": {
+      "additionalProperties": {
+        "type": "number"
+      },
+      "title": "Usage",
+      "type": "object"
+    },
+    "files_expire_at": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Files Expire At"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "id",
+    "kind",
+    "state",
+    "progress",
+    "resource",
+    "created_at",
+    "usage"
+  ],
+  "type": "object"
+}

@@ -1,0 +1,196 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.shadow_sample_spec",
+  "$defs": {
+    "DatasetIdRef": {
+      "additionalProperties": false,
+      "description": "Service dataset id reference (HTTP API).",
+      "properties": {
+        "dataset_id": {
+          "title": "Dataset Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "dataset_id"
+      ],
+      "title": "DatasetIdRef",
+      "type": "object"
+    },
+    "PathRef": {
+      "additionalProperties": false,
+      "description": "Local path reference (CLI, Python API, MCP local mode).",
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "PathRef",
+      "type": "object"
+    },
+    "Placement": {
+      "additionalProperties": false,
+      "description": "Touch-relative placement with a sampling weight.",
+      "properties": {
+        "offset_ticks": {
+          "title": "Offset Ticks",
+          "type": "integer"
+        },
+        "weight": {
+          "minimum": 0,
+          "title": "Weight",
+          "type": "number"
+        }
+      },
+      "required": [
+        "offset_ticks",
+        "weight"
+      ],
+      "title": "Placement",
+      "type": "object"
+    },
+    "QtyRule": {
+      "additionalProperties": false,
+      "description": "Quantity rule: `lots` (with `lots`) or `median_order_size`, with a sampling weight.",
+      "properties": {
+        "kind": {
+          "enum": [
+            "lots",
+            "median_order_size"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "lots": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lots"
+        },
+        "weight": {
+          "minimum": 0,
+          "title": "Weight",
+          "type": "number"
+        }
+      },
+      "required": [
+        "kind",
+        "weight"
+      ],
+      "title": "QtyRule",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`shadows sample`: seeded random shadow orders.",
+  "properties": {
+    "dataset": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PathRef"
+        },
+        {
+          "$ref": "#/$defs/DatasetIdRef"
+        }
+      ],
+      "title": "Dataset"
+    },
+    "out": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Out"
+    },
+    "n": {
+      "minimum": 0,
+      "title": "N",
+      "type": "integer"
+    },
+    "seed": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Seed",
+      "type": "integer"
+    },
+    "allocation": {
+      "default": "equal",
+      "enum": [
+        "equal",
+        "proportional"
+      ],
+      "title": "Allocation",
+      "type": "string"
+    },
+    "sides": {
+      "items": {
+        "enum": [
+          "B",
+          "A"
+        ],
+        "type": "string"
+      },
+      "title": "Sides",
+      "type": "array"
+    },
+    "placements": {
+      "items": {
+        "$ref": "#/$defs/Placement"
+      },
+      "title": "Placements",
+      "type": "array"
+    },
+    "qty": {
+      "items": {
+        "$ref": "#/$defs/QtyRule"
+      },
+      "title": "Qty",
+      "type": "array"
+    },
+    "window_open_s": {
+      "default": 300,
+      "minimum": 0,
+      "title": "Window Open S",
+      "type": "integer"
+    },
+    "window_close_s": {
+      "default": 600,
+      "minimum": 0,
+      "title": "Window Close S",
+      "type": "integer"
+    },
+    "lifetime_ns": {
+      "default": 300000000000,
+      "minimum": 0,
+      "title": "Lifetime Ns",
+      "type": "integer"
+    },
+    "latency_ns": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Latency Ns",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "dataset",
+    "n"
+  ],
+  "type": "object"
+}

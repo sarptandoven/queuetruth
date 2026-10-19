@@ -1,0 +1,155 @@
+{
+  "name": "qt.live_orders",
+  "metadata": {
+    "qt.engine_version": "0.1.0",
+    "qt.schema": "qt.live_orders",
+    "qt.schema_version": "1.1"
+  },
+  "optional_metadata": {
+    "qt.live.instrument_scales": "JSON array of per-instrument scales {venue, instrument, instrument_id, price_exp, size_exp, scale_source, n_orders} (queuetruth.live.instrument_scales)"
+  },
+  "fields": [
+    {
+      "name": "order_key",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "venue",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "account",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "instrument",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "instrument_id",
+      "type": "uint32",
+      "nullable": true
+    },
+    {
+      "name": "venue_order_id",
+      "type": "utf8",
+      "nullable": true
+    },
+    {
+      "name": "client_order_id",
+      "type": "utf8",
+      "nullable": true
+    },
+    {
+      "name": "client_order_id_chain",
+      "type": "list<utf8>",
+      "nullable": true
+    },
+    {
+      "name": "side",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "buy",
+        "sell"
+      ]
+    },
+    {
+      "name": "order_type",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "limit",
+        "market",
+        "stop",
+        "stop_limit",
+        "other"
+      ]
+    },
+    {
+      "name": "tif",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "gtc",
+        "ioc",
+        "fok",
+        "post_only",
+        "gtx",
+        "day",
+        "other",
+        "gtd"
+      ]
+    },
+    {
+      "name": "post_only",
+      "type": "bool",
+      "nullable": false
+    },
+    {
+      "name": "reduce_only",
+      "type": "bool",
+      "nullable": true
+    },
+    {
+      "name": "orig_qty",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "qty_str",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "limit_px",
+      "type": "int64",
+      "nullable": true
+    },
+    {
+      "name": "px_str",
+      "type": "utf8",
+      "nullable": true
+    },
+    {
+      "name": "price_exp",
+      "type": "int8",
+      "nullable": false
+    },
+    {
+      "name": "size_exp",
+      "type": "int8",
+      "nullable": false
+    },
+    {
+      "name": "strategy_tag",
+      "type": "utf8",
+      "nullable": true
+    },
+    {
+      "name": "validation_status",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "real",
+        "fixture_only",
+        "simulated"
+      ]
+    },
+    {
+      "name": "raw",
+      "type": "large_utf8",
+      "nullable": true
+    },
+    {
+      "name": "replaces_order_key",
+      "type": "utf8",
+      "nullable": true,
+      "since": "1.1"
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+# Shared build directory and no incremental cache (keeps disk use down).
+[build]
+target-dir = "target"
+incremental = false
+
+[env]
+# pyo3 build configuration for crates/py: the project venv (arm64) when it exists.
+PYO3_PYTHON = { value = ".venv/bin/python", relative = true, force = false }

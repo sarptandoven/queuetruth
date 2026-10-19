@@ -1,0 +1,503 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.scorecard_spec",
+  "$defs": {
+    "BootstrapSpec": {
+      "additionalProperties": false,
+      "description": "Block bootstrap settings; `auto` = day blocks with >= 5 dates, else 30-minute blocks.",
+      "properties": {
+        "b": {
+          "minimum": 1,
+          "title": "B",
+          "type": "integer"
+        },
+        "block": {
+          "default": "auto",
+          "enum": [
+            "auto",
+            "day",
+            "30min"
+          ],
+          "title": "Block",
+          "type": "string"
+        },
+        "seed": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Seed",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "b"
+      ],
+      "title": "BootstrapSpec",
+      "type": "object"
+    },
+    "DatasetIdRef": {
+      "additionalProperties": false,
+      "description": "Service dataset id reference (HTTP API).",
+      "properties": {
+        "dataset_id": {
+          "title": "Dataset Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "dataset_id"
+      ],
+      "title": "DatasetIdRef",
+      "type": "object"
+    },
+    "EquivalenceSpec": {
+      "additionalProperties": false,
+      "description": "TOST equivalence margins.",
+      "properties": {
+        "fill_rate_margin": {
+          "default": 0.02,
+          "minimum": 0,
+          "title": "Fill Rate Margin",
+          "type": "number"
+        },
+        "markout_margin_ticks": {
+          "default": 0.25,
+          "minimum": 0,
+          "title": "Markout Margin Ticks",
+          "type": "number"
+        },
+        "markout_horizon_ns": {
+          "default": 1000000000,
+          "minimum": 0,
+          "title": "Markout Horizon Ns",
+          "type": "integer"
+        }
+      },
+      "title": "EquivalenceSpec",
+      "type": "object"
+    },
+    "FdrSpec": {
+      "additionalProperties": false,
+      "description": "False-discovery-rate control for secondary tests.",
+      "properties": {
+        "method": {
+          "default": "bh",
+          "enum": [
+            "bh",
+            "by"
+          ],
+          "title": "Method",
+          "type": "string"
+        },
+        "q": {
+          "default": 0.05,
+          "exclusiveMaximum": 1,
+          "exclusiveMinimum": 0,
+          "title": "Q",
+          "type": "number"
+        }
+      },
+      "title": "FdrSpec",
+      "type": "object"
+    },
+    "GatesSpec": {
+      "additionalProperties": false,
+      "description": "Scorecard gates (exit code 1 when failed).",
+      "properties": {
+        "max_abs_fill_rate_bias": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Abs Fill Rate Bias"
+        },
+        "require_equivalence": {
+          "default": false,
+          "title": "Require Equivalence",
+          "type": "boolean"
+        }
+      },
+      "title": "GatesSpec",
+      "type": "object"
+    },
+    "JobFile": {
+      "additionalProperties": false,
+      "description": "One output file of a service job.",
+      "properties": {
+        "job_id": {
+          "title": "Job Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "job_id",
+        "name"
+      ],
+      "title": "JobFile",
+      "type": "object"
+    },
+    "JobFileRef": {
+      "additionalProperties": false,
+      "description": "Reference to a service job output file.",
+      "properties": {
+        "job_file": {
+          "$ref": "#/$defs/JobFile"
+        }
+      },
+      "required": [
+        "job_file"
+      ],
+      "title": "JobFileRef",
+      "type": "object"
+    },
+    "L2Config": {
+      "additionalProperties": false,
+      "description": "L2 view synthesis settings (SPEC 5.3.1).",
+      "properties": {
+        "depth_levels": {
+          "default": 10,
+          "maximum": 65535,
+          "minimum": 0,
+          "title": "Depth Levels",
+          "type": "integer"
+        },
+        "cadence_ns": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Cadence Ns",
+          "type": "integer"
+        },
+        "trade_position": {
+          "default": "before",
+          "enum": [
+            "before",
+            "after"
+          ],
+          "title": "Trade Position",
+          "type": "string"
+        },
+        "include_counts": {
+          "default": true,
+          "title": "Include Counts",
+          "type": "boolean"
+        },
+        "emit_hidden_trades": {
+          "default": true,
+          "title": "Emit Hidden Trades",
+          "type": "boolean"
+        }
+      },
+      "title": "L2Config",
+      "type": "object"
+    },
+    "LatencyModel": {
+      "additionalProperties": false,
+      "description": "Shadow latency components (SPEC 3.1 semantics).",
+      "properties": {
+        "feed_ns": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Feed Ns",
+          "type": "integer"
+        },
+        "decision_ns": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Decision Ns",
+          "type": "integer"
+        },
+        "gateway_ns": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Gateway Ns",
+          "type": "integer"
+        },
+        "jitter_ns": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Jitter Ns",
+          "type": "integer"
+        }
+      },
+      "title": "LatencyModel",
+      "type": "object"
+    },
+    "PathRef": {
+      "additionalProperties": false,
+      "description": "Local path reference (CLI, Python API, MCP local mode).",
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "PathRef",
+      "type": "object"
+    },
+    "SimExact": {
+      "additionalProperties": false,
+      "description": "Simulator arm = exact replay of the schedule.",
+      "properties": {
+        "kind": {
+          "const": "exact",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "SimExact",
+      "type": "object"
+    },
+    "SimExternal": {
+      "additionalProperties": false,
+      "description": "Simulator arm from a canonical live-log directory written by the user's simulator.",
+      "properties": {
+        "kind": {
+          "const": "external",
+          "title": "Kind",
+          "type": "string"
+        },
+        "log": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PathRef"
+            },
+            {
+              "$ref": "#/$defs/UploadRef"
+            },
+            {
+              "$ref": "#/$defs/JobFileRef"
+            }
+          ],
+          "title": "Log"
+        }
+      },
+      "required": [
+        "kind",
+        "log"
+      ],
+      "title": "SimExternal",
+      "type": "object"
+    },
+    "SimZoo": {
+      "additionalProperties": false,
+      "description": "Simulator arm = one zoo model on the L2 view.",
+      "properties": {
+        "kind": {
+          "const": "zoo",
+          "title": "Kind",
+          "type": "string"
+        },
+        "model": {
+          "title": "Model",
+          "type": "string"
+        },
+        "l2": {
+          "$ref": "#/$defs/L2Config"
+        }
+      },
+      "required": [
+        "kind",
+        "model"
+      ],
+      "title": "SimZoo",
+      "type": "object"
+    },
+    "UploadRef": {
+      "additionalProperties": false,
+      "description": "Service upload id reference (HTTP API).",
+      "properties": {
+        "upload_id": {
+          "title": "Upload Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "upload_id"
+      ],
+      "title": "UploadRef",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`score`: live log vs simulator arm (SPEC 5.7).",
+  "properties": {
+    "live": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PathRef"
+        },
+        {
+          "$ref": "#/$defs/UploadRef"
+        },
+        {
+          "$ref": "#/$defs/JobFileRef"
+        }
+      ],
+      "title": "Live"
+    },
+    "sim": {
+      "discriminator": {
+        "mapping": {
+          "exact": "#/$defs/SimExact",
+          "external": "#/$defs/SimExternal",
+          "zoo": "#/$defs/SimZoo"
+        },
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/SimExternal"
+        },
+        {
+          "$ref": "#/$defs/SimExact"
+        },
+        {
+          "$ref": "#/$defs/SimZoo"
+        }
+      ],
+      "title": "Sim"
+    },
+    "dataset": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PathRef"
+        },
+        {
+          "$ref": "#/$defs/DatasetIdRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Dataset"
+    },
+    "out": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Out"
+    },
+    "entry": {
+      "default": "exchange_ack",
+      "enum": [
+        "exchange_ack",
+        "send_plus_latency"
+      ],
+      "title": "Entry",
+      "type": "string"
+    },
+    "latency": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LatencyModel"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "markout_horizons_ns": {
+      "items": {
+        "minimum": 0,
+        "type": "integer"
+      },
+      "title": "Markout Horizons Ns",
+      "type": "array"
+    },
+    "markout_refs": {
+      "items": {
+        "enum": [
+          "mid",
+          "microprice"
+        ],
+        "type": "string"
+      },
+      "title": "Markout Refs",
+      "type": "array"
+    },
+    "ttf_horizons_ns": {
+      "items": {
+        "minimum": 0,
+        "type": "integer"
+      },
+      "title": "Ttf Horizons Ns",
+      "type": "array"
+    },
+    "bootstrap": {
+      "$ref": "#/$defs/BootstrapSpec"
+    },
+    "fdr": {
+      "$ref": "#/$defs/FdrSpec"
+    },
+    "equivalence": {
+      "$ref": "#/$defs/EquivalenceSpec"
+    },
+    "gates": {
+      "$ref": "#/$defs/GatesSpec"
+    },
+    "perm_b": {
+      "default": 2000,
+      "minimum": 1,
+      "title": "Perm B",
+      "type": "integer"
+    },
+    "window_ns": {
+      "default": 60000000000,
+      "minimum": 1,
+      "title": "Window Ns",
+      "type": "integer"
+    },
+    "match_window_ns": {
+      "default": 1000000,
+      "minimum": 0,
+      "title": "Match Window Ns",
+      "type": "integer"
+    },
+    "self_exclude": {
+      "default": true,
+      "title": "Self Exclude",
+      "type": "boolean"
+    },
+    "markout_past_end": {
+      "anyOf": [
+        {
+          "const": "last_quote",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Markout Past End"
+    }
+  },
+  "required": [
+    "live",
+    "sim"
+  ],
+  "type": "object"
+}

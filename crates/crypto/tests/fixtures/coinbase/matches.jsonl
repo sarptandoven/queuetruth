@@ -1,0 +1,2 @@
+{"type":"match","product_id":"BTC-USD","time":"2026-10-11T00:00:01.000002Z","recv_ns":1792000000000000013,"sequence":13,"trade_id":13,"maker_order_id":"o1","taker_order_id":"m1","side":"buy","price":"100.00","size":"0.2"}
+{"type":"match","product_id":"BTC-USD","time":"2026-10-11T00:00:03Z","recv_ns":1792000000000000017,"sequence":17,"trade_id":17,"maker_order_id":"o2","taker_order_id":"t2","side":"sell","price":"100.50","size":"0.1"}

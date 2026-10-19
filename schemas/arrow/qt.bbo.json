@@ -1,0 +1,55 @@
+{
+  "name": "qt.bbo",
+  "metadata": {
+    "qt.engine_version": "0.1.0",
+    "qt.schema": "qt.bbo",
+    "qt.schema_version": "1.1"
+  },
+  "fields": [
+    {
+      "name": "ts_event",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": false
+    },
+    {
+      "name": "instrument_id",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "sequence",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "bid_px",
+      "type": "int64",
+      "nullable": true
+    },
+    {
+      "name": "bid_sz",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "bid_ct",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "ask_px",
+      "type": "int64",
+      "nullable": true
+    },
+    {
+      "name": "ask_sz",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "ask_ct",
+      "type": "uint32",
+      "nullable": false
+    }
+  ]
+}

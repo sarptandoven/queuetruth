@@ -1,0 +1,55 @@
+{
+  "sample": {
+    "dataset": {
+      "path": "x"
+    },
+    "schedule": {
+      "path": "x"
+    },
+    "sim_fills": {
+      "path": "x"
+    },
+    "simulator": {
+      "name": "x",
+      "version": "x"
+    },
+    "tolerance": {
+      "max_discordant": 1,
+      "max_qty_mismatch": 1,
+      "max_abs_ttf_err_ns": 1
+    },
+    "out": "x"
+  },
+  "minimal": {
+    "dataset": {
+      "path": "x"
+    },
+    "schedule": {
+      "path": "x"
+    },
+    "sim_fills": {
+      "path": "x"
+    }
+  },
+  "defaults": {
+    "dataset": {
+      "path": "x"
+    },
+    "schedule": {
+      "path": "x"
+    },
+    "sim_fills": {
+      "path": "x"
+    },
+    "simulator": {
+      "name": "unknown",
+      "version": null
+    },
+    "tolerance": {
+      "max_discordant": 0,
+      "max_qty_mismatch": 0,
+      "max_abs_ttf_err_ns": 0
+    },
+    "out": null
+  }
+}

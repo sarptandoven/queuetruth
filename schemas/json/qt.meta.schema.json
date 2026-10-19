@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.meta",
+  "$defs": {
+    "Limits": {
+      "additionalProperties": false,
+      "description": "Service limits.",
+      "properties": {
+        "max_upload_bytes": {
+          "title": "Max Upload Bytes",
+          "type": "integer"
+        },
+        "part_size_bytes": {
+          "title": "Part Size Bytes",
+          "type": "integer"
+        },
+        "max_jobs_running": {
+          "title": "Max Jobs Running",
+          "type": "integer"
+        },
+        "rate_limits": {
+          "additionalProperties": true,
+          "title": "Rate Limits",
+          "type": "object"
+        }
+      },
+      "required": [
+        "max_upload_bytes",
+        "part_size_bytes",
+        "max_jobs_running",
+        "rate_limits"
+      ],
+      "title": "Limits",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Service metadata.",
+  "properties": {
+    "schema": {
+      "const": "qt.meta",
+      "default": "qt.meta",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "api_version": {
+      "const": "v1",
+      "title": "Api Version",
+      "type": "string"
+    },
+    "engine_version": {
+      "title": "Engine Version",
+      "type": "string"
+    },
+    "schema_versions": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "title": "Schema Versions",
+      "type": "object"
+    },
+    "limits": {
+      "$ref": "#/$defs/Limits"
+    },
+    "formats": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Formats",
+      "type": "array"
+    },
+    "zero_egress": {
+      "title": "Zero Egress",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "api_version",
+    "engine_version",
+    "schema_versions",
+    "limits",
+    "formats",
+    "zero_egress"
+  ],
+  "type": "object"
+}

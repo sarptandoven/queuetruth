@@ -1,0 +1,65 @@
+{
+  "sample": {
+    "format": "itch",
+    "inputs": [
+      {
+        "path": "x"
+      }
+    ],
+    "venue": "x",
+    "source_venue": "x",
+    "out": "x",
+    "symbols": [
+      "x"
+    ],
+    "session_date": "2020-01-02",
+    "midnight_utc_ns": 1,
+    "tz": "America/New_York",
+    "instruments": {
+      "path": "x"
+    },
+    "price_exp": 0,
+    "size_exp": 1,
+    "tick_size": "x",
+    "lot_size": "x",
+    "options": {
+      "k": 1
+    },
+    "strict": true,
+    "open_s": 1,
+    "close_s": 1
+  },
+  "minimal": {
+    "format": "itch",
+    "inputs": [
+      {
+        "path": "x"
+      }
+    ],
+    "venue": "x"
+  },
+  "defaults": {
+    "format": "itch",
+    "inputs": [
+      {
+        "path": "x"
+      }
+    ],
+    "venue": "x",
+    "source_venue": null,
+    "out": null,
+    "symbols": null,
+    "session_date": null,
+    "midnight_utc_ns": null,
+    "tz": null,
+    "instruments": null,
+    "price_exp": -9,
+    "size_exp": null,
+    "tick_size": null,
+    "lot_size": null,
+    "options": {},
+    "strict": false,
+    "open_s": null,
+    "close_s": null
+  }
+}

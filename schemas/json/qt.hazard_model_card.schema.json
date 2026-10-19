@@ -1,0 +1,496 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.hazard_model_card",
+  "$defs": {
+    "CiValue": {
+      "additionalProperties": false,
+      "description": "Point estimate with a confidence interval.",
+      "properties": {
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        },
+        "ci_lo": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ci Lo"
+        },
+        "ci_hi": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ci Hi"
+        }
+      },
+      "required": [
+        "value",
+        "ci_lo",
+        "ci_hi"
+      ],
+      "title": "CiValue",
+      "type": "object"
+    },
+    "FileEntry": {
+      "additionalProperties": false,
+      "description": "One output file: name relative to the output directory, row count for tables, size and sha256.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "rows": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rows"
+        },
+        "bytes": {
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "bytes",
+        "sha256"
+      ],
+      "title": "FileEntry",
+      "type": "object"
+    },
+    "HazardScores": {
+      "additionalProperties": false,
+      "description": "Test-split scores (SPEC 5.5.7); `c_index_uno` and `auc` are discrimination only (improper).",
+      "properties": {
+        "rcll": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Rcll"
+        },
+        "ipcw_logloss": {
+          "patternProperties": {
+            "^[0-9]+$": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "title": "Ipcw Logloss",
+          "type": "object"
+        },
+        "brier": {
+          "patternProperties": {
+            "^[0-9]+$": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "title": "Brier",
+          "type": "object"
+        },
+        "bss_vs_climatology": {
+          "patternProperties": {
+            "^[0-9]+$": {
+              "$ref": "#/$defs/CiValue"
+            }
+          },
+          "title": "Bss Vs Climatology",
+          "type": "object"
+        },
+        "ibs": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ibs"
+        },
+        "calib_slope": {
+          "patternProperties": {
+            "^[0-9]+$": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "title": "Calib Slope",
+          "type": "object"
+        },
+        "calib_intercept": {
+          "patternProperties": {
+            "^[0-9]+$": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "title": "Calib Intercept",
+          "type": "object"
+        },
+        "spiegelhalter_z": {
+          "patternProperties": {
+            "^[0-9]+$": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "title": "Spiegelhalter Z",
+          "type": "object"
+        },
+        "hl_p": {
+          "patternProperties": {
+            "^[0-9]+$": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "title": "Hl P",
+          "type": "object"
+        },
+        "c_index_uno": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "C Index Uno"
+        },
+        "auc": {
+          "patternProperties": {
+            "^[0-9]+$": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "title": "Auc",
+          "type": "object"
+        },
+        "hl_p_et": {
+          "anyOf": [
+            {
+              "patternProperties": {
+                "^[0-9]+$": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hl P Et"
+        }
+      },
+      "required": [
+        "rcll",
+        "ipcw_logloss",
+        "brier",
+        "bss_vs_climatology",
+        "ibs",
+        "calib_slope",
+        "calib_intercept",
+        "spiegelhalter_z",
+        "hl_p",
+        "c_index_uno",
+        "auc"
+      ],
+      "title": "HazardScores",
+      "type": "object"
+    },
+    "SplitCounts": {
+      "additionalProperties": false,
+      "description": "Orders per split.",
+      "properties": {
+        "train": {
+          "title": "Train",
+          "type": "integer"
+        },
+        "calib": {
+          "title": "Calib",
+          "type": "integer"
+        },
+        "test": {
+          "title": "Test",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "train",
+        "calib",
+        "test"
+      ],
+      "title": "SplitCounts",
+      "type": "object"
+    },
+    "SplitEcho": {
+      "additionalProperties": false,
+      "description": "Split scheme and the dates/blocks of each part.",
+      "properties": {
+        "scheme": {
+          "title": "Scheme",
+          "type": "string"
+        },
+        "train": {
+          "title": "Train"
+        },
+        "calib": {
+          "title": "Calib"
+        },
+        "test": {
+          "title": "Test"
+        }
+      },
+      "required": [
+        "scheme",
+        "train",
+        "calib",
+        "test"
+      ],
+      "title": "SplitEcho",
+      "type": "object"
+    },
+    "ZooBrier": {
+      "additionalProperties": false,
+      "description": "Brier of a zoo model on the same test rows.",
+      "properties": {
+        "brier": {
+          "patternProperties": {
+            "^[0-9]+$": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "title": "Brier",
+          "type": "object"
+        }
+      },
+      "required": [
+        "brier"
+      ],
+      "title": "ZooBrier",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`model.json` of `fit-hazard` (SPEC 5.5.8).",
+  "properties": {
+    "schema": {
+      "const": "qt.hazard_model_card",
+      "default": "qt.hazard_model_card",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "model_id": {
+      "title": "Model Id",
+      "type": "string"
+    },
+    "format_version": {
+      "const": 1,
+      "title": "Format Version",
+      "type": "integer"
+    },
+    "spec": {
+      "additionalProperties": true,
+      "title": "Spec",
+      "type": "object"
+    },
+    "grid_ns": {
+      "items": {
+        "type": "integer"
+      },
+      "title": "Grid Ns",
+      "type": "array"
+    },
+    "causes": {
+      "items": {
+        "enum": [
+          "fill",
+          "cancel"
+        ],
+        "type": "string"
+      },
+      "title": "Causes",
+      "type": "array"
+    },
+    "feature_names": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Feature Names",
+      "type": "array"
+    },
+    "privileged": {
+      "title": "Privileged",
+      "type": "boolean"
+    },
+    "split": {
+      "$ref": "#/$defs/SplitEcho"
+    },
+    "n_orders": {
+      "$ref": "#/$defs/SplitCounts"
+    },
+    "n_rows_train": {
+      "title": "N Rows Train",
+      "type": "integer"
+    },
+    "scores_test": {
+      "$ref": "#/$defs/HazardScores"
+    },
+    "zoo_comparison": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/ZooBrier"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Zoo Comparison"
+    },
+    "recalibration": {
+      "enum": [
+        "isotonic",
+        "none"
+      ],
+      "title": "Recalibration",
+      "type": "string"
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/FileEntry"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "model_id",
+    "format_version",
+    "spec",
+    "grid_ns",
+    "causes",
+    "feature_names",
+    "privileged",
+    "split",
+    "n_orders",
+    "n_rows_train",
+    "scores_test",
+    "recalibration",
+    "files",
+    "warnings"
+  ],
+  "type": "object"
+}

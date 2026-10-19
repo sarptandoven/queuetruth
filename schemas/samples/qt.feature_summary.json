@@ -1,0 +1,30 @@
+{
+  "sample": {
+    "schema": "qt.feature_summary",
+    "schema_version": 1,
+    "spec": {
+      "k": 1
+    },
+    "n_orders": 1,
+    "n_rows": 1,
+    "by_cause": {
+      "fill": 1,
+      "cancel": 1,
+      "censor": 1
+    },
+    "feature_names": [
+      "x"
+    ],
+    "privileged_names": [
+      "x"
+    ],
+    "files": [
+      {
+        "name": "x",
+        "rows": 1,
+        "bytes": 1,
+        "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      }
+    ]
+  }
+}

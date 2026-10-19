@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.tenant",
+  "$defs": {
+    "Retention": {
+      "additionalProperties": false,
+      "description": "Retention in days.",
+      "properties": {
+        "uploads_days": {
+          "maximum": 365,
+          "minimum": 1,
+          "title": "Uploads Days",
+          "type": "integer"
+        },
+        "outputs_days": {
+          "maximum": 365,
+          "minimum": 1,
+          "title": "Outputs Days",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "uploads_days",
+        "outputs_days"
+      ],
+      "title": "Retention",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A tenant.",
+  "properties": {
+    "schema": {
+      "const": "qt.tenant",
+      "default": "qt.tenant",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "plan": {
+      "title": "Plan",
+      "type": "string"
+    },
+    "zero_egress": {
+      "title": "Zero Egress",
+      "type": "boolean"
+    },
+    "retention": {
+      "$ref": "#/$defs/Retention"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "id",
+    "name",
+    "plan",
+    "zero_egress",
+    "retention"
+  ],
+  "type": "object"
+}

@@ -1,0 +1,112 @@
+{
+  "name": "qt.real_orders",
+  "metadata": {
+    "qt.engine_version": "0.1.0",
+    "qt.schema": "qt.real_orders",
+    "qt.schema_version": "1.1"
+  },
+  "fields": [
+    {
+      "name": "instrument_id",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "session_date",
+      "type": "date32",
+      "nullable": false
+    },
+    {
+      "name": "order_id",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "side",
+      "type": "uint8",
+      "nullable": false
+    },
+    {
+      "name": "price",
+      "type": "int64",
+      "nullable": false
+    },
+    {
+      "name": "size_at_add",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "ts_add",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": false
+    },
+    {
+      "name": "sequence_add",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "queue_ahead_at_add",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "rank_at_add",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "level_qty_at_add",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "ts_first_fill",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": true
+    },
+    {
+      "name": "ts_last_fill",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": true
+    },
+    {
+      "name": "filled_qty",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "n_fills",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "n_reduces",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "ts_end",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": true
+    },
+    {
+      "name": "end_reason",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "filled",
+        "cancelled",
+        "replaced",
+        "cleared",
+        "open_at_end"
+      ]
+    },
+    {
+      "name": "in_snapshot",
+      "type": "bool",
+      "nullable": false
+    }
+  ]
+}

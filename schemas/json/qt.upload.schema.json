@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.upload",
+  "$defs": {
+    "UploadPart": {
+      "additionalProperties": false,
+      "description": "One presigned upload part.",
+      "properties": {
+        "part_number": {
+          "title": "Part Number",
+          "type": "integer"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        },
+        "expires_at": {
+          "title": "Expires At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "part_number",
+        "url",
+        "expires_at"
+      ],
+      "title": "UploadPart",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A multipart upload.",
+  "properties": {
+    "schema": {
+      "const": "qt.upload",
+      "default": "qt.upload",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "purpose": {
+      "enum": [
+        "market_data",
+        "live_log",
+        "sim_log",
+        "shadow_spec",
+        "model",
+        "other"
+      ],
+      "title": "Purpose",
+      "type": "string"
+    },
+    "filename": {
+      "title": "Filename",
+      "type": "string"
+    },
+    "size_bytes": {
+      "title": "Size Bytes",
+      "type": "integer"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Sha256",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "pending",
+        "complete",
+        "verified",
+        "failed"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "parts": {
+      "items": {
+        "$ref": "#/$defs/UploadPart"
+      },
+      "title": "Parts",
+      "type": "array"
+    },
+    "created_at": {
+      "title": "Created At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "id",
+    "purpose",
+    "filename",
+    "size_bytes",
+    "sha256",
+    "status",
+    "parts",
+    "created_at"
+  ],
+  "type": "object"
+}

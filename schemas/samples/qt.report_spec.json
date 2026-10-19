@@ -1,0 +1,25 @@
+{
+  "sample": {
+    "inputs": [
+      "x"
+    ],
+    "out": "x",
+    "title": "x",
+    "max_why": 1,
+    "leaderboard_sort_horizon_ns": 1
+  },
+  "minimal": {
+    "inputs": [
+      "x"
+    ]
+  },
+  "defaults": {
+    "inputs": [
+      "x"
+    ],
+    "out": null,
+    "title": "queuetruth report",
+    "max_why": 20,
+    "leaderboard_sort_horizon_ns": null
+  }
+}

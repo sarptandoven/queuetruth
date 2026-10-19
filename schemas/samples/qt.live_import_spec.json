@@ -1,0 +1,58 @@
+{
+  "sample": {
+    "venue": "binance",
+    "inputs": [
+      {
+        "path": "x"
+      }
+    ],
+    "out": "x",
+    "account": "x",
+    "instrument_map": {
+      "path": "x"
+    },
+    "append": true,
+    "fix": {
+      "delimiter": "x",
+      "local_ts_regex": "x",
+      "venue_name": "x",
+      "checksum": "exclude",
+      "data_dictionary": "x",
+      "session_venues": {
+        "k": "x"
+      },
+      "instrument_tag": 1
+    },
+    "tz": "x"
+  },
+  "minimal": {
+    "venue": "binance",
+    "inputs": [
+      {
+        "path": "x"
+      }
+    ]
+  },
+  "defaults": {
+    "venue": "binance",
+    "inputs": [
+      {
+        "path": "x"
+      }
+    ],
+    "out": null,
+    "account": null,
+    "instrument_map": null,
+    "append": false,
+    "fix": {
+      "delimiter": "auto",
+      "local_ts_regex": null,
+      "venue_name": null,
+      "checksum": "exclude",
+      "data_dictionary": null,
+      "session_venues": {},
+      "instrument_tag": null
+    },
+    "tz": null
+  }
+}

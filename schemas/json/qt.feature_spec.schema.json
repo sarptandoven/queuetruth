@@ -1,0 +1,250 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.feature_spec",
+  "$defs": {
+    "DatasetIdRef": {
+      "additionalProperties": false,
+      "description": "Service dataset id reference (HTTP API).",
+      "properties": {
+        "dataset_id": {
+          "title": "Dataset Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "dataset_id"
+      ],
+      "title": "DatasetIdRef",
+      "type": "object"
+    },
+    "JobFile": {
+      "additionalProperties": false,
+      "description": "One output file of a service job.",
+      "properties": {
+        "job_id": {
+          "title": "Job Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "job_id",
+        "name"
+      ],
+      "title": "JobFile",
+      "type": "object"
+    },
+    "JobFileRef": {
+      "additionalProperties": false,
+      "description": "Reference to a service job output file.",
+      "properties": {
+        "job_file": {
+          "$ref": "#/$defs/JobFile"
+        }
+      },
+      "required": [
+        "job_file"
+      ],
+      "title": "JobFileRef",
+      "type": "object"
+    },
+    "L2Config": {
+      "additionalProperties": false,
+      "description": "L2 view synthesis settings (SPEC 5.3.1).",
+      "properties": {
+        "depth_levels": {
+          "default": 10,
+          "maximum": 65535,
+          "minimum": 0,
+          "title": "Depth Levels",
+          "type": "integer"
+        },
+        "cadence_ns": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Cadence Ns",
+          "type": "integer"
+        },
+        "trade_position": {
+          "default": "before",
+          "enum": [
+            "before",
+            "after"
+          ],
+          "title": "Trade Position",
+          "type": "string"
+        },
+        "include_counts": {
+          "default": true,
+          "title": "Include Counts",
+          "type": "boolean"
+        },
+        "emit_hidden_trades": {
+          "default": true,
+          "title": "Emit Hidden Trades",
+          "type": "boolean"
+        }
+      },
+      "title": "L2Config",
+      "type": "object"
+    },
+    "PathRef": {
+      "additionalProperties": false,
+      "description": "Local path reference (CLI, Python API, MCP local mode).",
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "PathRef",
+      "type": "object"
+    },
+    "UploadRef": {
+      "additionalProperties": false,
+      "description": "Service upload id reference (HTTP API).",
+      "properties": {
+        "upload_id": {
+          "title": "Upload Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "upload_id"
+      ],
+      "title": "UploadRef",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`features`: landmark features and outcomes for shadows or real orders.",
+  "properties": {
+    "dataset": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PathRef"
+        },
+        {
+          "$ref": "#/$defs/DatasetIdRef"
+        }
+      ],
+      "title": "Dataset"
+    },
+    "out": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Out"
+    },
+    "population": {
+      "default": "shadows",
+      "enum": [
+        "shadows",
+        "real_orders"
+      ],
+      "title": "Population",
+      "type": "string"
+    },
+    "shadows": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PathRef"
+        },
+        {
+          "$ref": "#/$defs/UploadRef"
+        },
+        {
+          "$ref": "#/$defs/JobFileRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Shadows"
+    },
+    "n_real_orders": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "N Real Orders"
+    },
+    "landmarks_ns": {
+      "items": {
+        "minimum": 0,
+        "type": "integer"
+      },
+      "title": "Landmarks Ns",
+      "type": "array"
+    },
+    "cancel_away_ticks": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": 2,
+      "title": "Cancel Away Ticks"
+    },
+    "h_max_ns": {
+      "default": 60000000000,
+      "minimum": 0,
+      "title": "H Max Ns",
+      "type": "integer"
+    },
+    "l2": {
+      "$ref": "#/$defs/L2Config"
+    },
+    "trackers": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Trackers",
+      "type": "array"
+    },
+    "privileged": {
+      "default": true,
+      "title": "Privileged",
+      "type": "boolean"
+    },
+    "seed": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Seed",
+      "type": "integer"
+    },
+    "threads": {
+      "default": 1,
+      "minimum": 1,
+      "title": "Threads",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "dataset"
+  ],
+  "type": "object"
+}

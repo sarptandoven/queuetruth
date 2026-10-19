@@ -1,0 +1,314 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.zoo_summary",
+  "$defs": {
+    "CiValue": {
+      "additionalProperties": false,
+      "description": "Point estimate with a confidence interval.",
+      "properties": {
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        },
+        "ci_lo": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ci Lo"
+        },
+        "ci_hi": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ci Hi"
+        }
+      },
+      "required": [
+        "value",
+        "ci_lo",
+        "ci_hi"
+      ],
+      "title": "CiValue",
+      "type": "object"
+    },
+    "FileEntry": {
+      "additionalProperties": false,
+      "description": "One output file: name relative to the output directory, row count for tables, size and sha256.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "rows": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rows"
+        },
+        "bytes": {
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "bytes",
+        "sha256"
+      ],
+      "title": "FileEntry",
+      "type": "object"
+    },
+    "LeaderboardEntry": {
+      "additionalProperties": false,
+      "description": "One model's metrics vs exact truth (SPEC 5.6).",
+      "properties": {
+        "model_id": {
+          "title": "Model Id",
+          "type": "string"
+        },
+        "brier": {
+          "patternProperties": {
+            "^[0-9]+$": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "title": "Brier",
+          "type": "object"
+        },
+        "logloss": {
+          "patternProperties": {
+            "^[0-9]+$": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "title": "Logloss",
+          "type": "object"
+        },
+        "fill_rate_bias": {
+          "patternProperties": {
+            "^[0-9]+$": {
+              "$ref": "#/$defs/CiValue"
+            }
+          },
+          "title": "Fill Rate Bias",
+          "type": "object"
+        },
+        "overfill_bias": {
+          "$ref": "#/$defs/CiValue"
+        },
+        "qty_bias": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Qty Bias"
+        },
+        "ttf_log_ratio_median": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ttf Log Ratio Median"
+        },
+        "ttf_iad": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ttf Iad"
+        },
+        "qtrack_mae": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Qtrack Mae"
+        },
+        "mcnemar": {
+          "$ref": "#/$defs/McNemarSmall"
+        }
+      },
+      "required": [
+        "model_id",
+        "brier",
+        "logloss",
+        "fill_rate_bias",
+        "overfill_bias",
+        "qty_bias",
+        "ttf_iad",
+        "mcnemar"
+      ],
+      "title": "LeaderboardEntry",
+      "type": "object"
+    },
+    "McNemarSmall": {
+      "additionalProperties": false,
+      "description": "Discordant counts and exact McNemar p-value.",
+      "properties": {
+        "b": {
+          "title": "B",
+          "type": "integer"
+        },
+        "c": {
+          "title": "C",
+          "type": "integer"
+        },
+        "p_exact": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "P Exact"
+        }
+      },
+      "required": [
+        "b",
+        "c",
+        "p_exact"
+      ],
+      "title": "McNemarSmall",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Summary of `zoo`; the Rust runner leaves `leaderboard` empty (filled by `queuetruth.eval`).",
+  "properties": {
+    "schema": {
+      "const": "qt.zoo_summary",
+      "default": "qt.zoo_summary",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "run_id": {
+      "pattern": "^[0-9a-f]{16}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "spec": {
+      "additionalProperties": true,
+      "title": "Spec",
+      "type": "object"
+    },
+    "n_shadows": {
+      "title": "N Shadows",
+      "type": "integer"
+    },
+    "models": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Models",
+      "type": "array"
+    },
+    "leaderboard": {
+      "items": {
+        "$ref": "#/$defs/LeaderboardEntry"
+      },
+      "title": "Leaderboard",
+      "type": "array"
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/FileEntry"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    },
+    "hbt_312_aborts": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "title": "Hbt 312 Aborts",
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "run_id",
+    "spec",
+    "n_shadows",
+    "models",
+    "leaderboard",
+    "files",
+    "warnings"
+  ],
+  "type": "object"
+}

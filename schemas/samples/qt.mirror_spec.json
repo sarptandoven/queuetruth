@@ -1,0 +1,27 @@
+{
+  "sample": {
+    "dataset": {
+      "path": "x"
+    },
+    "out": "x",
+    "n": 1,
+    "seed": 1,
+    "stratify": true,
+    "placement": "behind_real"
+  },
+  "minimal": {
+    "dataset": {
+      "path": "x"
+    }
+  },
+  "defaults": {
+    "dataset": {
+      "path": "x"
+    },
+    "out": null,
+    "n": 3000,
+    "seed": 0,
+    "stratify": true,
+    "placement": "behind_real"
+  }
+}

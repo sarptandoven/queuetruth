@@ -1,0 +1,47 @@
+{
+  "sample": {
+    "target": "hftbacktest",
+    "calibration": {
+      "path": "x"
+    },
+    "dataset": {
+      "path": "x"
+    },
+    "instrument_id": 1,
+    "session_date": "2020-01-02",
+    "live": {
+      "path": "x"
+    },
+    "l2": {
+      "depth_levels": 1,
+      "cadence_ns": 1,
+      "trade_position": "before",
+      "include_counts": true,
+      "emit_hidden_trades": true
+    },
+    "feed_latency_ns": 1,
+    "out": "x",
+    "force": true
+  },
+  "minimal": {
+    "target": "hftbacktest"
+  },
+  "defaults": {
+    "target": "hftbacktest",
+    "calibration": null,
+    "dataset": null,
+    "instrument_id": null,
+    "session_date": null,
+    "live": null,
+    "l2": {
+      "depth_levels": 10,
+      "cadence_ns": 0,
+      "trade_position": "before",
+      "include_counts": true,
+      "emit_hidden_trades": true
+    },
+    "feed_latency_ns": 0,
+    "out": null,
+    "force": false
+  }
+}

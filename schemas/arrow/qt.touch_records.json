@@ -1,0 +1,45 @@
+{
+  "name": "qt.touch_records",
+  "metadata": {
+    "qt.engine_version": "0.1.0",
+    "qt.schema": "qt.touch_records",
+    "qt.schema_version": "1.1"
+  },
+  "fields": [
+    {
+      "name": "shadow_id",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "ts_event",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": false
+    },
+    {
+      "name": "touch_index",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "nt_front_before",
+      "type": "float64",
+      "nullable": false
+    },
+    {
+      "name": "nt_excess",
+      "type": "float64",
+      "nullable": false
+    },
+    {
+      "name": "truth_filled_now",
+      "type": "bool",
+      "nullable": false
+    },
+    {
+      "name": "truth_first_fill_here",
+      "type": "bool",
+      "nullable": false
+    }
+  ]
+}

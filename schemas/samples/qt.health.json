@@ -1,0 +1,11 @@
+{
+  "sample": {
+    "schema": "qt.health",
+    "schema_version": 1,
+    "status": "ok",
+    "db": "x",
+    "store": "x",
+    "queue": "x",
+    "version": "x"
+  }
+}

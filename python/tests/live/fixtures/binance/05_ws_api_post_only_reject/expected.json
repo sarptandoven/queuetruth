@@ -1,0 +1,112 @@
+{
+  "schema": "qtdev.live_expected",
+  "schema_version": 1,
+  "venue": "binance",
+  "import_spec": {
+    "venue": "binance",
+    "account": "acct1",
+    "instrument_map": null,
+    "inputs": [
+      "ws_api_capture.jsonl"
+    ]
+  },
+  "inputs": [
+    "ws_api_capture.jsonl"
+  ],
+  "row_order": "orders sorted by order_key; events sorted by (order_key, event_seq)",
+  "compare_ignore_columns": [
+    "raw"
+  ],
+  "edge_cases": [
+    "post_only_reject_sync_error",
+    "order_key_from_client_id",
+    "ts_local_send"
+  ],
+  "notes": [
+    "NOT a SPEC input format: SPEC 5.7.1 lists only captured user-stream messages and REST history. The {dir, local_ns, msg} request/response capture is an importer convention; without it Binance post-only rejects are invisible and the order is silently missing from the scorer. order_key falls back to the root client order id because no orderId is ever assigned. ts_exchange is null (kind unknown), which the validator allows because ts_local_send/recv are set."
+  ],
+  "orders": [
+    {
+      "order_key": "binance:acct1:qtPO-0001",
+      "venue": "binance",
+      "account": "acct1",
+      "instrument": "BTCUSDT",
+      "instrument_id": null,
+      "venue_order_id": null,
+      "client_order_id": "qtPO-0001",
+      "client_order_id_chain": null,
+      "side": "buy",
+      "order_type": "limit",
+      "tif": "post_only",
+      "post_only": true,
+      "reduce_only": null,
+      "orig_qty": 2000000,
+      "qty_str": "0.02000000",
+      "limit_px": 60060000000000,
+      "px_str": "60060.00",
+      "price_exp": -9,
+      "size_exp": -8,
+      "strategy_tag": null,
+      "validation_status": "fixture_only",
+      "raw": null
+    }
+  ],
+  "events": [
+    {
+      "order_key": "binance:acct1:qtPO-0001",
+      "event_seq": 1,
+      "event_type": "submit_sent",
+      "qty": 2000000,
+      "px": 60060000000000,
+      "leaves_qty": null,
+      "cum_qty": null,
+      "fill_id": null,
+      "ref_fill_id": null,
+      "liquidity": null,
+      "fee": null,
+      "fee_ccy": null,
+      "amend_keeps_priority": null,
+      "ts_local_send": 1792071300000000000,
+      "ts_exchange": null,
+      "ts_local_recv": null,
+      "ts_exchange_kind": "unknown",
+      "ts_precision": "ms",
+      "source": "ws",
+      "reason": null,
+      "derived": false,
+      "raw": null
+    },
+    {
+      "order_key": "binance:acct1:qtPO-0001",
+      "event_seq": 2,
+      "event_type": "post_only_reject",
+      "qty": null,
+      "px": null,
+      "leaves_qty": 0,
+      "cum_qty": 0,
+      "fill_id": null,
+      "ref_fill_id": null,
+      "liquidity": null,
+      "fee": null,
+      "fee_ccy": null,
+      "amend_keeps_priority": null,
+      "ts_local_send": null,
+      "ts_exchange": null,
+      "ts_local_recv": 1792071300002400000,
+      "ts_exchange_kind": "unknown",
+      "ts_precision": "ms",
+      "source": "ws",
+      "reason": "-2010 Order would immediately match and take.",
+      "derived": false,
+      "raw": null
+    }
+  ],
+  "summary": {
+    "n_orders": 1,
+    "n_events": 2,
+    "n_fills": 0,
+    "dedupe_dropped": 0,
+    "unmatched_fills": 0,
+    "warnings_contains": []
+  }
+}

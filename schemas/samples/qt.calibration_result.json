@@ -1,0 +1,165 @@
+{
+  "sample": {
+    "schema": "qt.calibration_result",
+    "schema_version": 1,
+    "run_id": "0123456789abcdef",
+    "spec": {
+      "k": 1
+    },
+    "kind": "alloc",
+    "family": "x",
+    "mode": "x",
+    "param_name": "x",
+    "estimate": 0.5,
+    "ci_profile": [
+      0.5,
+      0.5
+    ],
+    "ci_bootstrap": [
+      0.5,
+      0.5
+    ],
+    "loglik": 0.5,
+    "n_events": 1,
+    "n_shadows": 1,
+    "train": {
+      "dates": [
+        "x"
+      ],
+      "blocks": {
+        "index": [
+          1
+        ],
+        "n_blocks": 1
+      }
+    },
+    "test": {
+      "dates": [
+        "x"
+      ],
+      "blocks": {
+        "index": [
+          1
+        ],
+        "n_blocks": 1
+      }
+    },
+    "held_out": {
+      "k": {
+        "brier": {
+          "1000000000": 0.5
+        },
+        "logloss": {
+          "1000000000": 0.5
+        },
+        "fill_rate_bias": {
+          "1000000000": 0.5
+        }
+      }
+    },
+    "baseline_held_out": {
+      "k": {
+        "brier": {
+          "1000000000": 0.5
+        },
+        "logloss": {
+          "1000000000": 0.5
+        },
+        "fill_rate_bias": {
+          "1000000000": 0.5
+        }
+      }
+    },
+    "stratified": [
+      {
+        "stratum_kind": "x",
+        "stratum": "x",
+        "estimate": 0.5,
+        "ci_lo": 0.5,
+        "ci_hi": 0.5,
+        "n": 1
+      }
+    ],
+    "latency": {
+      "entry_ns": {
+        "p10": 0.5,
+        "p50": 0.5,
+        "p90": 0.5,
+        "p99": 0.5,
+        "n": 1
+      },
+      "response_ns": {
+        "p10": 0.5,
+        "p50": 0.5,
+        "p90": 0.5,
+        "p99": 0.5,
+        "n": 1
+      },
+      "cancel_ns": {
+        "p10": 0.5,
+        "p50": 0.5,
+        "p90": 0.5,
+        "p99": 0.5,
+        "n": 1
+      },
+      "amend_ns": {
+        "p10": 0.5,
+        "p50": 0.5,
+        "p90": 0.5,
+        "p99": 0.5,
+        "n": 1
+      },
+      "clock_sync_assumed": true
+    },
+    "exports": {
+      "hftbacktest": {
+        "python": "x",
+        "notes": [
+          "x"
+        ]
+      },
+      "nautilus": {
+        "python": "x",
+        "notes": [
+          "x"
+        ]
+      },
+      "latency_npz": "x"
+    },
+    "data_sources": [
+      {
+        "dataset_id": "x",
+        "venue": "x",
+        "source_venue": "x",
+        "validation_status": "real_data"
+      }
+    ],
+    "warnings": [
+      "x"
+    ],
+    "held_out_discordance": {
+      "n": 1,
+      "b": 1,
+      "c": 1,
+      "fill_rate_bias": 0.5,
+      "ci_lo": 0.5,
+      "ci_hi": 0.5,
+      "p_exact": 0.5,
+      "p_clustered": 0.5,
+      "clustered_method": "x",
+      "n_clusters": 1
+    },
+    "trust": {
+      "verdict": "exportable",
+      "reasons": [
+        "x"
+      ],
+      "flags": [
+        "x"
+      ],
+      "beats_default": {
+        "1000000000": "better"
+      }
+    }
+  }
+}

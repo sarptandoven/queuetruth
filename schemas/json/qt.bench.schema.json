@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.bench",
+  "additionalProperties": false,
+  "description": "Result of `bench replay`.",
+  "properties": {
+    "schema": {
+      "const": "qt.bench",
+      "default": "qt.bench",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "data": {
+      "title": "Data",
+      "type": "string"
+    },
+    "records": {
+      "title": "Records",
+      "type": "integer"
+    },
+    "wall_s": {
+      "items": {
+        "type": "number"
+      },
+      "title": "Wall S",
+      "type": "array"
+    },
+    "records_per_s_median": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Records Per S Median"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "data",
+    "records",
+    "wall_s",
+    "records_per_s_median"
+  ],
+  "type": "object"
+}

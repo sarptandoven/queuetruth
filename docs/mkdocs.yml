@@ -1,0 +1,62 @@
+# Site configuration for the queuetruth docs (mkdocs-material; Zensical reads it too). MkDocs does not allow the
+# config file inside docs_dir, so the root mkdocs.yml inherits this file. Build: make docs-build. The pages are
+# plain Markdown that renders on GitHub; docs/check_docs.py checks links, runnable blocks and this nav.
+site_name: queuetruth
+site_description: Exact order-level replay, L2 queue models measured against exact truth, calibration and a sim-vs-live scorer.
+docs_dir: docs
+strict: true
+exclude_docs: |
+  launch/
+  mkdocs.yml
+  check_docs.py
+  gen_reference.py
+theme:
+  name: material
+  features: [navigation.sections, navigation.top, content.code.copy, search.highlight]
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+markdown_extensions:
+  - admonition
+  - tables
+  - toc: {permalink: true}
+  - pymdownx.superfences
+  - pymdownx.details
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Concepts:
+      - Exact FIFO truth: concepts/exact-truth.md
+      - Shadow orders: concepts/shadow-orders.md
+      - Queue ahead: concepts/queue-ahead.md
+      - Rules from the independent audit: concepts/audit-rules.md
+      - The L2 model zoo: concepts/l2-model-zoo.md
+      - Calibration: concepts/calibration.md
+      - The learned fill model: concepts/learned-model.md
+      - Scorecard statistics: concepts/scorecard.md
+  - How-to guides:
+      - Calibrate my hftbacktest model: how-to/calibrate-hftbacktest.md
+      - Calibrate on an L2-only venue against my fills: how-to/calibrate-live-l2-venue.md
+      - Score my Nautilus backtest against my Binance fills: how-to/score-nautilus-vs-binance.md
+      - Score my QuickFIX-driven strategy: how-to/score-quickfix-strategy.md
+      - Referee my simulator: how-to/referee-your-simulator.md
+      - Self-host the service: how-to/self-host-the-service.md
+      - Import fills from my venue or broker: how-to/import-live-logs.md
+      - Explain one fill: how-to/explain-one-fill.md
+      - Use queuetruth from an agent (MCP): how-to/use-from-an-agent.md
+  - Reference:
+      - CLI: reference/cli.md
+      - Python API: reference/python-api.md
+      - HTTP API: reference/http-api.md
+      - MCP tools: reference/mcp.md
+      - Schemas: reference/schemas.md
+      - Error codes: reference/errors.md
+  - Results on real data: RESULTS.md
+  - How queuetruth is tested: testing.md
+  - Venue semantics: venue-semantics.md
+  - Data and licensing: data-and-licensing.md
+  - Design:
+      - How it was built and verified: design/build-plan.md
+      - Design specification: design/spec.md

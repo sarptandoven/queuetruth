@@ -1,0 +1,106 @@
+{
+  "description": "Software used to generate tests/fixtures/reference (no wall clock, host or user recorded).",
+  "platform": {
+    "system": "Darwin",
+    "machine": "arm64",
+    "python": "3.13.9",
+    "python_implementation": "CPython"
+  },
+  "python_packages": {
+    "numpy": "2.5.3",
+    "scipy": "1.18.1",
+    "statsmodels": "0.15.0",
+    "lifelines": "0.30.3",
+    "pandas": "2.3.3",
+    "scikit-learn": "1.9.1"
+  },
+  "r": {
+    "R": "4.6.1",
+    "cmprsk": "2.2.12",
+    "survival": "3.8.6",
+    "jsonlite": "2.0.0"
+  },
+  "rng": "SPEC 3.1 splitmix64 / stable_seed / xoshiro256** (Python mirror in scripts/reference/_common.py, checked against schemas/rng_kat.json); R inputs from a Park-Miller LCG inside gen_gray.R",
+  "fixtures": {
+    "bootstrap.json": {
+      "generator": "scripts/reference/gen_bootstrap.py",
+      "oracle": [
+        "O-STAT-4"
+      ],
+      "command": "python scripts/reference/gen_bootstrap.py"
+    },
+    "et_calibration.json": {
+      "generator": "scripts/reference/gen_et_calibration.py",
+      "oracle": [
+        "O-STAT-5"
+      ],
+      "command": "python scripts/reference/gen_et_calibration.py"
+    },
+    "gray_cmprsk.json": {
+      "generator": "scripts/reference/gen_gray.R",
+      "oracle": [
+        "O-STAT-3",
+        "O-STAT-2"
+      ],
+      "command": "Rscript scripts/reference/gen_gray.R"
+    },
+    "isotonic.json": {
+      "generator": "scripts/reference/gen_isotonic.py",
+      "oracle": [
+        "O-MOD-2"
+      ],
+      "command": "python scripts/reference/gen_isotonic.py"
+    },
+    "markouts.json": {
+      "generator": "scripts/reference/gen_markouts.py",
+      "oracle": [
+        "O-SCORE-3"
+      ],
+      "command": "python scripts/reference/gen_markouts.py"
+    },
+    "mcnemar.json": {
+      "generator": "scripts/reference/gen_mcnemar.py",
+      "oracle": [
+        "O-STAT-1"
+      ],
+      "command": "python scripts/reference/gen_mcnemar.py"
+    },
+    "multitest.json": {
+      "generator": "scripts/reference/gen_multitest.py",
+      "oracle": [
+        "O-STAT-4"
+      ],
+      "command": "python scripts/reference/gen_multitest.py"
+    },
+    "scoring_rules.json": {
+      "generator": "scripts/reference/gen_scoring.py",
+      "oracle": [
+        "O-STAT-5",
+        "O-MOD-5"
+      ],
+      "command": "python scripts/reference/gen_scoring.py"
+    },
+    "survival.json": {
+      "generator": "scripts/reference/gen_survival.py",
+      "oracle": [
+        "O-STAT-2"
+      ],
+      "command": "python scripts/reference/gen_survival.py"
+    },
+    "tost.json": {
+      "generator": "scripts/reference/gen_tost.py",
+      "oracle": [
+        "O-STAT-4"
+      ],
+      "command": "python scripts/reference/gen_tost.py"
+    },
+    "wilcoxon.json": {
+      "generator": "scripts/reference/gen_wilcoxon.py",
+      "oracle": [
+        "O-STAT-2"
+      ],
+      "command": "python scripts/reference/gen_wilcoxon.py"
+    }
+  },
+  "regenerate_all": "python scripts/reference/gen_all.py"
+}

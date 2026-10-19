@@ -1,0 +1,792 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.calibration_result",
+  "$defs": {
+    "BlockWindowEcho": {
+      "additionalProperties": false,
+      "description": "Block selection echo.",
+      "properties": {
+        "index": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Index",
+          "type": "array"
+        },
+        "n_blocks": {
+          "title": "N Blocks",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "index",
+        "n_blocks"
+      ],
+      "title": "BlockWindowEcho",
+      "type": "object"
+    },
+    "CalibrationTrust": {
+      "additionalProperties": false,
+      "description": "1.1: structured form of the `trust:` warning lines (`queuetruth.export.trust`, `qt_calib::trust`).",
+      "properties": {
+        "verdict": {
+          "enum": [
+            "exportable",
+            "refused"
+          ],
+          "title": "Verdict",
+          "type": "string"
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        },
+        "flags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Flags",
+          "type": "array"
+        },
+        "beats_default": {
+          "patternProperties": {
+            "^[0-9]+$": {
+              "enum": [
+                "better",
+                "tie",
+                "worse",
+                "mixed",
+                "n/a"
+              ],
+              "type": "string"
+            }
+          },
+          "title": "Beats Default",
+          "type": "object"
+        }
+      },
+      "required": [
+        "verdict",
+        "reasons",
+        "flags",
+        "beats_default"
+      ],
+      "title": "CalibrationTrust",
+      "type": "object"
+    },
+    "DataSource": {
+      "additionalProperties": false,
+      "description": "Provenance of the data a calibration used.",
+      "properties": {
+        "dataset_id": {
+          "title": "Dataset Id",
+          "type": "string"
+        },
+        "venue": {
+          "title": "Venue",
+          "type": "string"
+        },
+        "source_venue": {
+          "title": "Source Venue",
+          "type": "string"
+        },
+        "validation_status": {
+          "enum": [
+            "real_data",
+            "synthetic_only",
+            "assumed",
+            "fixture_only"
+          ],
+          "title": "Validation Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "dataset_id",
+        "venue",
+        "source_venue",
+        "validation_status"
+      ],
+      "title": "DataSource",
+      "type": "object"
+    },
+    "ExportSnippet": {
+      "additionalProperties": false,
+      "description": "Paste-ready config text with notes.",
+      "properties": {
+        "python": {
+          "title": "Python",
+          "type": "string"
+        },
+        "notes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Notes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "python",
+        "notes"
+      ],
+      "title": "ExportSnippet",
+      "type": "object"
+    },
+    "Exports": {
+      "additionalProperties": false,
+      "description": "Config exports; all members are null in the Rust-only `fit.json`.",
+      "properties": {
+        "hftbacktest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExportSnippet"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "nautilus": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExportSnippet"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "latency_npz": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Latency Npz"
+        }
+      },
+      "title": "Exports",
+      "type": "object"
+    },
+    "HeldOut": {
+      "additionalProperties": false,
+      "description": "Held-out metrics of one model.",
+      "properties": {
+        "brier": {
+          "patternProperties": {
+            "^[0-9]+$": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "title": "Brier",
+          "type": "object"
+        },
+        "logloss": {
+          "patternProperties": {
+            "^[0-9]+$": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "title": "Logloss",
+          "type": "object"
+        },
+        "fill_rate_bias": {
+          "patternProperties": {
+            "^[0-9]+$": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "title": "Fill Rate Bias",
+          "type": "object"
+        }
+      },
+      "required": [
+        "brier",
+        "logloss",
+        "fill_rate_bias"
+      ],
+      "title": "HeldOut",
+      "type": "object"
+    },
+    "HeldOutDiscordance": {
+      "additionalProperties": false,
+      "description": "1.1 (3.11 #10): order-level held-out discordance of `calibrate-live` at the window H (model filled =\n`p_fill(H) >= 0.5`): exact and cluster-robust McNemar and the fill-rate bias with its block-bootstrap CI.",
+      "properties": {
+        "n": {
+          "title": "N",
+          "type": "integer"
+        },
+        "b": {
+          "title": "B",
+          "type": "integer"
+        },
+        "c": {
+          "title": "C",
+          "type": "integer"
+        },
+        "fill_rate_bias": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Fill Rate Bias"
+        },
+        "ci_lo": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ci Lo"
+        },
+        "ci_hi": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ci Hi"
+        },
+        "p_exact": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "P Exact"
+        },
+        "p_clustered": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "P Clustered"
+        },
+        "clustered_method": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Clustered Method"
+        },
+        "n_clusters": {
+          "title": "N Clusters",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "n",
+        "b",
+        "c",
+        "fill_rate_bias",
+        "ci_lo",
+        "ci_hi",
+        "p_exact",
+        "p_clustered",
+        "clustered_method",
+        "n_clusters"
+      ],
+      "title": "HeldOutDiscordance",
+      "type": "object"
+    },
+    "LatencyFit": {
+      "additionalProperties": false,
+      "description": "Latency distributions from a live log.",
+      "properties": {
+        "entry_ns": {
+          "$ref": "#/$defs/Quantiles"
+        },
+        "response_ns": {
+          "$ref": "#/$defs/Quantiles"
+        },
+        "cancel_ns": {
+          "$ref": "#/$defs/Quantiles"
+        },
+        "amend_ns": {
+          "$ref": "#/$defs/Quantiles"
+        },
+        "clock_sync_assumed": {
+          "title": "Clock Sync Assumed",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "entry_ns",
+        "response_ns",
+        "cancel_ns",
+        "amend_ns",
+        "clock_sync_assumed"
+      ],
+      "title": "LatencyFit",
+      "type": "object"
+    },
+    "Quantiles": {
+      "additionalProperties": false,
+      "description": "Latency quantiles in ns.",
+      "properties": {
+        "p10": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "P10"
+        },
+        "p50": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "P50"
+        },
+        "p90": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "P90"
+        },
+        "p99": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "P99"
+        },
+        "n": {
+          "title": "N",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "p10",
+        "p50",
+        "p90",
+        "p99",
+        "n"
+      ],
+      "title": "Quantiles",
+      "type": "object"
+    },
+    "StratumEstimate": {
+      "additionalProperties": false,
+      "description": "Parameter estimate in one stratum.",
+      "properties": {
+        "stratum_kind": {
+          "title": "Stratum Kind",
+          "type": "string"
+        },
+        "stratum": {
+          "title": "Stratum",
+          "type": "string"
+        },
+        "estimate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Estimate"
+        },
+        "ci_lo": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ci Lo"
+        },
+        "ci_hi": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ci Hi"
+        },
+        "n": {
+          "title": "N",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "stratum_kind",
+        "stratum",
+        "estimate",
+        "n"
+      ],
+      "title": "StratumEstimate",
+      "type": "object"
+    },
+    "WindowEcho": {
+      "additionalProperties": false,
+      "description": "Train/test window echo (dates or blocks).",
+      "properties": {
+        "dates": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dates"
+        },
+        "blocks": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BlockWindowEcho"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "WindowEcho",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Result of `calibrate` (SPEC 5.4).",
+  "properties": {
+    "schema": {
+      "const": "qt.calibration_result",
+      "default": "qt.calibration_result",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "run_id": {
+      "pattern": "^[0-9a-f]{16}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "spec": {
+      "additionalProperties": true,
+      "title": "Spec",
+      "type": "object"
+    },
+    "kind": {
+      "enum": [
+        "alloc",
+        "survival",
+        "nt_touch",
+        "latency",
+        "live"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "family": {
+      "title": "Family",
+      "type": "string"
+    },
+    "mode": {
+      "title": "Mode",
+      "type": "string"
+    },
+    "param_name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Param Name"
+    },
+    "estimate": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Estimate"
+    },
+    "ci_profile": {
+      "anyOf": [
+        {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          ],
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Ci Profile"
+    },
+    "ci_bootstrap": {
+      "anyOf": [
+        {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          ],
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Ci Bootstrap"
+    },
+    "loglik": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Loglik"
+    },
+    "n_events": {
+      "title": "N Events",
+      "type": "integer"
+    },
+    "n_shadows": {
+      "title": "N Shadows",
+      "type": "integer"
+    },
+    "train": {
+      "$ref": "#/$defs/WindowEcho"
+    },
+    "test": {
+      "$ref": "#/$defs/WindowEcho"
+    },
+    "held_out": {
+      "additionalProperties": {
+        "$ref": "#/$defs/HeldOut"
+      },
+      "title": "Held Out",
+      "type": "object"
+    },
+    "baseline_held_out": {
+      "additionalProperties": {
+        "$ref": "#/$defs/HeldOut"
+      },
+      "title": "Baseline Held Out",
+      "type": "object"
+    },
+    "stratified": {
+      "items": {
+        "$ref": "#/$defs/StratumEstimate"
+      },
+      "title": "Stratified",
+      "type": "array"
+    },
+    "latency": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LatencyFit"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "exports": {
+      "$ref": "#/$defs/Exports"
+    },
+    "data_sources": {
+      "items": {
+        "$ref": "#/$defs/DataSource"
+      },
+      "title": "Data Sources",
+      "type": "array"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    },
+    "held_out_discordance": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/HeldOutDiscordance"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "trust": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CalibrationTrust"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "run_id",
+    "spec",
+    "kind",
+    "family",
+    "mode",
+    "n_events",
+    "n_shadows",
+    "train",
+    "test",
+    "held_out",
+    "baseline_held_out",
+    "stratified",
+    "exports",
+    "data_sources",
+    "warnings"
+  ],
+  "type": "object"
+}

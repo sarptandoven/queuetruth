@@ -1,0 +1,84 @@
+{
+  "sample": {
+    "dataset": {
+      "path": "x"
+    },
+    "out": "x",
+    "n": 1,
+    "seed": 1,
+    "allocation": "equal",
+    "sides": [
+      "B"
+    ],
+    "placements": [
+      {
+        "offset_ticks": 1,
+        "weight": 0.5
+      }
+    ],
+    "qty": [
+      {
+        "kind": "lots",
+        "lots": 1,
+        "weight": 0.5
+      }
+    ],
+    "window_open_s": 1,
+    "window_close_s": 1,
+    "lifetime_ns": 1,
+    "latency_ns": 1
+  },
+  "minimal": {
+    "dataset": {
+      "path": "x"
+    },
+    "n": 1
+  },
+  "defaults": {
+    "dataset": {
+      "path": "x"
+    },
+    "out": null,
+    "n": 1,
+    "seed": 0,
+    "allocation": "equal",
+    "sides": [
+      "B",
+      "A"
+    ],
+    "placements": [
+      {
+        "offset_ticks": 0,
+        "weight": 0.6
+      },
+      {
+        "offset_ticks": -1,
+        "weight": 0.2
+      },
+      {
+        "offset_ticks": -2,
+        "weight": 0.1
+      },
+      {
+        "offset_ticks": 1,
+        "weight": 0.1
+      }
+    ],
+    "qty": [
+      {
+        "kind": "lots",
+        "lots": 1,
+        "weight": 0.5
+      },
+      {
+        "kind": "median_order_size",
+        "lots": null,
+        "weight": 0.5
+      }
+    ],
+    "window_open_s": 300,
+    "window_close_s": 600,
+    "lifetime_ns": 300000000000,
+    "latency_ns": 0
+  }
+}

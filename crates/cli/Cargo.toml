@@ -1,0 +1,47 @@
+[package]
+name = "queuetruth-cli"
+description = "Command-line grammar, native runner and the queuetruth-core binary."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+name = "qt_cli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "queuetruth-core"
+path = "src/main.rs"
+
+[features]
+# Runs the gate tests: cross-crate end-to-end tests that are ignored by default.
+gate = []
+
+[dependencies]
+queuetruth-types.workspace = true
+queuetruth-schema.workspace = true
+queuetruth-book.workspace = true
+queuetruth-ingest.workspace = true
+queuetruth-crypto.workspace = true
+queuetruth-l2.workspace = true
+queuetruth-replay.workspace = true
+queuetruth-zoo.workspace = true
+queuetruth-calib.workspace = true
+queuetruth-features.workspace = true
+queuetruth-testkit.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+clap.workspace = true
+arrow-array.workspace = true
+arrow-schema.workspace = true
+parquet.workspace = true
+sha2.workspace = true
+hex.workspace = true
+indexmap.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true

@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.usage_report",
+  "$defs": {
+    "UsageRow": {
+      "additionalProperties": false,
+      "description": "One metered quantity.",
+      "properties": {
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "meter": {
+          "title": "Meter",
+          "type": "string"
+        },
+        "quantity": {
+          "title": "Quantity",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "meter",
+        "quantity",
+        "unit"
+      ],
+      "title": "UsageRow",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Usage over a period.",
+  "properties": {
+    "schema": {
+      "const": "qt.usage_report",
+      "default": "qt.usage_report",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "from": {
+      "title": "From",
+      "type": "string"
+    },
+    "to": {
+      "title": "To",
+      "type": "string"
+    },
+    "group_by": {
+      "enum": [
+        "meter",
+        "day",
+        "job"
+      ],
+      "title": "Group By",
+      "type": "string"
+    },
+    "rows": {
+      "items": {
+        "$ref": "#/$defs/UsageRow"
+      },
+      "title": "Rows",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "from",
+    "to",
+    "group_by",
+    "rows"
+  ],
+  "type": "object"
+}

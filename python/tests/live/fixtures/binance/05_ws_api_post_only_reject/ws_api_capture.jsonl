@@ -1,0 +1,2 @@
+{"dir":"out","local_ns":1792071300000000000,"msg":{"id":"req-7f3a","method":"order.place","params":{"symbol":"BTCUSDT","side":"BUY","type":"LIMIT_MAKER","price":"60060.00","quantity":"0.02000000","newClientOrderId":"qtPO-0001","apiKey":"SYNTHETIC_KEY","timestamp":1792071300000,"signature":"SYNTHETIC_SIGNATURE"}}}
+{"dir":"in","local_ns":1792071300002400000,"msg":{"id":"req-7f3a","status":400,"error":{"code":-2010,"msg":"Order would immediately match and take."}}}

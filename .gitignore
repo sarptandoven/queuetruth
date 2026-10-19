@@ -1,0 +1,15 @@
+target/
+.venv/
+.realdata/
+.scratch/
+*.so
+*.pyd
+*.dylib
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.hypothesis/
+dist/
+*.egg-info/
+.DS_Store

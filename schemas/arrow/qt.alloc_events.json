@@ -1,0 +1,65 @@
+{
+  "name": "qt.alloc_events",
+  "metadata": {
+    "qt.engine_version": "0.1.0",
+    "qt.schema": "qt.alloc_events",
+    "qt.schema_version": "1.1"
+  },
+  "fields": [
+    {
+      "name": "shadow_id",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "instrument_id",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "session_date",
+      "type": "date32",
+      "nullable": false
+    },
+    {
+      "name": "ts_event",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": false
+    },
+    {
+      "name": "front",
+      "type": "float64",
+      "nullable": false
+    },
+    {
+      "name": "back",
+      "type": "float64",
+      "nullable": false
+    },
+    {
+      "name": "ahead_cancel",
+      "type": "float64",
+      "nullable": false
+    },
+    {
+      "name": "behind_cancel",
+      "type": "float64",
+      "nullable": false
+    },
+    {
+      "name": "l2_prev",
+      "type": "float64",
+      "nullable": true
+    },
+    {
+      "name": "l2_new",
+      "type": "float64",
+      "nullable": true
+    },
+    {
+      "name": "l2_trades",
+      "type": "float64",
+      "nullable": true
+    }
+  ]
+}

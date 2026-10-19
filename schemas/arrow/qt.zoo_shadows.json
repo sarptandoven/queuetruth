@@ -1,0 +1,55 @@
+{
+  "name": "qt.zoo_shadows",
+  "metadata": {
+    "qt.engine_version": "0.1.0",
+    "qt.schema": "qt.zoo_shadows",
+    "qt.schema_version": "1.1"
+  },
+  "fields": [
+    {
+      "name": "shadow_id",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "ts_cancel_planned",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": true
+    },
+    {
+      "name": "ts_admin_end",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": true
+    },
+    {
+      "name": "instrument_id",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "session_date",
+      "type": "date32",
+      "nullable": false
+    },
+    {
+      "name": "ts_live",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": false
+    },
+    {
+      "name": "session_close",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": false
+    },
+    {
+      "name": "exact_end_state",
+      "type": "utf8",
+      "nullable": true
+    },
+    {
+      "name": "never_cancel",
+      "type": "bool",
+      "nullable": false
+    }
+  ]
+}

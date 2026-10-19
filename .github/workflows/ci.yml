@@ -1,0 +1,204 @@
+# CI. Actions are pinned by commit SHA (tag in the trailing comment).
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  UV_PYTHON_DOWNLOADS: never
+  UV_VERSION: "0.11.31"
+  PYTHON_VERSION: "3.13"
+  RUST_TOOLCHAIN: "1.97.1"
+
+jobs:
+  rust:
+    name: rust (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, ubuntu-24.04]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master 2026-10-16
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          components: clippy, rustfmt
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        id: py
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: fmt
+        run: cargo fmt --all --check
+      - name: clippy
+        env:
+          PYO3_PYTHON: ${{ steps.py.outputs.python-path }}
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: test-rust
+        env:
+          PYO3_PYTHON: ${{ steps.py.outputs.python-path }}
+        run: cargo test --workspace --locked --exclude queuetruth-py --features gate
+
+  python:
+    name: python (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, ubuntu-24.04]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master 2026-10-16
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        id: py
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: venv + sync
+        run: |
+          uv venv --python "${{ steps.py.outputs.python-path }}" .venv
+          make sync
+      - name: develop
+        run: make develop
+      - name: ruff
+        run: |
+          uv run --frozen --no-sync ruff check python service scripts tests benches
+          uv run --frozen --no-sync ruff format --check python service scripts tests benches
+      - name: schemas up to date
+        run: make schemas-check
+      - name: test-py
+        run: make test-py
+      - name: e2e (no integration; data guardrail, bench gate statistics)
+        run: uv run --frozen --no-sync pytest tests/e2e
+      - name: docs runnable blocks (needs the extension built above)
+        run: uv run --frozen --no-sync python docs/check_docs.py --require-core
+
+  service:
+    name: service (ubuntu, postgres 16)
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: qt
+          POSTGRES_PASSWORD: qt
+          POSTGRES_DB: qt
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U qt" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      QT_PG_DSN: postgresql://qt:qt@127.0.0.1:5432/qt
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master 2026-10-16
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        id: py
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: venv + sync + develop
+        run: |
+          uv venv --python "${{ steps.py.outputs.python-path }}" .venv
+          make sync develop
+      - name: test-service
+        run: make test-service
+      - name: compose config
+        run: make compose-config
+
+  supply-chain:
+    name: supply chain (cargo audit, pip-audit)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
+        with:
+          tool: cargo-audit
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+      - name: cargo audit (allowlist in .cargo/audit.toml)
+        run: cargo audit --deny warnings
+      - name: pip-audit on the locked requirements (allowlist in .github/pip-audit-allowlist.txt)
+        run: |
+          mkdir -p .scratch
+          uv export --frozen --all-packages --all-extras --group dev --no-emit-workspace --no-hashes \
+            -o .scratch/requirements.txt
+          ignores=$(grep -v '^#' .github/pip-audit-allowlist.txt | awk 'NF {print "--ignore-vuln " $1}')
+          uvx --python ${{ env.PYTHON_VERSION }} pip-audit==2.9.0 --strict --no-deps --disable-pip \
+            -r .scratch/requirements.txt $ignores
+
+  docs:
+    name: docs (links, anchors, placeholders, build)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        id: py
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+      - name: venv + sync (no extension build)
+        run: |
+          uv venv --python "${{ steps.py.outputs.python-path }}" .venv
+          make sync
+      - name: no unfilled placeholders in README.md and docs (docs/launch templates excepted)
+        run: make check-placeholders
+      - name: check_docs (links, anchors, nav, style; runnable blocks need the extension and run in `python`)
+        run: uv run --frozen --no-sync python docs/check_docs.py --no-run
+      - name: mkdocs build --strict
+        run: make docs-build
+
+  wheels:
+    name: wheel (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            target: aarch64-apple-darwin
+            manylinux: ""
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            manylinux: "2_28"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          target: ${{ matrix.target }}
+          manylinux: ${{ matrix.manylinux }}
+          rust-toolchain: ${{ env.RUST_TOOLCHAIN }}
+          args: --profile dist --locked --out dist
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: wheel-${{ matrix.target }}
+          path: dist/*.whl
+          if-no-files-found: error

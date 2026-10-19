@@ -1,0 +1,293 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.ingest_spec",
+  "$defs": {
+    "JobFile": {
+      "additionalProperties": false,
+      "description": "One output file of a service job.",
+      "properties": {
+        "job_id": {
+          "title": "Job Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "job_id",
+        "name"
+      ],
+      "title": "JobFile",
+      "type": "object"
+    },
+    "JobFileRef": {
+      "additionalProperties": false,
+      "description": "Reference to a service job output file.",
+      "properties": {
+        "job_file": {
+          "$ref": "#/$defs/JobFile"
+        }
+      },
+      "required": [
+        "job_file"
+      ],
+      "title": "JobFileRef",
+      "type": "object"
+    },
+    "PathRef": {
+      "additionalProperties": false,
+      "description": "Local path reference (CLI, Python API, MCP local mode).",
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "PathRef",
+      "type": "object"
+    },
+    "UploadRef": {
+      "additionalProperties": false,
+      "description": "Service upload id reference (HTTP API).",
+      "properties": {
+        "upload_id": {
+          "title": "Upload Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "upload_id"
+      ],
+      "title": "UploadRef",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`ingest`: source files -> normalized dataset (SPEC 3.3).",
+  "properties": {
+    "format": {
+      "enum": [
+        "itch",
+        "dbn",
+        "etcsv",
+        "parquet",
+        "bitstamp",
+        "bitfinex",
+        "coinbase",
+        "tardis_l2"
+      ],
+      "title": "Format",
+      "type": "string"
+    },
+    "inputs": {
+      "items": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/PathRef"
+          },
+          {
+            "$ref": "#/$defs/UploadRef"
+          },
+          {
+            "$ref": "#/$defs/JobFileRef"
+          }
+        ]
+      },
+      "minItems": 1,
+      "title": "Inputs",
+      "type": "array"
+    },
+    "venue": {
+      "title": "Venue",
+      "type": "string"
+    },
+    "source_venue": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Venue"
+    },
+    "out": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Out"
+    },
+    "symbols": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Symbols"
+    },
+    "session_date": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Session Date"
+    },
+    "midnight_utc_ns": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Midnight Utc Ns"
+    },
+    "tz": {
+      "anyOf": [
+        {
+          "enum": [
+            "America/New_York",
+            "UTC"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Tz"
+    },
+    "instruments": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PathRef"
+        },
+        {
+          "$ref": "#/$defs/UploadRef"
+        },
+        {
+          "$ref": "#/$defs/JobFileRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Instruments"
+    },
+    "price_exp": {
+      "default": -9,
+      "maximum": 0,
+      "minimum": -12,
+      "title": "Price Exp",
+      "type": "integer"
+    },
+    "size_exp": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Size Exp"
+    },
+    "tick_size": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Tick Size"
+    },
+    "lot_size": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Lot Size"
+    },
+    "options": {
+      "additionalProperties": true,
+      "title": "Options",
+      "type": "object"
+    },
+    "strict": {
+      "default": false,
+      "title": "Strict",
+      "type": "boolean"
+    },
+    "open_s": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Open S"
+    },
+    "close_s": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Close S"
+    }
+  },
+  "required": [
+    "format",
+    "inputs",
+    "venue"
+  ],
+  "type": "object"
+}

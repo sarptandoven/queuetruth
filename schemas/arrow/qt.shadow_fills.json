@@ -1,0 +1,91 @@
+{
+  "name": "qt.shadow_fills",
+  "metadata": {
+    "qt.engine_version": "0.1.0",
+    "qt.schema": "qt.shadow_fills",
+    "qt.schema_version": "1.1"
+  },
+  "fields": [
+    {
+      "name": "shadow_id",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "fill_seq",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "ts_event",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": false
+    },
+    {
+      "name": "sequence",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "fill_qty",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "cum_qty",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "leaves_qty",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "fill_px",
+      "type": "int64",
+      "nullable": false
+    },
+    {
+      "name": "reason",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "queue_depleted",
+        "trade_through",
+        "crossed",
+        "crossed_at_live"
+      ]
+    },
+    {
+      "name": "queue_ahead_before",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "traded_at_px_event",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "trade_through_event",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "behind_volume_executed",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "liquidity",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "maker",
+        "taker"
+      ],
+      "since": "1.1"
+    }
+  ]
+}

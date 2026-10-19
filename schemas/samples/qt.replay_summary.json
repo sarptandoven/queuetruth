@@ -1,0 +1,157 @@
+{
+  "sample": {
+    "schema": "qt.replay_summary",
+    "schema_version": 1,
+    "run_id": "0123456789abcdef",
+    "engine_version": "x",
+    "spec": {
+      "k": 1
+    },
+    "stats": {
+      "records": 1,
+      "events": 1,
+      "trades": 1,
+      "instruments": 1,
+      "partitions": 1,
+      "snapshot_records": 1
+    },
+    "invariants": {
+      "cancels_exceeding_resting": 1,
+      "fills_exceeding_resting": 1,
+      "fills_unknown_order": 1,
+      "unknown_order_refs": 1,
+      "duplicate_adds": 1,
+      "unexpected_modifies": 1,
+      "crossed_books_after_last": 1,
+      "negative_spreads": 1
+    },
+    "rank_oracle": {
+      "executions_checked": 1,
+      "executions_unknown_order": 1,
+      "price_priority_violations": 1,
+      "fifo_rank_histogram": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "fifo_rank_histogram_sweep_adjusted": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "rank0_share": 0.5,
+      "rank0_share_sweep_adjusted": 0.5,
+      "sweeps": 1,
+      "sweeps_multi_fill": 1,
+      "sweep_gap_ns": 1,
+      "first_60s_after_open": {
+        "checked": 1,
+        "rank_violations": 1,
+        "rank_violations_sweep_adjusted": 1,
+        "rank0_share": 0.5,
+        "rank0_share_sweep_adjusted": 0.5
+      },
+      "rank0_share_by_bucket": {
+        "09:30": {
+          "checked": 1,
+          "rank0": 1,
+          "rank0_sweep_adjusted": 1,
+          "rank0_share": 0.5,
+          "rank0_share_sweep_adjusted": 0.5
+        }
+      }
+    },
+    "parity": {
+      "trades_compared": 1,
+      "trades_mismatches": 1,
+      "trades_missing_derived": 1,
+      "trades_extra_derived": 1,
+      "bbo_compared": 1,
+      "bbo_mismatches": 1,
+      "first_mismatches": [
+        {
+          "k": 1
+        }
+      ],
+      "pass": true
+    },
+    "shadows": {
+      "n": 1,
+      "n_live": 1,
+      "n_filled": 1,
+      "n_partial_only": 1,
+      "n_cancelled": 1,
+      "n_censored": 1,
+      "n_rejected": 1,
+      "fills_rows": 1,
+      "trajectory_rows": 1
+    },
+    "data_quality": {
+      "schema": "qt.data_quality",
+      "schema_version": 1,
+      "records": 1,
+      "maybe_bad_book_records": 1,
+      "bad_ts_recv_records": 1,
+      "snapshot_records": 1,
+      "pre_snapshot_rows_skipped": 1,
+      "unknown_order_refs": 1,
+      "duplicate_adds": 1,
+      "unexpected_modifies": 1,
+      "sequence_gaps": 1,
+      "sequence_regressions": 1,
+      "out_of_order_ts_event": 1,
+      "crossed_books_after_last": 1,
+      "hidden_prints": 1,
+      "off_price_executions": 1,
+      "feed_gaps": [
+        {
+          "instrument_id": 1,
+          "ts_start": 1,
+          "ts_end": 1,
+          "reason": "x"
+        }
+      ],
+      "source_specific": {
+        "k": 1
+      },
+      "verdict": "clean",
+      "reasons": [
+        "x"
+      ]
+    },
+    "files": [
+      {
+        "name": "x",
+        "rows": 1,
+        "bytes": 1,
+        "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      }
+    ],
+    "warnings": [
+      "x"
+    ],
+    "timings": {
+      "wall_s": 0.5,
+      "records_per_s": 0.5
+    },
+    "shadow_diagnostics": {
+      "hidden_print_fills": 1,
+      "hidden_at_px_with_display_ahead": 1,
+      "taker_fills": 1,
+      "crossed_unfilled": 1,
+      "behind_exec_with_ahead": 1,
+      "excluded_requested": 1,
+      "excluded_matched": 1,
+      "excluded_records": 1,
+      "twins_linked": 1,
+      "twin_fills_with_queue_ahead": 1,
+      "twin_fills_off_display": 1
+    }
+  }
+}

@@ -1,0 +1,30 @@
+[package]
+name = "queuetruth-book"
+description = "Exact L3 FIFO order book with invariants, rank queries and a naive reference book."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+name = "qt_book"
+path = "src/lib.rs"
+
+[features]
+# Runs the gate tests: cross-crate end-to-end tests that are ignored by default.
+gate = []
+
+[dependencies]
+queuetruth-types.workspace = true
+queuetruth-schema.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+indexmap.workspace = true
+
+[dev-dependencies]
+queuetruth-testkit.workspace = true
+proptest.workspace = true
+serde_json.workspace = true

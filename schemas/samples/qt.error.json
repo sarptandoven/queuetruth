@@ -1,0 +1,12 @@
+{
+  "sample": {
+    "schema": "qt.error",
+    "schema_version": 1,
+    "code": "QT-INPUT-002",
+    "message": "x",
+    "hint": "x",
+    "details": {
+      "k": 1
+    }
+  }
+}

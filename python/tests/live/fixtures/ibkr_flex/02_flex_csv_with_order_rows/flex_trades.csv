@@ -1,0 +1,4 @@
+"ClientAccountID","CurrencyPrimary","AssetClass","Symbol","Conid","TradeID","IBOrderID","IBExecID","TradeDate","DateTime","Buy/Sell","Quantity","TradePrice","IBCommission","IBCommissionCurrency","OrderType","LevelOfDetail","OrderTime","Exchange","Notes/Codes","TransactionType"
+"U0000001","USD","STK","ACME","100000001","700000011","4100000011","0000e0d5.6740e5f6.01.01","2026-10-15","2026-10-15, 10:00:02","BUY","30","50.31","-0.15","USD","LMT","EXECUTION","2026-10-15, 09:59:58","ARCA","P","ExchTrade"
+"U0000001","USD","STK","ACME","100000001","700000012","4100000011","0000e0d5.6740e5f6.01.02","2026-10-15","2026-10-15, 10:00:09","BUY","70","50.3","-0.35","USD","LMT","EXECUTION","2026-10-15, 09:59:58","NASDAQ","","ExchTrade"
+"U0000001","USD","STK","ACME","100000001","","4100000011","","2026-10-15","2026-10-15, 10:00:09","BUY","100","50.303","-0.5","USD","LMT","ORDER","2026-10-15, 09:59:58","--","","ExchTrade"

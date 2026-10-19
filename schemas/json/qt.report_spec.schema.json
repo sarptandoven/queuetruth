@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.report_spec",
+  "additionalProperties": false,
+  "description": "`report`: static HTML report from output directories.",
+  "properties": {
+    "inputs": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Inputs",
+      "type": "array"
+    },
+    "out": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Out"
+    },
+    "title": {
+      "default": "queuetruth report",
+      "title": "Title",
+      "type": "string"
+    },
+    "max_why": {
+      "default": 20,
+      "minimum": 0,
+      "title": "Max Why",
+      "type": "integer"
+    },
+    "leaderboard_sort_horizon_ns": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Leaderboard Sort Horizon Ns"
+    }
+  },
+  "required": [
+    "inputs"
+  ],
+  "type": "object"
+}

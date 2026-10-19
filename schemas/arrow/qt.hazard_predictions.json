@@ -1,0 +1,65 @@
+{
+  "name": "qt.hazard_predictions",
+  "metadata": {
+    "qt.engine_version": "0.1.0",
+    "qt.schema": "qt.hazard_predictions",
+    "qt.schema_version": "1.1"
+  },
+  "fields": [
+    {
+      "name": "order_ref",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "landmark_ns",
+      "type": "int64",
+      "nullable": false
+    },
+    {
+      "name": "horizon_ns",
+      "type": "int64",
+      "nullable": false
+    },
+    {
+      "name": "cif_fill_raw",
+      "type": "float64",
+      "nullable": false
+    },
+    {
+      "name": "cif_fill",
+      "type": "float64",
+      "nullable": false
+    },
+    {
+      "name": "cif_cancel",
+      "type": "float64",
+      "nullable": false
+    },
+    {
+      "name": "survival",
+      "type": "float64",
+      "nullable": false
+    },
+    {
+      "name": "y_fill",
+      "type": "bool",
+      "nullable": true
+    },
+    {
+      "name": "censored",
+      "type": "bool",
+      "nullable": false
+    },
+    {
+      "name": "split",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "train",
+        "calib",
+        "test"
+      ]
+    }
+  ]
+}

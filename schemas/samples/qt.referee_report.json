@@ -1,0 +1,42 @@
+{
+  "sample": {
+    "schema": "qt.referee_report",
+    "schema_version": 1,
+    "spec": {
+      "k": 1
+    },
+    "simulator": {
+      "name": "x",
+      "version": "x"
+    },
+    "n_orders": 1,
+    "n_both_filled": 1,
+    "discordant": {
+      "sim_only": 1,
+      "exact_only": 1
+    },
+    "qty_mismatch": 1,
+    "max_abs_ttf_err_ns": 1,
+    "ttf_err_p50_ns": 1,
+    "by_reason": {
+      "k": 1
+    },
+    "tolerance": {
+      "max_discordant": 1,
+      "max_qty_mismatch": 1,
+      "max_abs_ttf_err_ns": 1
+    },
+    "pass": true,
+    "examples": [
+      {
+        "order_key": "x",
+        "exact": {
+          "k": 1
+        },
+        "sim": {
+          "k": 1
+        }
+      }
+    ]
+  }
+}

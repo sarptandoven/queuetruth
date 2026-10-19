@@ -1,0 +1,169 @@
+{
+  "schema": "qtdev.live_expected",
+  "schema_version": 1,
+  "venue": "deribit",
+  "import_spec": {
+    "venue": "deribit",
+    "account": "acct1",
+    "instrument_map": null,
+    "inputs": [
+      "get_user_trades_by_instrument.json",
+      "get_order_history_by_instrument.json"
+    ]
+  },
+  "inputs": [
+    "get_order_history_by_instrument.json",
+    "get_user_trades_by_instrument.json"
+  ],
+  "row_order": "orders sorted by order_key; events sorted by (order_key, event_seq)",
+  "compare_ignore_columns": [
+    "raw"
+  ],
+  "edge_cases": [
+    "orphan_trade_direction_assumed",
+    "rest_result_trades_has_more",
+    "inverse_perp_usd_amount",
+    "fills_only_order"
+  ],
+  "notes": [
+    "REST trades come as result.trades + has_more (not a bare array); order history as a bare result array.",
+    "Order F has no order record: side taken from trade.direction and flagged (SPEC: ASSUMED). The OpenAPI text for user_trade.direction reads 'Trade direction of the taker' (copied from public_trade) while AsyncAPI just says buy/sell; the examples match the user's own side. Fixture direction = own side.",
+    "No instrument map here -> price_exp -9, size_exp -8 even for USD-notional BTC-PERPETUAL amounts (40 -> 4000000000 size units). Valid but meaningless as 'base size' (SPEC gap: SPEC treats size as base quantity; Deribit inverse perps are quoted in USD).",
+    "Order F order_type taken from trade.order_type 'limit'; tif unknown -> other; limit_px null."
+  ],
+  "orders": [
+    {
+      "order_key": "deribit:acct1:84000000010",
+      "venue": "deribit",
+      "account": "acct1",
+      "instrument": "BTC-PERPETUAL",
+      "instrument_id": null,
+      "venue_order_id": "84000000010",
+      "client_order_id": "qtE-dr",
+      "client_order_id_chain": null,
+      "side": "sell",
+      "order_type": "limit",
+      "tif": "gtc",
+      "post_only": false,
+      "reduce_only": false,
+      "orig_qty": 4000000000,
+      "qty_str": "40",
+      "limit_px": 65200000000000,
+      "px_str": "65200.0",
+      "price_exp": -9,
+      "size_exp": -8,
+      "strategy_tag": null,
+      "validation_status": "fixture_only",
+      "raw": null
+    },
+    {
+      "order_key": "deribit:acct1:84000000011",
+      "venue": "deribit",
+      "account": "acct1",
+      "instrument": "BTC-PERPETUAL",
+      "instrument_id": null,
+      "venue_order_id": "84000000011",
+      "client_order_id": null,
+      "client_order_id_chain": null,
+      "side": "buy",
+      "order_type": "limit",
+      "tif": "other",
+      "post_only": false,
+      "reduce_only": false,
+      "orig_qty": 2000000000,
+      "qty_str": "20",
+      "limit_px": null,
+      "px_str": null,
+      "price_exp": -9,
+      "size_exp": -8,
+      "strategy_tag": null,
+      "validation_status": "fixture_only",
+      "raw": null
+    }
+  ],
+  "events": [
+    {
+      "order_key": "deribit:acct1:84000000010",
+      "event_seq": 1,
+      "event_type": "ack",
+      "qty": 4000000000,
+      "px": 65200000000000,
+      "leaves_qty": 4000000000,
+      "cum_qty": 0,
+      "fill_id": null,
+      "ref_fill_id": null,
+      "liquidity": null,
+      "fee": null,
+      "fee_ccy": null,
+      "amend_keeps_priority": null,
+      "ts_local_send": null,
+      "ts_exchange": 1792087800000000000,
+      "ts_local_recv": null,
+      "ts_exchange_kind": "record_time",
+      "ts_precision": "ms",
+      "source": "rest",
+      "reason": "from order history creation_timestamp",
+      "derived": false,
+      "raw": null
+    },
+    {
+      "order_key": "deribit:acct1:84000000010",
+      "event_seq": 2,
+      "event_type": "fill",
+      "qty": 4000000000,
+      "px": 65200000000000,
+      "leaves_qty": 0,
+      "cum_qty": 4000000000,
+      "fill_id": "BTC-91000101",
+      "ref_fill_id": null,
+      "liquidity": "maker",
+      "fee": -1.5e-08,
+      "fee_ccy": "BTC",
+      "amend_keeps_priority": null,
+      "ts_local_send": null,
+      "ts_exchange": 1792087802000000000,
+      "ts_local_recv": null,
+      "ts_exchange_kind": "match_time",
+      "ts_precision": "ms",
+      "source": "rest",
+      "reason": null,
+      "derived": false,
+      "raw": null
+    },
+    {
+      "order_key": "deribit:acct1:84000000011",
+      "event_seq": 1,
+      "event_type": "fill",
+      "qty": 2000000000,
+      "px": 65210500000000,
+      "leaves_qty": null,
+      "cum_qty": 2000000000,
+      "fill_id": "BTC-91000102",
+      "ref_fill_id": null,
+      "liquidity": "taker",
+      "fee": 1.5e-07,
+      "fee_ccy": "BTC",
+      "amend_keeps_priority": null,
+      "ts_local_send": null,
+      "ts_exchange": 1792087803000000000,
+      "ts_local_recv": null,
+      "ts_exchange_kind": "match_time",
+      "ts_precision": "ms",
+      "source": "rest",
+      "reason": "side from trade.direction (ASSUMED: no joinable order record)",
+      "derived": false,
+      "raw": null
+    }
+  ],
+  "summary": {
+    "n_orders": 2,
+    "n_events": 3,
+    "n_fills": 2,
+    "dedupe_dropped": 0,
+    "unmatched_fills": 1,
+    "warnings_contains": [
+      "direction",
+      "84000000011"
+    ]
+  }
+}

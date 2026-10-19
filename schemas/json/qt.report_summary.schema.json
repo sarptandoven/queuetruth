@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.report_summary",
+  "additionalProperties": false,
+  "description": "Summary of `report`.",
+  "properties": {
+    "schema": {
+      "const": "qt.report_summary",
+      "default": "qt.report_summary",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "inputs": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Inputs",
+      "type": "array"
+    },
+    "out": {
+      "title": "Out",
+      "type": "string"
+    },
+    "sections": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Sections",
+      "type": "array"
+    },
+    "bytes": {
+      "title": "Bytes",
+      "type": "integer"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "inputs",
+    "out",
+    "sections",
+    "bytes",
+    "sha256"
+  ],
+  "type": "object"
+}

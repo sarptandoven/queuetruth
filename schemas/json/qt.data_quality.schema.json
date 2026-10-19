@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.data_quality",
+  "$defs": {
+    "FeedGap": {
+      "additionalProperties": false,
+      "description": "A gap in the feed of one instrument.",
+      "properties": {
+        "instrument_id": {
+          "title": "Instrument Id",
+          "type": "integer"
+        },
+        "ts_start": {
+          "title": "Ts Start",
+          "type": "integer"
+        },
+        "ts_end": {
+          "title": "Ts End",
+          "type": "integer"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "instrument_id",
+        "ts_start",
+        "ts_end",
+        "reason"
+      ],
+      "title": "FeedGap",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Data-quality counters and verdict (SPEC 5.1.5).",
+  "properties": {
+    "schema": {
+      "const": "qt.data_quality",
+      "default": "qt.data_quality",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "records": {
+      "title": "Records",
+      "type": "integer"
+    },
+    "maybe_bad_book_records": {
+      "title": "Maybe Bad Book Records",
+      "type": "integer"
+    },
+    "bad_ts_recv_records": {
+      "title": "Bad Ts Recv Records",
+      "type": "integer"
+    },
+    "snapshot_records": {
+      "title": "Snapshot Records",
+      "type": "integer"
+    },
+    "pre_snapshot_rows_skipped": {
+      "title": "Pre Snapshot Rows Skipped",
+      "type": "integer"
+    },
+    "unknown_order_refs": {
+      "title": "Unknown Order Refs",
+      "type": "integer"
+    },
+    "duplicate_adds": {
+      "title": "Duplicate Adds",
+      "type": "integer"
+    },
+    "unexpected_modifies": {
+      "title": "Unexpected Modifies",
+      "type": "integer"
+    },
+    "sequence_gaps": {
+      "title": "Sequence Gaps",
+      "type": "integer"
+    },
+    "sequence_regressions": {
+      "title": "Sequence Regressions",
+      "type": "integer"
+    },
+    "out_of_order_ts_event": {
+      "title": "Out Of Order Ts Event",
+      "type": "integer"
+    },
+    "crossed_books_after_last": {
+      "title": "Crossed Books After Last",
+      "type": "integer"
+    },
+    "hidden_prints": {
+      "title": "Hidden Prints",
+      "type": "integer"
+    },
+    "off_price_executions": {
+      "title": "Off Price Executions",
+      "type": "integer"
+    },
+    "feed_gaps": {
+      "items": {
+        "$ref": "#/$defs/FeedGap"
+      },
+      "title": "Feed Gaps",
+      "type": "array"
+    },
+    "source_specific": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "title": "Source Specific",
+      "type": "object"
+    },
+    "verdict": {
+      "enum": [
+        "clean",
+        "warnings",
+        "unusable"
+      ],
+      "title": "Verdict",
+      "type": "string"
+    },
+    "reasons": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Reasons",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "records",
+    "maybe_bad_book_records",
+    "bad_ts_recv_records",
+    "snapshot_records",
+    "pre_snapshot_rows_skipped",
+    "unknown_order_refs",
+    "duplicate_adds",
+    "unexpected_modifies",
+    "sequence_gaps",
+    "sequence_regressions",
+    "out_of_order_ts_event",
+    "crossed_books_after_last",
+    "hidden_prints",
+    "off_price_executions",
+    "feed_gaps",
+    "source_specific",
+    "verdict",
+    "reasons"
+  ],
+  "type": "object"
+}

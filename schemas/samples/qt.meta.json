@@ -1,0 +1,23 @@
+{
+  "sample": {
+    "schema": "qt.meta",
+    "schema_version": 1,
+    "api_version": "v1",
+    "engine_version": "x",
+    "schema_versions": {
+      "k": 1
+    },
+    "limits": {
+      "max_upload_bytes": 1,
+      "part_size_bytes": 1,
+      "max_jobs_running": 1,
+      "rate_limits": {
+        "k": 1
+      }
+    },
+    "formats": [
+      "x"
+    ],
+    "zero_egress": true
+  }
+}

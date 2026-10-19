@@ -1,0 +1,260 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.live_import_spec",
+  "$defs": {
+    "FixOptions": {
+      "additionalProperties": false,
+      "description": "FIX 4.4 drop-copy parsing options.",
+      "properties": {
+        "delimiter": {
+          "default": "auto",
+          "title": "Delimiter",
+          "type": "string"
+        },
+        "local_ts_regex": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Local Ts Regex"
+        },
+        "venue_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Venue Name"
+        },
+        "checksum": {
+          "default": "exclude",
+          "enum": [
+            "exclude",
+            "keep"
+          ],
+          "title": "Checksum",
+          "type": "string"
+        },
+        "data_dictionary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Data Dictionary"
+        },
+        "session_venues": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Session Venues",
+          "type": "object"
+        },
+        "instrument_tag": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Instrument Tag"
+        }
+      },
+      "title": "FixOptions",
+      "type": "object"
+    },
+    "JobFile": {
+      "additionalProperties": false,
+      "description": "One output file of a service job.",
+      "properties": {
+        "job_id": {
+          "title": "Job Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "job_id",
+        "name"
+      ],
+      "title": "JobFile",
+      "type": "object"
+    },
+    "JobFileRef": {
+      "additionalProperties": false,
+      "description": "Reference to a service job output file.",
+      "properties": {
+        "job_file": {
+          "$ref": "#/$defs/JobFile"
+        }
+      },
+      "required": [
+        "job_file"
+      ],
+      "title": "JobFileRef",
+      "type": "object"
+    },
+    "PathRef": {
+      "additionalProperties": false,
+      "description": "Local path reference (CLI, Python API, MCP local mode).",
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "PathRef",
+      "type": "object"
+    },
+    "UploadRef": {
+      "additionalProperties": false,
+      "description": "Service upload id reference (HTTP API).",
+      "properties": {
+        "upload_id": {
+          "title": "Upload Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "upload_id"
+      ],
+      "title": "UploadRef",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`live import`: venue exports -> canonical live log (SPEC 3.8).",
+  "properties": {
+    "venue": {
+      "enum": [
+        "binance",
+        "bybit",
+        "okx",
+        "coinbase",
+        "kraken",
+        "deribit",
+        "hyperliquid",
+        "ibkr_flex",
+        "fix44",
+        "sim_hftbacktest",
+        "sim_nautilus"
+      ],
+      "title": "Venue",
+      "type": "string"
+    },
+    "inputs": {
+      "items": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/PathRef"
+          },
+          {
+            "$ref": "#/$defs/UploadRef"
+          },
+          {
+            "$ref": "#/$defs/JobFileRef"
+          }
+        ]
+      },
+      "minItems": 1,
+      "title": "Inputs",
+      "type": "array"
+    },
+    "out": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Out"
+    },
+    "account": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Account"
+    },
+    "instrument_map": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PathRef"
+        },
+        {
+          "$ref": "#/$defs/UploadRef"
+        },
+        {
+          "$ref": "#/$defs/JobFileRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Instrument Map"
+    },
+    "append": {
+      "default": false,
+      "title": "Append",
+      "type": "boolean"
+    },
+    "fix": {
+      "$ref": "#/$defs/FixOptions"
+    },
+    "tz": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Tz"
+    }
+  },
+  "required": [
+    "venue",
+    "inputs"
+  ],
+  "type": "object"
+}

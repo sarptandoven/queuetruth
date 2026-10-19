@@ -1,0 +1,115 @@
+{
+  "schema": "qtdev.live_expected",
+  "schema_version": 1,
+  "venue": "ibkr_flex",
+  "import_spec": {
+    "venue": "ibkr_flex",
+    "account": null,
+    "instrument_map": null,
+    "tz": "America/New_York",
+    "inputs": [
+      "flex_trades.xml"
+    ]
+  },
+  "inputs": [
+    "flex_trades.xml"
+  ],
+  "row_order": "orders sorted by order_key; events sorted by (order_key, event_seq)",
+  "compare_ignore_columns": [
+    "raw"
+  ],
+  "edge_cases": [
+    "trade_cancel_bust_unverified",
+    "orig_trade_id_join",
+    "duplicate_exec_id_on_cancel"
+  ],
+  "notes": [
+    "UNVERIFIED LAYOUT. The enum values (transactionType TradeCancel, buySell 'BUY (Ca.)', notes code 'Ca') are from ibflex; how IBKR fills ibExecID/origTradeID/quantity sign on a cancellation row is NOT documented in the Flex reference. This fixture encodes one plausible layout: the cancel row repeats the original ibExecID and points back with origTradeID. The importer must bind the bust through origTradeID -> tradeID -> ibExecID (fill_id is the execution id per SPEC, Trade ID is a different key). The duplicate ibExecID must NOT trip the duplicate-fill check.",
+    "Bust row: fill_id null (no new execution id), ts_exchange = the cancelled trade's dateTime, kind unknown (the cancel time itself is only known to day precision via reportDate).",
+    "Treat this scenario as a design probe; replace with a real (redacted) Flex cancel sample before claiming support."
+  ],
+  "orders": [
+    {
+      "order_key": "ibkr_flex:U0000001:4100000021",
+      "venue": "ibkr_flex",
+      "account": "U0000001",
+      "instrument": "ACME",
+      "instrument_id": null,
+      "venue_order_id": "4100000021",
+      "client_order_id": null,
+      "client_order_id_chain": null,
+      "side": "buy",
+      "order_type": "limit",
+      "tif": "other",
+      "post_only": false,
+      "reduce_only": null,
+      "orig_qty": 20,
+      "qty_str": "20",
+      "limit_px": null,
+      "px_str": null,
+      "price_exp": -9,
+      "size_exp": 0,
+      "strategy_tag": null,
+      "validation_status": "fixture_only",
+      "raw": null
+    }
+  ],
+  "events": [
+    {
+      "order_key": "ibkr_flex:U0000001:4100000021",
+      "event_seq": 1,
+      "event_type": "fill",
+      "qty": 20,
+      "px": 51000000000,
+      "leaves_qty": null,
+      "cum_qty": 20,
+      "fill_id": "0000e0d5.6750a7b8.01.01",
+      "ref_fill_id": null,
+      "liquidity": "unknown",
+      "fee": 0.1,
+      "fee_ccy": "USD",
+      "amend_keeps_priority": null,
+      "ts_local_send": null,
+      "ts_exchange": 1792164600000000000,
+      "ts_local_recv": null,
+      "ts_exchange_kind": "match_time",
+      "ts_precision": "s",
+      "source": "flex",
+      "reason": null,
+      "derived": false,
+      "raw": null
+    },
+    {
+      "order_key": "ibkr_flex:U0000001:4100000021",
+      "event_seq": 2,
+      "event_type": "fill_bust",
+      "qty": 20,
+      "px": 51000000000,
+      "leaves_qty": null,
+      "cum_qty": 0,
+      "fill_id": null,
+      "ref_fill_id": "0000e0d5.6750a7b8.01.01",
+      "liquidity": "unknown",
+      "fee": -0.1,
+      "fee_ccy": "USD",
+      "amend_keeps_priority": null,
+      "ts_local_send": null,
+      "ts_exchange": 1792164600000000000,
+      "ts_local_recv": null,
+      "ts_exchange_kind": "unknown",
+      "ts_precision": "s",
+      "source": "flex",
+      "reason": "TradeCancel origTradeID=700000021 reportDate=20261017",
+      "derived": false,
+      "raw": null
+    }
+  ],
+  "summary": {
+    "n_orders": 1,
+    "n_events": 2,
+    "n_fills": 1,
+    "dedupe_dropped": 0,
+    "unmatched_fills": 0,
+    "warnings_contains": []
+  }
+}

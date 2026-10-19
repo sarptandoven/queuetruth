@@ -1,0 +1,17 @@
+{
+  "sample": {
+    "schema": "qt.usage_report",
+    "schema_version": 1,
+    "from": "x",
+    "to": "x",
+    "group_by": "meter",
+    "rows": [
+      {
+        "key": "x",
+        "meter": "x",
+        "quantity": 0.5,
+        "unit": "x"
+      }
+    ]
+  }
+}

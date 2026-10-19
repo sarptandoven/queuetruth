@@ -1,0 +1,17 @@
+{
+  "schema": "qt.live_manifest",
+  "schema_version": 1,
+  "venues": [
+    "binance",
+    "fix44",
+    "okx"
+  ],
+  "accounts": [
+    "QTACCT01",
+    "acct1"
+  ],
+  "n_orders": 15,
+  "n_events": 53,
+  "instrument_map_sha256": null,
+  "created_by": "queuetruth live fixtures"
+}

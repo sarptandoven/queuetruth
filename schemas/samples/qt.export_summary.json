@@ -1,0 +1,16 @@
+{
+  "sample": {
+    "schema": "qt.export_summary",
+    "schema_version": 1,
+    "target": "hftbacktest",
+    "files": [
+      {
+        "name": "x",
+        "rows": 1,
+        "bytes": 1,
+        "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      }
+    ],
+    "text": "x"
+  }
+}

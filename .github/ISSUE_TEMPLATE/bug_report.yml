@@ -1,0 +1,71 @@
+name: Bug report
+description: Something in queuetruth crashes, errors or gives a wrong result.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please do not paste real market data, orders, fills or prices. A reproduction on the
+        synthetic fixtures (`queuetruth fixtures synth --out synth`) is the fastest way to a fix.
+        Security problems go through the private process in SECURITY.md, not here.
+  - type: input
+    id: version
+    attributes:
+      label: queuetruth version
+      description: Output of `queuetruth --version`, or the commit if you built from source.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS and architecture, Python version, how you installed (wheel, sdist, source).
+      placeholder: macOS 15 arm64, CPython 3.13, pip wheel
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - ingest / readers
+        - replay / shadows / why
+        - zoo (queue models)
+        - calibration / export
+        - learned model
+        - live import / scorer
+        - referee
+        - report
+        - HTTP service
+        - MCP server
+        - docs
+        - other
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: The exact commands or code, ideally on the synthetic fixtures.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened
+      description: Include the error code (for example `QT-INPUT-002`) and the full message. `--format json` output helps.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Related issues, workarounds, `queuetruth doctor` output.

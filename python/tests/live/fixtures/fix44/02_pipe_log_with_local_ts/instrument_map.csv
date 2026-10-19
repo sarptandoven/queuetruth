@@ -1,0 +1,2 @@
+venue,instrument,instrument_id,session_date,price_exp,size_exp,tick_size,lot_size
+fix44,ACME,201,,-4,0,0.01,1

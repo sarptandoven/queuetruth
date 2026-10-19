@@ -1,0 +1,31 @@
+{
+  "jsonrpc": "2.0",
+  "id": 9305,
+  "result": [
+    {
+      "web": false,
+      "time_in_force": "good_til_cancelled",
+      "replaced": false,
+      "reduce_only": false,
+      "price": 65200.0,
+      "post_only": false,
+      "order_type": "limit",
+      "order_state": "filled",
+      "order_id": "84000000010",
+      "max_show": 40,
+      "last_update_timestamp": 1792087802000,
+      "label": "qtE-dr",
+      "is_rebalance": false,
+      "is_liquidation": false,
+      "instrument_name": "BTC-PERPETUAL",
+      "filled_amount": 40,
+      "direction": "sell",
+      "creation_timestamp": 1792087800000,
+      "average_price": 65200.0,
+      "api": true,
+      "amount": 40,
+      "mobile": false,
+      "risk_reducing": false
+    }
+  ]
+}

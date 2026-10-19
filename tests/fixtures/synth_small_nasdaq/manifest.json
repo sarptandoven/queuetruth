@@ -1,0 +1,76 @@
+{
+  "schema": "qt.dataset_manifest",
+  "schema_version": 1,
+  "dataset_id": "ef3ff4f0fcbefe8f89f22aa7028e5fabe0a93219ddf85a32846976bf13089cb2",
+  "kind": "mbo",
+  "source_format": "synthetic",
+  "venue": "nasdaq",
+  "source_venue": "nasdaq",
+  "inputs": [],
+  "partitions": [
+    {
+      "instrument_id": 1,
+      "session_date": 20619,
+      "files": [
+        {
+          "path": "mbo/date=2026-06-15/instrument_id=1/part-00000.parquet",
+          "rows": 49417,
+          "sha256": "0182f7d3e0fd145447b8be624e852cf4e91820546570651b85a964cfc1ed7f1d"
+        }
+      ],
+      "rows": 49417,
+      "ts_min": 1781529902873370710,
+      "ts_max": 1781555072061644073
+    },
+    {
+      "instrument_id": 2,
+      "session_date": 20619,
+      "files": [
+        {
+          "path": "mbo/date=2026-06-15/instrument_id=2/part-00000.parquet",
+          "rows": 49841,
+          "sha256": "4ca51b1d91f85b6928ac2d1ffa956c14ae82763f1127d59c9ed6411da83d6957"
+        }
+      ],
+      "rows": 49841,
+      "ts_min": 1781529900003487812,
+      "ts_max": 1781554217775891267
+    },
+    {
+      "instrument_id": 1,
+      "session_date": 20620,
+      "files": [
+        {
+          "path": "mbo/date=2026-06-16/instrument_id=1/part-00000.parquet",
+          "rows": 49364,
+          "sha256": "793a58ff3708f349f1a4e2d99c67a69e6b7c0f643018073f07e9280282f0b221"
+        }
+      ],
+      "rows": 49364,
+      "ts_min": 1781616302205560991,
+      "ts_max": 1781641045283798695
+    },
+    {
+      "instrument_id": 2,
+      "session_date": 20620,
+      "files": [
+        {
+          "path": "mbo/date=2026-06-16/instrument_id=2/part-00000.parquet",
+          "rows": 49834,
+          "sha256": "8c68e34997f1cb3f3ba03b4504ed937f024b499953ed8a5a55ab799f38654129"
+        }
+      ],
+      "rows": 49834,
+      "ts_min": 1781616301712427741,
+      "ts_max": 1781640982356593012
+    }
+  ],
+  "price_exp_by_instrument": {
+    "1": -9,
+    "2": -9
+  },
+  "created_by": "queuetruth-testkit 0.1.0",
+  "validation_status": "synthetic_only",
+  "rule_set": null,
+  "source_vintage": null
+}

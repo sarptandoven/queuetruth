@@ -1,0 +1,349 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.why_trace",
+  "$defs": {
+    "WhyDivergence": {
+      "additionalProperties": false,
+      "description": "1.1: first event after which the model's and the exact queue ahead differ.",
+      "properties": {
+        "index": {
+          "minimum": 0,
+          "title": "Index",
+          "type": "integer"
+        },
+        "ts_event": {
+          "title": "Ts Event",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "index",
+        "ts_event"
+      ],
+      "title": "WhyDivergence",
+      "type": "object"
+    },
+    "WhyEvent": {
+      "additionalProperties": false,
+      "description": "One record at the order's level, with queue state after it.",
+      "properties": {
+        "ts_event": {
+          "title": "Ts Event",
+          "type": "integer"
+        },
+        "sequence": {
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "action": {
+          "enum": [
+            "A",
+            "C",
+            "M",
+            "R",
+            "T",
+            "F",
+            "N"
+          ],
+          "title": "Action",
+          "type": "string"
+        },
+        "order_id": {
+          "title": "Order Id",
+          "type": "integer"
+        },
+        "side": {
+          "enum": [
+            "B",
+            "A",
+            "N"
+          ],
+          "title": "Side",
+          "type": "string"
+        },
+        "price": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Price"
+        },
+        "size": {
+          "title": "Size",
+          "type": "integer"
+        },
+        "effect": {
+          "title": "Effect",
+          "type": "string"
+        },
+        "is_ahead": {
+          "title": "Is Ahead",
+          "type": "boolean"
+        },
+        "queue_ahead_after": {
+          "title": "Queue Ahead After",
+          "type": "integer"
+        },
+        "rank_after": {
+          "title": "Rank After",
+          "type": "integer"
+        },
+        "level_qty_after": {
+          "title": "Level Qty After",
+          "type": "integer"
+        },
+        "fill_qty": {
+          "title": "Fill Qty",
+          "type": "integer"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        }
+      },
+      "required": [
+        "ts_event",
+        "sequence",
+        "action",
+        "order_id",
+        "side",
+        "price",
+        "size",
+        "effect",
+        "is_ahead",
+        "queue_ahead_after",
+        "rank_after",
+        "level_qty_after",
+        "fill_qty"
+      ],
+      "title": "WhyEvent",
+      "type": "object"
+    },
+    "WhyOutcome": {
+      "additionalProperties": false,
+      "description": "Outcome of the traced order.",
+      "properties": {
+        "filled_qty": {
+          "title": "Filled Qty",
+          "type": "integer"
+        },
+        "ts_first_fill": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ts First Fill"
+        },
+        "end_state": {
+          "title": "End State",
+          "type": "string"
+        }
+      },
+      "required": [
+        "filled_qty",
+        "end_state"
+      ],
+      "title": "WhyOutcome",
+      "type": "object"
+    },
+    "WhySubject": {
+      "additionalProperties": false,
+      "description": "The traced order.",
+      "properties": {
+        "shadow_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Shadow Id"
+        },
+        "order_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Order Key"
+        }
+      },
+      "title": "WhySubject",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Event-by-event trace of one shadow or live order.",
+  "properties": {
+    "schema": {
+      "const": "qt.why_trace",
+      "default": "qt.why_trace",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "subject": {
+      "$ref": "#/$defs/WhySubject"
+    },
+    "instrument_id": {
+      "title": "Instrument Id",
+      "type": "integer"
+    },
+    "side": {
+      "enum": [
+        "B",
+        "A",
+        "N"
+      ],
+      "title": "Side",
+      "type": "string"
+    },
+    "price": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Price"
+    },
+    "qty": {
+      "title": "Qty",
+      "type": "integer"
+    },
+    "ts_live": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Ts Live"
+    },
+    "outcome": {
+      "$ref": "#/$defs/WhyOutcome"
+    },
+    "events": {
+      "items": {
+        "$ref": "#/$defs/WhyEvent"
+      },
+      "title": "Events",
+      "type": "array"
+    },
+    "truncated": {
+      "title": "Truncated",
+      "type": "boolean"
+    },
+    "model_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Model Id"
+    },
+    "model_queue_ahead": {
+      "anyOf": [
+        {
+          "items": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Model Queue Ahead"
+    },
+    "first_divergence": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/WhyDivergence"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "conclusion": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Conclusion"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "subject",
+    "instrument_id",
+    "side",
+    "price",
+    "qty",
+    "outcome",
+    "events",
+    "truncated"
+  ],
+  "type": "object"
+}

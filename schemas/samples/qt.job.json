@@ -1,0 +1,43 @@
+{
+  "sample": {
+    "schema": "qt.job",
+    "schema_version": 1,
+    "id": "x",
+    "kind": "ingest",
+    "state": "queued",
+    "progress": {
+      "fraction": 0.5,
+      "stage": "x"
+    },
+    "resource": {
+      "type": "x",
+      "id": "x"
+    },
+    "created_at": "x",
+    "started_at": "x",
+    "finished_at": "x",
+    "error": {
+      "schema": "qt.problem",
+      "schema_version": 1,
+      "type": "x",
+      "title": "x",
+      "status": 1,
+      "detail": "x",
+      "instance": "x",
+      "code": "x",
+      "request_id": "x",
+      "errors": [
+        {
+          "loc": [
+            "x"
+          ],
+          "msg": "x"
+        }
+      ]
+    },
+    "usage": {
+      "k": 0.5
+    },
+    "files_expire_at": "x"
+  }
+}

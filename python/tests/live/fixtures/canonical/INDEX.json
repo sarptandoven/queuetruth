@@ -1,0 +1,26 @@
+{
+  "neg_event_seq_gap": {
+    "expect_error_code": "QT-INPUT-002",
+    "why": "OID-3 events have event_seq 1,3,4 (2 removed)"
+  },
+  "neg_duplicate_fill_id": {
+    "expect_error_code": "QT-INPUT-003",
+    "why": "fill_id F-5-1 appears twice on OID-5"
+  },
+  "neg_cum_qty_mismatch": {
+    "expect_error_code": "QT-INPUT-002",
+    "why": "F-3-1 cum_qty 11 but running fill sum is 10"
+  },
+  "neg_duplicate_order_key": {
+    "expect_error_code": "QT-INPUT-003",
+    "why": "orders.parquet has fix44:QTACCT01:OID-1 twice"
+  },
+  "neg_event_without_timestamp": {
+    "expect_error_code": "QT-INPUT-002",
+    "why": "fix44:QTACCT01:OID-1 ack has no timestamp"
+  },
+  "warn_post_only_taker_fill": {
+    "expect_error_code": null,
+    "why": "OID-5 marked post_only but its fill is taker -> warning only"
+  }
+}

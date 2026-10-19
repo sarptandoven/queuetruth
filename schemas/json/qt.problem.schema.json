@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.problem",
+  "$defs": {
+    "ProblemError": {
+      "additionalProperties": false,
+      "description": "One validation error location.",
+      "properties": {
+        "loc": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ]
+          },
+          "title": "Loc",
+          "type": "array"
+        },
+        "msg": {
+          "title": "Msg",
+          "type": "string"
+        }
+      },
+      "required": [
+        "loc",
+        "msg"
+      ],
+      "title": "ProblemError",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "RFC 9457 problem details.",
+  "properties": {
+    "schema": {
+      "const": "qt.problem",
+      "default": "qt.problem",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "type": {
+      "title": "Type",
+      "type": "string"
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    },
+    "status": {
+      "title": "Status",
+      "type": "integer"
+    },
+    "detail": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Detail"
+    },
+    "instance": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Instance"
+    },
+    "code": {
+      "title": "Code",
+      "type": "string"
+    },
+    "request_id": {
+      "title": "Request Id",
+      "type": "string"
+    },
+    "errors": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/ProblemError"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Errors"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "type",
+    "title",
+    "status",
+    "code",
+    "request_id"
+  ],
+  "type": "object"
+}

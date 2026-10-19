@@ -1,0 +1,68 @@
+{
+  "sample": {
+    "dataset": {
+      "path": "x"
+    },
+    "out": "x",
+    "population": "shadows",
+    "shadows": {
+      "path": "x"
+    },
+    "n_real_orders": 1,
+    "landmarks_ns": [
+      1
+    ],
+    "cancel_away_ticks": 1,
+    "h_max_ns": 1,
+    "l2": {
+      "depth_levels": 1,
+      "cadence_ns": 1,
+      "trade_position": "before",
+      "include_counts": true,
+      "emit_hidden_trades": true
+    },
+    "trackers": [
+      "x"
+    ],
+    "privileged": true,
+    "seed": 1,
+    "threads": 1
+  },
+  "minimal": {
+    "dataset": {
+      "path": "x"
+    }
+  },
+  "defaults": {
+    "dataset": {
+      "path": "x"
+    },
+    "out": null,
+    "population": "shadows",
+    "shadows": null,
+    "n_real_orders": null,
+    "landmarks_ns": [
+      0,
+      1000000000,
+      5000000000
+    ],
+    "cancel_away_ticks": 2,
+    "h_max_ns": 60000000000,
+    "l2": {
+      "depth_levels": 10,
+      "cadence_ns": 0,
+      "trade_position": "before",
+      "include_counts": true,
+      "emit_hidden_trades": true
+    },
+    "trackers": [
+      "hbt_risk_adverse",
+      "hbt_power3[n=1]",
+      "hbt_power3[n=3]",
+      "hbt_log2"
+    ],
+    "privileged": true,
+    "seed": 0,
+    "threads": 1
+  }
+}

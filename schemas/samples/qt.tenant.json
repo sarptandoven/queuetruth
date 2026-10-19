@@ -1,0 +1,14 @@
+{
+  "sample": {
+    "schema": "qt.tenant",
+    "schema_version": 1,
+    "id": "x",
+    "name": "x",
+    "plan": "x",
+    "zero_egress": true,
+    "retention": {
+      "uploads_days": 1,
+      "outputs_days": 1
+    }
+  }
+}

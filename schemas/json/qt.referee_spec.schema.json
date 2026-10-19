@@ -1,0 +1,205 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.referee_spec",
+  "$defs": {
+    "DatasetIdRef": {
+      "additionalProperties": false,
+      "description": "Service dataset id reference (HTTP API).",
+      "properties": {
+        "dataset_id": {
+          "title": "Dataset Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "dataset_id"
+      ],
+      "title": "DatasetIdRef",
+      "type": "object"
+    },
+    "JobFile": {
+      "additionalProperties": false,
+      "description": "One output file of a service job.",
+      "properties": {
+        "job_id": {
+          "title": "Job Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "job_id",
+        "name"
+      ],
+      "title": "JobFile",
+      "type": "object"
+    },
+    "JobFileRef": {
+      "additionalProperties": false,
+      "description": "Reference to a service job output file.",
+      "properties": {
+        "job_file": {
+          "$ref": "#/$defs/JobFile"
+        }
+      },
+      "required": [
+        "job_file"
+      ],
+      "title": "JobFileRef",
+      "type": "object"
+    },
+    "PathRef": {
+      "additionalProperties": false,
+      "description": "Local path reference (CLI, Python API, MCP local mode).",
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "PathRef",
+      "type": "object"
+    },
+    "RefereeTolerance": {
+      "additionalProperties": false,
+      "description": "Referee pass thresholds.",
+      "properties": {
+        "max_discordant": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Max Discordant",
+          "type": "integer"
+        },
+        "max_qty_mismatch": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Max Qty Mismatch",
+          "type": "integer"
+        },
+        "max_abs_ttf_err_ns": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Max Abs Ttf Err Ns",
+          "type": "integer"
+        }
+      },
+      "title": "RefereeTolerance",
+      "type": "object"
+    },
+    "SimulatorInfo": {
+      "additionalProperties": false,
+      "description": "Name and version of the simulator under test.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Version"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "SimulatorInfo",
+      "type": "object"
+    },
+    "UploadRef": {
+      "additionalProperties": false,
+      "description": "Service upload id reference (HTTP API).",
+      "properties": {
+        "upload_id": {
+          "title": "Upload Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "upload_id"
+      ],
+      "title": "UploadRef",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`referee run`: exact-FIFO regression oracle for another simulator.",
+  "properties": {
+    "dataset": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PathRef"
+        },
+        {
+          "$ref": "#/$defs/DatasetIdRef"
+        }
+      ],
+      "title": "Dataset"
+    },
+    "schedule": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PathRef"
+        },
+        {
+          "$ref": "#/$defs/UploadRef"
+        },
+        {
+          "$ref": "#/$defs/JobFileRef"
+        }
+      ],
+      "title": "Schedule"
+    },
+    "sim_fills": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PathRef"
+        },
+        {
+          "$ref": "#/$defs/UploadRef"
+        },
+        {
+          "$ref": "#/$defs/JobFileRef"
+        }
+      ],
+      "title": "Sim Fills"
+    },
+    "simulator": {
+      "$ref": "#/$defs/SimulatorInfo"
+    },
+    "tolerance": {
+      "$ref": "#/$defs/RefereeTolerance"
+    },
+    "out": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Out"
+    }
+  },
+  "required": [
+    "dataset",
+    "schedule",
+    "sim_fills"
+  ],
+  "type": "object"
+}

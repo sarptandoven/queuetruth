@@ -1,0 +1,70 @@
+{
+  "name": "qt.mbo",
+  "metadata": {
+    "qt.engine_version": "0.1.0",
+    "qt.schema": "qt.mbo",
+    "qt.schema_version": "1.1"
+  },
+  "fields": [
+    {
+      "name": "ts_event",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": false
+    },
+    {
+      "name": "ts_recv",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": false
+    },
+    {
+      "name": "instrument_id",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "action",
+      "type": "uint8",
+      "nullable": false
+    },
+    {
+      "name": "side",
+      "type": "uint8",
+      "nullable": false
+    },
+    {
+      "name": "price",
+      "type": "int64",
+      "nullable": false
+    },
+    {
+      "name": "size",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "order_id",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "flags",
+      "type": "uint8",
+      "nullable": false
+    },
+    {
+      "name": "sequence",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "channel_id",
+      "type": "uint16",
+      "nullable": false
+    },
+    {
+      "name": "publisher_id",
+      "type": "uint16",
+      "nullable": false
+    }
+  ]
+}

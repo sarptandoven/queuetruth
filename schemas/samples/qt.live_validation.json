@@ -1,0 +1,15 @@
+{
+  "sample": {
+    "schema": "qt.live_validation",
+    "schema_version": 1,
+    "path": "x",
+    "n_orders": 1,
+    "n_events": 1,
+    "errors": [
+      "x"
+    ],
+    "warnings": [
+      "x"
+    ]
+  }
+}

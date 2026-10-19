@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.file_manifest",
+  "$defs": {
+    "ManifestFile": {
+      "additionalProperties": false,
+      "description": "One downloadable job file.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "bytes": {
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "content_type": {
+          "title": "Content Type",
+          "type": "string"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        },
+        "expires_at": {
+          "title": "Expires At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "bytes",
+        "sha256",
+        "content_type",
+        "url",
+        "expires_at"
+      ],
+      "title": "ManifestFile",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Downloadable files of a job.",
+  "properties": {
+    "schema": {
+      "const": "qt.file_manifest",
+      "default": "qt.file_manifest",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "job_id": {
+      "title": "Job Id",
+      "type": "string"
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/ManifestFile"
+      },
+      "title": "Files",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "job_id",
+    "files"
+  ],
+  "type": "object"
+}

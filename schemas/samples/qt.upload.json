@@ -1,0 +1,20 @@
+{
+  "sample": {
+    "schema": "qt.upload",
+    "schema_version": 1,
+    "id": "x",
+    "purpose": "market_data",
+    "filename": "x",
+    "size_bytes": 1,
+    "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "status": "pending",
+    "parts": [
+      {
+        "part_number": 1,
+        "url": "x",
+        "expires_at": "x"
+      }
+    ],
+    "created_at": "x"
+  }
+}

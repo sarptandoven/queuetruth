@@ -1,0 +1,248 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.hazard_fit_spec",
+  "$defs": {
+    "GbdtSpec": {
+      "additionalProperties": false,
+      "description": "HistGradientBoostingClassifier settings.",
+      "properties": {
+        "max_iter": {
+          "default": 300,
+          "minimum": 1,
+          "title": "Max Iter",
+          "type": "integer"
+        },
+        "learning_rate": {
+          "default": 0.05,
+          "exclusiveMinimum": 0,
+          "title": "Learning Rate",
+          "type": "number"
+        },
+        "max_leaf_nodes": {
+          "default": 31,
+          "minimum": 2,
+          "title": "Max Leaf Nodes",
+          "type": "integer"
+        },
+        "min_samples_leaf": {
+          "default": 100,
+          "minimum": 1,
+          "title": "Min Samples Leaf",
+          "type": "integer"
+        },
+        "l2_regularization": {
+          "default": 1.0,
+          "minimum": 0,
+          "title": "L2 Regularization",
+          "type": "number"
+        }
+      },
+      "title": "GbdtSpec",
+      "type": "object"
+    },
+    "JobFile": {
+      "additionalProperties": false,
+      "description": "One output file of a service job.",
+      "properties": {
+        "job_id": {
+          "title": "Job Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "job_id",
+        "name"
+      ],
+      "title": "JobFile",
+      "type": "object"
+    },
+    "JobFileRef": {
+      "additionalProperties": false,
+      "description": "Reference to a service job output file.",
+      "properties": {
+        "job_file": {
+          "$ref": "#/$defs/JobFile"
+        }
+      },
+      "required": [
+        "job_file"
+      ],
+      "title": "JobFileRef",
+      "type": "object"
+    },
+    "PathRef": {
+      "additionalProperties": false,
+      "description": "Local path reference (CLI, Python API, MCP local mode).",
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "PathRef",
+      "type": "object"
+    },
+    "SplitSpec": {
+      "additionalProperties": false,
+      "description": "Train/calib/test split for the learned model (SPEC 5.5.6).",
+      "properties": {
+        "scheme": {
+          "default": "auto",
+          "enum": [
+            "auto",
+            "days",
+            "blocks"
+          ],
+          "title": "Scheme",
+          "type": "string"
+        },
+        "n_blocks": {
+          "default": 5,
+          "minimum": 3,
+          "title": "N Blocks",
+          "type": "integer"
+        },
+        "embargo_ns": {
+          "default": 60000000000,
+          "minimum": 0,
+          "title": "Embargo Ns",
+          "type": "integer"
+        }
+      },
+      "title": "SplitSpec",
+      "type": "object"
+    },
+    "UploadRef": {
+      "additionalProperties": false,
+      "description": "Service upload id reference (HTTP API).",
+      "properties": {
+        "upload_id": {
+          "title": "Upload Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "upload_id"
+      ],
+      "title": "UploadRef",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`fit-hazard`: discrete-time competing-risk hazard model.",
+  "properties": {
+    "features": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PathRef"
+        },
+        {
+          "$ref": "#/$defs/UploadRef"
+        },
+        {
+          "$ref": "#/$defs/JobFileRef"
+        }
+      ],
+      "title": "Features"
+    },
+    "out": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Out"
+    },
+    "grid_ns": {
+      "items": {
+        "minimum": 0,
+        "type": "integer"
+      },
+      "title": "Grid Ns",
+      "type": "array"
+    },
+    "split": {
+      "$ref": "#/$defs/SplitSpec"
+    },
+    "gbdt": {
+      "$ref": "#/$defs/GbdtSpec"
+    },
+    "recalibration": {
+      "default": "isotonic",
+      "enum": [
+        "isotonic",
+        "none"
+      ],
+      "title": "Recalibration",
+      "type": "string"
+    },
+    "privileged": {
+      "default": false,
+      "title": "Privileged",
+      "type": "boolean"
+    },
+    "seed": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Seed",
+      "type": "integer"
+    },
+    "bootstrap_b": {
+      "default": 1000,
+      "minimum": 1,
+      "title": "Bootstrap B",
+      "type": "integer"
+    },
+    "zoo_predictions": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PathRef"
+        },
+        {
+          "$ref": "#/$defs/UploadRef"
+        },
+        {
+          "$ref": "#/$defs/JobFileRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Zoo Predictions"
+    },
+    "zoo_shadows": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PathRef"
+        },
+        {
+          "$ref": "#/$defs/UploadRef"
+        },
+        {
+          "$ref": "#/$defs/JobFileRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Zoo Shadows"
+    }
+  },
+  "required": [
+    "features"
+  ],
+  "type": "object"
+}

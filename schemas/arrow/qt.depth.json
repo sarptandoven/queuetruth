@@ -1,0 +1,50 @@
+{
+  "name": "qt.depth",
+  "metadata": {
+    "qt.engine_version": "0.1.0",
+    "qt.schema": "qt.depth",
+    "qt.schema_version": "1.1"
+  },
+  "fields": [
+    {
+      "name": "ts_event",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": false
+    },
+    {
+      "name": "instrument_id",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "sequence",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "side",
+      "type": "uint8",
+      "nullable": false
+    },
+    {
+      "name": "level",
+      "type": "uint8",
+      "nullable": false
+    },
+    {
+      "name": "price",
+      "type": "int64",
+      "nullable": true
+    },
+    {
+      "name": "size",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "count",
+      "type": "uint32",
+      "nullable": false
+    }
+  ]
+}

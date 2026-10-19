@@ -1,0 +1,119 @@
+{
+  "schema": "qtdev.live_expected",
+  "schema_version": 1,
+  "venue": "ibkr_flex",
+  "import_spec": {
+    "venue": "ibkr_flex",
+    "account": null,
+    "instrument_map": null,
+    "tz": "America/New_York",
+    "inputs": [
+      "flex_trades.csv"
+    ]
+  },
+  "inputs": [
+    "flex_trades.csv"
+  ],
+  "row_order": "orders sorted by order_key; events sorted by (order_key, event_seq)",
+  "compare_ignore_columns": [
+    "raw"
+  ],
+  "edge_cases": [
+    "flex_csv",
+    "comma_datetime_separator",
+    "mixed_order_and_execution_rows",
+    "fills_only_orders"
+  ],
+  "notes": [
+    "CSV column labels: Symbol, AssetClass, CurrencyPrimary, TradeDate, DateTime, Quantity, IBCommission, Buy/Sell are verified (et notes); TradeID, IBOrderID, IBExecID, TradePrice, OrderTime, LevelOfDetail, ClientAccountID, Exchange are the display labels without spaces: UNVERIFIED.",
+    "DateTime uses the 'yyyy-MM-dd, HH:mm:ss' layout (date/time separator ', ' inside a quoted CSV field); Flex lets the user pick formats and separators (; , space T or none), so the parser must try them all.",
+    "The LevelOfDetail=ORDER summary row (aggregated 100 @ 50.303) duplicates the two EXECUTION rows: it must be skipped (with a warning), never imported as a third fill. The query should be set to Executions; SPEC says 'Level of Detail = executions' but not what to do with mixed files.",
+    "The 50.303 average price is not used anywhere; it is also exactly representable, so no QT-INPUT-004."
+  ],
+  "orders": [
+    {
+      "order_key": "ibkr_flex:U0000001:4100000011",
+      "venue": "ibkr_flex",
+      "account": "U0000001",
+      "instrument": "ACME",
+      "instrument_id": null,
+      "venue_order_id": "4100000011",
+      "client_order_id": null,
+      "client_order_id_chain": null,
+      "side": "buy",
+      "order_type": "limit",
+      "tif": "other",
+      "post_only": false,
+      "reduce_only": null,
+      "orig_qty": 100,
+      "qty_str": "100",
+      "limit_px": null,
+      "px_str": null,
+      "price_exp": -9,
+      "size_exp": 0,
+      "strategy_tag": null,
+      "validation_status": "fixture_only",
+      "raw": null
+    }
+  ],
+  "events": [
+    {
+      "order_key": "ibkr_flex:U0000001:4100000011",
+      "event_seq": 1,
+      "event_type": "fill",
+      "qty": 30,
+      "px": 50310000000,
+      "leaves_qty": null,
+      "cum_qty": 30,
+      "fill_id": "0000e0d5.6740e5f6.01.01",
+      "ref_fill_id": null,
+      "liquidity": "unknown",
+      "fee": 0.15,
+      "fee_ccy": "USD",
+      "amend_keeps_priority": null,
+      "ts_local_send": null,
+      "ts_exchange": 1792072802000000000,
+      "ts_local_recv": null,
+      "ts_exchange_kind": "match_time",
+      "ts_precision": "s",
+      "source": "flex",
+      "reason": null,
+      "derived": false,
+      "raw": null
+    },
+    {
+      "order_key": "ibkr_flex:U0000001:4100000011",
+      "event_seq": 2,
+      "event_type": "fill",
+      "qty": 70,
+      "px": 50300000000,
+      "leaves_qty": null,
+      "cum_qty": 100,
+      "fill_id": "0000e0d5.6740e5f6.01.02",
+      "ref_fill_id": null,
+      "liquidity": "unknown",
+      "fee": 0.35,
+      "fee_ccy": "USD",
+      "amend_keeps_priority": null,
+      "ts_local_send": null,
+      "ts_exchange": 1792072809000000000,
+      "ts_local_recv": null,
+      "ts_exchange_kind": "match_time",
+      "ts_precision": "s",
+      "source": "flex",
+      "reason": null,
+      "derived": false,
+      "raw": null
+    }
+  ],
+  "summary": {
+    "n_orders": 1,
+    "n_events": 2,
+    "n_fills": 2,
+    "dedupe_dropped": 0,
+    "unmatched_fills": 0,
+    "warnings_contains": [
+      "ORDER"
+    ]
+  }
+}

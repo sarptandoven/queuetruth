@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.mirror_spec",
+  "$defs": {
+    "DatasetIdRef": {
+      "additionalProperties": false,
+      "description": "Service dataset id reference (HTTP API).",
+      "properties": {
+        "dataset_id": {
+          "title": "Dataset Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "dataset_id"
+      ],
+      "title": "DatasetIdRef",
+      "type": "object"
+    },
+    "PathRef": {
+      "additionalProperties": false,
+      "description": "Local path reference (CLI, Python API, MCP local mode).",
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "PathRef",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`shadows mirror-real`: shadows joining directly behind sampled real orders.",
+  "properties": {
+    "dataset": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PathRef"
+        },
+        {
+          "$ref": "#/$defs/DatasetIdRef"
+        }
+      ],
+      "title": "Dataset"
+    },
+    "out": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Out"
+    },
+    "n": {
+      "default": 3000,
+      "minimum": 0,
+      "title": "N",
+      "type": "integer"
+    },
+    "seed": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Seed",
+      "type": "integer"
+    },
+    "stratify": {
+      "default": true,
+      "title": "Stratify",
+      "type": "boolean"
+    },
+    "placement": {
+      "const": "behind_real",
+      "default": "behind_real",
+      "title": "Placement",
+      "type": "string"
+    }
+  },
+  "required": [
+    "dataset"
+  ],
+  "type": "object"
+}

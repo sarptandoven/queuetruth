@@ -1,0 +1,15 @@
+{
+  "sample": {
+    "schema": "qt.report_summary",
+    "schema_version": 1,
+    "inputs": [
+      "x"
+    ],
+    "out": "x",
+    "sections": [
+      "x"
+    ],
+    "bytes": 1,
+    "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  }
+}

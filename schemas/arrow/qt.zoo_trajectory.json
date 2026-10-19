@@ -1,0 +1,38 @@
+{
+  "name": "qt.zoo_trajectory",
+  "metadata": {
+    "qt.engine_version": "0.1.0",
+    "qt.schema": "qt.zoo_trajectory",
+    "qt.schema_version": "1.1"
+  },
+  "optional_metadata": {
+    "qt.zoo_trajectory_scope": "which shadows the table holds: `all` (write_trajectory) or `traced:<n>` (the n shadows the report's why traces pick)"
+  },
+  "fields": [
+    {
+      "name": "model_id",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "shadow_id",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "ts_event",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": false
+    },
+    {
+      "name": "queue_ahead_est",
+      "type": "float64",
+      "nullable": false
+    },
+    {
+      "name": "queue_ahead_exact",
+      "type": "uint64",
+      "nullable": false
+    }
+  ]
+}

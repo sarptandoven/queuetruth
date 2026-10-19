@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.estimate",
+  "additionalProperties": false,
+  "description": "Cost and time estimate of a job.",
+  "properties": {
+    "schema": {
+      "const": "qt.estimate",
+      "default": "qt.estimate",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "kind": {
+      "title": "Kind",
+      "type": "string"
+    },
+    "records_est": {
+      "title": "Records Est",
+      "type": "integer"
+    },
+    "shadows_est": {
+      "title": "Shadows Est",
+      "type": "integer"
+    },
+    "cpu_seconds_est": {
+      "title": "Cpu Seconds Est",
+      "type": "number"
+    },
+    "bytes_out_est": {
+      "title": "Bytes Out Est",
+      "type": "integer"
+    },
+    "cost_units": {
+      "title": "Cost Units",
+      "type": "number"
+    },
+    "eta_seconds": {
+      "title": "Eta Seconds",
+      "type": "number"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "kind",
+    "records_est",
+    "shadows_est",
+    "cpu_seconds_est",
+    "bytes_out_est",
+    "cost_units",
+    "eta_seconds"
+  ],
+  "type": "object"
+}

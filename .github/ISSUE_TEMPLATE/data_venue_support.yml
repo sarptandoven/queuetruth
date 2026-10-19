@@ -1,0 +1,59 @@
+name: Data or venue support request
+description: An importer or reader fails on a real export or feed, or you need a venue or format that is not supported.
+labels: ["data-support"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Importers and readers are tested on fixtures written from public format documentation, so reports from real
+        exports are very welcome. Share only the shape of the data (field names, types, an invented example row),
+        never your real orders, fills, prices or account ids. Check your data licence before sharing anything
+        derived from vendor data.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Request type
+      options:
+        - An existing importer or reader fails on my real data
+        - A new venue, broker or simulator log
+        - A new market-data format
+        - Different venue semantics (matching rules, priority, hidden orders)
+    validations:
+      required: true
+  - type: input
+    id: venue
+    attributes:
+      label: Venue and format
+      description: For example "Binance USD-M user data stream", "Coinbase FIX drop copy", "Databento DBN MBO for CME".
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: queuetruth version
+      description: Output of `queuetruth --version`, or the commit if you built from source.
+  - type: textarea
+    id: command
+    attributes:
+      label: Command and error
+      description: The command you ran and the full error message (error code included), if something failed.
+      render: shell
+  - type: textarea
+    id: layout
+    attributes:
+      label: Data layout
+      description: Field names and types, a link to the public format documentation, and one invented example record.
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: What you want to do with it
+      description: For example "score my backtest against these fills" or "exact replay of this feed".
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Confirmation
+      options:
+        - label: This report contains no real orders, fills, prices or account ids.
+          required: true

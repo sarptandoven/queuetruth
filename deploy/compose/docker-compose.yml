@@ -1,0 +1,170 @@
+# queuetruth self-host stack: api, worker, one-shot migrate, PostgreSQL 16, SeaweedFS (S3 gateway).
+# Validate: docker compose -f deploy/compose/docker-compose.yml --env-file deploy/compose/.env.example config -q
+# Copy .env.example to .env (never commit it) and replace every value: with QT_ENV=prod the services refuse
+# placeholder, empty or short secrets. TLS is terminated by a reverse proxy in front of the api; presigned
+# upload/download URLs point at QT_S3_PUBLIC_ENDPOINT, which clients must be able to reach.
+#
+# Exposure: the api and the S3 gateway publish on 127.0.0.1 only. To serve other hosts, put a TLS proxy in front or
+# set QT_API_BIND / QT_S3_BIND (for example 0.0.0.0) explicitly. The api trusts X-Forwarded-For/-Proto only from
+# QT_FORWARDED_ALLOW_IPS (comma-separated addresses or networks of your proxies; default: nobody).
+#
+# Least privilege: only `migrate` gets the owner DSN (and the role passwords it applies). The api connects as qt_app,
+# the worker as qt_worker; both refuse to start with a superuser, BYPASSRLS or owner role. Create tenants with the
+# owner role through the migrate service:
+#   docker compose -f deploy/compose/docker-compose.yml --env-file deploy/compose/.env \
+#     run --rm migrate queuetruth-service create-tenant --name NAME
+#
+# Network: postgres, migrate and the worker are attached only to `backend`, an internal network without a default
+# route, so job processes (which run inside the worker and hold no credentials) cannot reach the internet. The api and
+# seaweedfs also join `edge` to publish their ports. Job work directories live on the `jobs` volume (one private
+# directory per job, with its own tmp/), not on a shared RAM /tmp; the worker has memory and pids limits.
+# Images are pinned by digest (refresh tag and digest together).
+name: queuetruth
+
+x-qt-common: &qt-common
+  QT_ENV: prod
+  QT_STORE: s3
+  QT_S3_ENDPOINT: http://seaweedfs:8333
+  QT_S3_PUBLIC_ENDPOINT: ${QT_S3_PUBLIC_ENDPOINT:-http://localhost:8333}
+  QT_S3_BUCKET: queuetruth
+  QT_S3_REGION: us-east-1
+  QT_S3_ACCESS_KEY_ID: ${QT_S3_ACCESS_KEY_ID:?set QT_S3_ACCESS_KEY_ID}
+  QT_S3_SECRET_ACCESS_KEY: ${QT_S3_SECRET_ACCESS_KEY:?set QT_S3_SECRET_ACCESS_KEY}
+  QT_ZERO_EGRESS: ${QT_ZERO_EGRESS:-false}
+  QT_BILLER: noop
+  QT_RETENTION_DAYS_DEFAULT: ${QT_RETENTION_DAYS_DEFAULT:-30}
+
+x-qt-image: &qt-image
+  image: queuetruth:${QT_VERSION:-dev}
+  build:
+    context: ../..
+    dockerfile: deploy/docker/Dockerfile
+  restart: unless-stopped
+  read_only: true
+  tmpfs:
+    - /tmp:size=64m
+  security_opt:
+    - no-new-privileges:true
+  cap_drop: [ALL]
+
+services:
+  postgres:
+    image: postgres:16.14-bookworm@sha256:64154d0babcb1741988719e703419af0382b19953706149f9872fbd0f438efa8
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: queuetruth
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${QT_PG_PASSWORD:?set QT_PG_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d queuetruth"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.47@sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882
+    restart: unless-stopped
+    command: >-
+      server -dir=/data -ip=seaweedfs -ip.bind=0.0.0.0 -s3 -s3.port=8333
+      -master.volumeSizeLimitMB=1024 -volume.max=0
+    environment:
+      AWS_ACCESS_KEY_ID: ${QT_S3_ACCESS_KEY_ID:?set QT_S3_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${QT_S3_SECRET_ACCESS_KEY:?set QT_S3_SECRET_ACCESS_KEY}
+    volumes:
+      - seaweed:/data
+    networks: [backend, edge]
+    ports:
+      - "${QT_S3_BIND:-127.0.0.1}:${QT_S3_PORT:-8333}:8333"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8333/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+
+  migrate:
+    <<: *qt-image
+    restart: "no"
+    command: ["queuetruth-service", "migrate", "--create-bucket"]
+    environment:
+      <<: *qt-common
+      QT_DATABASE_URL: postgresql://postgres:${QT_PG_PASSWORD:?set QT_PG_PASSWORD}@postgres:5432/queuetruth
+      QT_DATABASE_URL_APP: postgresql://qt_app:${QT_APP_PASSWORD:?set QT_APP_PASSWORD}@postgres:5432/queuetruth
+      QT_DATABASE_URL_WORKER: postgresql://qt_worker:${QT_WORKER_PASSWORD:?set QT_WORKER_PASSWORD}@postgres:5432/queuetruth
+      QT_KEY_PEPPER: ${QT_KEY_PEPPER:?set QT_KEY_PEPPER}
+    networks: [backend]
+    depends_on:
+      postgres: {condition: service_healthy}
+      seaweedfs: {condition: service_healthy}
+
+  api:
+    <<: *qt-image
+    command: ["queuetruth-service", "api", "--host", "0.0.0.0", "--port", "8080"]
+    environment:
+      <<: *qt-common
+      QT_DATABASE_URL_APP: postgresql://qt_app:${QT_APP_PASSWORD:?set QT_APP_PASSWORD}@postgres:5432/queuetruth
+      QT_KEY_PEPPER: ${QT_KEY_PEPPER:?set QT_KEY_PEPPER}
+      QT_SIGNING_KEY: ${QT_SIGNING_KEY:?set QT_SIGNING_KEY}
+      QT_PUBLIC_BASE_URL: ${QT_PUBLIC_BASE_URL:-http://localhost:8080}
+      QT_FORWARDED_ALLOW_IPS: ${QT_FORWARDED_ALLOW_IPS:-}
+    networks: [backend, edge]
+    ports:
+      - "${QT_API_BIND:-127.0.0.1}:${QT_API_PORT:-8080}:8080"
+    mem_limit: ${QT_API_MEM_LIMIT:-2g}
+    pids_limit: 256
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(urllib.request.urlopen('http://localhost:8080/v1/health', timeout=2).status != 200)"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+
+  worker:
+    <<: *qt-image
+    command: ["queuetruth-service", "worker"]
+    environment:
+      <<: *qt-common
+      QT_DATABASE_URL_WORKER: postgresql://qt_worker:${QT_WORKER_PASSWORD:?set QT_WORKER_PASSWORD}@postgres:5432/queuetruth
+      QT_WORKER_CONCURRENCY: ${QT_WORKER_CONCURRENCY:-2}
+      QT_TENANT_MAX_RUNNING: ${QT_TENANT_MAX_RUNNING:-1}
+      # Child-process wall-clock limit for job kinds without a per-kind entry. Per-kind limits are read from
+      # QT_JOB_TIMEOUTS_S, a JSON object {kind: seconds} (kinds: replay, calibration, scorecard, report,
+      # dataset_validate, ingest), for example '{"calibration": 14400}'. Unset or {} means every kind uses
+      # QT_JOB_TIMEOUT_S.
+      QT_JOB_TIMEOUT_S: ${QT_JOB_TIMEOUT_S:-7200}
+      QT_JOB_TIMEOUTS_S: ${QT_JOB_TIMEOUTS_S:-{}}
+      QT_JOB_MEMORY_BYTES: ${QT_JOB_MEMORY_BYTES:-8589934592}
+      QT_JOB_ROOT: /var/lib/queuetruth/jobs
+      QT_WORKER_HEALTH_FILE: /tmp/qt-worker.alive
+    networks: [backend]
+    volumes:
+      - jobs:/var/lib/queuetruth/jobs
+    mem_limit: ${QT_WORKER_MEM_LIMIT:-18g}  # >= QT_WORKER_CONCURRENCY x QT_JOB_MEMORY_BYTES + headroom
+    pids_limit: 512
+    ulimits:
+      core: 0
+      nofile: {soft: 65536, hard: 65536}
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,sys,time; sys.exit(time.time() - os.path.getmtime('/tmp/qt-worker.alive') > 90)"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+    stop_grace_period: 60s
+
+networks:
+  backend:
+    internal: true
+  edge: {}
+
+volumes:
+  pgdata:
+  seaweed:
+  jobs:

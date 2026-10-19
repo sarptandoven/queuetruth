@@ -1,0 +1,88 @@
+{
+  "sample": {
+    "schema": "qt.hazard_model_card",
+    "schema_version": 1,
+    "model_id": "x",
+    "format_version": 1,
+    "spec": {
+      "k": 1
+    },
+    "grid_ns": [
+      1
+    ],
+    "causes": [
+      "fill"
+    ],
+    "feature_names": [
+      "x"
+    ],
+    "privileged": true,
+    "split": {
+      "scheme": "x",
+      "train": 1,
+      "calib": 1,
+      "test": 1
+    },
+    "n_orders": {
+      "train": 1,
+      "calib": 1,
+      "test": 1
+    },
+    "n_rows_train": 1,
+    "scores_test": {
+      "rcll": 0.5,
+      "ipcw_logloss": {
+        "1000000000": 0.5
+      },
+      "brier": {
+        "1000000000": 0.5
+      },
+      "bss_vs_climatology": {
+        "1000000000": {
+          "value": 0.5,
+          "ci_lo": 0.5,
+          "ci_hi": 0.5
+        }
+      },
+      "ibs": 0.5,
+      "calib_slope": {
+        "1000000000": 0.5
+      },
+      "calib_intercept": {
+        "1000000000": 0.5
+      },
+      "spiegelhalter_z": {
+        "1000000000": 0.5
+      },
+      "hl_p": {
+        "1000000000": 0.5
+      },
+      "c_index_uno": 0.5,
+      "auc": {
+        "1000000000": 0.5
+      },
+      "hl_p_et": {
+        "1000000000": 0.5
+      }
+    },
+    "zoo_comparison": {
+      "k": {
+        "brier": {
+          "1000000000": 0.5
+        }
+      }
+    },
+    "recalibration": "isotonic",
+    "files": [
+      {
+        "name": "x",
+        "rows": 1,
+        "bytes": 1,
+        "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      }
+    ],
+    "warnings": [
+      "x"
+    ]
+  }
+}

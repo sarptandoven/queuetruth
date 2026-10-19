@@ -1,0 +1,124 @@
+{
+  "name": "qt.zoo_predictions",
+  "metadata": {
+    "qt.engine_version": "0.1.0",
+    "qt.schema": "qt.zoo_predictions",
+    "qt.schema_version": "1.1"
+  },
+  "fields": [
+    {
+      "name": "model_id",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "shadow_id",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "qty",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "horizon_ns",
+      "type": "int64",
+      "nullable": false
+    },
+    {
+      "name": "p_fill",
+      "type": "float64",
+      "nullable": false
+    },
+    {
+      "name": "e_fill_qty",
+      "type": "float64",
+      "nullable": false
+    },
+    {
+      "name": "model_ts_first_fill",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": true
+    },
+    {
+      "name": "truth_filled",
+      "type": "bool",
+      "nullable": true
+    },
+    {
+      "name": "truth_ts_first_fill",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": true
+    },
+    {
+      "name": "truth_filled_qty",
+      "type": "uint64",
+      "nullable": true
+    },
+    {
+      "name": "censored",
+      "type": "bool",
+      "nullable": false
+    },
+    {
+      "name": "queue_ahead_at_live",
+      "type": "uint64",
+      "nullable": true
+    },
+    {
+      "name": "level_qty_at_live",
+      "type": "uint64",
+      "nullable": true
+    },
+    {
+      "name": "visible_level_qty_at_live",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "out_of_view_at_live",
+      "type": "bool",
+      "nullable": false
+    },
+    {
+      "name": "instrument_id",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "session_date",
+      "type": "date32",
+      "nullable": false
+    },
+    {
+      "name": "ts_live",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": false
+    },
+    {
+      "name": "trade_vol_60s",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "liquidity",
+      "type": "dictionary<int8, utf8>",
+      "nullable": true,
+      "values": [
+        "maker",
+        "taker"
+      ],
+      "since": "1.1"
+    },
+    {
+      "name": "status",
+      "type": "dictionary<int8, utf8>",
+      "nullable": true,
+      "values": [
+        "hbt_312_abort"
+      ],
+      "since": "1.1"
+    }
+  ]
+}

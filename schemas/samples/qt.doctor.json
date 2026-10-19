@@ -1,0 +1,16 @@
+{
+  "sample": {
+    "schema": "qt.doctor",
+    "schema_version": 1,
+    "python": "x",
+    "platform": "x",
+    "machine": "x",
+    "core_version": "x",
+    "schemas_ok": true,
+    "postgres": "x",
+    "docker": "x",
+    "problems": [
+      "x"
+    ]
+  }
+}

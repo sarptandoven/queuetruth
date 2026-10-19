@@ -1,0 +1,3 @@
+{"recv_ns":2,"chan":"book_P0","symbol":"tBTCUSD","msg":[2,[[61200.5,1,0.5],[61205,1,-0.8]],2,1712131200000]}
+{"recv_ns":4,"chan":"book_P0","symbol":"tBTCUSD","msg":[2,[61200.5,2,0.75],4,1712131200001]}
+{"recv_ns":13,"chan":"book_P0","symbol":"tBTCUSD","msg":[2,[61205,0,-1],13,1712131200006]}

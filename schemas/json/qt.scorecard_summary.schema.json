@@ -1,0 +1,1404 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.scorecard_summary",
+  "$defs": {
+    "ArmCounts": {
+      "additionalProperties": false,
+      "description": "A count per scorecard arm.",
+      "properties": {
+        "live": {
+          "title": "Live",
+          "type": "integer"
+        },
+        "sim": {
+          "title": "Sim",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "live",
+        "sim"
+      ],
+      "title": "ArmCounts",
+      "type": "object"
+    },
+    "Bias": {
+      "additionalProperties": false,
+      "description": "Signed fill-rate and quantity bias (sim minus live).",
+      "properties": {
+        "fill_rate_bias": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Fill Rate Bias"
+        },
+        "ci_lo": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ci Lo"
+        },
+        "ci_hi": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ci Hi"
+        },
+        "relative_overfill": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Relative Overfill"
+        },
+        "qty_bias": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Qty Bias"
+        },
+        "qty_bias_ci_lo": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Qty Bias Ci Lo"
+        },
+        "qty_bias_ci_hi": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Qty Bias Ci Hi"
+        },
+        "direction": {
+          "enum": [
+            "sim_overfills",
+            "sim_underfills",
+            "no_significant_bias"
+          ],
+          "title": "Direction",
+          "type": "string"
+        }
+      },
+      "required": [
+        "fill_rate_bias",
+        "ci_lo",
+        "ci_hi",
+        "relative_overfill",
+        "qty_bias",
+        "qty_bias_ci_lo",
+        "qty_bias_ci_hi",
+        "direction"
+      ],
+      "title": "Bias",
+      "type": "object"
+    },
+    "DataQuality": {
+      "additionalProperties": false,
+      "description": "Data-quality counters and verdict (SPEC 5.1.5).",
+      "properties": {
+        "schema": {
+          "const": "qt.data_quality",
+          "default": "qt.data_quality",
+          "title": "Schema",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "records": {
+          "title": "Records",
+          "type": "integer"
+        },
+        "maybe_bad_book_records": {
+          "title": "Maybe Bad Book Records",
+          "type": "integer"
+        },
+        "bad_ts_recv_records": {
+          "title": "Bad Ts Recv Records",
+          "type": "integer"
+        },
+        "snapshot_records": {
+          "title": "Snapshot Records",
+          "type": "integer"
+        },
+        "pre_snapshot_rows_skipped": {
+          "title": "Pre Snapshot Rows Skipped",
+          "type": "integer"
+        },
+        "unknown_order_refs": {
+          "title": "Unknown Order Refs",
+          "type": "integer"
+        },
+        "duplicate_adds": {
+          "title": "Duplicate Adds",
+          "type": "integer"
+        },
+        "unexpected_modifies": {
+          "title": "Unexpected Modifies",
+          "type": "integer"
+        },
+        "sequence_gaps": {
+          "title": "Sequence Gaps",
+          "type": "integer"
+        },
+        "sequence_regressions": {
+          "title": "Sequence Regressions",
+          "type": "integer"
+        },
+        "out_of_order_ts_event": {
+          "title": "Out Of Order Ts Event",
+          "type": "integer"
+        },
+        "crossed_books_after_last": {
+          "title": "Crossed Books After Last",
+          "type": "integer"
+        },
+        "hidden_prints": {
+          "title": "Hidden Prints",
+          "type": "integer"
+        },
+        "off_price_executions": {
+          "title": "Off Price Executions",
+          "type": "integer"
+        },
+        "feed_gaps": {
+          "items": {
+            "$ref": "#/$defs/FeedGap"
+          },
+          "title": "Feed Gaps",
+          "type": "array"
+        },
+        "source_specific": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Source Specific",
+          "type": "object"
+        },
+        "verdict": {
+          "enum": [
+            "clean",
+            "warnings",
+            "unusable"
+          ],
+          "title": "Verdict",
+          "type": "string"
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        }
+      },
+      "required": [
+        "schema",
+        "schema_version",
+        "records",
+        "maybe_bad_book_records",
+        "bad_ts_recv_records",
+        "snapshot_records",
+        "pre_snapshot_rows_skipped",
+        "unknown_order_refs",
+        "duplicate_adds",
+        "unexpected_modifies",
+        "sequence_gaps",
+        "sequence_regressions",
+        "out_of_order_ts_event",
+        "crossed_books_after_last",
+        "hidden_prints",
+        "off_price_executions",
+        "feed_gaps",
+        "source_specific",
+        "verdict",
+        "reasons"
+      ],
+      "title": "DataQuality",
+      "type": "object"
+    },
+    "DecileRow": {
+      "additionalProperties": false,
+      "description": "2x2 table and test within one queue decile.",
+      "properties": {
+        "decile": {
+          "title": "Decile",
+          "type": "integer"
+        },
+        "both": {
+          "title": "Both",
+          "type": "integer"
+        },
+        "neither": {
+          "title": "Neither",
+          "type": "integer"
+        },
+        "live_only": {
+          "title": "Live Only",
+          "type": "integer"
+        },
+        "sim_only": {
+          "title": "Sim Only",
+          "type": "integer"
+        },
+        "p_exact": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "P Exact"
+        },
+        "p_adj": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "P Adj"
+        }
+      },
+      "required": [
+        "decile",
+        "both",
+        "neither",
+        "live_only",
+        "sim_only",
+        "p_exact",
+        "p_adj"
+      ],
+      "title": "DecileRow",
+      "type": "object"
+    },
+    "DiscordanceClustered": {
+      "additionalProperties": false,
+      "description": "1.1 (3.11 #9): the cluster-robust primary discordance test (audit ruling A10).",
+      "properties": {
+        "method": {
+          "title": "Method",
+          "type": "string"
+        },
+        "estimate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Estimate"
+        },
+        "ci_lo": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ci Lo"
+        },
+        "ci_hi": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ci Hi"
+        },
+        "p_value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "P Value"
+        },
+        "n_clusters": {
+          "title": "N Clusters",
+          "type": "integer"
+        },
+        "n_clusters_discordant": {
+          "title": "N Clusters Discordant",
+          "type": "integer"
+        },
+        "design_effect": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Design Effect"
+        },
+        "n_effective": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "N Effective"
+        }
+      },
+      "required": [
+        "method",
+        "estimate",
+        "ci_lo",
+        "ci_hi",
+        "p_value",
+        "n_clusters",
+        "n_clusters_discordant",
+        "design_effect",
+        "n_effective"
+      ],
+      "title": "DiscordanceClustered",
+      "type": "object"
+    },
+    "DiscordantMarkoutRow": {
+      "additionalProperties": false,
+      "description": "Markouts of sim-only vs live-only fills.",
+      "properties": {
+        "horizon_ns": {
+          "title": "Horizon Ns",
+          "type": "integer"
+        },
+        "sim_only_mean": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sim Only Mean"
+        },
+        "live_only_mean": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Live Only Mean"
+        },
+        "diff": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Diff"
+        },
+        "ci_lo": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ci Lo"
+        },
+        "ci_hi": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ci Hi"
+        }
+      },
+      "required": [
+        "horizon_ns",
+        "sim_only_mean",
+        "live_only_mean",
+        "diff",
+        "ci_lo",
+        "ci_hi"
+      ],
+      "title": "DiscordantMarkoutRow",
+      "type": "object"
+    },
+    "Equivalence": {
+      "additionalProperties": false,
+      "description": "TOST equivalence results.",
+      "properties": {
+        "fill_rate_margin": {
+          "title": "Fill Rate Margin",
+          "type": "number"
+        },
+        "tost_p": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Tost P"
+        },
+        "fill_rate_equivalent": {
+          "title": "Fill Rate Equivalent",
+          "type": "boolean"
+        },
+        "markout_margin_ticks": {
+          "title": "Markout Margin Ticks",
+          "type": "number"
+        },
+        "markout_horizon_ns": {
+          "title": "Markout Horizon Ns",
+          "type": "integer"
+        },
+        "markout_tost_p": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Markout Tost P"
+        },
+        "markout_equivalent": {
+          "title": "Markout Equivalent",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "fill_rate_margin",
+        "tost_p",
+        "fill_rate_equivalent",
+        "markout_margin_ticks",
+        "markout_horizon_ns",
+        "markout_tost_p",
+        "markout_equivalent"
+      ],
+      "title": "Equivalence",
+      "type": "object"
+    },
+    "Fdr": {
+      "additionalProperties": false,
+      "description": "Multiple-testing summary.",
+      "properties": {
+        "method": {
+          "enum": [
+            "bh",
+            "by"
+          ],
+          "title": "Method",
+          "type": "string"
+        },
+        "q": {
+          "title": "Q",
+          "type": "number"
+        },
+        "n_tests": {
+          "title": "N Tests",
+          "type": "integer"
+        },
+        "n_rejected": {
+          "title": "N Rejected",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "method",
+        "q",
+        "n_tests",
+        "n_rejected"
+      ],
+      "title": "Fdr",
+      "type": "object"
+    },
+    "FeedGap": {
+      "additionalProperties": false,
+      "description": "A gap in the feed of one instrument.",
+      "properties": {
+        "instrument_id": {
+          "title": "Instrument Id",
+          "type": "integer"
+        },
+        "ts_start": {
+          "title": "Ts Start",
+          "type": "integer"
+        },
+        "ts_end": {
+          "title": "Ts End",
+          "type": "integer"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "instrument_id",
+        "ts_start",
+        "ts_end",
+        "reason"
+      ],
+      "title": "FeedGap",
+      "type": "object"
+    },
+    "FileEntry": {
+      "additionalProperties": false,
+      "description": "One output file: name relative to the output directory, row count for tables, size and sha256.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "rows": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rows"
+        },
+        "bytes": {
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "bytes",
+        "sha256"
+      ],
+      "title": "FileEntry",
+      "type": "object"
+    },
+    "LiquidityRow": {
+      "additionalProperties": false,
+      "description": "2x2 table and test within one liquidity bucket.",
+      "properties": {
+        "bucket": {
+          "title": "Bucket",
+          "type": "integer"
+        },
+        "both": {
+          "title": "Both",
+          "type": "integer"
+        },
+        "neither": {
+          "title": "Neither",
+          "type": "integer"
+        },
+        "live_only": {
+          "title": "Live Only",
+          "type": "integer"
+        },
+        "sim_only": {
+          "title": "Sim Only",
+          "type": "integer"
+        },
+        "p_exact": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "P Exact"
+        },
+        "p_adj": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "P Adj"
+        }
+      },
+      "required": [
+        "bucket",
+        "both",
+        "neither",
+        "live_only",
+        "sim_only",
+        "p_exact",
+        "p_adj"
+      ],
+      "title": "LiquidityRow",
+      "type": "object"
+    },
+    "MarkoutDiffRow": {
+      "additionalProperties": false,
+      "description": "Paired first-fill markout difference (sim minus live).",
+      "properties": {
+        "horizon_ns": {
+          "title": "Horizon Ns",
+          "type": "integer"
+        },
+        "ref": {
+          "enum": [
+            "mid",
+            "microprice"
+          ],
+          "title": "Ref",
+          "type": "string"
+        },
+        "n": {
+          "title": "N",
+          "type": "integer"
+        },
+        "mean_diff_ticks": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Mean Diff Ticks"
+        },
+        "ci_lo": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ci Lo"
+        },
+        "ci_hi": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ci Hi"
+        },
+        "p_adj": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "P Adj"
+        }
+      },
+      "required": [
+        "horizon_ns",
+        "ref",
+        "n",
+        "mean_diff_ticks",
+        "ci_lo",
+        "ci_hi",
+        "p_adj"
+      ],
+      "title": "MarkoutDiffRow",
+      "type": "object"
+    },
+    "MarkoutRow": {
+      "additionalProperties": false,
+      "description": "Mean markout of one arm at one horizon.",
+      "properties": {
+        "horizon_ns": {
+          "title": "Horizon Ns",
+          "type": "integer"
+        },
+        "ref": {
+          "enum": [
+            "mid",
+            "microprice"
+          ],
+          "title": "Ref",
+          "type": "string"
+        },
+        "arm": {
+          "enum": [
+            "live",
+            "sim"
+          ],
+          "title": "Arm",
+          "type": "string"
+        },
+        "n": {
+          "title": "N",
+          "type": "integer"
+        },
+        "mean_ticks": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Mean Ticks"
+        },
+        "ci_lo": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ci Lo"
+        },
+        "ci_hi": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ci Hi"
+        }
+      },
+      "required": [
+        "horizon_ns",
+        "ref",
+        "arm",
+        "n",
+        "mean_ticks",
+        "ci_lo",
+        "ci_hi"
+      ],
+      "title": "MarkoutRow",
+      "type": "object"
+    },
+    "McNemar": {
+      "additionalProperties": false,
+      "description": "McNemar test on the discordant pairs (SPEC 5.7.5).",
+      "properties": {
+        "b": {
+          "title": "B",
+          "type": "integer"
+        },
+        "c": {
+          "title": "C",
+          "type": "integer"
+        },
+        "chi2_cc": {
+          "title": "Chi2 Cc",
+          "type": "number"
+        },
+        "p_chi2": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "P Chi2"
+        },
+        "p_exact": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "P Exact"
+        },
+        "odds_ratio": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Odds Ratio"
+        },
+        "or_ci_lo": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Or Ci Lo"
+        },
+        "or_ci_hi": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Or Ci Hi"
+        }
+      },
+      "required": [
+        "b",
+        "c",
+        "chi2_cc",
+        "p_chi2",
+        "p_exact"
+      ],
+      "title": "McNemar",
+      "type": "object"
+    },
+    "SimSource": {
+      "additionalProperties": false,
+      "description": "Which simulator arm was scored.",
+      "properties": {
+        "kind": {
+          "enum": [
+            "external",
+            "exact",
+            "zoo"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "model_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Id"
+        },
+        "path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Path"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "SimSource",
+      "type": "object"
+    },
+    "Ttf": {
+      "additionalProperties": false,
+      "description": "Time-to-fill comparison.",
+      "properties": {
+        "n_joint": {
+          "title": "N Joint",
+          "type": "integer"
+        },
+        "median_log_ratio": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Median Log Ratio"
+        },
+        "ci_lo": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ci Lo"
+        },
+        "ci_hi": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ci Hi"
+        },
+        "wilcoxon_p": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Wilcoxon P"
+        },
+        "paired_perm_p": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Paired Perm P"
+        },
+        "logrank_p": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Logrank P"
+        },
+        "gray_p": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Gray P"
+        },
+        "cif_fill": {
+          "additionalProperties": {
+            "patternProperties": {
+              "^[0-9]+$": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "propertyNames": {
+            "enum": [
+              "live",
+              "sim"
+            ]
+          },
+          "title": "Cif Fill",
+          "type": "object"
+        }
+      },
+      "required": [
+        "n_joint",
+        "cif_fill"
+      ],
+      "title": "Ttf",
+      "type": "object"
+    },
+    "TwoByTwo": {
+      "additionalProperties": false,
+      "description": "Per-order fill outcome table.",
+      "properties": {
+        "both": {
+          "title": "Both",
+          "type": "integer"
+        },
+        "neither": {
+          "title": "Neither",
+          "type": "integer"
+        },
+        "live_only": {
+          "title": "Live Only",
+          "type": "integer"
+        },
+        "sim_only": {
+          "title": "Sim Only",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "both",
+        "neither",
+        "live_only",
+        "sim_only"
+      ],
+      "title": "TwoByTwo",
+      "type": "object"
+    },
+    "Verdict": {
+      "additionalProperties": false,
+      "description": "Headline and gates.",
+      "properties": {
+        "headline": {
+          "title": "Headline",
+          "type": "string"
+        },
+        "signed_bias": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Signed Bias"
+        },
+        "gates_passed": {
+          "title": "Gates Passed",
+          "type": "boolean"
+        },
+        "failed_gates": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Failed Gates",
+          "type": "array"
+        }
+      },
+      "required": [
+        "headline",
+        "signed_bias",
+        "gates_passed",
+        "failed_gates"
+      ],
+      "title": "Verdict",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Summary of `score` (SPEC 5.7).",
+  "properties": {
+    "schema": {
+      "const": "qt.scorecard_summary",
+      "default": "qt.scorecard_summary",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "run_id": {
+      "pattern": "^[0-9a-f]{16}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "spec": {
+      "additionalProperties": true,
+      "title": "Spec",
+      "type": "object"
+    },
+    "live_source": {
+      "title": "Live Source",
+      "type": "string"
+    },
+    "sim_source": {
+      "$ref": "#/$defs/SimSource"
+    },
+    "n_orders": {
+      "title": "N Orders",
+      "type": "integer"
+    },
+    "n_matched": {
+      "title": "N Matched",
+      "type": "integer"
+    },
+    "n_unmatched_live": {
+      "title": "N Unmatched Live",
+      "type": "integer"
+    },
+    "n_unmatched_sim": {
+      "title": "N Unmatched Sim",
+      "type": "integer"
+    },
+    "n_overlap_same_px": {
+      "title": "N Overlap Same Px",
+      "type": "integer"
+    },
+    "two_by_two": {
+      "$ref": "#/$defs/TwoByTwo"
+    },
+    "bias": {
+      "$ref": "#/$defs/Bias"
+    },
+    "mcnemar": {
+      "$ref": "#/$defs/McNemar"
+    },
+    "by_queue_decile": {
+      "items": {
+        "$ref": "#/$defs/DecileRow"
+      },
+      "title": "By Queue Decile",
+      "type": "array"
+    },
+    "by_liquidity": {
+      "items": {
+        "$ref": "#/$defs/LiquidityRow"
+      },
+      "title": "By Liquidity",
+      "type": "array"
+    },
+    "ttf": {
+      "$ref": "#/$defs/Ttf"
+    },
+    "markouts": {
+      "items": {
+        "$ref": "#/$defs/MarkoutRow"
+      },
+      "title": "Markouts",
+      "type": "array"
+    },
+    "markout_diff": {
+      "items": {
+        "$ref": "#/$defs/MarkoutDiffRow"
+      },
+      "title": "Markout Diff",
+      "type": "array"
+    },
+    "sim_only_vs_live_only_markout": {
+      "items": {
+        "$ref": "#/$defs/DiscordantMarkoutRow"
+      },
+      "title": "Sim Only Vs Live Only Markout",
+      "type": "array"
+    },
+    "equivalence": {
+      "$ref": "#/$defs/Equivalence"
+    },
+    "fdr": {
+      "$ref": "#/$defs/Fdr"
+    },
+    "verdict": {
+      "$ref": "#/$defs/Verdict"
+    },
+    "data_quality": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DataQuality"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/FileEntry"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    },
+    "n_twin_unmatched": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "N Twin Unmatched"
+    },
+    "twin_match_rate": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Twin Match Rate"
+    },
+    "discordance_clustered": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DiscordanceClustered"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "n_taker_fills": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ArmCounts"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "fills_only": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Fills Only"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "run_id",
+    "spec",
+    "live_source",
+    "sim_source",
+    "n_orders",
+    "n_matched",
+    "n_unmatched_live",
+    "n_unmatched_sim",
+    "n_overlap_same_px",
+    "two_by_two",
+    "bias",
+    "mcnemar",
+    "by_queue_decile",
+    "by_liquidity",
+    "ttf",
+    "markouts",
+    "markout_diff",
+    "sim_only_vs_live_only_markout",
+    "equivalence",
+    "fdr",
+    "verdict",
+    "files",
+    "warnings"
+  ],
+  "type": "object"
+}

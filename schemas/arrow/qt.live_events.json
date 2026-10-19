@@ -1,0 +1,164 @@
+{
+  "name": "qt.live_events",
+  "metadata": {
+    "qt.engine_version": "0.1.0",
+    "qt.schema": "qt.live_events",
+    "qt.schema_version": "1.1"
+  },
+  "fields": [
+    {
+      "name": "order_key",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "event_seq",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "event_type",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "submit_sent",
+        "ack",
+        "reject",
+        "post_only_reject",
+        "amend_sent",
+        "amend_ack",
+        "amend_reject",
+        "cancel_sent",
+        "cancel_ack",
+        "cancel_reject",
+        "fill",
+        "fill_bust",
+        "fill_correct",
+        "expire",
+        "restate",
+        "done"
+      ]
+    },
+    {
+      "name": "qty",
+      "type": "uint64",
+      "nullable": true
+    },
+    {
+      "name": "px",
+      "type": "int64",
+      "nullable": true
+    },
+    {
+      "name": "leaves_qty",
+      "type": "uint64",
+      "nullable": true
+    },
+    {
+      "name": "cum_qty",
+      "type": "uint64",
+      "nullable": true
+    },
+    {
+      "name": "fill_id",
+      "type": "utf8",
+      "nullable": true
+    },
+    {
+      "name": "ref_fill_id",
+      "type": "utf8",
+      "nullable": true
+    },
+    {
+      "name": "liquidity",
+      "type": "dictionary<int8, utf8>",
+      "nullable": true,
+      "values": [
+        "maker",
+        "taker",
+        "unknown"
+      ]
+    },
+    {
+      "name": "fee",
+      "type": "float64",
+      "nullable": true
+    },
+    {
+      "name": "fee_ccy",
+      "type": "utf8",
+      "nullable": true
+    },
+    {
+      "name": "amend_keeps_priority",
+      "type": "bool",
+      "nullable": true
+    },
+    {
+      "name": "ts_local_send",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": true
+    },
+    {
+      "name": "ts_exchange",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": true
+    },
+    {
+      "name": "ts_local_recv",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": true
+    },
+    {
+      "name": "ts_exchange_kind",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "match_time",
+        "record_time",
+        "gateway_time",
+        "unknown"
+      ]
+    },
+    {
+      "name": "ts_precision",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "s",
+        "ms",
+        "us",
+        "ns"
+      ]
+    },
+    {
+      "name": "source",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "ws",
+        "rest",
+        "fix_dropcopy",
+        "flex",
+        "csv",
+        "synthetic",
+        "sim"
+      ]
+    },
+    {
+      "name": "reason",
+      "type": "utf8",
+      "nullable": true
+    },
+    {
+      "name": "derived",
+      "type": "bool",
+      "nullable": false
+    },
+    {
+      "name": "raw",
+      "type": "large_utf8",
+      "nullable": true
+    }
+  ]
+}

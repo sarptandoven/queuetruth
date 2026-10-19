@@ -1,0 +1,246 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.export_spec",
+  "$defs": {
+    "DatasetIdRef": {
+      "additionalProperties": false,
+      "description": "Service dataset id reference (HTTP API).",
+      "properties": {
+        "dataset_id": {
+          "title": "Dataset Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "dataset_id"
+      ],
+      "title": "DatasetIdRef",
+      "type": "object"
+    },
+    "JobFile": {
+      "additionalProperties": false,
+      "description": "One output file of a service job.",
+      "properties": {
+        "job_id": {
+          "title": "Job Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "job_id",
+        "name"
+      ],
+      "title": "JobFile",
+      "type": "object"
+    },
+    "JobFileRef": {
+      "additionalProperties": false,
+      "description": "Reference to a service job output file.",
+      "properties": {
+        "job_file": {
+          "$ref": "#/$defs/JobFile"
+        }
+      },
+      "required": [
+        "job_file"
+      ],
+      "title": "JobFileRef",
+      "type": "object"
+    },
+    "L2Config": {
+      "additionalProperties": false,
+      "description": "L2 view synthesis settings (SPEC 5.3.1).",
+      "properties": {
+        "depth_levels": {
+          "default": 10,
+          "maximum": 65535,
+          "minimum": 0,
+          "title": "Depth Levels",
+          "type": "integer"
+        },
+        "cadence_ns": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Cadence Ns",
+          "type": "integer"
+        },
+        "trade_position": {
+          "default": "before",
+          "enum": [
+            "before",
+            "after"
+          ],
+          "title": "Trade Position",
+          "type": "string"
+        },
+        "include_counts": {
+          "default": true,
+          "title": "Include Counts",
+          "type": "boolean"
+        },
+        "emit_hidden_trades": {
+          "default": true,
+          "title": "Emit Hidden Trades",
+          "type": "boolean"
+        }
+      },
+      "title": "L2Config",
+      "type": "object"
+    },
+    "PathRef": {
+      "additionalProperties": false,
+      "description": "Local path reference (CLI, Python API, MCP local mode).",
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "PathRef",
+      "type": "object"
+    },
+    "UploadRef": {
+      "additionalProperties": false,
+      "description": "Service upload id reference (HTTP API).",
+      "properties": {
+        "upload_id": {
+          "title": "Upload Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "upload_id"
+      ],
+      "title": "UploadRef",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`export`: config snippets and npz files.",
+  "properties": {
+    "target": {
+      "enum": [
+        "hftbacktest",
+        "nautilus",
+        "l2_npz",
+        "latency_npz"
+      ],
+      "title": "Target",
+      "type": "string"
+    },
+    "calibration": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PathRef"
+        },
+        {
+          "$ref": "#/$defs/UploadRef"
+        },
+        {
+          "$ref": "#/$defs/JobFileRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Calibration"
+    },
+    "dataset": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PathRef"
+        },
+        {
+          "$ref": "#/$defs/DatasetIdRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Dataset"
+    },
+    "instrument_id": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Instrument Id"
+    },
+    "session_date": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Session Date"
+    },
+    "live": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PathRef"
+        },
+        {
+          "$ref": "#/$defs/UploadRef"
+        },
+        {
+          "$ref": "#/$defs/JobFileRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Live"
+    },
+    "l2": {
+      "$ref": "#/$defs/L2Config"
+    },
+    "feed_latency_ns": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Feed Latency Ns",
+      "type": "integer"
+    },
+    "out": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Out"
+    },
+    "force": {
+      "default": false,
+      "title": "Force",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "target"
+  ],
+  "type": "object"
+}

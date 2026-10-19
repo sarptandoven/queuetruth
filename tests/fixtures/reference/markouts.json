@@ -1,0 +1,1018 @@
+{
+  "reference": "markouts",
+  "oracle": [
+    "O-SCORE-3"
+  ],
+  "generator": "scripts/reference/gen_markouts.py",
+  "description": "Markout and realized-spread reference values (SPEC 5.7.5 \"Markouts\", oracle O-SCORE-3)\n-> tests/fixtures/reference/markouts.json.\n\nOne instrument-day: `price_exp = -9`, `tick_size = 10_000_000` (0.01 in price units), `size_exp = 0`,\n`contract_multiplier = 1.0`, `last_event_ts` given explicitly. BBO rows follow qt.bbo (`bid_px`/`ask_px` null\nwhen the side is empty, sizes 0 then). For each fill (d = +1 buy, -1 sell; P; qty) and horizon h:\n- `M(t)` = reference price of the PREVAILING quote: the last BBO row with `ts_event <= t`; null if none, if a side\n  is empty, or if `t > last_event_ts` (t equal to last_event_ts is still valid).\n- ref `mid`: `(bid_px + ask_px) / 2`; ref `microprice`: `(bid_sz * ask_px + ask_sz * bid_px) / (bid_sz + ask_sz)`\n  (null if both sizes are 0).\n- `mo_ticks = d (M(t + h) - P) / tick`; `mo_ccy = d (M(t + h) - P) 10^price_exp * qty 10^size_exp * multiplier`;\n  `mm_ticks = d (M(t + h) - M(t-)) / tick`, `M(t-)` from the last BBO row strictly before t.\n- Identity: for the taker on the other side of a maker fill, the SEC realized spread `RS_h = 2 * mo` of the maker\n  (`rs_taker_ticks`), i.e. `2 * d_taker * (P - M(t + h)) / tick` with `d_taker = -d`.\nAll values computed in exact rational arithmetic, then converted to float.",
+  "software": {
+    "python": "3.13.9"
+  },
+  "tolerance": {
+    "all": "abs 1e-12 (mo_ccy rel 1e-12)"
+  },
+  "instrument": {
+    "price_exp": -9,
+    "tick_size": 10000000,
+    "size_exp": 0,
+    "contract_multiplier": 1.0,
+    "last_event_ts": 1767261670000000000
+  },
+  "bbo": [
+    {
+      "ts_event": 1767261600000000000,
+      "bid_px": 100000000000,
+      "bid_sz": 500,
+      "ask_px": 100020000000,
+      "ask_sz": 300
+    },
+    {
+      "ts_event": 1767261600040000000,
+      "bid_px": 100000000000,
+      "bid_sz": 200,
+      "ask_px": 100020000000,
+      "ask_sz": 300
+    },
+    {
+      "ts_event": 1767261600100000000,
+      "bid_px": 100010000000,
+      "bid_sz": 100,
+      "ask_px": 100020000000,
+      "ask_sz": 300
+    },
+    {
+      "ts_event": 1767261601000000000,
+      "bid_px": 100010000000,
+      "bid_sz": 100,
+      "ask_px": null,
+      "ask_sz": 0
+    },
+    {
+      "ts_event": 1767261601500000000,
+      "bid_px": 100000000000,
+      "bid_sz": 400,
+      "ask_px": 100030000000,
+      "ask_sz": 100
+    },
+    {
+      "ts_event": 1767261610000000000,
+      "bid_px": 99980000000,
+      "bid_sz": 250,
+      "ask_px": 100010000000,
+      "ask_sz": 750
+    },
+    {
+      "ts_event": 1767261615000000000,
+      "bid_px": 100050000000,
+      "bid_sz": 600,
+      "ask_px": 100070000000,
+      "ask_sz": 200
+    }
+  ],
+  "fills": [
+    {
+      "ts_event": 1767261600000000000,
+      "side": "buy",
+      "px": 100000000000,
+      "qty": 100
+    },
+    {
+      "ts_event": 1767261600040000000,
+      "side": "sell",
+      "px": 100020000000,
+      "qty": 50
+    },
+    {
+      "ts_event": 1767261600900000000,
+      "side": "buy",
+      "px": 100010000000,
+      "qty": 25
+    },
+    {
+      "ts_event": 1767261605000000000,
+      "side": "sell",
+      "px": 100030000000,
+      "qty": 10
+    },
+    {
+      "ts_event": 1767261660000000000,
+      "side": "buy",
+      "px": 100060000000,
+      "qty": 7
+    }
+  ],
+  "horizons_ns": [
+    50000000,
+    60000000,
+    100000000,
+    1000000000,
+    10000000000,
+    15000000000,
+    60000000000,
+    300000000000
+  ],
+  "markouts": [
+    {
+      "fill_index": 0,
+      "horizon_ns": 50000000,
+      "ref": "mid",
+      "mo_ticks": 1.0,
+      "mo_ccy": 1.0,
+      "mm_ticks": null,
+      "M_t_plus_h": 100010000000.0,
+      "M_t_minus": null,
+      "rs_taker_ticks": 2.0
+    },
+    {
+      "fill_index": 0,
+      "horizon_ns": 60000000,
+      "ref": "mid",
+      "mo_ticks": 1.0,
+      "mo_ccy": 1.0,
+      "mm_ticks": null,
+      "M_t_plus_h": 100010000000.0,
+      "M_t_minus": null,
+      "rs_taker_ticks": 2.0
+    },
+    {
+      "fill_index": 0,
+      "horizon_ns": 100000000,
+      "ref": "mid",
+      "mo_ticks": 1.5,
+      "mo_ccy": 1.5,
+      "mm_ticks": null,
+      "M_t_plus_h": 100015000000.0,
+      "M_t_minus": null,
+      "rs_taker_ticks": 3.0
+    },
+    {
+      "fill_index": 0,
+      "horizon_ns": 1000000000,
+      "ref": "mid",
+      "mo_ticks": null,
+      "mo_ccy": null,
+      "mm_ticks": null,
+      "M_t_plus_h": null,
+      "M_t_minus": null,
+      "rs_taker_ticks": null
+    },
+    {
+      "fill_index": 0,
+      "horizon_ns": 10000000000,
+      "ref": "mid",
+      "mo_ticks": -0.5,
+      "mo_ccy": -0.5,
+      "mm_ticks": null,
+      "M_t_plus_h": 99995000000.0,
+      "M_t_minus": null,
+      "rs_taker_ticks": -1.0
+    },
+    {
+      "fill_index": 0,
+      "horizon_ns": 15000000000,
+      "ref": "mid",
+      "mo_ticks": 6.0,
+      "mo_ccy": 6.0,
+      "mm_ticks": null,
+      "M_t_plus_h": 100060000000.0,
+      "M_t_minus": null,
+      "rs_taker_ticks": 12.0
+    },
+    {
+      "fill_index": 0,
+      "horizon_ns": 60000000000,
+      "ref": "mid",
+      "mo_ticks": 6.0,
+      "mo_ccy": 6.0,
+      "mm_ticks": null,
+      "M_t_plus_h": 100060000000.0,
+      "M_t_minus": null,
+      "rs_taker_ticks": 12.0
+    },
+    {
+      "fill_index": 0,
+      "horizon_ns": 300000000000,
+      "ref": "mid",
+      "mo_ticks": null,
+      "mo_ccy": null,
+      "mm_ticks": null,
+      "M_t_plus_h": null,
+      "M_t_minus": null,
+      "rs_taker_ticks": null
+    },
+    {
+      "fill_index": 0,
+      "horizon_ns": 50000000,
+      "ref": "microprice",
+      "mo_ticks": 0.8,
+      "mo_ccy": 0.8,
+      "mm_ticks": null,
+      "M_t_plus_h": 100008000000.0,
+      "M_t_minus": null,
+      "rs_taker_ticks": 1.6
+    },
+    {
+      "fill_index": 0,
+      "horizon_ns": 60000000,
+      "ref": "microprice",
+      "mo_ticks": 0.8,
+      "mo_ccy": 0.8,
+      "mm_ticks": null,
+      "M_t_plus_h": 100008000000.0,
+      "M_t_minus": null,
+      "rs_taker_ticks": 1.6
+    },
+    {
+      "fill_index": 0,
+      "horizon_ns": 100000000,
+      "ref": "microprice",
+      "mo_ticks": 1.25,
+      "mo_ccy": 1.25,
+      "mm_ticks": null,
+      "M_t_plus_h": 100012500000.0,
+      "M_t_minus": null,
+      "rs_taker_ticks": 2.5
+    },
+    {
+      "fill_index": 0,
+      "horizon_ns": 1000000000,
+      "ref": "microprice",
+      "mo_ticks": null,
+      "mo_ccy": null,
+      "mm_ticks": null,
+      "M_t_plus_h": null,
+      "M_t_minus": null,
+      "rs_taker_ticks": null
+    },
+    {
+      "fill_index": 0,
+      "horizon_ns": 10000000000,
+      "ref": "microprice",
+      "mo_ticks": -1.25,
+      "mo_ccy": -1.25,
+      "mm_ticks": null,
+      "M_t_plus_h": 99987500000.0,
+      "M_t_minus": null,
+      "rs_taker_ticks": -2.5
+    },
+    {
+      "fill_index": 0,
+      "horizon_ns": 15000000000,
+      "ref": "microprice",
+      "mo_ticks": 6.5,
+      "mo_ccy": 6.5,
+      "mm_ticks": null,
+      "M_t_plus_h": 100065000000.0,
+      "M_t_minus": null,
+      "rs_taker_ticks": 13.0
+    },
+    {
+      "fill_index": 0,
+      "horizon_ns": 60000000000,
+      "ref": "microprice",
+      "mo_ticks": 6.5,
+      "mo_ccy": 6.5,
+      "mm_ticks": null,
+      "M_t_plus_h": 100065000000.0,
+      "M_t_minus": null,
+      "rs_taker_ticks": 13.0
+    },
+    {
+      "fill_index": 0,
+      "horizon_ns": 300000000000,
+      "ref": "microprice",
+      "mo_ticks": null,
+      "mo_ccy": null,
+      "mm_ticks": null,
+      "M_t_plus_h": null,
+      "M_t_minus": null,
+      "rs_taker_ticks": null
+    },
+    {
+      "fill_index": 1,
+      "horizon_ns": 50000000,
+      "ref": "mid",
+      "mo_ticks": 1.0,
+      "mo_ccy": 0.5,
+      "mm_ticks": 0.0,
+      "M_t_plus_h": 100010000000.0,
+      "M_t_minus": 100010000000.0,
+      "rs_taker_ticks": 2.0
+    },
+    {
+      "fill_index": 1,
+      "horizon_ns": 60000000,
+      "ref": "mid",
+      "mo_ticks": 0.5,
+      "mo_ccy": 0.25,
+      "mm_ticks": -0.5,
+      "M_t_plus_h": 100015000000.0,
+      "M_t_minus": 100010000000.0,
+      "rs_taker_ticks": 1.0
+    },
+    {
+      "fill_index": 1,
+      "horizon_ns": 100000000,
+      "ref": "mid",
+      "mo_ticks": 0.5,
+      "mo_ccy": 0.25,
+      "mm_ticks": -0.5,
+      "M_t_plus_h": 100015000000.0,
+      "M_t_minus": 100010000000.0,
+      "rs_taker_ticks": 1.0
+    },
+    {
+      "fill_index": 1,
+      "horizon_ns": 1000000000,
+      "ref": "mid",
+      "mo_ticks": null,
+      "mo_ccy": null,
+      "mm_ticks": null,
+      "M_t_plus_h": null,
+      "M_t_minus": 100010000000.0,
+      "rs_taker_ticks": null
+    },
+    {
+      "fill_index": 1,
+      "horizon_ns": 10000000000,
+      "ref": "mid",
+      "mo_ticks": 2.5,
+      "mo_ccy": 1.25,
+      "mm_ticks": 1.5,
+      "M_t_plus_h": 99995000000.0,
+      "M_t_minus": 100010000000.0,
+      "rs_taker_ticks": 5.0
+    },
+    {
+      "fill_index": 1,
+      "horizon_ns": 15000000000,
+      "ref": "mid",
+      "mo_ticks": -4.0,
+      "mo_ccy": -2.0,
+      "mm_ticks": -5.0,
+      "M_t_plus_h": 100060000000.0,
+      "M_t_minus": 100010000000.0,
+      "rs_taker_ticks": -8.0
+    },
+    {
+      "fill_index": 1,
+      "horizon_ns": 60000000000,
+      "ref": "mid",
+      "mo_ticks": -4.0,
+      "mo_ccy": -2.0,
+      "mm_ticks": -5.0,
+      "M_t_plus_h": 100060000000.0,
+      "M_t_minus": 100010000000.0,
+      "rs_taker_ticks": -8.0
+    },
+    {
+      "fill_index": 1,
+      "horizon_ns": 300000000000,
+      "ref": "mid",
+      "mo_ticks": null,
+      "mo_ccy": null,
+      "mm_ticks": null,
+      "M_t_plus_h": null,
+      "M_t_minus": 100010000000.0,
+      "rs_taker_ticks": null
+    },
+    {
+      "fill_index": 1,
+      "horizon_ns": 50000000,
+      "ref": "microprice",
+      "mo_ticks": 1.2,
+      "mo_ccy": 0.6,
+      "mm_ticks": 0.45,
+      "M_t_plus_h": 100008000000.0,
+      "M_t_minus": 100012500000.0,
+      "rs_taker_ticks": 2.4
+    },
+    {
+      "fill_index": 1,
+      "horizon_ns": 60000000,
+      "ref": "microprice",
+      "mo_ticks": 0.75,
+      "mo_ccy": 0.375,
+      "mm_ticks": 0.0,
+      "M_t_plus_h": 100012500000.0,
+      "M_t_minus": 100012500000.0,
+      "rs_taker_ticks": 1.5
+    },
+    {
+      "fill_index": 1,
+      "horizon_ns": 100000000,
+      "ref": "microprice",
+      "mo_ticks": 0.75,
+      "mo_ccy": 0.375,
+      "mm_ticks": 0.0,
+      "M_t_plus_h": 100012500000.0,
+      "M_t_minus": 100012500000.0,
+      "rs_taker_ticks": 1.5
+    },
+    {
+      "fill_index": 1,
+      "horizon_ns": 1000000000,
+      "ref": "microprice",
+      "mo_ticks": null,
+      "mo_ccy": null,
+      "mm_ticks": null,
+      "M_t_plus_h": null,
+      "M_t_minus": 100012500000.0,
+      "rs_taker_ticks": null
+    },
+    {
+      "fill_index": 1,
+      "horizon_ns": 10000000000,
+      "ref": "microprice",
+      "mo_ticks": 3.25,
+      "mo_ccy": 1.625,
+      "mm_ticks": 2.5,
+      "M_t_plus_h": 99987500000.0,
+      "M_t_minus": 100012500000.0,
+      "rs_taker_ticks": 6.5
+    },
+    {
+      "fill_index": 1,
+      "horizon_ns": 15000000000,
+      "ref": "microprice",
+      "mo_ticks": -4.5,
+      "mo_ccy": -2.25,
+      "mm_ticks": -5.25,
+      "M_t_plus_h": 100065000000.0,
+      "M_t_minus": 100012500000.0,
+      "rs_taker_ticks": -9.0
+    },
+    {
+      "fill_index": 1,
+      "horizon_ns": 60000000000,
+      "ref": "microprice",
+      "mo_ticks": -4.5,
+      "mo_ccy": -2.25,
+      "mm_ticks": -5.25,
+      "M_t_plus_h": 100065000000.0,
+      "M_t_minus": 100012500000.0,
+      "rs_taker_ticks": -9.0
+    },
+    {
+      "fill_index": 1,
+      "horizon_ns": 300000000000,
+      "ref": "microprice",
+      "mo_ticks": null,
+      "mo_ccy": null,
+      "mm_ticks": null,
+      "M_t_plus_h": null,
+      "M_t_minus": 100012500000.0,
+      "rs_taker_ticks": null
+    },
+    {
+      "fill_index": 2,
+      "horizon_ns": 50000000,
+      "ref": "mid",
+      "mo_ticks": 0.5,
+      "mo_ccy": 0.125,
+      "mm_ticks": 0.0,
+      "M_t_plus_h": 100015000000.0,
+      "M_t_minus": 100015000000.0,
+      "rs_taker_ticks": 1.0
+    },
+    {
+      "fill_index": 2,
+      "horizon_ns": 60000000,
+      "ref": "mid",
+      "mo_ticks": 0.5,
+      "mo_ccy": 0.125,
+      "mm_ticks": 0.0,
+      "M_t_plus_h": 100015000000.0,
+      "M_t_minus": 100015000000.0,
+      "rs_taker_ticks": 1.0
+    },
+    {
+      "fill_index": 2,
+      "horizon_ns": 100000000,
+      "ref": "mid",
+      "mo_ticks": null,
+      "mo_ccy": null,
+      "mm_ticks": null,
+      "M_t_plus_h": null,
+      "M_t_minus": 100015000000.0,
+      "rs_taker_ticks": null
+    },
+    {
+      "fill_index": 2,
+      "horizon_ns": 1000000000,
+      "ref": "mid",
+      "mo_ticks": 0.5,
+      "mo_ccy": 0.125,
+      "mm_ticks": 0.0,
+      "M_t_plus_h": 100015000000.0,
+      "M_t_minus": 100015000000.0,
+      "rs_taker_ticks": 1.0
+    },
+    {
+      "fill_index": 2,
+      "horizon_ns": 10000000000,
+      "ref": "mid",
+      "mo_ticks": -1.5,
+      "mo_ccy": -0.375,
+      "mm_ticks": -2.0,
+      "M_t_plus_h": 99995000000.0,
+      "M_t_minus": 100015000000.0,
+      "rs_taker_ticks": -3.0
+    },
+    {
+      "fill_index": 2,
+      "horizon_ns": 15000000000,
+      "ref": "mid",
+      "mo_ticks": 5.0,
+      "mo_ccy": 1.25,
+      "mm_ticks": 4.5,
+      "M_t_plus_h": 100060000000.0,
+      "M_t_minus": 100015000000.0,
+      "rs_taker_ticks": 10.0
+    },
+    {
+      "fill_index": 2,
+      "horizon_ns": 60000000000,
+      "ref": "mid",
+      "mo_ticks": 5.0,
+      "mo_ccy": 1.25,
+      "mm_ticks": 4.5,
+      "M_t_plus_h": 100060000000.0,
+      "M_t_minus": 100015000000.0,
+      "rs_taker_ticks": 10.0
+    },
+    {
+      "fill_index": 2,
+      "horizon_ns": 300000000000,
+      "ref": "mid",
+      "mo_ticks": null,
+      "mo_ccy": null,
+      "mm_ticks": null,
+      "M_t_plus_h": null,
+      "M_t_minus": 100015000000.0,
+      "rs_taker_ticks": null
+    },
+    {
+      "fill_index": 2,
+      "horizon_ns": 50000000,
+      "ref": "microprice",
+      "mo_ticks": 0.25,
+      "mo_ccy": 0.0625,
+      "mm_ticks": 0.0,
+      "M_t_plus_h": 100012500000.0,
+      "M_t_minus": 100012500000.0,
+      "rs_taker_ticks": 0.5
+    },
+    {
+      "fill_index": 2,
+      "horizon_ns": 60000000,
+      "ref": "microprice",
+      "mo_ticks": 0.25,
+      "mo_ccy": 0.0625,
+      "mm_ticks": 0.0,
+      "M_t_plus_h": 100012500000.0,
+      "M_t_minus": 100012500000.0,
+      "rs_taker_ticks": 0.5
+    },
+    {
+      "fill_index": 2,
+      "horizon_ns": 100000000,
+      "ref": "microprice",
+      "mo_ticks": null,
+      "mo_ccy": null,
+      "mm_ticks": null,
+      "M_t_plus_h": null,
+      "M_t_minus": 100012500000.0,
+      "rs_taker_ticks": null
+    },
+    {
+      "fill_index": 2,
+      "horizon_ns": 1000000000,
+      "ref": "microprice",
+      "mo_ticks": 1.4,
+      "mo_ccy": 0.35,
+      "mm_ticks": 1.15,
+      "M_t_plus_h": 100024000000.0,
+      "M_t_minus": 100012500000.0,
+      "rs_taker_ticks": 2.8
+    },
+    {
+      "fill_index": 2,
+      "horizon_ns": 10000000000,
+      "ref": "microprice",
+      "mo_ticks": -2.25,
+      "mo_ccy": -0.5625,
+      "mm_ticks": -2.5,
+      "M_t_plus_h": 99987500000.0,
+      "M_t_minus": 100012500000.0,
+      "rs_taker_ticks": -4.5
+    },
+    {
+      "fill_index": 2,
+      "horizon_ns": 15000000000,
+      "ref": "microprice",
+      "mo_ticks": 5.5,
+      "mo_ccy": 1.375,
+      "mm_ticks": 5.25,
+      "M_t_plus_h": 100065000000.0,
+      "M_t_minus": 100012500000.0,
+      "rs_taker_ticks": 11.0
+    },
+    {
+      "fill_index": 2,
+      "horizon_ns": 60000000000,
+      "ref": "microprice",
+      "mo_ticks": 5.5,
+      "mo_ccy": 1.375,
+      "mm_ticks": 5.25,
+      "M_t_plus_h": 100065000000.0,
+      "M_t_minus": 100012500000.0,
+      "rs_taker_ticks": 11.0
+    },
+    {
+      "fill_index": 2,
+      "horizon_ns": 300000000000,
+      "ref": "microprice",
+      "mo_ticks": null,
+      "mo_ccy": null,
+      "mm_ticks": null,
+      "M_t_plus_h": null,
+      "M_t_minus": 100012500000.0,
+      "rs_taker_ticks": null
+    },
+    {
+      "fill_index": 3,
+      "horizon_ns": 50000000,
+      "ref": "mid",
+      "mo_ticks": 1.5,
+      "mo_ccy": 0.15,
+      "mm_ticks": 0.0,
+      "M_t_plus_h": 100015000000.0,
+      "M_t_minus": 100015000000.0,
+      "rs_taker_ticks": 3.0
+    },
+    {
+      "fill_index": 3,
+      "horizon_ns": 60000000,
+      "ref": "mid",
+      "mo_ticks": 1.5,
+      "mo_ccy": 0.15,
+      "mm_ticks": 0.0,
+      "M_t_plus_h": 100015000000.0,
+      "M_t_minus": 100015000000.0,
+      "rs_taker_ticks": 3.0
+    },
+    {
+      "fill_index": 3,
+      "horizon_ns": 100000000,
+      "ref": "mid",
+      "mo_ticks": 1.5,
+      "mo_ccy": 0.15,
+      "mm_ticks": 0.0,
+      "M_t_plus_h": 100015000000.0,
+      "M_t_minus": 100015000000.0,
+      "rs_taker_ticks": 3.0
+    },
+    {
+      "fill_index": 3,
+      "horizon_ns": 1000000000,
+      "ref": "mid",
+      "mo_ticks": 1.5,
+      "mo_ccy": 0.15,
+      "mm_ticks": 0.0,
+      "M_t_plus_h": 100015000000.0,
+      "M_t_minus": 100015000000.0,
+      "rs_taker_ticks": 3.0
+    },
+    {
+      "fill_index": 3,
+      "horizon_ns": 10000000000,
+      "ref": "mid",
+      "mo_ticks": -3.0,
+      "mo_ccy": -0.3,
+      "mm_ticks": -4.5,
+      "M_t_plus_h": 100060000000.0,
+      "M_t_minus": 100015000000.0,
+      "rs_taker_ticks": -6.0
+    },
+    {
+      "fill_index": 3,
+      "horizon_ns": 15000000000,
+      "ref": "mid",
+      "mo_ticks": -3.0,
+      "mo_ccy": -0.3,
+      "mm_ticks": -4.5,
+      "M_t_plus_h": 100060000000.0,
+      "M_t_minus": 100015000000.0,
+      "rs_taker_ticks": -6.0
+    },
+    {
+      "fill_index": 3,
+      "horizon_ns": 60000000000,
+      "ref": "mid",
+      "mo_ticks": -3.0,
+      "mo_ccy": -0.3,
+      "mm_ticks": -4.5,
+      "M_t_plus_h": 100060000000.0,
+      "M_t_minus": 100015000000.0,
+      "rs_taker_ticks": -6.0
+    },
+    {
+      "fill_index": 3,
+      "horizon_ns": 300000000000,
+      "ref": "mid",
+      "mo_ticks": null,
+      "mo_ccy": null,
+      "mm_ticks": null,
+      "M_t_plus_h": null,
+      "M_t_minus": 100015000000.0,
+      "rs_taker_ticks": null
+    },
+    {
+      "fill_index": 3,
+      "horizon_ns": 50000000,
+      "ref": "microprice",
+      "mo_ticks": 0.6,
+      "mo_ccy": 0.06,
+      "mm_ticks": 0.0,
+      "M_t_plus_h": 100024000000.0,
+      "M_t_minus": 100024000000.0,
+      "rs_taker_ticks": 1.2
+    },
+    {
+      "fill_index": 3,
+      "horizon_ns": 60000000,
+      "ref": "microprice",
+      "mo_ticks": 0.6,
+      "mo_ccy": 0.06,
+      "mm_ticks": 0.0,
+      "M_t_plus_h": 100024000000.0,
+      "M_t_minus": 100024000000.0,
+      "rs_taker_ticks": 1.2
+    },
+    {
+      "fill_index": 3,
+      "horizon_ns": 100000000,
+      "ref": "microprice",
+      "mo_ticks": 0.6,
+      "mo_ccy": 0.06,
+      "mm_ticks": 0.0,
+      "M_t_plus_h": 100024000000.0,
+      "M_t_minus": 100024000000.0,
+      "rs_taker_ticks": 1.2
+    },
+    {
+      "fill_index": 3,
+      "horizon_ns": 1000000000,
+      "ref": "microprice",
+      "mo_ticks": 0.6,
+      "mo_ccy": 0.06,
+      "mm_ticks": 0.0,
+      "M_t_plus_h": 100024000000.0,
+      "M_t_minus": 100024000000.0,
+      "rs_taker_ticks": 1.2
+    },
+    {
+      "fill_index": 3,
+      "horizon_ns": 10000000000,
+      "ref": "microprice",
+      "mo_ticks": -3.5,
+      "mo_ccy": -0.35,
+      "mm_ticks": -4.1,
+      "M_t_plus_h": 100065000000.0,
+      "M_t_minus": 100024000000.0,
+      "rs_taker_ticks": -7.0
+    },
+    {
+      "fill_index": 3,
+      "horizon_ns": 15000000000,
+      "ref": "microprice",
+      "mo_ticks": -3.5,
+      "mo_ccy": -0.35,
+      "mm_ticks": -4.1,
+      "M_t_plus_h": 100065000000.0,
+      "M_t_minus": 100024000000.0,
+      "rs_taker_ticks": -7.0
+    },
+    {
+      "fill_index": 3,
+      "horizon_ns": 60000000000,
+      "ref": "microprice",
+      "mo_ticks": -3.5,
+      "mo_ccy": -0.35,
+      "mm_ticks": -4.1,
+      "M_t_plus_h": 100065000000.0,
+      "M_t_minus": 100024000000.0,
+      "rs_taker_ticks": -7.0
+    },
+    {
+      "fill_index": 3,
+      "horizon_ns": 300000000000,
+      "ref": "microprice",
+      "mo_ticks": null,
+      "mo_ccy": null,
+      "mm_ticks": null,
+      "M_t_plus_h": null,
+      "M_t_minus": 100024000000.0,
+      "rs_taker_ticks": null
+    },
+    {
+      "fill_index": 4,
+      "horizon_ns": 50000000,
+      "ref": "mid",
+      "mo_ticks": 0.0,
+      "mo_ccy": 0.0,
+      "mm_ticks": 0.0,
+      "M_t_plus_h": 100060000000.0,
+      "M_t_minus": 100060000000.0,
+      "rs_taker_ticks": 0.0
+    },
+    {
+      "fill_index": 4,
+      "horizon_ns": 60000000,
+      "ref": "mid",
+      "mo_ticks": 0.0,
+      "mo_ccy": 0.0,
+      "mm_ticks": 0.0,
+      "M_t_plus_h": 100060000000.0,
+      "M_t_minus": 100060000000.0,
+      "rs_taker_ticks": 0.0
+    },
+    {
+      "fill_index": 4,
+      "horizon_ns": 100000000,
+      "ref": "mid",
+      "mo_ticks": 0.0,
+      "mo_ccy": 0.0,
+      "mm_ticks": 0.0,
+      "M_t_plus_h": 100060000000.0,
+      "M_t_minus": 100060000000.0,
+      "rs_taker_ticks": 0.0
+    },
+    {
+      "fill_index": 4,
+      "horizon_ns": 1000000000,
+      "ref": "mid",
+      "mo_ticks": 0.0,
+      "mo_ccy": 0.0,
+      "mm_ticks": 0.0,
+      "M_t_plus_h": 100060000000.0,
+      "M_t_minus": 100060000000.0,
+      "rs_taker_ticks": 0.0
+    },
+    {
+      "fill_index": 4,
+      "horizon_ns": 10000000000,
+      "ref": "mid",
+      "mo_ticks": 0.0,
+      "mo_ccy": 0.0,
+      "mm_ticks": 0.0,
+      "M_t_plus_h": 100060000000.0,
+      "M_t_minus": 100060000000.0,
+      "rs_taker_ticks": 0.0
+    },
+    {
+      "fill_index": 4,
+      "horizon_ns": 15000000000,
+      "ref": "mid",
+      "mo_ticks": null,
+      "mo_ccy": null,
+      "mm_ticks": null,
+      "M_t_plus_h": null,
+      "M_t_minus": 100060000000.0,
+      "rs_taker_ticks": null
+    },
+    {
+      "fill_index": 4,
+      "horizon_ns": 60000000000,
+      "ref": "mid",
+      "mo_ticks": null,
+      "mo_ccy": null,
+      "mm_ticks": null,
+      "M_t_plus_h": null,
+      "M_t_minus": 100060000000.0,
+      "rs_taker_ticks": null
+    },
+    {
+      "fill_index": 4,
+      "horizon_ns": 300000000000,
+      "ref": "mid",
+      "mo_ticks": null,
+      "mo_ccy": null,
+      "mm_ticks": null,
+      "M_t_plus_h": null,
+      "M_t_minus": 100060000000.0,
+      "rs_taker_ticks": null
+    },
+    {
+      "fill_index": 4,
+      "horizon_ns": 50000000,
+      "ref": "microprice",
+      "mo_ticks": 0.5,
+      "mo_ccy": 0.035,
+      "mm_ticks": 0.0,
+      "M_t_plus_h": 100065000000.0,
+      "M_t_minus": 100065000000.0,
+      "rs_taker_ticks": 1.0
+    },
+    {
+      "fill_index": 4,
+      "horizon_ns": 60000000,
+      "ref": "microprice",
+      "mo_ticks": 0.5,
+      "mo_ccy": 0.035,
+      "mm_ticks": 0.0,
+      "M_t_plus_h": 100065000000.0,
+      "M_t_minus": 100065000000.0,
+      "rs_taker_ticks": 1.0
+    },
+    {
+      "fill_index": 4,
+      "horizon_ns": 100000000,
+      "ref": "microprice",
+      "mo_ticks": 0.5,
+      "mo_ccy": 0.035,
+      "mm_ticks": 0.0,
+      "M_t_plus_h": 100065000000.0,
+      "M_t_minus": 100065000000.0,
+      "rs_taker_ticks": 1.0
+    },
+    {
+      "fill_index": 4,
+      "horizon_ns": 1000000000,
+      "ref": "microprice",
+      "mo_ticks": 0.5,
+      "mo_ccy": 0.035,
+      "mm_ticks": 0.0,
+      "M_t_plus_h": 100065000000.0,
+      "M_t_minus": 100065000000.0,
+      "rs_taker_ticks": 1.0
+    },
+    {
+      "fill_index": 4,
+      "horizon_ns": 10000000000,
+      "ref": "microprice",
+      "mo_ticks": 0.5,
+      "mo_ccy": 0.035,
+      "mm_ticks": 0.0,
+      "M_t_plus_h": 100065000000.0,
+      "M_t_minus": 100065000000.0,
+      "rs_taker_ticks": 1.0
+    },
+    {
+      "fill_index": 4,
+      "horizon_ns": 15000000000,
+      "ref": "microprice",
+      "mo_ticks": null,
+      "mo_ccy": null,
+      "mm_ticks": null,
+      "M_t_plus_h": null,
+      "M_t_minus": 100065000000.0,
+      "rs_taker_ticks": null
+    },
+    {
+      "fill_index": 4,
+      "horizon_ns": 60000000000,
+      "ref": "microprice",
+      "mo_ticks": null,
+      "mo_ccy": null,
+      "mm_ticks": null,
+      "M_t_plus_h": null,
+      "M_t_minus": 100065000000.0,
+      "rs_taker_ticks": null
+    },
+    {
+      "fill_index": 4,
+      "horizon_ns": 300000000000,
+      "ref": "microprice",
+      "mo_ticks": null,
+      "mo_ccy": null,
+      "mm_ticks": null,
+      "M_t_plus_h": null,
+      "M_t_minus": 100065000000.0,
+      "rs_taker_ticks": null
+    }
+  ],
+  "position_series": [
+    {
+      "ts_event": 1767261600000000000,
+      "position": 100
+    },
+    {
+      "ts_event": 1767261600040000000,
+      "position": 50
+    },
+    {
+      "ts_event": 1767261600900000000,
+      "position": 75
+    },
+    {
+      "ts_event": 1767261605000000000,
+      "position": 65
+    },
+    {
+      "ts_event": 1767261660000000000,
+      "position": 72
+    }
+  ]
+}

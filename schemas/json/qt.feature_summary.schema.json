@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.feature_summary",
+  "$defs": {
+    "CauseCounts": {
+      "additionalProperties": false,
+      "description": "Rows by outcome cause.",
+      "properties": {
+        "fill": {
+          "title": "Fill",
+          "type": "integer"
+        },
+        "cancel": {
+          "title": "Cancel",
+          "type": "integer"
+        },
+        "censor": {
+          "title": "Censor",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "fill",
+        "cancel",
+        "censor"
+      ],
+      "title": "CauseCounts",
+      "type": "object"
+    },
+    "FileEntry": {
+      "additionalProperties": false,
+      "description": "One output file: name relative to the output directory, row count for tables, size and sha256.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "rows": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rows"
+        },
+        "bytes": {
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "bytes",
+        "sha256"
+      ],
+      "title": "FileEntry",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Summary of `features`.",
+  "properties": {
+    "schema": {
+      "const": "qt.feature_summary",
+      "default": "qt.feature_summary",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "spec": {
+      "additionalProperties": true,
+      "title": "Spec",
+      "type": "object"
+    },
+    "n_orders": {
+      "title": "N Orders",
+      "type": "integer"
+    },
+    "n_rows": {
+      "title": "N Rows",
+      "type": "integer"
+    },
+    "by_cause": {
+      "$ref": "#/$defs/CauseCounts"
+    },
+    "feature_names": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Feature Names",
+      "type": "array"
+    },
+    "privileged_names": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Privileged Names",
+      "type": "array"
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/FileEntry"
+      },
+      "title": "Files",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "spec",
+    "n_orders",
+    "n_rows",
+    "by_cause",
+    "feature_names",
+    "privileged_names",
+    "files"
+  ],
+  "type": "object"
+}

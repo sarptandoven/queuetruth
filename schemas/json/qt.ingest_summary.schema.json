@@ -1,0 +1,586 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.ingest_summary",
+  "$defs": {
+    "DataQuality": {
+      "additionalProperties": false,
+      "description": "Data-quality counters and verdict (SPEC 5.1.5).",
+      "properties": {
+        "schema": {
+          "const": "qt.data_quality",
+          "default": "qt.data_quality",
+          "title": "Schema",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "records": {
+          "title": "Records",
+          "type": "integer"
+        },
+        "maybe_bad_book_records": {
+          "title": "Maybe Bad Book Records",
+          "type": "integer"
+        },
+        "bad_ts_recv_records": {
+          "title": "Bad Ts Recv Records",
+          "type": "integer"
+        },
+        "snapshot_records": {
+          "title": "Snapshot Records",
+          "type": "integer"
+        },
+        "pre_snapshot_rows_skipped": {
+          "title": "Pre Snapshot Rows Skipped",
+          "type": "integer"
+        },
+        "unknown_order_refs": {
+          "title": "Unknown Order Refs",
+          "type": "integer"
+        },
+        "duplicate_adds": {
+          "title": "Duplicate Adds",
+          "type": "integer"
+        },
+        "unexpected_modifies": {
+          "title": "Unexpected Modifies",
+          "type": "integer"
+        },
+        "sequence_gaps": {
+          "title": "Sequence Gaps",
+          "type": "integer"
+        },
+        "sequence_regressions": {
+          "title": "Sequence Regressions",
+          "type": "integer"
+        },
+        "out_of_order_ts_event": {
+          "title": "Out Of Order Ts Event",
+          "type": "integer"
+        },
+        "crossed_books_after_last": {
+          "title": "Crossed Books After Last",
+          "type": "integer"
+        },
+        "hidden_prints": {
+          "title": "Hidden Prints",
+          "type": "integer"
+        },
+        "off_price_executions": {
+          "title": "Off Price Executions",
+          "type": "integer"
+        },
+        "feed_gaps": {
+          "items": {
+            "$ref": "#/$defs/FeedGap"
+          },
+          "title": "Feed Gaps",
+          "type": "array"
+        },
+        "source_specific": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Source Specific",
+          "type": "object"
+        },
+        "verdict": {
+          "enum": [
+            "clean",
+            "warnings",
+            "unusable"
+          ],
+          "title": "Verdict",
+          "type": "string"
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        }
+      },
+      "required": [
+        "schema",
+        "schema_version",
+        "records",
+        "maybe_bad_book_records",
+        "bad_ts_recv_records",
+        "snapshot_records",
+        "pre_snapshot_rows_skipped",
+        "unknown_order_refs",
+        "duplicate_adds",
+        "unexpected_modifies",
+        "sequence_gaps",
+        "sequence_regressions",
+        "out_of_order_ts_event",
+        "crossed_books_after_last",
+        "hidden_prints",
+        "off_price_executions",
+        "feed_gaps",
+        "source_specific",
+        "verdict",
+        "reasons"
+      ],
+      "title": "DataQuality",
+      "type": "object"
+    },
+    "DatasetManifest": {
+      "additionalProperties": false,
+      "description": "`manifest.json` of a dataset directory (SPEC 3.3).",
+      "properties": {
+        "schema": {
+          "const": "qt.dataset_manifest",
+          "default": "qt.dataset_manifest",
+          "title": "Schema",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "dataset_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Dataset Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "mbo",
+            "l2"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "source_format": {
+          "title": "Source Format",
+          "type": "string"
+        },
+        "venue": {
+          "enum": [
+            "generic",
+            "nasdaq",
+            "cme",
+            "coinbase"
+          ],
+          "title": "Venue",
+          "type": "string"
+        },
+        "source_venue": {
+          "title": "Source Venue",
+          "type": "string"
+        },
+        "inputs": {
+          "items": {
+            "$ref": "#/$defs/InputFile"
+          },
+          "title": "Inputs",
+          "type": "array"
+        },
+        "partitions": {
+          "items": {
+            "$ref": "#/$defs/PartitionEntry"
+          },
+          "title": "Partitions",
+          "type": "array"
+        },
+        "price_exp_by_instrument": {
+          "patternProperties": {
+            "^-?[0-9]+$": {
+              "type": "integer"
+            }
+          },
+          "title": "Price Exp By Instrument",
+          "type": "object"
+        },
+        "created_by": {
+          "title": "Created By",
+          "type": "string"
+        },
+        "validation_status": {
+          "enum": [
+            "real_data",
+            "synthetic_only",
+            "assumed",
+            "fixture_only"
+          ],
+          "title": "Validation Status",
+          "type": "string"
+        },
+        "rule_set": {
+          "anyOf": [
+            {
+              "enum": [
+                "generic",
+                "nasdaq",
+                "cme",
+                "coinbase",
+                "crypto_l3"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rule Set"
+        },
+        "source_vintage": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/SourceVintage"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Vintage"
+        }
+      },
+      "required": [
+        "schema",
+        "schema_version",
+        "dataset_id",
+        "kind",
+        "source_format",
+        "venue",
+        "source_venue",
+        "inputs",
+        "partitions",
+        "price_exp_by_instrument",
+        "created_by",
+        "validation_status"
+      ],
+      "title": "DatasetManifest",
+      "type": "object"
+    },
+    "FeedGap": {
+      "additionalProperties": false,
+      "description": "A gap in the feed of one instrument.",
+      "properties": {
+        "instrument_id": {
+          "title": "Instrument Id",
+          "type": "integer"
+        },
+        "ts_start": {
+          "title": "Ts Start",
+          "type": "integer"
+        },
+        "ts_end": {
+          "title": "Ts End",
+          "type": "integer"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "instrument_id",
+        "ts_start",
+        "ts_end",
+        "reason"
+      ],
+      "title": "FeedGap",
+      "type": "object"
+    },
+    "FileEntry": {
+      "additionalProperties": false,
+      "description": "One output file: name relative to the output directory, row count for tables, size and sha256.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "rows": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rows"
+        },
+        "bytes": {
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "bytes",
+        "sha256"
+      ],
+      "title": "FileEntry",
+      "type": "object"
+    },
+    "InputFile": {
+      "additionalProperties": false,
+      "description": "Provenance of one ingest input.",
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "bytes": {
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "bytes",
+        "sha256"
+      ],
+      "title": "InputFile",
+      "type": "object"
+    },
+    "PartitionEntry": {
+      "additionalProperties": false,
+      "description": "One (instrument, session date) partition; `session_date` in days since 1970-01-01.",
+      "properties": {
+        "instrument_id": {
+          "title": "Instrument Id",
+          "type": "integer"
+        },
+        "session_date": {
+          "title": "Session Date",
+          "type": "integer"
+        },
+        "files": {
+          "items": {
+            "$ref": "#/$defs/PartitionFile"
+          },
+          "title": "Files",
+          "type": "array"
+        },
+        "rows": {
+          "title": "Rows",
+          "type": "integer"
+        },
+        "ts_min": {
+          "title": "Ts Min",
+          "type": "integer"
+        },
+        "ts_max": {
+          "title": "Ts Max",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "instrument_id",
+        "session_date",
+        "files",
+        "rows",
+        "ts_min",
+        "ts_max"
+      ],
+      "title": "PartitionEntry",
+      "type": "object"
+    },
+    "PartitionFile": {
+      "additionalProperties": false,
+      "description": "One Parquet file of a partition, path relative to the dataset root.",
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "rows": {
+          "title": "Rows",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "rows",
+        "sha256"
+      ],
+      "title": "PartitionFile",
+      "type": "object"
+    },
+    "SourceVintage": {
+      "additionalProperties": false,
+      "description": "1.1: data vintage of one source file (DBN metadata; null fields when the format has none).",
+      "properties": {
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "dbn_version": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dbn Version"
+        },
+        "dataset": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dataset"
+        },
+        "dbn_schema": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dbn Schema"
+        },
+        "start_ns": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Ns"
+        },
+        "end_ns": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End Ns"
+        },
+        "publisher_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Publisher Id"
+        }
+      },
+      "required": [
+        "sha256"
+      ],
+      "title": "SourceVintage",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Summary of `ingest`.",
+  "properties": {
+    "schema": {
+      "const": "qt.ingest_summary",
+      "default": "qt.ingest_summary",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "spec": {
+      "additionalProperties": true,
+      "title": "Spec",
+      "type": "object"
+    },
+    "manifest": {
+      "$ref": "#/$defs/DatasetManifest"
+    },
+    "data_quality": {
+      "$ref": "#/$defs/DataQuality"
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/FileEntry"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "timings": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Timings"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "spec",
+    "manifest",
+    "data_quality",
+    "files"
+  ],
+  "type": "object"
+}

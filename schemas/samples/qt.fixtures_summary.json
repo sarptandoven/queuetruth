@@ -1,0 +1,21 @@
+{
+  "sample": {
+    "schema": "qt.fixtures_summary",
+    "schema_version": 1,
+    "out": "x",
+    "fixtures": [
+      {
+        "name": "x",
+        "path": "x",
+        "files": [
+          {
+            "name": "x",
+            "rows": 1,
+            "bytes": 1,
+            "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "sample": {
+    "schema": "qt.why_trace",
+    "schema_version": 1,
+    "subject": {
+      "shadow_id": "x",
+      "order_key": "x"
+    },
+    "instrument_id": 1,
+    "side": "B",
+    "price": 1,
+    "qty": 1,
+    "ts_live": 1,
+    "outcome": {
+      "filled_qty": 1,
+      "ts_first_fill": 1,
+      "end_state": "x"
+    },
+    "events": [
+      {
+        "ts_event": 1,
+        "sequence": 1,
+        "action": "A",
+        "order_id": 1,
+        "side": "B",
+        "price": 1,
+        "size": 1,
+        "effect": "x",
+        "is_ahead": true,
+        "queue_ahead_after": 1,
+        "rank_after": 1,
+        "level_qty_after": 1,
+        "fill_qty": 1,
+        "note": "x"
+      }
+    ],
+    "truncated": true,
+    "model_id": "x",
+    "model_queue_ahead": [
+      0.5
+    ],
+    "first_divergence": {
+      "index": 1,
+      "ts_event": 1
+    },
+    "conclusion": "x",
+    "warnings": [
+      "x"
+    ]
+  }
+}

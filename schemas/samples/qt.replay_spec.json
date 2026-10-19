@@ -1,0 +1,87 @@
+{
+  "sample": {
+    "dataset": {
+      "path": "x"
+    },
+    "out": "x",
+    "venue": "x",
+    "shadows": {
+      "path": "x"
+    },
+    "amends": {
+      "path": "x"
+    },
+    "latency": {
+      "feed_ns": 1,
+      "decision_ns": 1,
+      "gateway_ns": 1,
+      "jitter_ns": 1
+    },
+    "rank_oracle": true,
+    "sweep_gap_ns": 1,
+    "bbo": "none",
+    "depth_levels": 1,
+    "trajectory": "none",
+    "race_window_ns": 1,
+    "real_orders": true,
+    "l2": {
+      "depth_levels": 1,
+      "cadence_ns": 1,
+      "trade_position": "before",
+      "include_counts": true,
+      "emit_hidden_trades": true
+    },
+    "parity_trades": true,
+    "parity_bbo": {
+      "path": "x"
+    },
+    "strict": true,
+    "threads": 1,
+    "seed": 1,
+    "fill_rule": "exact",
+    "hidden_print_policy": "ignore",
+    "exclude_order_ids": [
+      {
+        "instrument_id": 1,
+        "order_id": 1,
+        "session_date": "2020-01-02"
+      }
+    ]
+  },
+  "minimal": {
+    "dataset": {
+      "path": "x"
+    }
+  },
+  "defaults": {
+    "dataset": {
+      "path": "x"
+    },
+    "out": null,
+    "venue": null,
+    "shadows": null,
+    "amends": null,
+    "latency": {
+      "feed_ns": 0,
+      "decision_ns": 0,
+      "gateway_ns": 0,
+      "jitter_ns": 0
+    },
+    "rank_oracle": false,
+    "sweep_gap_ns": 2000000,
+    "bbo": "change",
+    "depth_levels": 0,
+    "trajectory": "ahead",
+    "race_window_ns": 0,
+    "real_orders": false,
+    "l2": null,
+    "parity_trades": false,
+    "parity_bbo": null,
+    "strict": false,
+    "threads": 1,
+    "seed": 0,
+    "fill_rule": "exact",
+    "hidden_print_policy": null,
+    "exclude_order_ids": []
+  }
+}

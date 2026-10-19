@@ -1,0 +1,13 @@
+{
+  "sample": {
+    "schema": "qt.estimate",
+    "schema_version": 1,
+    "kind": "x",
+    "records_est": 1,
+    "shadows_est": 1,
+    "cpu_seconds_est": 0.5,
+    "bytes_out_est": 1,
+    "cost_units": 0.5,
+    "eta_seconds": 0.5
+  }
+}

@@ -1,0 +1,113 @@
+{
+  "fills": [
+    {
+      "entry_id": "e-0004",
+      "trade_id": "t-0002",
+      "order_id": "11111111-aaaa-4000-8000-000000000010",
+      "trade_time": "2026-10-15T16:10:55.000000Z",
+      "trade_type": "REVERSAL",
+      "price": "60100.00",
+      "size": "0.00100000",
+      "commission": "-0.2404",
+      "product_id": "BTC-USD",
+      "sequence_timestamp": "2026-10-15T16:10:55.003000Z",
+      "liquidity_indicator": "MAKER",
+      "size_in_quote": false,
+      "user_id": "33333333-0000-4000-8000-000000000001",
+      "side": "SELL",
+      "retail_portfolio_id": "00000000-0000-4000-8000-0000000000aa",
+      "fillSource": "FILL_SOURCE_CLOB",
+      "commission_detail_total": {
+        "total_commission": "-0.2404",
+        "gst_commission": "0",
+        "withholding_commission": "0",
+        "client_commission": "0",
+        "venue_commission": "-0.2404",
+        "regulatory_commission": "0",
+        "clearing_commission": "0"
+      }
+    },
+    {
+      "entry_id": "e-0003",
+      "trade_id": "t-0003",
+      "order_id": "11111111-aaaa-4000-8000-000000000011",
+      "trade_time": "2026-10-15T16:10:05.000000Z",
+      "trade_type": "FILL",
+      "price": "60000.00",
+      "size": "600.00",
+      "commission": "3.60",
+      "product_id": "BTC-USD",
+      "sequence_timestamp": "2026-10-15T16:10:05.003000Z",
+      "liquidity_indicator": "TAKER",
+      "size_in_quote": true,
+      "user_id": "33333333-0000-4000-8000-000000000001",
+      "side": "BUY",
+      "retail_portfolio_id": "00000000-0000-4000-8000-0000000000aa",
+      "fillSource": "FILL_SOURCE_CLOB",
+      "commission_detail_total": {
+        "total_commission": "3.60",
+        "gst_commission": "0",
+        "withholding_commission": "0",
+        "client_commission": "0",
+        "venue_commission": "3.60",
+        "regulatory_commission": "0",
+        "clearing_commission": "0"
+      }
+    },
+    {
+      "entry_id": "e-0002",
+      "trade_id": "t-0002",
+      "order_id": "11111111-aaaa-4000-8000-000000000010",
+      "trade_time": "2026-10-15T16:10:02.500654Z",
+      "trade_type": "FILL",
+      "price": "60100.00",
+      "size": "0.00100000",
+      "commission": "0.2404",
+      "product_id": "BTC-USD",
+      "sequence_timestamp": "2026-10-15T16:10:02.503654Z",
+      "liquidity_indicator": "MAKER",
+      "size_in_quote": false,
+      "user_id": "33333333-0000-4000-8000-000000000001",
+      "side": "SELL",
+      "retail_portfolio_id": "00000000-0000-4000-8000-0000000000aa",
+      "fillSource": "FILL_SOURCE_CLOB",
+      "commission_detail_total": {
+        "total_commission": "0.2404",
+        "gst_commission": "0",
+        "withholding_commission": "0",
+        "client_commission": "0",
+        "venue_commission": "0.2404",
+        "regulatory_commission": "0",
+        "clearing_commission": "0"
+      }
+    },
+    {
+      "entry_id": "e-0001",
+      "trade_id": "t-0001",
+      "order_id": "11111111-aaaa-4000-8000-000000000010",
+      "trade_time": "2026-10-15T16:10:00.000123Z",
+      "trade_type": "FILL",
+      "price": "60100.00",
+      "size": "0.00200000",
+      "commission": "0.4808",
+      "product_id": "BTC-USD",
+      "sequence_timestamp": "2026-10-15T16:10:00.003123Z",
+      "liquidity_indicator": "MAKER",
+      "size_in_quote": false,
+      "user_id": "33333333-0000-4000-8000-000000000001",
+      "side": "SELL",
+      "retail_portfolio_id": "00000000-0000-4000-8000-0000000000aa",
+      "fillSource": "FILL_SOURCE_CLOB",
+      "commission_detail_total": {
+        "total_commission": "0.4808",
+        "gst_commission": "0",
+        "withholding_commission": "0",
+        "client_commission": "0",
+        "venue_commission": "0.4808",
+        "regulatory_commission": "0",
+        "clearing_commission": "0"
+      }
+    }
+  ],
+  "cursor": "789100"
+}

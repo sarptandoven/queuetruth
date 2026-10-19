@@ -1,0 +1,25 @@
+{
+  "schema": "qt.data_quality",
+  "schema_version": 1,
+  "records": 11,
+  "maybe_bad_book_records": 0,
+  "bad_ts_recv_records": 0,
+  "snapshot_records": 4,
+  "pre_snapshot_rows_skipped": 0,
+  "unknown_order_refs": 0,
+  "duplicate_adds": 0,
+  "unexpected_modifies": 0,
+  "sequence_gaps": 0,
+  "sequence_regressions": 0,
+  "out_of_order_ts_event": 0,
+  "crossed_books_after_last": 0,
+  "hidden_prints": 0,
+  "off_price_executions": 0,
+  "feed_gaps": [],
+  "source_specific": {
+    "unterminated_events": 0,
+    "files_without_snapshot": 0
+  },
+  "verdict": "clean",
+  "reasons": []
+}

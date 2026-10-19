@@ -1,0 +1,96 @@
+{
+  "name": "qt.instruments",
+  "metadata": {
+    "qt.engine_version": "0.1.0",
+    "qt.schema": "qt.instruments",
+    "qt.schema_version": "1.1"
+  },
+  "fields": [
+    {
+      "name": "instrument_id",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "session_date",
+      "type": "date32",
+      "nullable": false
+    },
+    {
+      "name": "symbol",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "venue",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "nasdaq",
+        "cme",
+        "coinbase",
+        "generic"
+      ]
+    },
+    {
+      "name": "source_venue",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "price_exp",
+      "type": "int8",
+      "nullable": false
+    },
+    {
+      "name": "tick_size",
+      "type": "int64",
+      "nullable": false
+    },
+    {
+      "name": "lot_size",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "size_exp",
+      "type": "int8",
+      "nullable": false
+    },
+    {
+      "name": "contract_multiplier",
+      "type": "float64",
+      "nullable": false
+    },
+    {
+      "name": "currency",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "session_tz",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "midnight_utc_ns",
+      "type": "int64",
+      "nullable": false
+    },
+    {
+      "name": "open_s",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "close_s",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "source",
+      "type": "utf8",
+      "nullable": false
+    }
+  ]
+}

@@ -1,0 +1,344 @@
+# Release. On a published GitHub release: build the sdist and one abi3 wheel per platform, check their
+# contents (scripts/release/check_dist.py), smoke-test every wheel in a clean venv on its own platform with CPython
+# 3.11 and 3.14 (scripts/release/smoke.sh), build and smoke-test a wheel from the sdist alone, build the standalone
+# queuetruth-core binaries, attest build provenance, then upload to PyPI with Trusted Publishing (PEP 740
+# attestations) and attach the binaries to the GitHub release. `workflow_dispatch` runs every build and test and
+# uploads nothing (a dry run).
+#
+# Actions are pinned by commit SHA (tag in the trailing comment), as in ci.yml.
+#
+# One-time setup, done by the maintainer before the first release:
+# - PyPI: project `queuetruth` -> Publishing -> add a trusted publisher: owner `sarptandoven`, repository
+#   `queuetruth`, workflow `release.yml`, environment `pypi` (a "pending publisher" works before the first upload).
+# - GitHub: Settings -> Environments -> `pypi`, with the maintainer as required reviewer, so every upload waits for approval.
+# - Release checklist: version bumped in pyproject.toml, Cargo.toml and python/queuetruth/_version.py; CHANGELOG.md
+#   heading `## [X.Y.Z] - YYYY-MM-DD`; tag `vX.Y.Z`.
+#
+# Platforms (SPEC 1.1 item 13, 1.2): published wheels for macOS arm64 and x86_64 and manylinux_2_28 x86_64 and
+# aarch64. Windows and musllinux wheels are built as experiments only (continue-on-error, never uploaded): SPEC 1.2
+# rules out Windows/musl wheels for v0.1, and scikit-learn publishes no musllinux wheels, so a musl install cannot
+# be smoke-tested.
+name: release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  PYTHON_VERSION: "3.13"
+  RUST_TOOLCHAIN: "1.97.1"
+
+jobs:
+  meta:
+    name: version and tag
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: versions agree; release tag and CHANGELOG match
+        id: version
+        env:
+          EVENT: ${{ github.event_name }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          python -I - <<'EOF'
+          import os
+          import re
+          import tomllib
+          from pathlib import Path
+
+          v = tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"]
+          cargo = tomllib.loads(Path("Cargo.toml").read_text())["workspace"]["package"]["version"]
+          py = re.search(r'__version__\s*=\s*"([^"]+)"', Path("python/queuetruth/_version.py").read_text())[1]
+          assert v == cargo == py, f"pyproject {v}, Cargo.toml {cargo}, _version.py {py}"
+          if os.environ["EVENT"] == "release":
+              tag = os.environ["TAG"]
+              assert tag == f"v{v}", f"release tag {tag!r} is not v{v}"
+              changelog = Path("CHANGELOG.md").read_text()
+              assert re.search(rf"^## \[{re.escape(v)}\] - \d{{4}}-\d{{2}}-\d{{2}}$", changelog, re.M), (
+                  f"CHANGELOG.md has no '## [{v}] - YYYY-MM-DD' heading"
+              )
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"version={v}\n")
+          print("version", v)
+          EOF
+
+  sdist:
+    name: sdist
+    needs: meta
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          command: sdist
+          args: --out dist
+      - name: check sdist contents
+        run: python -I scripts/release/check_dist.py dist --source . --require-sdist
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dist-sdist
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  wheels:
+    name: wheel (${{ matrix.platform.name }})
+    needs: meta
+    runs-on: ${{ matrix.platform.os }}
+    continue-on-error: ${{ matrix.platform.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - { name: macos-arm64, os: macos-15, target: aarch64-apple-darwin, manylinux: "", experimental: false }
+          - { name: macos-x86_64, os: macos-15-intel, target: x86_64-apple-darwin, manylinux: "", experimental: false }
+          - name: manylinux-x86_64
+            os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            manylinux: "2_28"
+            experimental: false
+          - name: manylinux-aarch64
+            os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            manylinux: "2_28"
+            experimental: false
+          - name: musllinux-x86_64
+            os: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+            manylinux: musllinux_1_2
+            experimental: true
+          - name: windows-x86_64
+            os: windows-2025
+            target: x86_64-pc-windows-msvc
+            manylinux: ""
+            experimental: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          target: ${{ matrix.platform.target }}
+          manylinux: ${{ matrix.platform.manylinux }}
+          rust-toolchain: ${{ env.RUST_TOOLCHAIN }}
+          args: --profile dist --locked --out dist
+      - name: check wheel contents
+        shell: bash
+        run: python -I scripts/release/check_dist.py dist --source .
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          # Only `dist-*` artifacts are uploaded to PyPI.
+          name: ${{ matrix.platform.experimental && 'experimental' || 'dist' }}-wheel-${{ matrix.platform.name }}
+          path: dist/*.whl
+          if-no-files-found: error
+
+  smoke:
+    name: smoke (${{ matrix.platform.name }}, CPython ${{ matrix.python }})
+    needs: wheels
+    runs-on: ${{ matrix.platform.os }}
+    continue-on-error: ${{ matrix.platform.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.14"]
+        platform:
+          - { name: macos-arm64, os: macos-15, experimental: false }
+          - { name: macos-x86_64, os: macos-15-intel, experimental: false }
+          - { name: manylinux-x86_64, os: ubuntu-24.04, experimental: false }
+          - { name: manylinux-aarch64, os: ubuntu-24.04-arm, experimental: false }
+          - { name: windows-x86_64, os: windows-2025, experimental: true }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        id: py
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ matrix.platform.experimental && 'experimental' || 'dist' }}-wheel-${{ matrix.platform.name }}
+          path: wheel
+      - name: clean venv, wheel only, getting-started steps
+        shell: bash
+        env:
+          PY: ${{ steps.py.outputs.python-path }}
+        run: |
+          work="$(cygpath -u "$RUNNER_TEMP" 2>/dev/null || echo "$RUNNER_TEMP")/smoke"
+          bash scripts/release/smoke.sh "$PY" wheel/*.whl "$work"
+
+  sdist-build:
+    name: wheel from the sdist alone
+    needs: sdist
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master 2026-10-16
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        id: py
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dist-sdist
+          path: sdist
+      - name: pip wheel from the sdist (isolated build, outside the checkout)
+        working-directory: ${{ runner.temp }}
+        run: python -m pip wheel --no-deps --no-cache-dir -w sdist-wheel "$GITHUB_WORKSPACE"/sdist/queuetruth-*.tar.gz
+      - name: check the source-built wheel
+        run: python -I scripts/release/check_dist.py "$RUNNER_TEMP"/sdist-wheel/*.whl --source .
+      - name: smoke the source-built wheel
+        env:
+          PY: ${{ steps.py.outputs.python-path }}
+        run: bash scripts/release/smoke.sh "$PY" "$RUNNER_TEMP"/sdist-wheel/*.whl "$RUNNER_TEMP/smoke"
+
+  core:
+    name: queuetruth-core (${{ matrix.target }})
+    needs: meta
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-15, target: aarch64-apple-darwin }
+          - { os: macos-15-intel, target: x86_64-apple-darwin }
+          - { os: ubuntu-24.04, target: x86_64-unknown-linux-musl }
+          - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-musl }
+    env:
+      TARGET: ${{ matrix.target }}
+      VERSION: ${{ needs.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master 2026-10-16
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: ${{ matrix.target }}
+      - name: musl C toolchain (zstd)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q musl-tools
+          echo "CC_$(echo "$TARGET" | tr - _)=musl-gcc" >> "$GITHUB_ENV"
+      - name: build (static on Linux)
+        run: cargo build --locked --profile dist -p queuetruth-cli --bin queuetruth-core --target "$TARGET"
+      - name: smoke (fixtures synth, sample, replay; a Python-only command exits 2)
+        working-directory: ${{ runner.temp }}
+        run: |
+          bin="$GITHUB_WORKSPACE/target/$TARGET/dist/queuetruth-core"
+          "$bin" --version | grep -qx "queuetruth-core $VERSION"
+          "$bin" fixtures synth --out synth
+          (cd synth && shasum -a 256 -c MANIFEST.sha256 > /dev/null && echo "synth: all files verified")
+          "$bin" shadows sample --data synth --n 200 --out shadows.parquet
+          "$bin" replay --data synth --shadows shadows.parquet --out replay
+          set +e
+          "$bin" report --in replay --out report.html 2> report.err
+          rc=$?
+          set -e
+          cat report.err
+          test "$rc" -eq 2 && grep -q QT-USAGE-001 report.err
+      - name: package
+        run: |
+          name="queuetruth-core-$VERSION-$TARGET"
+          mkdir -p "pkg/$name/licenses"
+          cp "target/$TARGET/dist/queuetruth-core" README.md LICENSE NOTICE "pkg/$name/"
+          cp third_party/licenses/* "pkg/$name/licenses/"
+          tar -C pkg -czf "pkg/$name.tar.gz" "$name"
+          (cd pkg && shasum -a 256 "$name.tar.gz" > "$name.tar.gz.sha256")
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: core-${{ matrix.target }}
+          path: pkg/queuetruth-core-*.tar.gz*
+          if-no-files-found: error
+
+  publish:
+    name: publish to PyPI
+    needs: [meta, sdist, wheels, smoke, sdist-build]
+    if: github.event_name == 'release'
+    runs-on: ubuntu-24.04
+    environment:
+      name: pypi
+      url: https://pypi.org/project/queuetruth/${{ needs.meta.outputs.version }}/
+    permissions:
+      contents: read # checkout for check_dist.py
+      id-token: write # PyPI Trusted Publishing and Sigstore signing of the attestations
+      attestations: write # GitHub build-provenance attestations of the uploaded files
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: dist-*
+          merge-multiple: true
+          path: dist
+      - name: final check of everything that will be uploaded
+        run: |
+          ls -l dist
+          python -I scripts/release/check_dist.py dist --source . --require-sdist \
+            --require-platform 'macosx_*_arm64' --require-platform 'macosx_*_x86_64' \
+            --require-platform 'manylinux_2_28_x86_64*' --require-platform 'manylinux_2_28_aarch64*'
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/*
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          packages-dir: dist/
+          attestations: true
+
+  release-assets:
+    name: attach queuetruth-core to the GitHub release
+    needs: [core, publish]
+    if: github.event_name == 'release'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # upload assets to the GitHub release
+      id-token: write # Sigstore signing of the attestations
+      attestations: write # GitHub build-provenance attestations of the binaries
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: core-*
+          merge-multiple: true
+          path: core
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: core/*.tar.gz
+      - name: upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+          REPO: ${{ github.repository }}
+        run: gh release upload "$TAG" core/* --repo "$REPO"

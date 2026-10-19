@@ -1,0 +1,95 @@
+{
+  "name": "qt.queue_trajectory",
+  "metadata": {
+    "qt.engine_version": "0.1.0",
+    "qt.schema": "qt.queue_trajectory",
+    "qt.schema_version": "1.1"
+  },
+  "fields": [
+    {
+      "name": "shadow_id",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "ts_event",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": false
+    },
+    {
+      "name": "sequence",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "kind",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "live",
+        "event",
+        "end"
+      ]
+    },
+    {
+      "name": "queue_ahead_before",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "queue_ahead_after",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "rank_before",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "rank_after",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "level_qty_before",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "level_qty_after",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "cancel_ahead_qty",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "cancel_behind_qty",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "add_behind_qty",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "traded_at_px_qty",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "trade_through_qty",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "filled_qty",
+      "type": "uint64",
+      "nullable": false
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+# Separate interpreter for `run.py nautilus` (never install into the queuetruth venv).
+# Verified 2026-10-19 with CPython 3.13 (/opt/homebrew/bin/python3.13) on macOS 15.6 arm64; venv ~650 MB.
+#
+# nautilus_trader 1.231.0 (2026-08-02) is the latest stable release on or before 2026-10-04 (2.0.0rc1..rc5 are
+# pre-releases). Its macOS arm64 wheel is tagged macosx_26_0 although every extension module is built with
+# minos 11.0, so on macOS < 26 download it and install it under a macosx_11_0 file name:
+#
+#   uv venv .scratch/nt/venv --python /opt/homebrew/bin/python3.13
+#   curl -L -o /tmp/nautilus_trader-1.231.0-cp313-cp313-macosx_11_0_arm64.whl \
+#     "$(curl -s https://pypi.org/pypi/nautilus-trader/1.231.0/json | python3 -c 'import json,sys; print([f["url"] for f in json.load(sys.stdin)["urls"] if "cp313-cp313-macosx" in f["filename"]][0])')"
+#   uv pip install --python .scratch/nt/venv/bin/python /tmp/nautilus_trader-1.231.0-cp313-cp313-macosx_11_0_arm64.whl
+#
+# On Linux / macOS 26: `uv pip install --python .scratch/nt/venv/bin/python -r scripts/nt_crosscheck/requirements.txt`.
+nautilus_trader==1.231.0
+click==8.5.0
+fsspec==2026.2.0
+msgspec==0.22.0
+numpy==2.5.3
+pandas==3.0.6
+portion==2.6.3
+pyarrow==25.0.1
+python-dateutil==2.9.0.post0
+pytz==2026.4
+six==1.17.0
+sortedcontainers==2.4.0
+tqdm==4.70.1
+tzdata==2026.5
+uvloop==0.22.1

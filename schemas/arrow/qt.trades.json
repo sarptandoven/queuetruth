@@ -1,0 +1,55 @@
+{
+  "name": "qt.trades",
+  "metadata": {
+    "qt.engine_version": "0.1.0",
+    "qt.schema": "qt.trades",
+    "qt.schema_version": "1.1"
+  },
+  "fields": [
+    {
+      "name": "ts_event",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": false
+    },
+    {
+      "name": "instrument_id",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "sequence",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "price",
+      "type": "int64",
+      "nullable": false
+    },
+    {
+      "name": "size",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "aggressor_side",
+      "type": "uint8",
+      "nullable": false
+    },
+    {
+      "name": "kind",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "displayed",
+        "hidden",
+        "cross"
+      ]
+    },
+    {
+      "name": "maker_order_id",
+      "type": "uint64",
+      "nullable": true
+    }
+  ]
+}

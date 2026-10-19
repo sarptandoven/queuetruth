@@ -1,0 +1,161 @@
+{
+  "reference": "tost",
+  "oracle": [
+    "O-STAT-4"
+  ],
+  "generator": "scripts/reference/gen_tost.py",
+  "description": "TOST equivalence reference values (SPEC 5.7.5, oracle O-STAT-4) -> tests/fixtures/reference/tost.json.\n\n- `tost_p(estimate, se, margin) = max(1 - Phi((est + margin) / se), Phi((est - margin) / se))` with\n  `Phi = scipy.stats.norm.cdf`, written literally (`1 - cdf`). `p_sf_variant` uses `norm.sf` for the first term;\n  the two agree to 1e-15 on every case here (they diverge only far in the tail, where both are ~0).\n- `tost_from_ci(ci90, margin)`: equivalent iff the 90% CI lies inside `[-margin, margin]`, read as the CLOSED\n  interval (`-margin <= lo and hi <= margin`); boundary cases are included and flagged.",
+  "software": {
+    "python": "3.13.9",
+    "scipy": "1.18.1"
+  },
+  "tolerance": {
+    "tost_p": "abs 1e-15"
+  },
+  "tost_p": [
+    {
+      "estimate": 0.0,
+      "se": 0.01,
+      "margin": 0.02,
+      "tost_p": 0.02275013194817921,
+      "p_sf_variant": 0.022750131948179198
+    },
+    {
+      "estimate": 0.005,
+      "se": 0.01,
+      "margin": 0.02,
+      "tost_p": 0.06680720126885806,
+      "p_sf_variant": 0.06680720126885806
+    },
+    {
+      "estimate": -0.012,
+      "se": 0.008,
+      "margin": 0.02,
+      "tost_p": 0.15865525393145707,
+      "p_sf_variant": 0.15865525393145707
+    },
+    {
+      "estimate": 0.019,
+      "se": 0.004,
+      "margin": 0.02,
+      "tost_p": 0.4012936743170762,
+      "p_sf_variant": 0.4012936743170762
+    },
+    {
+      "estimate": 0.03,
+      "se": 0.01,
+      "margin": 0.02,
+      "tost_p": 0.8413447460685429,
+      "p_sf_variant": 0.8413447460685429
+    },
+    {
+      "estimate": -0.025,
+      "se": 0.02,
+      "margin": 0.02,
+      "tost_p": 0.5987063256829237,
+      "p_sf_variant": 0.5987063256829237
+    },
+    {
+      "estimate": 0.0,
+      "se": 0.05,
+      "margin": 0.02,
+      "tost_p": 0.3445782583896758,
+      "p_sf_variant": 0.3445782583896758
+    },
+    {
+      "estimate": 0.25,
+      "se": 0.4,
+      "margin": 1.0,
+      "tost_p": 0.03039636176526136,
+      "p_sf_variant": 0.03039636176526136
+    },
+    {
+      "estimate": -1.5,
+      "se": 0.3,
+      "margin": 1.0,
+      "tost_p": 0.9522096477271853,
+      "p_sf_variant": 0.9522096477271853
+    },
+    {
+      "estimate": 0.0,
+      "se": 0.0001,
+      "margin": 0.01,
+      "tost_p": 0.0,
+      "p_sf_variant": 0.0
+    }
+  ],
+  "tost_from_ci": [
+    {
+      "ci90": [
+        -0.01,
+        0.015
+      ],
+      "margin": 0.02,
+      "equivalent": true,
+      "boundary": false
+    },
+    {
+      "ci90": [
+        -0.025,
+        0.01
+      ],
+      "margin": 0.02,
+      "equivalent": false,
+      "boundary": false
+    },
+    {
+      "ci90": [
+        0.005,
+        0.021
+      ],
+      "margin": 0.02,
+      "equivalent": false,
+      "boundary": false
+    },
+    {
+      "ci90": [
+        -0.02,
+        0.02
+      ],
+      "margin": 0.02,
+      "equivalent": true,
+      "boundary": true
+    },
+    {
+      "ci90": [
+        -0.02,
+        0.0
+      ],
+      "margin": 0.02,
+      "equivalent": true,
+      "boundary": true
+    },
+    {
+      "ci90": [
+        -0.03,
+        0.03
+      ],
+      "margin": 0.02,
+      "equivalent": false,
+      "boundary": false
+    },
+    {
+      "ci90": [
+        0.0,
+        0.0
+      ],
+      "margin": 0.0,
+      "equivalent": true,
+      "boundary": true
+    },
+    {
+      "ci90": [
+        -0.5,
+        0.75
+      ],
+      "margin": 1.0,
+      "equivalent": true,
+      "boundary": false
+    }
+  ]
+}

@@ -1,0 +1,99 @@
+{
+  "sample": {
+    "dataset": {
+      "path": "x"
+    },
+    "shadows": {
+      "path": "x"
+    },
+    "out": "x",
+    "models": [
+      "x"
+    ],
+    "mode": "faithful",
+    "exchange": "partial",
+    "horizons_ns": [
+      1
+    ],
+    "h_max_ns": 1,
+    "l2": {
+      "depth_levels": 1,
+      "cadence_ns": 1,
+      "trade_position": "before",
+      "include_counts": true,
+      "emit_hidden_trades": true
+    },
+    "particles": 1,
+    "seed": 1,
+    "latency": {
+      "feed_ns": 1,
+      "decision_ns": 1,
+      "gateway_ns": 1,
+      "jitter_ns": 1
+    },
+    "write_fills": true,
+    "write_trajectory": true,
+    "threads": 1,
+    "bootstrap_b": 1,
+    "amends": {
+      "path": "x"
+    },
+    "exclude_order_ids": [
+      {
+        "instrument_id": 1,
+        "order_id": 1,
+        "session_date": "2020-01-02"
+      }
+    ]
+  },
+  "minimal": {
+    "dataset": {
+      "path": "x"
+    },
+    "shadows": {
+      "path": "x"
+    }
+  },
+  "defaults": {
+    "dataset": {
+      "path": "x"
+    },
+    "shadows": {
+      "path": "x"
+    },
+    "out": null,
+    "models": [
+      "all"
+    ],
+    "mode": "faithful",
+    "exchange": "partial",
+    "horizons_ns": [
+      100000000,
+      1000000000,
+      10000000000,
+      60000000000
+    ],
+    "h_max_ns": 300000000000,
+    "l2": {
+      "depth_levels": 10,
+      "cadence_ns": 0,
+      "trade_position": "before",
+      "include_counts": true,
+      "emit_hidden_trades": true
+    },
+    "particles": 100,
+    "seed": 0,
+    "latency": {
+      "feed_ns": 0,
+      "decision_ns": 0,
+      "gateway_ns": 0,
+      "jitter_ns": 0
+    },
+    "write_fills": true,
+    "write_trajectory": false,
+    "threads": 1,
+    "bootstrap_b": 1000,
+    "amends": null,
+    "exclude_order_ids": []
+  }
+}

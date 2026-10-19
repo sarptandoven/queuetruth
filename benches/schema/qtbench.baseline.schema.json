@@ -1,0 +1,610 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "qtbench.baseline",
+ "title": "qtbench.baseline",
+ "description": "benches/baseline.json: a promoted qtbench.results (check.py --promote) plus gate settings.",
+ "type": "object",
+ "required": [
+  "schema",
+  "schema_version",
+  "suite",
+  "created_utc",
+  "env",
+  "config",
+  "cases",
+  "derived",
+  "promoted_from",
+  "gate"
+ ],
+ "properties": {
+  "schema": {
+   "const": "qtbench.baseline"
+  },
+  "schema_version": {
+   "const": 1
+  },
+  "suite": {
+   "type": "string"
+  },
+  "created_utc": {
+   "type": "string"
+  },
+  "env": {
+   "type": "object",
+   "required": [
+    "machine",
+    "os",
+    "cpu_brand",
+    "ncpu",
+    "mem_bytes",
+    "power_source",
+    "low_power_mode",
+    "env_class"
+   ],
+   "properties": {
+    "machine": {
+     "type": "string"
+    },
+    "os": {
+     "type": "string"
+    },
+    "cpu_brand": {
+     "type": "string"
+    },
+    "ncpu": {
+     "type": "integer"
+    },
+    "perf_cores": {
+     "type": [
+      "integer",
+      "null"
+     ]
+    },
+    "eff_cores": {
+     "type": [
+      "integer",
+      "null"
+     ]
+    },
+    "mem_bytes": {
+     "type": "integer"
+    },
+    "python": {
+     "type": "string"
+    },
+    "rustc": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "power_source": {
+     "enum": [
+      "ac",
+      "battery",
+      "unknown"
+     ]
+    },
+    "low_power_mode": {
+     "type": [
+      "boolean",
+      "null"
+     ]
+    },
+    "thermal_warning": {
+     "type": [
+      "boolean",
+      "null"
+     ]
+    },
+    "load_avg_start": {
+     "type": [
+      "array",
+      "null"
+     ],
+     "items": {
+      "type": "number"
+     }
+    },
+    "load_avg_end": {
+     "type": [
+      "array",
+      "null"
+     ],
+     "items": {
+      "type": "number"
+     }
+    },
+    "env_class": {
+     "type": "string"
+    },
+    "engine_version": {
+     "type": "string"
+    },
+    "binary_sha256": {
+     "type": "object",
+     "additionalProperties": {
+      "type": "string"
+     }
+    }
+   }
+  },
+  "config": {
+   "type": "object"
+  },
+  "cases": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "id",
+     "group",
+     "unit",
+     "direction",
+     "status",
+     "samples",
+     "summary",
+     "target"
+    ],
+    "properties": {
+     "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:\\-]+$"
+     },
+     "group": {
+      "type": "string"
+     },
+     "unit": {
+      "type": "string",
+      "description": "records/s | msg/s | s"
+     },
+     "direction": {
+      "enum": [
+       "higher_is_better",
+       "lower_is_better"
+      ]
+     },
+     "work": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "status": {
+      "enum": [
+       "ok",
+       "partial",
+       "error",
+       "skipped"
+      ]
+     },
+     "skip_reason": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "errors": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     },
+     "samples": {
+      "type": "object",
+      "required": [
+       "metric",
+       "metric_round",
+       "process_wall_s",
+       "peak_rss_bytes",
+       "round"
+      ],
+      "properties": {
+       "metric": {
+        "type": "array",
+        "items": {
+         "type": "number"
+        }
+       },
+       "metric_round": {
+        "type": "array",
+        "items": {
+         "type": "integer"
+        }
+       },
+       "process_wall_s": {
+        "type": "array",
+        "items": {
+         "type": "number"
+        }
+       },
+       "user_s": {
+        "type": "array",
+        "items": {
+         "type": "number"
+        }
+       },
+       "sys_s": {
+        "type": "array",
+        "items": {
+         "type": "number"
+        }
+       },
+       "peak_rss_bytes": {
+        "type": "array",
+        "items": {
+         "type": "integer"
+        }
+       },
+       "load1_before": {
+        "type": "array",
+        "items": {
+         "type": "number"
+        }
+       },
+       "round": {
+        "type": "array",
+        "items": {
+         "type": "integer"
+        }
+       }
+      }
+     },
+     "extra_samples": {
+      "type": "object",
+      "additionalProperties": {
+       "type": "array",
+       "items": {
+        "type": "number"
+       }
+      }
+     },
+     "extra_medians": {
+      "type": "object",
+      "additionalProperties": {
+       "type": "number"
+      }
+     },
+     "summary": {
+      "type": "object",
+      "required": [
+       "n",
+       "median",
+       "p10",
+       "p90",
+       "min",
+       "max"
+      ],
+      "properties": {
+       "n": {
+        "type": "integer"
+       },
+       "median": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "mean": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "stdev": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "cv": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "p10": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "p90": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "min": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "max": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "mad": {
+        "type": [
+         "number",
+         "null"
+        ]
+       }
+      },
+      "additionalProperties": false
+     },
+     "peak_rss_bytes_max": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "noisy_rounds": {
+      "type": "integer"
+     },
+     "target": {
+      "type": [
+       "object",
+       "null"
+      ],
+      "required": [
+       "op",
+       "value",
+       "met"
+      ],
+      "properties": {
+       "op": {
+        "enum": [
+         ">=",
+         "<=",
+         ">",
+         "<"
+        ]
+       },
+       "value": {
+        "type": "number"
+       },
+       "spec": {
+        "type": "string"
+       },
+       "measured": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "met": {
+        "type": [
+         "boolean",
+         "null"
+        ]
+       }
+      }
+     },
+     "reference": {
+      "type": [
+       "object",
+       "null"
+      ]
+     },
+     "notes": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    }
+   }
+  },
+  "derived": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "id",
+     "kind",
+     "of",
+     "paired",
+     "summary",
+     "target"
+    ],
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "kind": {
+      "enum": [
+       "cost_ratio",
+       "throughput_loss"
+      ]
+     },
+     "of": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "minItems": 2,
+      "maxItems": 2
+     },
+     "paired": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      }
+     },
+     "summary": {
+      "type": "object",
+      "required": [
+       "n",
+       "median",
+       "p10",
+       "p90",
+       "min",
+       "max"
+      ],
+      "properties": {
+       "n": {
+        "type": "integer"
+       },
+       "median": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "mean": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "stdev": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "cv": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "p10": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "p90": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "min": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "max": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "mad": {
+        "type": [
+         "number",
+         "null"
+        ]
+       }
+      },
+      "additionalProperties": false
+     },
+     "target": {
+      "type": [
+       "object",
+       "null"
+      ],
+      "required": [
+       "op",
+       "value",
+       "met"
+      ],
+      "properties": {
+       "op": {
+        "enum": [
+         ">=",
+         "<=",
+         ">",
+         "<"
+        ]
+       },
+       "value": {
+        "type": "number"
+       },
+       "spec": {
+        "type": "string"
+       },
+       "measured": {
+        "type": [
+         "number",
+         "null"
+        ]
+       },
+       "met": {
+        "type": [
+         "boolean",
+         "null"
+        ]
+       }
+      }
+     },
+     "notes": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    }
+   }
+  },
+  "promoted_from": {
+   "type": "object",
+   "required": [
+    "sha256"
+   ],
+   "properties": {
+    "path": {
+     "type": "string"
+    },
+    "sha256": {
+     "type": "string"
+    },
+    "created_utc": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "note": {
+     "type": [
+      "string",
+      "null"
+     ]
+    }
+   }
+  },
+  "gate": {
+   "type": "object",
+   "required": [
+    "threshold",
+    "alpha"
+   ],
+   "properties": {
+    "threshold": {
+     "type": "number"
+    },
+    "alpha": {
+     "type": "number"
+    },
+    "per_case": {
+     "type": "object",
+     "additionalProperties": {
+      "type": "object",
+      "properties": {
+       "threshold": {
+        "type": "number"
+       }
+      }
+     }
+    }
+   }
+  }
+ }
+}
