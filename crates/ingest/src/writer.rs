@@ -1,7 +1,10 @@
 //! `DatasetWriter`: routes rows into `(session_date, instrument_id)` partitions, keeps memory bounded by spilling
-//! partition buffers to fixed-size binary scratch files under `<root>/.spill/`, and on `finish` writes one Parquet
-//! file per partition (in parallel, byte-identical whatever the buffering), `instruments.parquet`,
-//! `data_quality.json` and `manifest.json` (SPEC 3.3, 3.10).
+//! partition buffers, and on `finish` writes one Parquet file per partition (in parallel, byte-identical whatever the
+//! buffering), `instruments.parquet`, `data_quality.json` and `manifest.json` (SPEC 3.3, 3.10).
+//!
+//! Spilling: the first `MAX_STREAMED_PARTS` partitions of a table that spill are streamed, i.e. encoded into their
+//! final Parquet file while the input is read, in the `CHUNK_ROWS` batches `write_table` would use (so the bytes are
+//! the same); further partitions spill to fixed-size binary scratch files under `<root>/.spill/`.
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
@@ -17,15 +20,20 @@ use qt_types::{Instrument, MboEvent, QtError, QtResult, Ts, ValidationStatus, Ve
 
 use crate::DatasetKind;
 use crate::dq::apply_verdict;
-use crate::spill::{FixedRow, spill_append, spill_path, write_table};
+use crate::spill::{CHUNK_ROWS, FixedRow, spill_append, spill_path, write_table};
 use crate::time::{NS_PER_DAY, format_date, midnight_utc_ns, tz_from_name};
 
 /// Total rows buffered in memory (all partitions, all tables) before the largest buffers are spilled.
 pub const DEFAULT_MEMORY_ROWS: usize = 8_000_000;
+/// Partitions per table encoded into their Parquet file while the input is read (the others spill to scratch).
+const MAX_STREAMED_PARTS: usize = 8;
 
 struct PartBuf<T> {
+    /// Rows not yet written (a streamed partition keeps fewer than `CHUNK_ROWS`: its next batch).
     pending: Vec<T>,
     spilled: bool,
+    /// Streamed: its Parquet file is written while the input is read (the writer is `Parts::streams[i]`).
+    streamed: bool,
     rows: u64,
     ts_min: Ts,
     ts_max: Ts,
@@ -36,6 +44,7 @@ impl<T> Default for PartBuf<T> {
         Self {
             pending: Vec::new(),
             spilled: false,
+            streamed: false,
             rows: 0,
             ts_min: Ts::MAX,
             ts_max: Ts::MIN,
@@ -43,20 +52,40 @@ impl<T> Default for PartBuf<T> {
     }
 }
 
+/// `<dir_name>/date=.../instrument_id=.../part-00000.parquet` of a partition.
+fn part_rel(dir_name: &str, date: i32, iid: u32) -> String {
+    format!(
+        "{dir_name}/date={}/instrument_id={iid}/part-00000.parquet",
+        format_date(date)
+    )
+}
+
 struct Parts<T> {
+    /// Dataset root and the table's directory (where streamed partitions are written).
+    root: PathBuf,
+    dir_name: &'static str,
     index: HashMap<(i32, u32), usize>,
     keys: Vec<(i32, u32)>,
     bufs: Vec<PartBuf<T>>,
+    /// Parquet writers of the streamed partitions (index-aligned with `bufs`).
+    streams: Vec<Option<TableWriter>>,
+    /// Streamed partitions so far.
+    n_streamed: usize,
     last: Option<((i32, u32), usize)>,
+    /// Rows buffered in the partitions that are not streamed (the spillable rows).
     pending: usize,
 }
 
 impl<T: FixedRow> Parts<T> {
-    fn new() -> Self {
+    fn new(root: &Path, dir_name: &'static str) -> Self {
         Self {
+            root: root.to_owned(),
+            dir_name,
             index: HashMap::new(),
             keys: Vec::new(),
             bufs: Vec::new(),
+            streams: Vec::new(),
+            n_streamed: 0,
             last: None,
             pending: 0,
         }
@@ -76,6 +105,7 @@ impl<T: FixedRow> Parts<T> {
                 self.index.insert(key, i);
                 self.keys.push(key);
                 self.bufs.push(PartBuf::default());
+                self.streams.push(None);
                 i
             }
         };
@@ -84,7 +114,7 @@ impl<T: FixedRow> Parts<T> {
     }
 
     #[inline]
-    fn push(&mut self, key: (i32, u32), r: T) {
+    fn push(&mut self, key: (i32, u32), r: T) -> QtResult<()> {
         let i = self.slot(key);
         let b = &mut self.bufs[i];
         let ts = r.ts();
@@ -92,23 +122,57 @@ impl<T: FixedRow> Parts<T> {
         b.ts_max = b.ts_max.max(ts);
         b.rows += 1;
         b.pending.push(r);
-        self.pending += 1;
+        if !b.streamed {
+            self.pending += 1;
+        } else if b.pending.len() == CHUNK_ROWS
+            && let Some(w) = self.streams[i].as_mut()
+        {
+            w.write(&T::batch(&b.pending))?;
+            b.pending.clear();
+        }
+        Ok(())
     }
 
-    /// Spills the largest pending buffers until at most `target` rows remain in memory.
+    /// Opens the Parquet file of partition `i` and writes its whole `CHUNK_ROWS` batches; the rest stays pending as
+    /// the start of its next batch (no longer counted in `pending`: a streamed partition holds fewer than
+    /// `CHUNK_ROWS` rows, so memory stays bounded by `MAX_STREAMED_PARTS * CHUNK_ROWS` rows per table on top).
+    fn start_stream(&mut self, i: usize) -> QtResult<()> {
+        let (date, iid) = self.keys[i];
+        let mut w = TableWriter::create(&self.root.join(part_rel(self.dir_name, date, iid)), T::TABLE)?;
+        let b = &mut self.bufs[i];
+        self.pending -= b.pending.len();
+        let whole = b.pending.len() - b.pending.len() % CHUNK_ROWS;
+        for c in b.pending[..whole].chunks(CHUNK_ROWS) {
+            w.write(&T::batch(c))?;
+        }
+        let mut rest = Vec::with_capacity(CHUNK_ROWS);
+        rest.extend_from_slice(&b.pending[whole..]);
+        b.pending = rest;
+        b.streamed = true;
+        self.streams[i] = Some(w);
+        self.n_streamed += 1;
+        Ok(())
+    }
+
+    /// Spills the largest pending buffers until at most `target` rows remain in memory (streaming the first
+    /// `MAX_STREAMED_PARTS` partitions that spill, scratch files for the others).
     fn spill_down_to(&mut self, dir: &Path, target: usize) -> QtResult<()> {
         if self.pending <= target {
             return Ok(());
         }
-        std::fs::create_dir_all(dir).map_err(|e| QtError::Engine(format!("{}: {e}", dir.display())))?;
         let mut order: Vec<usize> = (0..self.bufs.len())
-            .filter(|&i| !self.bufs[i].pending.is_empty())
+            .filter(|&i| !self.bufs[i].pending.is_empty() && !self.bufs[i].streamed)
             .collect();
         order.sort_by_key(|&i| std::cmp::Reverse(self.bufs[i].pending.len()));
         for i in order {
             if self.pending <= target {
                 break;
             }
+            if !self.bufs[i].spilled && self.n_streamed < MAX_STREAMED_PARTS {
+                self.start_stream(i)?;
+                continue;
+            }
+            std::fs::create_dir_all(dir).map_err(|e| QtError::Engine(format!("{}: {e}", dir.display())))?;
             let (date, iid) = self.keys[i];
             let b = &mut self.bufs[i];
             spill_append(&spill_path(dir, T::TABLE, date, iid), &b.pending)?;
@@ -172,9 +236,9 @@ impl DatasetWriter {
             instruments: Vec::new(),
             routes: HashMap::new(),
             inputs: Vec::new(),
-            mbo: Parts::new(),
-            l2: Parts::new(),
-            trades: Parts::new(),
+            mbo: Parts::new(root, "mbo"),
+            l2: Parts::new(root, "l2"),
+            trades: Parts::new(root, "trades_source"),
             memory_rows: DEFAULT_MEMORY_ROWS,
             threads,
             warnings: Vec::new(),
@@ -316,7 +380,7 @@ impl DatasetWriter {
                 msg: "market-data timestamps must be >= 0".into(),
             });
         }
-        self.mbo.push((session_date, e.instrument_id), *e);
+        self.mbo.push((session_date, e.instrument_id), *e)?;
         if self.mbo.pending > self.memory_rows {
             self.maybe_spill()?;
         }
@@ -333,7 +397,7 @@ impl DatasetWriter {
     /// Appends an L2 row to the partition of `session_date`.
     pub fn push_l2_at(&mut self, r: &L2Row, session_date: i32) -> QtResult<()> {
         self.check_kind(DatasetKind::L2)?;
-        self.l2.push((session_date, r.instrument_id), *r);
+        self.l2.push((session_date, r.instrument_id), *r)?;
         if self.l2.pending > self.memory_rows {
             self.maybe_spill()?;
         }
@@ -348,7 +412,7 @@ impl DatasetWriter {
 
     /// Appends a source trade print to the partition of `session_date`.
     pub fn push_source_trade_at(&mut self, t: &TradeRow, session_date: i32) -> QtResult<()> {
-        self.trades.push((session_date, t.instrument_id), *t);
+        self.trades.push((session_date, t.instrument_id), *t)?;
         if self.trades.pending + self.mbo.pending + self.l2.pending > self.memory_rows {
             self.maybe_spill()?;
         }
@@ -369,9 +433,9 @@ impl DatasetWriter {
 
     /// Writes the manifest and data quality and returns the ingest summary (`spec` left empty for the caller).
     pub fn finish(mut self, mut dq: DataQuality) -> QtResult<json::IngestSummary> {
-        let (dir_name, main_rows) = match self.kind {
-            DatasetKind::Mbo => ("mbo", self.mbo.bufs.iter().map(|b| b.rows).sum::<u64>()),
-            DatasetKind::L2 => ("l2", self.l2.bufs.iter().map(|b| b.rows).sum::<u64>()),
+        let main_rows = match self.kind {
+            DatasetKind::Mbo => self.mbo.bufs.iter().map(|b| b.rows).sum::<u64>(),
+            DatasetKind::L2 => self.l2.bufs.iter().map(|b| b.rows).sum::<u64>(),
         };
         let mut inst_keys: Vec<(i32, u32)> = self
             .instruments
@@ -399,16 +463,16 @@ impl DatasetWriter {
 
         let main = match self.kind {
             DatasetKind::Mbo => {
-                let parts = std::mem::replace(&mut self.mbo, Parts::new());
-                self.write_parts(&parts, dir_name)?
+                let parts = std::mem::replace(&mut self.mbo, Parts::new(&self.root, "mbo"));
+                self.write_parts(parts)?
             }
             DatasetKind::L2 => {
-                let parts = std::mem::replace(&mut self.l2, Parts::new());
-                self.write_parts(&parts, dir_name)?
+                let parts = std::mem::replace(&mut self.l2, Parts::new(&self.root, "l2"));
+                self.write_parts(parts)?
             }
         };
-        let tparts = std::mem::replace(&mut self.trades, Parts::new());
-        let trades = self.write_parts(&tparts, "trades_source")?;
+        let tparts = std::mem::replace(&mut self.trades, Parts::new(&self.root, "trades_source"));
+        let trades = self.write_parts(tparts)?;
 
         let mut files: Vec<FileEntry> = Vec::new();
         let mut partitions = Vec::new();
@@ -487,26 +551,38 @@ impl DatasetWriter {
     }
 
     #[allow(clippy::type_complexity)]
-    fn write_parts<T: FixedRow>(
-        &self,
-        parts: &Parts<T>,
-        dir_name: &str,
-    ) -> QtResult<Vec<((i32, u32), FileEntry, u64, Ts, Ts)>> {
+    fn write_parts<T: FixedRow>(&self, mut parts: Parts<T>) -> QtResult<Vec<((i32, u32), FileEntry, u64, Ts, Ts)>> {
+        let dir_name = parts.dir_name;
         let mut order: Vec<usize> = (0..parts.keys.len()).collect();
         order.sort_by_key(|&i| parts.keys[i]);
+        let streams: Vec<Mutex<Option<TableWriter>>> =
+            std::mem::take(&mut parts.streams).into_iter().map(Mutex::new).collect();
+        let (keys, bufs) = (&parts.keys, &parts.bufs);
+        let (root, spill_dir) = (&self.root, &self.spill_dir);
         let results: Vec<Mutex<Option<QtResult<FileEntry>>>> = order.iter().map(|_| Mutex::new(None)).collect();
         let next = AtomicUsize::new(0);
         let job = |j: usize| -> QtResult<FileEntry> {
             let i = order[j];
-            let (date, iid) = parts.keys[i];
-            let b = &parts.bufs[i];
-            let rel = format!(
-                "{dir_name}/date={}/instrument_id={iid}/part-00000.parquet",
-                format_date(date)
-            );
-            let path = self.root.join(&rel);
-            let spill = b.spilled.then(|| spill_path(&self.spill_dir, T::TABLE, date, iid));
-            let mut e = write_table::<T>(&path, spill.as_deref(), &b.pending)?;
+            let (date, iid) = keys[i];
+            let b = &bufs[i];
+            let rel = part_rel(dir_name, date, iid);
+            let stream = streams[i]
+                .lock()
+                .map_err(|_| QtError::Engine("partition stream lock poisoned".into()))?
+                .take();
+            let mut e = match stream {
+                // the last batch (fewer than CHUNK_ROWS rows), as write_table ends the partition
+                Some(mut w) => {
+                    if !b.pending.is_empty() {
+                        w.write(&T::batch(&b.pending))?;
+                    }
+                    w.finish()?
+                }
+                None => {
+                    let spill = b.spilled.then(|| spill_path(spill_dir, T::TABLE, date, iid));
+                    write_table::<T>(&root.join(&rel), spill.as_deref(), &b.pending)?
+                }
+            };
             e.name = rel;
             Ok(e)
         };

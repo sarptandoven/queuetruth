@@ -319,6 +319,10 @@ pub fn mbo_to_batch(rows: &[MboEvent]) -> RecordBatch {
 /// MBO events from a `qt.mbo` batch.
 pub fn batch_to_mbo(batch: &RecordBatch) -> QtResult<Vec<MboEvent>> {
     let c = Cols::new(batch, "qt.mbo")?;
+    if let Some(v) = mbo_columns(&c)? {
+        return Ok(v);
+    }
+    // A null in some column: decode row by row for the error of the first null (row order, then column order).
     let (te, tr, iid) = (
         get_ts(&c, "ts_event")?,
         get_ts(&c, "ts_recv")?,
@@ -350,6 +354,67 @@ pub fn batch_to_mbo(batch: &RecordBatch) -> QtResult<Vec<MboEvent>> {
             })
         })
         .collect()
+}
+
+/// Column-major `batch_to_mbo` when no column holds a null (`None` otherwise): typed value slices, one pass.
+fn mbo_columns(c: &Cols<'_>) -> QtResult<Option<Vec<MboEvent>>> {
+    let te: &TimestampNanosecondArray = c.col("ts_event")?;
+    let tr: &TimestampNanosecondArray = c.col("ts_recv")?;
+    let iid: &UInt32Array = c.col("instrument_id")?;
+    let act: &UInt8Array = c.col("action")?;
+    let sd: &UInt8Array = c.col("side")?;
+    let px: &Int64Array = c.col("price")?;
+    let sz: &UInt64Array = c.col("size")?;
+    let oid: &UInt64Array = c.col("order_id")?;
+    let fl: &UInt8Array = c.col("flags")?;
+    let seq: &UInt64Array = c.col("sequence")?;
+    let ch: &UInt16Array = c.col("channel_id")?;
+    let pb: &UInt16Array = c.col("publisher_id")?;
+    let nulls = [
+        te.null_count(),
+        tr.null_count(),
+        iid.null_count(),
+        act.null_count(),
+        sd.null_count(),
+        px.null_count(),
+        sz.null_count(),
+        oid.null_count(),
+        fl.null_count(),
+        seq.null_count(),
+        ch.null_count(),
+        pb.null_count(),
+    ];
+    if nulls.iter().any(|&n| n > 0) {
+        return Ok(None);
+    }
+    let n = c.batch.num_rows();
+    let (te, tr, iid) = (&te.values()[..n], &tr.values()[..n], &iid.values()[..n]);
+    let (act, sd, px, sz) = (
+        &act.values()[..n],
+        &sd.values()[..n],
+        &px.values()[..n],
+        &sz.values()[..n],
+    );
+    let (oid, fl, seq) = (&oid.values()[..n], &fl.values()[..n], &seq.values()[..n]);
+    let (ch, pb) = (&ch.values()[..n], &pb.values()[..n]);
+    let mut out = Vec::with_capacity(n);
+    for i in 0..n {
+        out.push(MboEvent {
+            ts_event: te[i],
+            ts_recv: tr[i],
+            instrument_id: iid[i],
+            action: act[i],
+            side: sd[i],
+            price: px[i],
+            size: sz[i],
+            order_id: oid[i],
+            flags: fl[i],
+            sequence: seq[i],
+            channel_id: ch[i],
+            publisher_id: pb[i],
+        });
+    }
+    Ok(Some(out))
 }
 
 // ---- qt.instruments ---------------------------------------------------------------------------------------------
@@ -1962,3 +2027,35 @@ table_row!(
     touch_records_to_batch,
     batch_to_touch_records
 );
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The column-major `batch_to_mbo` reads sliced batches (non-zero array offsets) row for row.
+    #[test]
+    fn batch_to_mbo_round_trips_sliced_batches() {
+        let rows: Vec<MboEvent> = (0..50u64)
+            .map(|i| MboEvent {
+                ts_event: 10 + i as i64,
+                ts_recv: 20 + i as i64,
+                instrument_id: 3 + i as u32 % 2,
+                action: b"ACMFTR"[i as usize % 6],
+                side: b"BAN"[i as usize % 3],
+                price: -5 + i as i64 * 100,
+                size: i * 7,
+                order_id: 1_000 + i,
+                flags: (i % 256) as u8,
+                sequence: i * 2,
+                channel_id: (i % 4) as u16,
+                publisher_id: 9,
+            })
+            .collect();
+        let batch = mbo_to_batch(&rows);
+        assert_eq!(batch_to_mbo(&batch).expect("decode"), rows);
+        assert_eq!(
+            batch_to_mbo(&batch.slice(7, 30)).expect("decode slice"),
+            rows[7..37].to_vec()
+        );
+    }
+}

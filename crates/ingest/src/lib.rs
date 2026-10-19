@@ -12,7 +12,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use qt_schema::io::{TableReader, read_table_as};
+use qt_schema::io::{TableReader, read_table_as, read_table_parallel_as};
 use qt_schema::json::{DatasetKindName, DatasetManifest};
 use qt_schema::rows::{L2Row, TradeRow};
 use qt_schema::{codec, json, specs};
@@ -201,31 +201,24 @@ struct RowStream<T> {
     rows: std::vec::IntoIter<T>,
     decode: fn(&arrow_array::RecordBatch) -> QtResult<Vec<T>>,
     failed: bool,
+    /// Decode each file's columns on several threads (`read_table_parallel`; large partitions).
+    parallel: bool,
 }
 
-impl<T> Iterator for RowStream<T> {
-    type Item = QtResult<T>;
-
-    fn next(&mut self) -> Option<Self::Item> {
+impl<T> RowStream<T> {
+    /// The next decoded batch (`None` at the end, and after an error).
+    fn next_batch(&mut self) -> Option<QtResult<Vec<T>>> {
         loop {
             if self.failed {
                 return None;
             }
-            if let Some(r) = self.rows.next() {
-                return Some(Ok(r));
-            }
             if let Some(rd) = self.reader.as_mut() {
                 match rd.next() {
-                    Some(Ok(b)) => match (self.decode)(&b) {
-                        Ok(v) => {
-                            self.rows = v.into_iter();
-                            continue;
-                        }
-                        Err(e) => {
-                            self.failed = true;
-                            return Some(Err(e));
-                        }
-                    },
+                    Some(Ok(b)) => {
+                        let r = (self.decode)(&b);
+                        self.failed = r.is_err();
+                        return Some(r);
+                    }
                     Some(Err(e)) => {
                         self.failed = true;
                         return Some(Err(e));
@@ -235,7 +228,12 @@ impl<T> Iterator for RowStream<T> {
             }
             let f = self.files.get(self.next_file)?.clone();
             self.next_file += 1;
-            match read_table_as(&f, self.table) {
+            let opened = if self.parallel {
+                read_table_parallel_as(&f, self.table)
+            } else {
+                read_table_as(&f, self.table)
+            };
+            match opened {
                 Ok(r) => self.reader = Some(r),
                 Err(e) => {
                     self.failed = true;
@@ -244,6 +242,115 @@ impl<T> Iterator for RowStream<T> {
             }
         }
     }
+}
+
+impl<T> Iterator for RowStream<T> {
+    type Item = QtResult<T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if let Some(r) = self.rows.next() {
+                return Some(Ok(r));
+            }
+            match self.next_batch()? {
+                Ok(v) => self.rows = v.into_iter(),
+                Err(e) => return Some(Err(e)),
+            }
+        }
+    }
+}
+
+/// Partitions of at least this many rows are decoded on a background thread (`Prefetch`).
+const PREFETCH_MIN_ROWS: u64 = 131_072;
+/// Decoded batches queued ahead of the consumer.
+const PREFETCH_BATCHES: usize = 4;
+
+type Batches<T> = std::sync::mpsc::Receiver<QtResult<Vec<T>>>;
+
+/// A `RowStream` decoded on a background thread, up to `PREFETCH_BATCHES` batches ahead of the consumer: the same
+/// rows and the same error, in the same order (the decoder stops at its first error, like `RowStream`).
+struct Prefetch<T> {
+    rx: Option<Batches<T>>,
+    rows: std::vec::IntoIter<T>,
+    handle: Option<std::thread::JoinHandle<()>>,
+}
+
+impl<T: Send + 'static> Prefetch<T> {
+    /// Starts decoding `make()` on a thread; `None` when no thread could be started.
+    fn start(make: impl FnOnce() -> RowStream<T> + Send + 'static) -> Option<Self> {
+        let (tx, rx) = std::sync::mpsc::sync_channel(PREFETCH_BATCHES);
+        let handle = std::thread::Builder::new()
+            .name("qt-decode".into())
+            .spawn(move || {
+                let mut s = make();
+                while let Some(b) = s.next_batch() {
+                    if tx.send(b).is_err() {
+                        return; // consumer gone
+                    }
+                }
+            })
+            .ok()?;
+        Some(Self {
+            rx: Some(rx),
+            rows: Vec::new().into_iter(),
+            handle: Some(handle),
+        })
+    }
+}
+
+impl<T> Iterator for Prefetch<T> {
+    type Item = QtResult<T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if let Some(r) = self.rows.next() {
+                return Some(Ok(r));
+            }
+            let rx = self.rx.as_ref()?;
+            match rx.recv() {
+                Ok(Ok(v)) => self.rows = v.into_iter(),
+                Ok(Err(e)) => {
+                    self.rx = None;
+                    return Some(Err(e));
+                }
+                Err(_) => {
+                    // decoder finished (or died: never end a partition early without an error)
+                    self.rx = None;
+                    let panicked = self.handle.take().is_some_and(|h| h.join().is_err());
+                    return panicked.then(|| Err(QtError::Engine("Parquet decode thread panicked".into())));
+                }
+            }
+        }
+    }
+}
+
+impl<T> Drop for Prefetch<T> {
+    fn drop(&mut self) {
+        self.rx = None; // unblocks the decoder
+        if let Some(h) = self.handle.take() {
+            let _ = h.join();
+        }
+    }
+}
+
+/// `RowStream` of a partition's files, decoded ahead on a thread when the partition is large.
+fn partition_stream<T: Send + 'static>(
+    files: Vec<PathBuf>,
+    rows: u64,
+    table: &'static str,
+    decode: fn(&arrow_array::RecordBatch) -> QtResult<Vec<T>>,
+) -> Box<dyn Iterator<Item = QtResult<T>> + Send> {
+    if rows >= PREFETCH_MIN_ROWS {
+        let f = files.clone();
+        let make = move || RowStream {
+            parallel: true,
+            ..stream(f, table, decode)
+        };
+        if let Some(p) = Prefetch::start(make) {
+            return Box::new(p);
+        }
+    }
+    Box::new(stream(files, table, decode))
 }
 
 fn stream<T: 'static>(
@@ -259,6 +366,7 @@ fn stream<T: 'static>(
         rows: Vec::new().into_iter(),
         decode,
         failed: false,
+        parallel: false,
     }
 }
 
@@ -270,7 +378,12 @@ impl Partition {
                 "exact replay needs MBO: this is an L2-only dataset".into(),
             ));
         }
-        Ok(Box::new(stream(self.files.clone(), "qt.mbo", codec::batch_to_mbo)))
+        Ok(partition_stream(
+            self.files.clone(),
+            self.rows,
+            "qt.mbo",
+            codec::batch_to_mbo,
+        ))
     }
 
     /// L2 rows in order (streaming).
@@ -280,7 +393,12 @@ impl Partition {
                 "this is an MBO dataset: synthesize L2 rows with qt_l2".into(),
             ));
         }
-        Ok(Box::new(stream(self.files.clone(), "qt.l2", codec::batch_to_l2)))
+        Ok(partition_stream(
+            self.files.clone(),
+            self.rows,
+            "qt.l2",
+            codec::batch_to_l2,
+        ))
     }
 
     /// The `trades_source/date=.../instrument_id=.../` directory of this partition.

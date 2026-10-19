@@ -167,7 +167,7 @@ fn bench_replay_2m() {
         false,
     );
     println!(
-        "SPEC-density overhead: 3,000 = {:+.1}% (target <= 15%)  100,000 = {:.2}x (target <= 2.5x)  trajectory = {:+.1}% (target <= 10%)",
+        "SPEC-density overhead: 3,000 = {:+.1}% (target <= 15%)  100,000 = {:.2}x (reported; SPEC 7.1 gates >= 5M rec/s)  trajectory = {:+.1}% (target <= 10%)",
         (d3k / base - 1.0) * 100.0,
         d100k / base,
         (d3k_t / d3k - 1.0) * 100.0

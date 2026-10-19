@@ -48,7 +48,8 @@ detecting sequence gaps per partition (section 6). The latest full `make realdat
 number of the earlier 01:35 UTC run that this page also quotes, except where a section says otherwise. The headline,
 oracle, RD-9 and RD-13 rerun files loaded the extension built at 21:30 on 2026-10-18, and the RD-13 rerun used
 `queuetruth-core` built at 21:46. The engine was still changing between these runs; the raw-bytes results were since rerun on the 0.1.0 commit
-(below), the et-artifact runs (RD-1 .. RD-13) were not. The qtbench quick suite (section 7) ran on the 20:03 build.
+(below), the et-artifact runs (RD-1 .. RD-12) were not. Section 7 (performance, including the RD-13 re-measurement)
+ran on 2026-10-19 with the binaries it names.
 
 The raw-bytes runs (sections 2, 3 raw rows, 4, 4b, RD-9, RD-10) are newer than everything above and ran on one
 build: `_core.abi3.so` sha256 `812f1e881489aec8...` (built 2026-10-19 03:10 local, after the per-shadow #312 ruling
@@ -65,8 +66,8 @@ oracle on both days, calibration, learned model). Compared with the published ru
 (`.realdata/repro/phase1/results.json`), the leaderboard on both days, the four calibrations (power3, Databento,
 `nt_prob_touch`, `nt_queue_l2_prob_touch`), the learned model and the oracle are identical; only wall times differ.
 (`reproduce.py` flags `build_changed_during_run` because the source-tree hash changed: unrelated files were added to
-the working tree during the run; the extension and git HEAD did not change.) RD-13 is still pending a re-measurement
-on a quiet machine.
+the working tree during the run; the extension and git HEAD did not change.) RD-13 was re-measured after the
+performance work of section 7: 8.56M-8.60M rec/s on day one, met.
 
 ## 1. Exactness against the earlier prototype (RD-1 .. RD-7)
 
@@ -540,39 +541,86 @@ decoding of Databento-written bytes across format versions; 2 records say nothin
 
 ## 7. Performance
 
-Measured on a loaded machine: other builds were compiling throughout (load1 43 to 101 on 8 cores), Low Power
-Mode on, AC power (`env_class` `Apple M1 Pro|8c|16G|ac|lpm1`). Treat these as lower bounds; a quiet-machine baseline
-is still to be recorded (`make bench` then `make bench-baseline`).
+Measured 2026-10-19 on an Apple M1 Pro (8 cores: 6 performance, 2 efficiency; 16 GB), macOS 15.6.1, AC power with
+**Low Power Mode on** (`env_class` `Apple M1 Pro|8c|16G|ac|lpm1`; it could not be switched off for these runs, so
+every number here is a lower bound for this machine), rustc 1.97.1, `release` profile (opt-level 3, thin LTO, 16
+codegen units). No other builds ran during the measurements; load1 at the start of the runs was 3.8 (before) and 8.4
+(after, decaying from the build that preceded it; `--max-load 4` let the harness wait for a quieter machine between
+rounds). Command (the before run left out `replay_shadows_3k_ahead`):
 
-qtbench quick suite (2M generated records, 8 samples per case over 2 processes, medians with p10 / p90):
+```sh
+uv run --frozen --no-sync python benches/bench.py --suite full --core <queuetruth-core> --max-load 4 \
+    --only '^(core\.synth(2|10)m\.(itch_parse|replay_book|replay_sinks|replay_rank|l2_d10|replay_shadows_.*)|ingest\.synth\.itch)$'
+```
 
-| Case | Median | p10 / p90 | SPEC 7.1 target | Met |
+"Before" is the 0.1.0 working tree as benchmarked by the last gate run (`queuetruth-core` sha256 `5495e35e279c7390...`,
+`.realdata/bench-perf-before.json`); "after" adds the changes below (`e45fe2f11a2e8b8e...`,
+`.realdata/bench-perf-after.json`). Medians of 6 samples (2 processes x 3 repetitions after a warmup) for the
+in-process kernels, of 3 processes for `ingest.synth.itch`; p10 / p90 of the after run in brackets.
+
+| Case (SPEC 7.1) | Target | Before | After | Met |
 |---|---|---|---|---|
-| ITCH parse + map | 9.60M msg/s | 2.91M / 16.38M | >= 5.0M | yes |
-| replay, book + invariants (from Parquet) | 4.15M rec/s | 2.94M / 4.46M | >= 8M | no |
-| replay with BBO change + trades sinks | 2.04M rec/s | 1.29M / 2.73M | >= 4M | no |
-| replay with rank oracle + rank trace | 2.71M rec/s | 2.50M / 2.96M | >= 3M | no |
-| replay with 3,000 shadows | 4.25M rec/s | 3.89M / 4.92M | | |
-| replay with 3,000 shadows + trajectory `ahead` | 3.94M rec/s | 3.11M / 5.02M | | |
-| replay with 100,000 shadows | 2.34M rec/s | 1.32M / 3.44M | | |
-| L2Builder depth 10, cadence 0 | 2.27M rec/s | 1.12M / 3.84M | >= 3M | no |
-| shadow overhead, 3,000 (throughput loss, paired) | -0.17 | | <= 0.15 | yes |
-| shadow overhead, 100,000 (cost ratio, paired) | 2.08x | | <= 2.5x | yes |
-| trajectory `ahead` extra (paired) | 0.099 | | <= 0.10 | yes |
-| `qt.replay` vs `queuetruth replay` on the fixture (cost ratio) | 1.18x | | <= 1.05x | no |
+| ITCH parse + map, 2M messages | >= 5M msg/s | 16.80M | 16.66M (16.58M / 16.75M) | yes |
+| replay, book + invariants from Parquet, 2M records | >= 8M rec/s | 5.88M | 14.54M (14.49M / 14.63M) | yes |
+| same, 10M records (5 sessions) | >= 8M rec/s | 5.81M | 14.40M (14.35M / 14.52M) | yes |
+| replay with BBO change + trades Parquet sinks, 2M | >= 4M rec/s | 3.21M | 6.25M (6.16M / 6.45M) | yes |
+| same, 10M | >= 4M rec/s | 3.19M | 6.78M (6.70M / 6.97M) | yes |
+| replay with rank oracle + rank trace, 2M | >= 3M rec/s | 3.23M | 5.70M (5.62M / 5.87M) | yes |
+| L2Builder depth 10, cadence 0, 2M | >= 3M rec/s | 4.70M | 8.94M (8.91M / 8.96M) | yes |
+| `ingest --format itch`, 20M synthetic messages (30M MBO rows, one partition) | >= 2.5M msg/s | 0.97M (gate run: 1.24M) | 4.56M (4.52M / 4.57M) | yes |
+| replay with 3,000 shadows, 2M | | 5.60M | 12.67M | |
+| shadow overhead, 3,000 (throughput loss, paired), 2M / 10M | <= 0.15 | 0.05 / 0.01 | 0.13 / 0.06 | yes |
+| trajectory `ahead` extra (paired), 2M / 10M | <= 0.10 | not run | 0.003 / 0.002 | yes |
+| replay with 100,000 shadows, 2M (target since E74) | >= 5M rec/s | 3.38M | 5.28M | yes |
+| shadow overhead, 100,000 (cost ratio, paired), 2M / 10M | reported | 1.75x / 1.21x | 2.76x / 1.55x | |
 
-Real day one (RD-13, same loaded machine). **RD-13 fails** under this load: the book-only replay from Parquet
-measured 4.30M rec/s in the latest full run (`.realdata/results.json`) and 4.26M rec/s in the RD-13 rerun
-(`.realdata/rd13/results.json`), against the 8M rec/s target. The other day-one targets checked there are met: etcsv
-ingest 1.69M rec/s (rerun 1.94M; target 1.5M) and the zoo for 17 models x 3,000 shadows in 9.0 s faithful and 8.2 s
-corrected at 4 threads (target <= 90 s). Also measured in the latest full run: the RD-2 replay (rank oracle, full BBO,
-trade and BBO parity) 0.94M rec/s, 3,000 shadows with trajectory 8.4M rec/s, features for 40,000 shadows over both
-days 9.6 s, `fit-hazard` 47 s (the L2-only fit; the <= 120 s target for 60,000 order-landmarks is not isolated here);
-peak RSS of the driver 1.78 GB. Whether the replay target is met on a quiet machine is open until it is re-measured
-(`make bench`, `make bench-baseline`).
-The day-one end-to-end pipeline budget (<= 15 min, <= 2 GB RSS) and the zoo single-thread target were not measured
-separately. The misses are recorded with their numbers; the replay kernel targets need a quiet-machine run before
-any bottleneck analysis.
+Every output byte is unchanged: the synthetic 2M and 200k datasets, the 20M-message ITCH ingest (dataset, manifest,
+`dataset_id`), and the replay outputs (BBO change, trades, rank trace, full BBO + depth 5 + L2 at 3 threads) have the
+same sha256 before and after, as does the day-one replay below; `make fixtures` verifies every committed manifest.
+
+What changed (no compression level, row-group size, batch size or encoding setting was touched):
+
+- Profile (macOS `sample`): book replay from Parquet spent about 60% of its decode time in zstd decompression and 24%
+  in the row-by-row Arrow-to-`MboEvent` conversion, all on the engine's thread; the sinks run added the BBO and trade
+  Parquet encoding (zstd compression) to the same thread; the ITCH ingest spent 74% of its time after the input was
+  read, encoding the one large partition on one thread, writing, re-reading and deleting about 1.6 GB of raw spill.
+- `Partition::mbo()` / `l2()` of partitions with at least 131,072 rows decode on a background thread up to four
+  batches ahead, and that thread decodes the file's columns in two groups in parallel (`read_table_parallel`); the
+  rows, their order and the first error are those of the single-threaded stream. `batch_to_mbo` converts column by
+  column from typed value slices when no column holds a null.
+- `TableWriter` writes the file `ArrowWriter` writes, through its lower-level parts: once a table passes 131,072 rows
+  its column writers move to up to four threads (whole columns per thread, fed the same arrays in the same order),
+  and the row-group chunks are appended in column order (unit test: bytes equal to `ArrowWriter` for a 1.1M-row,
+  two-row-group table).
+- `DatasetWriter`: the first 8 partitions of a table that spill are encoded into their final Parquet file while the
+  input is read, in the same 65,536-row batches the spill-then-encode path produces; further partitions spill to
+  scratch files as before (test: 20 partitions at four memory settings give identical files). The ITCH ingest's
+  system time fell from 7.8 s to 1.6 s and its peak RSS from 0.72-1.04 GB to 0.60-0.74 GB; CPU time is unchanged.
+
+The 100,000-shadow target changed. It was a cost ratio, at most 2.5x slower than the no-shadow replay. The replay with
+100,000 shadows got 1.56x faster in absolute terms (3.38M to 5.28M rec/s), but its ratio rose from 1.75x to 2.76x on
+the 2M case, because the denominator got 2.5x faster. With decoding off the engine's thread, the ratio now measures
+the shadow engine alone (per-event shadow work, creating and dropping 100,000 shadows per run). SPEC 7.1 now states an
+absolute floor of 5M rec/s with 100,000 shadows. It is met on all three cases: 5.28M on 2M synthetic records, about
+9.3M on 10M, and 5.19M on real day one (`queuetruth-core bench replay --synth-shadows 100000`, 3 repetitions, 1.64x
+the no-shadow replay's 8.54M in the same session). The ratio is still reported.
+
+Real day one (RD-13): `queuetruth-core bench replay --data .realdata/ds/nasdaq-2019-12-30` (6,103,262 records, 4
+partitions; medians of 3 repetitions, 3 interleaved rounds, same machine and binaries, `.realdata/rd13-perf.txt`):
+
+| Kernel | Before | After |
+|---|---|---|
+| book + invariants from Parquet (`--mode book`, the RD-13 check, >= 8M rec/s) | 4.32M-4.34M | **8.56M-8.60M (met)** |
+| BBO change + trades sinks (`--mode sinks`, >= 4M) | 2.73M-2.75M | 5.18M-5.22M (met) |
+| rank oracle + rank trace (`--mode rank-oracle`, >= 3M) | 3.68M-3.72M | 6.51M-6.60M (met) |
+
+The day-one book replay is now limited by the order book itself: the engine applies the same records from memory at
+9.06M rec/s and the decoder alone reaches 16.2M rec/s, so the 7% margin over the target is the book's, not the
+reader's. The replay outputs of the day (`--rank-oracle --bbo change`) are byte-identical before and after. The other
+day-one targets of RD-13 were not re-measured here and stand as recorded on the loaded machine (etcsv ingest 1.69M
+rec/s, target 1.5M; zoo 17 models x 3,000 shadows 9.0 s faithful / 8.2 s corrected at 4 threads, target <= 90 s).
+Not re-measured either: the `qt.replay` vs `queuetruth replay` binding overhead (1.18x on the loaded machine, target
+<= 1.05x), the day-one end-to-end budget (<= 15 min, <= 2 GB RSS) and the zoo single-thread target.
 
 ## 8. Reproduce
 

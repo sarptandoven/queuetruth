@@ -3005,7 +3005,7 @@ orders at every horizon (`scripts/nt_crosscheck`); the refit `p = 0.287` cuts th
 | Replay with change-only BBO + trades Parquet sinks | >= 4M rec/s | et 4.7M rec/s writing CSV |
 | Replay with rank oracle + rank_trace | >= 3M rec/s | et 1.07M rec/s from CSV end to end |
 | Shadow overhead, 3,000 shadows on a 4-symbol day | <= 15% throughput loss vs no shadows | |
-| Shadow overhead, 100,000 shadows | <= 2.5x slower than no shadows | |
+| Replay with 100,000 shadows, book + invariants | >= 5M rec/s | was <= 2.5x slower than no shadows until 2026-10-19; the cost ratio is reported, not gated (E74) |
 | Trajectory `ahead` | <= 10% extra | |
 | L2Builder depth 10, cadence 0 | >= 3M rec/s | |
 | Zoo, 17 models x 3,000 shadows, 4-symbol day | <= 240 s single thread, <= 90 s with `--threads 4`, RSS <= 1.5 GB | unmeasured (E32) |
@@ -3028,12 +3028,14 @@ builds). `benches/reference_et.json` holds et's numbers measured 2026-10-18 unde
 0.735M rec/s, 100,000 shadows 14.7x slower than none; it is a reference to beat, not a baseline.
 
 As built: `benches/` holds the harness; `make bench` (`BENCH_SUITE ?= gate`)
-writes `.realdata/bench.json`; `benches/baseline.json` is not promoted yet. Measured (quick suite and RD-13,
-load1 43-101, Low Power Mode on, so misses are provisional): ITCH parse 9.60M msg/s (met); replay book 4.15M
-(missed), with sinks 2.04M (missed), with rank oracle 2.71M (missed); L2Builder 2.27M (missed); shadow overhead -0.17
-at 3,000 and 2.08x at 100,000 (met); trajectory extra 0.099 (met); Python vs CLI replay 1.18x (missed, target
-5%); etcsv ingest 1.94M rec/s (met); `bench replay` on day one 4.26M rec/s (missed); zoo 7.8 s / 8.1 s per day
-(met); features 10.0 s (met); `fit-hazard` 172 s (missed, 120 s); score 11.4 s (met); peak RSS 1.81 GB.
+writes `.realdata/bench.json`; `benches/baseline.json` is not promoted yet. Measured 2026-10-19 (full suite, kernel
+and ingest cases, Low Power Mode on, so every number is a lower bound; docs/RESULTS.md section 7): ITCH parse 16.66M
+msg/s; replay book 14.54M rec/s (2M) and 14.40M (10M); with sinks 6.25M; with rank oracle 5.70M; L2Builder 8.94M;
+ITCH ingest 4.56M msg/s; shadow throughput loss 0.13 at 3,000; replay with 100,000 shadows 5.28M (2M), cost ratio
+2.76x reported; trajectory extra 0.003; `bench replay` on day one 8.56M-8.60M rec/s. All met. Earlier gate-run
+figures not re-measured since: Python vs CLI replay 1.18x (missed, target 5%); etcsv ingest 1.94M rec/s (met); zoo
+7.8 s / 8.1 s per day (met); features 10.0 s (met); `fit-hazard` 172 s (missed, 120 s); score 11.4 s (met); peak RSS
+1.81 GB.
 
 ### 7.2 Determinism requirements
 

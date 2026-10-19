@@ -159,7 +159,11 @@ def core_kernels(ctx: Ctx, data: Path | None, n_records: int | None, tag: str) -
         ),
         k("replay_shadows_3k", ["replay", *src, "--mode", "book", *shadows, "--trajectory", "none"]),
         k("replay_shadows_3k_ahead", ["replay", *src, "--mode", "book", *shadows, "--trajectory", "ahead"]),
-        k("replay_shadows_100k", ["replay", *src, "--mode", "book", *shadows100k, "--trajectory", "none"]),
+        k(
+            "replay_shadows_100k",
+            ["replay", *src, "--mode", "book", *shadows100k, "--trajectory", "none"],
+            target={"op": ">=", "value": 5e6, "spec": T71},
+        ),
         # PROPOSED: bench l2: qt_l2::L2Builder::push over preloaded events, depth 10, cadence 0, rows discarded
         k(
             "l2_d10",
@@ -197,7 +201,7 @@ def core_kernels(ctx: Ctx, data: Path | None, n_records: int | None, tag: str) -
                 p + "replay_shadows_100k",
                 p + "replay_book",
                 "cost_ratio",
-                {"op": "<=", "value": 2.5, "spec": T71},
+                None,  # informational since 2026-10-19; the SPEC 7.1 target is replay_shadows_100k >= 5M rec/s
             ),
             (
                 p + "trajectory_ahead_extra",

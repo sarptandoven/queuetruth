@@ -86,6 +86,91 @@ fn write(root: &Path, evs: &[MboEvent], memory_rows: usize) -> qt_schema::json::
     w.finish(DataQuality::default()).unwrap()
 }
 
+/// More spilling partitions than are streamed (the rest spill to scratch files), partitions spanning several
+/// `CHUNK_ROWS` batches and more than one row group: every spill setting gives the spill-free bytes.
+#[test]
+fn streamed_and_scratch_spills_are_byte_identical() {
+    let n_inst = 20u32;
+    // instrument 1 takes half the feed (1.2M rows: two row groups), the rest round-robin
+    let evs: Vec<MboEvent> = (0..2_400_000u64)
+        .map(|i| {
+            let iid = if i % 2 == 0 {
+                1
+            } else {
+                2 + (i / 2 % u64::from(n_inst - 1)) as u32
+            };
+            MboEvent {
+                ts_event: i64::from(D0) * DAY + i as i64 * 1_000,
+                ts_recv: i64::from(D0) * DAY + i as i64 * 1_000 + 5,
+                instrument_id: iid,
+                action: b'A',
+                side: if i % 3 == 0 { b'B' } else { b'A' },
+                price: 100 + (i % 17) as i64,
+                size: 1 + i % 5,
+                order_id: i + 1,
+                flags: flags::LAST,
+                sequence: i,
+                channel_id: 1,
+                publisher_id: 2,
+            }
+        })
+        .collect();
+    let run = |name: &str, memory_rows: usize| {
+        let root = scratch(name);
+        let mut w = DatasetWriter::create(&root, DatasetKind::Mbo, Venue::Cme, "test").unwrap();
+        w.set_instruments((1..=n_inst).map(|i| inst(i, D0)).collect());
+        w.set_memory_rows(memory_rows);
+        for e in &evs {
+            w.push_mbo(e).unwrap();
+            if e.sequence % 7 == 0 {
+                w.push_source_trade(&TradeRow {
+                    ts_event: e.ts_event,
+                    instrument_id: e.instrument_id,
+                    sequence: e.sequence,
+                    price: e.price,
+                    size: e.size,
+                    aggressor_side: Side::Ask,
+                    kind: TradeKind::Displayed,
+                    maker_order_id: None,
+                })
+                .unwrap();
+            }
+        }
+        let s = w.finish(DataQuality::default()).unwrap();
+        assert!(!root.join(".spill").exists(), "scratch removed");
+        for f in &s.files {
+            assert_eq!(sha256_file(&root.join(&f.name)).unwrap(), f.sha256, "{}", f.name);
+        }
+        if memory_rows == 5_000 {
+            // large partitions are decoded ahead on threads: same rows, in feed order
+            let ds = Dataset::open(&root).unwrap();
+            for p in ds.partitions() {
+                let got: Vec<MboEvent> = p.mbo().unwrap().map(Result::unwrap).collect();
+                let want: Vec<MboEvent> = evs
+                    .iter()
+                    .filter(|e| e.instrument_id == p.instrument_id)
+                    .copied()
+                    .collect();
+                assert_eq!(got, want, "instrument {}", p.instrument_id);
+            }
+            // a damaged file of a large partition is an error, never a short partition
+            let big = &ds.partitions()[0];
+            assert!(big.rows >= 1_000_000);
+            let bytes = std::fs::read(&big.files[0]).unwrap();
+            std::fs::write(&big.files[0], &bytes[..bytes.len() / 2]).unwrap();
+            assert!(big.mbo().unwrap().any(|r| r.is_err()));
+        }
+        std::fs::remove_dir_all(&root).unwrap();
+        s
+    };
+    let base = run("mix-none", 100_000_000);
+    for (name, rows) in [("mix-small", 5_000), ("mix-mid", 150_000), ("mix-large", 700_000)] {
+        let s = run(name, rows);
+        assert_eq!(base.files, s.files, "memory_rows {rows}");
+        assert_eq!(base.manifest, s.manifest, "memory_rows {rows}");
+    }
+}
+
 #[test]
 fn dataset_write_open_read_round_trip_is_byte_stable() {
     let evs = events(200_000);

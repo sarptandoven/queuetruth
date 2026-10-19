@@ -27,7 +27,7 @@ def iso(ns):
     s, f = divmod(ns, 1_000_000_000)
     import datetime
 
-    t = datetime.datetime.fromtimestamp(s, datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+    t = datetime.datetime.fromtimestamp(s, datetime.UTC).strftime("%Y-%m-%dT%H:%M:%S")
     return f"{t}.{f:09d}Z"
 
 
@@ -59,7 +59,7 @@ class Book:
             del self.fifo[side][px]
 
     def amend(self, oid, qty=None, px=None, ts=None):
-        side, opx, oqty, ots = self.orders[oid]
+        side, opx, oqty, _ots = self.orders[oid]
         nqty = Decimal(qty) if qty is not None else oqty
         npx = Decimal(px) if px is not None else opx
         if npx == opx and nqty <= oqty:
@@ -81,7 +81,7 @@ class Book:
 
 
 def ord_json(b, oid, event=None):
-    side, px, qty, ts = b.orders[oid]
+    _side, px, qty, ts = b.orders[oid]
     o = {}
     if event:
         o["event"] = event
@@ -153,7 +153,11 @@ def main():
           "success": True, "time_in": iso(t), "time_out": iso(t)})
     view = b.view()
     snap = {"symbol": SYM, "checksum": checksum(b), "timestamp": iso(t), "bids": [], "asks": []}
-    for (side, px), ids in sorted(view.items(), key=lambda kv: (kv[0][0] != "b", -kv[0][1] if kv[0][0] == "b" else kv[0][1])):
+    def level_order(kv):
+        (side, px), _ids = kv
+        return (side != "b", -px if side == "b" else px)
+
+    for (side, _px), ids in sorted(view.items(), key=level_order):
         for i in ids:
             snap["bids" if side == "b" else "asks"].append(ord_json(b, i))
     emit({"channel": "level3", "type": "snapshot", "data": [snap]})
@@ -196,7 +200,7 @@ def main():
             if i in before_ids and before_state[i][0] == b.orders[i][1] and before_state[i][1] != b.orders[i][2]:
                 ev[k[0]].append(ord_json(b, i, "modify"))
         # adds: per level in view after, orders not in view before (or moved), in queue order
-        for (side, px), ids in after.items():
+        for (side, _px), ids in after.items():
             for i in ids:
                 if i not in before_ids or before_state[i][0] != b.orders[i][1]:
                     ev[side].append(ord_json(b, i, "add"))
