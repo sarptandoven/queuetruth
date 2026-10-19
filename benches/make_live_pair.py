@@ -34,6 +34,28 @@ def write_live(orders: pa.Table, events: pa.Table, out: Path) -> None:
     (out / "manifest.json").write_text(json.dumps(manifest, indent=1) + "\n")
 
 
+def renumber_event_seq(events: pa.Table) -> pa.Table:
+    """Repair per-order bookkeeping after fill events were dropped: event_seq contiguous from 1, cum_qty equal to
+    the running sum of the remaining fills, and leaves_qty shifted by the same amount (order of events kept)."""
+    rows = events.to_pylist()
+    by_order: dict[str, list[int]] = {}
+    for i, r in enumerate(rows):
+        by_order.setdefault(r["order_key"], []).append(i)
+    for idx in by_order.values():
+        idx.sort(key=lambda i: rows[i]["event_seq"])
+        cum = 0
+        for j, i in enumerate(idx, start=1):
+            r = rows[i]
+            r["event_seq"] = j
+            if r["event_type"] == "fill" and r["qty"] is not None:
+                cum += r["qty"]
+            if r["cum_qty"] is not None:
+                if r["leaves_qty"] is not None:
+                    r["leaves_qty"] = r["leaves_qty"] + (r["cum_qty"] - cum)
+                r["cum_qty"] = cum
+    return pa.Table.from_pylist(rows, schema=events.schema)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--n", type=int, default=10_000)
@@ -56,6 +78,7 @@ def main() -> None:
         )
     # API[py] live.build_log(orders: list[dict], events: list[dict]) -> (orders, events), re-derives bookkeeping
     o2, e2 = live.build_log(orders.to_pylist(), sim_events.to_pylist())
+    e2 = renumber_event_seq(e2)
     write_live(o2, e2, a.sim)
     warnings = live.validate(str(a.sim))  # API[py] raises QtError on errors
     print(json.dumps({"live_orders": orders.num_rows, "sim_events": e2.num_rows, "sim_warnings": len(warnings)}))

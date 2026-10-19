@@ -8,6 +8,12 @@ prune idempotency records, push usage and apply retention.
 Duplicate deliveries are dropped by the claim; a worker whose lease was lost (heartbeat not owned) kills its child
 and discards the result. Cancel sets `cancel_requested`; the heartbeat sees it and kills the child.
 
+Row locks: the single-call lifecycle functions (claim, heartbeat, mark-enqueued, sweep) run in autocommit, so the job
+row lock they take is released by the server at the end of the statement and is never held across a client round trip
+(a stalled event loop between a statement and its COMMIT would otherwise keep a concurrent cancel waiting). The
+heartbeat also waits at most 2 s for the row (`lock_timeout` on `qt_heartbeat`, migration 0007) and retries on the
+next tick. The finish transaction hashes output files before it takes the row lock.
+
 Security review: the worker connects as `qt_worker` (H1/M3) and every job transaction is bound to the job attempt it
 holds (`JobBinding`; a stale attempt cannot write), queries filter by `tenant_id` explicitly; the claim caps each
 tenant's running jobs (`QT_TENANT_MAX_RUNNING`) and a capped delivery is re-enqueued after `QT_TENANT_DEFER_S`;
@@ -145,13 +151,10 @@ class Worker:
     async def claim(self, job_id: str) -> ClaimedJob | None:
         """Claims a queued job (None: not queued any more, e.g. a duplicate delivery, or deferred because its tenant
         is at `QT_TENANT_MAX_RUNNING`; a deferred job is re-enqueued with a delay)."""
-        async with self.pool.connection() as conn:
-            row = await (
-                await conn.cursor(row_factory=dict_row).execute(
-                    "select * from qt_claim_job(%s, %s, %s)",
-                    (job_id, self.settings.lease_s, self.settings.tenant_max_running),
-                )
-            ).fetchone()
+        rows = await self._call(
+            "select * from qt_claim_job(%s, %s, %s)", (job_id, self.settings.lease_s, self.settings.tenant_max_running)
+        )
+        row = rows[0] if rows else None
         if row is None:
             return None
         if row["deferred"]:
@@ -164,19 +167,32 @@ class Worker:
         if self.queue is None:
             return  # the sweeper re-enqueues it
         await self.queue.enqueue(job_id, delay_s=self.settings.tenant_defer_s)
+        await self._call("select qt_mark_enqueued(%s)", ([job_id],))
+
+    async def _call(self, query: str, params: tuple[Any, ...]) -> list[dict[str, Any]]:
+        """Runs one statement in its own implicit transaction (autocommit): the row locks it takes are released by
+        the server when the statement ends, never held while this event loop gets around to sending a COMMIT."""
         async with self.pool.connection() as conn:
-            await conn.execute("select qt_mark_enqueued(%s)", ([job_id],))
+            await conn.set_autocommit(True)
+            try:
+                return await (await conn.cursor(row_factory=dict_row).execute(query, params)).fetchall()
+            finally:
+                try:
+                    await conn.set_autocommit(False)
+                except psycopg.Error:
+                    await conn.close()  # not idle (interrupted mid-statement): the pool discards it
+
+    async def heartbeat_once(self, job: ClaimedJob) -> tuple[bool, bool]:
+        """Extends the lease of this attempt; returns `(owned, cancel_requested)`. Raises `psycopg.Error` (for
+        example `LockNotAvailable` after 2 s behind another transaction on the row); the caller retries."""
+        rows = await self._call("select * from qt_heartbeat(%s, %s, %s)", (job.id, job.attempts, self.settings.lease_s))
+        return bool(rows[0]["owned"]), bool(rows[0]["cancel_requested"])
 
     async def _heartbeat(self, job: ClaimedJob, cancel: asyncio.Event, lost: asyncio.Event) -> None:
         while True:
             await asyncio.sleep(self.settings.heartbeat_s)
             try:
-                async with self.pool.connection() as conn:
-                    owned, cancel_req = await (
-                        await conn.execute(
-                            "select * from qt_heartbeat(%s, %s, %s)", (job.id, job.attempts, self.settings.lease_s)
-                        )
-                    ).fetchone()
+                owned, cancel_req = await self.heartbeat_once(job)
             except psycopg.Error:
                 log.warning("heartbeat failed for %s; retrying", job.id)
                 continue
@@ -243,6 +259,11 @@ class Worker:
             raise _Fenced from e
 
     async def _finish_tx(self, job: ClaimedJob, o: Outcome) -> None:
+        # sizes and digests first, off the event loop: hashing large outputs inside the transaction would hold the
+        # job row lock (and stall every heartbeat of this worker) for as long as the hashing takes
+        digests: list[tuple[int, str]] = []
+        if o.state == "succeeded" and o.files:
+            digests = await asyncio.to_thread(lambda: [(p.stat().st_size, _sha256(p)) for _, p, _ in o.files])
         async with tenant_tx_async(self.pool, job.binding) as conn:
             cur = conn.cursor(row_factory=dict_row)
             t = await (await cur.execute("select * from tenants where id = %s", (job.tenant_id,))).fetchone()
@@ -261,7 +282,7 @@ class Worker:
             if not ok:
                 raise _Fenced
             if o.state == "succeeded":
-                for name, path, ctype in o.files:
+                for (name, _, ctype), (size, digest) in zip(o.files, digests, strict=True):
                     await conn.execute(
                         "insert into job_files (job_id, tenant_id, name, bytes, sha256, content_type, object_key) "
                         "values (%s, %s, %s, %s, %s, %s, %s) on conflict (job_id, name) do update set "
@@ -270,8 +291,8 @@ class Worker:
                             job.id,
                             job.tenant_id,
                             name,
-                            path.stat().st_size,
-                            _sha256(path),
+                            size,
+                            digest,
                             ctype,
                             job_key(job.tenant_id, job.id, name),
                         ),
@@ -524,17 +545,13 @@ class Worker:
 
     async def sweep_once(self, reenqueue_after_s: int = 300) -> list[tuple[str, str]]:
         """One sweeper pass; returns `[(job_id, action)]`."""
-        async with self.pool.connection() as conn:
-            rows = await (
-                await conn.execute("select * from qt_sweep(%s, %s)", (self.settings.max_attempts, reenqueue_after_s))
-            ).fetchall()
-        ids = [r[0] for r in rows if r[1] in ("requeue", "enqueue")]
+        rows = await self._call("select * from qt_sweep(%s, %s)", (self.settings.max_attempts, reenqueue_after_s))
+        ids = [r["id"] for r in rows if r["action"] in ("requeue", "enqueue")]
         if ids and self.queue is not None:
             for jid in ids:
                 await self.queue.enqueue(jid)
-            async with self.pool.connection() as conn:
-                await conn.execute("select qt_mark_enqueued(%s)", (ids,))
-        return [(r[0], r[1]) for r in rows]
+            await self._call("select qt_mark_enqueued(%s)", (ids,))
+        return [(r["id"], r["action"]) for r in rows]
 
     async def maintenance_once(self, *, daily: bool | None = None) -> dict[str, Any]:
         """Upload verification and expiry, idempotency pruning, usage push; once per UTC day retention and the

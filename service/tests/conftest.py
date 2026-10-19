@@ -1,5 +1,11 @@
 """Service test fixtures: an ephemeral PostgreSQL 16 cluster per session (or `QT_PG_DSN`), a migrated template
-database cloned per test, a moto S3 server, and an in-process app with two tenants."""
+database cloned per test, a moto S3 server, and an in-process app with two tenants.
+
+Every test runs under a wall-clock deadline (`QT_TEST_DEADLINE_S`, default 300 s; `@pytest.mark.deadline(s)` per
+test or module; 0 disables): at the deadline SIGALRM raises `DeadlineExceeded` in the main thread (the test fails and
+the run continues); if the test still has not unwound `HARD_GRACE_S` later (for example the main thread is stuck in a
+call that cannot be interrupted), faulthandler dumps every thread's stack to the real stderr and exits the process, so
+a hang fails CI in minutes instead of blocking it (pytest-timeout is not a dependency)."""
 
 from __future__ import annotations
 
@@ -8,10 +14,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # makes svc_support importable (unique name)
 
+import faulthandler
 import os
 import shutil
+import signal
 import socket
 import subprocess
+import threading
 from collections.abc import Iterator
 
 import pytest
@@ -21,6 +30,53 @@ from queuetruth_service.db.runner import migrate
 from queuetruth_service.testing import ExternalPg, PgCluster, pg_bin, reap_stale
 
 REPO = Path(__file__).resolve().parents[2]
+DEFAULT_DEADLINE_S = float(os.environ.get("QT_TEST_DEADLINE_S", "300"))
+HARD_GRACE_S = 60.0
+_real_stderr_fd: int | None = None
+
+
+class DeadlineExceeded(BaseException):
+    """A test ran past its deadline (a BaseException so that broad `except Exception` handlers cannot swallow it)."""
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    global _real_stderr_fd
+    config.addinivalue_line("markers", "deadline(seconds): wall-clock limit of a test (default QT_TEST_DEADLINE_S)")
+    if _real_stderr_fd is None:
+        _real_stderr_fd = os.dup(2)  # output capture is suspended here; per-test fd capture would swallow the dump
+
+
+def pytest_unconfigure(config: pytest.Config) -> None:
+    global _real_stderr_fd
+    if _real_stderr_fd is not None:
+        os.close(_real_stderr_fd)
+        _real_stderr_fd = None
+
+
+@pytest.fixture(autouse=True)
+def _deadline(request: pytest.FixtureRequest) -> Iterator[None]:
+    """Per-test deadline (setup, call and teardown of function fixtures; see the module docstring)."""
+    marker = request.node.get_closest_marker("deadline")
+    seconds = float(marker.args[0]) if marker else DEFAULT_DEADLINE_S
+    if seconds <= 0 or not hasattr(signal, "setitimer") or threading.current_thread() is not threading.main_thread():
+        yield
+        return
+    nodeid = request.node.nodeid
+
+    def fire(signum: int, frame: object) -> None:
+        raise DeadlineExceeded(f"{nodeid} exceeded its {seconds:g} s deadline")
+
+    previous = signal.signal(signal.SIGALRM, fire)
+    signal.setitimer(signal.ITIMER_REAL, seconds)
+    faulthandler.dump_traceback_later(
+        seconds + HARD_GRACE_S, exit=True, file=_real_stderr_fd if _real_stderr_fd is not None else 2
+    )
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous)
+        faulthandler.cancel_dump_traceback_later()
 
 
 def postgres_available() -> bool:

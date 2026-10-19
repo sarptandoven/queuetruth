@@ -1,6 +1,7 @@
 """Job queue and worker (SPEC 8.3, O-Q-1): queued -> running -> succeeded through PgQueuer; failures; cancel of
 queued and running jobs; timeout; worker crash (lease expiry) requeued, failed after 3 attempts; lost enqueue
-recovered by the sweeper; duplicate deliveries run once; fenced finish."""
+recovered by the sweeper; duplicate deliveries run once; fenced finish; cancel against a held job row lock (bounded
+wait, never a hang) and the heartbeat's bounded lock wait."""
 
 from __future__ import annotations
 
@@ -21,9 +22,10 @@ from svc_support import make_svc, seed_dataset
 
 from queuetruth_service.db.pool import make_async_pool
 from queuetruth_service.queue import PgQueuerJobQueue, enqueue_sync
+from queuetruth_service.routers.jobs import CANCEL_LOCK_TIMEOUT_MS
 from queuetruth_service.worker import ClaimedJob, Outcome, Worker, _Fenced
 
-pytestmark = [pytest.mark.requires_postgres, pytest.mark.asyncio]
+pytestmark = [pytest.mark.requires_postgres, pytest.mark.asyncio, pytest.mark.deadline(120)]
 FAKES = {
     "replay": "queuetruth_service.testing:fake_replay",
     "dataset_validate": "queuetruth_service.testing:fake_ingest",
@@ -46,6 +48,13 @@ class Env:
                 return True
             await asyncio.sleep(0.05)
         return False
+
+    async def api(self, method: str, url: str, *, timeout: float = 30.0, **kw):
+        """An API call made off the event loop, bounded by `timeout`. The TestClient blocks its calling thread until
+        the response; called on this loop it would also freeze the in-loop worker, and a worker transaction that
+        already holds the job row lock could then never send its COMMIT while the request waits for that lock (the
+        hang this replaces). Use it for every call that may lock a row the running worker touches (cancel)."""
+        return await asyncio.wait_for(asyncio.to_thread(getattr(self.svc.client, method), url, **kw), timeout)
 
     def state(self, job_id: str) -> str:
         return self.svc.db.q("select state from jobs where id = %s", (job_id,))[0][0]
@@ -74,6 +83,14 @@ async def env(db, tmp_path):
     await queue.close()
     await pool.close()
     gen.close()
+
+
+def lock_waiters(svc) -> int:
+    """Sessions of the test database waiting for a lock (pg_locks and datname are visible to any role)."""
+    return svc.db.q(
+        "select count(*) from pg_locks l join pg_stat_activity a on a.pid = l.pid "
+        "where not l.granted and a.datname = current_database()"
+    )[0][0]
 
 
 def submit(svc, ds: str, key: str, **extra) -> str:
@@ -144,21 +161,95 @@ async def test_o_q_1_cancel_queued_and_running(env):
     svc = env.svc
     ds = seed_dataset(svc)
     queued = submit(svc, ds, "cq")
-    r = svc.client.post(f"/v1/jobs/{queued}/cancel", headers=svc.h(Idempotency_Key="c1"))
+    r = await env.api("post", f"/v1/jobs/{queued}/cancel", headers=svc.h(Idempotency_Key="c1"))
     assert r.status_code == 200 and r.json()["state"] == "canceled"
     env.worker.targets["replay"] = "queuetruth_service.testing:fake_sleep"
     running = submit(svc, ds, "cr", seed=60)
     env.start()
     assert await env.until(lambda: env.state(running) == "running")
     await asyncio.sleep(1.0)  # child process started
-    r = svc.client.post(f"/v1/jobs/{running}/cancel", headers=svc.h(Idempotency_Key="c2"))
+    r = await env.api("post", f"/v1/jobs/{running}/cancel", headers=svc.h(Idempotency_Key="c2"))
     assert r.status_code == 200 and r.json()["state"] == "running"
     t0 = time.monotonic()
     assert await env.until(lambda: env.state(running) == "canceled", timeout=15)
     assert time.monotonic() - t0 < 10
     assert env.state(queued) == "canceled"
-    r = svc.client.post(f"/v1/jobs/{running}/cancel", headers=svc.h(Idempotency_Key="c3"))
+    r = await env.api("post", f"/v1/jobs/{running}/cancel", headers=svc.h(Idempotency_Key="c3"))
     assert r.status_code == 409
+
+
+async def _claimed(env, key: str) -> ClaimedJob:
+    svc = env.svc
+    svc.client.app.state.ctx.enqueue = None  # no queue delivery: the test drives the claim itself
+    job = submit(svc, seed_dataset(svc), key)
+    claimed = await env.worker.claim(job)
+    assert claimed is not None and env.state(job) == "running"
+    return claimed
+
+
+async def test_cancel_waits_for_a_worker_transaction_on_the_same_loop(env):
+    """Regression for the intermittent hang of `test_o_q_1_cancel_queued_and_running` (18 min): a heartbeat
+    transaction on this event loop held the job row lock between its UPDATE and its COMMIT when the test called the
+    cancel synchronously on the same loop; the cancel waited for the lock, the COMMIT waited for the loop. Here the
+    interleaving is forced: the holder takes the row lock, the barrier sees the cancel waiting for it, and only then
+    the holder commits, which needs this loop to run while the cancel is in flight."""
+    svc = env.svc
+    job = await _claimed(env, "hold")
+    holder = await psycopg.AsyncConnection.connect(svc.db.worker)
+    try:
+        await holder.execute("select * from qt_heartbeat(%s, %s, %s)", (job.id, job.attempts, 30))  # lock, no COMMIT
+        call = asyncio.create_task(env.api("post", f"/v1/jobs/{job.id}/cancel", headers=svc.h(Idempotency_Key="h1")))
+        assert await env.until(lambda: lock_waiters(svc) >= 1, timeout=10)  # barrier: the cancel waits on the row
+        assert not call.done()
+        await holder.commit()
+        r = await call
+    finally:
+        await holder.close()
+    assert r.status_code == 200, r.text
+    assert r.json()["state"] == "running"
+    assert svc.db.q("select cancel_requested from jobs where id = %s", (job.id,)) == [(True,)]
+
+
+async def test_cancel_fails_fast_while_the_job_row_stays_locked(env):
+    """A worker that stalls inside a transaction on the job row (stopped process, partition) must not pin a cancel
+    forever: after `CANCEL_LOCK_TIMEOUT_MS` the cancel answers 503 with Retry-After, changes nothing and keeps no
+    idempotency record, so the same key succeeds once the lock is gone."""
+    svc = env.svc
+    job = await _claimed(env, "stall")
+    holder = await psycopg.AsyncConnection.connect(svc.db.worker)
+    try:
+        await holder.execute("select * from qt_heartbeat(%s, %s, %s)", (job.id, job.attempts, 30))  # never commits
+        t0 = time.monotonic()
+        r = await env.api("post", f"/v1/jobs/{job.id}/cancel", headers=svc.h(Idempotency_Key="s1"))
+        elapsed = time.monotonic() - t0
+        assert r.status_code == 503, r.text
+        assert r.headers["Retry-After"] == "1" and r.json()["code"] == "QT-ENGINE-001"
+        assert CANCEL_LOCK_TIMEOUT_MS / 1000 - 0.5 < elapsed < CANCEL_LOCK_TIMEOUT_MS / 1000 + 5
+        assert svc.db.q("select cancel_requested from jobs where id = %s", (job.id,)) == [(False,)]
+        await holder.rollback()
+    finally:
+        await holder.close()
+    r = await env.api("post", f"/v1/jobs/{job.id}/cancel", headers=svc.h(Idempotency_Key="s1"))
+    assert r.status_code == 200 and r.json()["state"] == "running"
+    assert "Idempotent-Replayed" not in r.headers
+    assert svc.db.q("select cancel_requested from jobs where id = %s", (job.id,)) == [(True,)]
+
+
+async def test_heartbeat_waits_at_most_two_seconds_for_the_job_row(env):
+    """The heartbeat runs in autocommit (no row lock held across a round trip) and gives up after 2 s behind another
+    transaction on the row (`lock_timeout` on `qt_heartbeat`); its pooled connection comes back usable."""
+    svc = env.svc
+    job = await _claimed(env, "hb")
+    with psycopg.connect(svc.db.owner) as holder:
+        holder.execute("select 1 from jobs where id = %s for no key update", (job.id,))
+        t0 = time.monotonic()
+        with pytest.raises(psycopg.errors.LockNotAvailable):
+            await asyncio.wait_for(env.worker.heartbeat_once(job), 10)
+        assert time.monotonic() - t0 < 5
+        holder.rollback()
+    assert await asyncio.wait_for(env.worker.heartbeat_once(job), 10) == (True, False)
+    async with env.pool.connection() as conn:
+        assert not conn.autocommit
 
 
 async def test_job_timeout_kills_child(env):

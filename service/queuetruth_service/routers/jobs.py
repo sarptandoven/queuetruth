@@ -6,6 +6,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
+import psycopg
 from fastapi import APIRouter, Path, Query, Request
 from fastapi.responses import RedirectResponse, Response
 
@@ -26,6 +27,11 @@ JobId = Annotated[str, Path(max_length=64)]
 Limit = Annotated[int, Query(ge=1, le=200)]
 Kind = Literal["ingest", "replay", "calibration", "scorecard", "report", "dataset_validate", "deletion"]
 State = Literal["queued", "running", "succeeded", "failed", "canceled", "expired"]
+#: Longest a cancel waits for the job row (held briefly by the worker's claim, progress, heartbeat and finish
+#: transactions). A holder stuck longer (a stalled or partitioned worker mid-transaction) must not pin an API thread and
+#: a pool connection forever: the cancel answers 503 with Retry-After and, the idempotency record being dropped with the
+#: failed attempt, the client retries with the same key.
+CANCEL_LOCK_TIMEOUT_MS = 5000
 FILE_RESPONSES: dict[int | str, dict[str, Any]] = {
     200: {
         "description": "File bytes",
@@ -72,9 +78,24 @@ async def cancel_job(request: Request, job_id: JobId, idem: idempotency.IdemKey,
     the job is terminal."""
 
     def execute(conn: Any) -> idempotency.Outcome:
-        row = fetch_one(
-            conn, "select * from jobs where id = %s and tenant_id = %s for update", (job_id, auth.tenant_id)
-        )
+        # bounded wait for the row; `for no key update` (not `for update`) because only non-key columns change, so
+        # foreign-key checks of rows referencing the job (job_files, run tables) neither block nor are blocked
+        conn.execute("select set_config('lock_timeout', %s, true)", (f"{CANCEL_LOCK_TIMEOUT_MS}ms",))
+        try:
+            row = fetch_one(
+                conn,
+                "select * from jobs where id = %s and tenant_id = %s for no key update",
+                (job_id, auth.tenant_id),
+            )
+        except psycopg.errors.LockNotAvailable as e:
+            raise ProblemError(
+                503,
+                "unavailable",
+                "Service unavailable",
+                "QT-ENGINE-001",
+                "the job is locked by a worker transaction; retry with the same Idempotency-Key",
+                headers={"Retry-After": "1"},
+            ) from e
         if row is None:
             raise not_found("job")
         if row["state"] in TERMINAL:

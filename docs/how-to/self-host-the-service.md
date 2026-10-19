@@ -451,6 +451,10 @@ on every `up`). Migrations are plain SQL files applied once each, in order, unde
 nothing the second time (`test_admin_migrate_and_create_tenant`). Every JSON document carries `schema_version`;
 `GET /v1/meta` lists the versions the service speaks (all `1` in v0.1).
 
+Migration `0007_heartbeat_lock_timeout.sql` caps the worker heartbeat's wait for a job row at 2 s (it retries on its
+next tick); likewise `POST /v1/jobs/{id}/cancel` waits at most 5 s for a row held by a worker transaction and then
+answers `503` with `Retry-After: 1`, keeping no idempotency record, so retry with the same `Idempotency-Key`.
+
 ## Agents (MCP)
 
 Point `queuetruth mcp serve` at the service with `QT_API_URL` and a `read` key in `QT_API_KEY`; add `--allow-submit`
