@@ -100,7 +100,14 @@ def test_admin_migrate_and_create_tenant(pg, svc):
         assert out["key"] not in r.stderr
         r = subprocess.run([*run, "create-tenant"], env=env, capture_output=True, text=True, timeout=60)
         assert r.returncode == 2
-        env_prod = env | {"QT_ENV": "prod"}
+        # Password-less DSNs keep this check about the missing pepper: CI's Postgres has a weak password, which
+        # ENV=prod refuses first (the command exits before connecting either way).
+        env_prod = env | {
+            "QT_ENV": "prod",
+            "QT_DATABASE_URL": "postgresql:///queuetruth",
+            "QT_DATABASE_URL_APP": "postgresql://qt_app@localhost/queuetruth",
+            "QT_DATABASE_URL_WORKER": "postgresql://qt_worker@localhost/queuetruth",
+        }
         r = subprocess.run(
             [*run, "create-tenant", "--name", "x"], env=env_prod, capture_output=True, text=True, timeout=60
         )

@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import threading
 import time
+import zipfile
 from pathlib import Path
 
 import numpy as np
@@ -188,6 +189,11 @@ def test_export_l2_npz(synth: Path, tmp_path: Path) -> None:
     data = np.load(tmp_path / "x.npz")["data"]
     assert data.dtype.names == ("ev", "exch_ts", "local_ts", "px", "qty", "order_id", "ival", "fval")
     assert data.dtype.itemsize == 64 and len(data) == s.files[0].rows
+    # The in-crate zip writer: one STORED member, CRC-32 verified by zipfile, fixed 1980-01-01 timestamp.
+    with zipfile.ZipFile(tmp_path / "x.npz") as z:
+        assert z.testzip() is None and z.namelist() == ["data.npy"]
+        info = z.getinfo("data.npy")
+        assert info.compress_type == zipfile.ZIP_STORED and info.date_time == (1980, 1, 1, 0, 0, 0)
 
 
 def test_synthesize_and_bbo_from_l2_shapes(synth: Path, tmp_path: Path) -> None:

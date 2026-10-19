@@ -2,7 +2,7 @@
 """O-ZOO-3 style driver: run the released hftbacktest Python wheel (2.4.4) on SPEC 5.3.5 npz feeds.
 
 Input directory layout (written by gen_scenarios.py, or by queuetruth `write_hbt_npz` plus an orders sidecar):
-  <dir>/<name>.npz           np.savez_compressed(path, data=arr), arr dtype = SPEC 5.3.5 / hftbacktest event_dtype
+  <dir>/<name>.npz           np.savez[_compressed](path, data=arr), arr dtype = SPEC 5.3.5 / hftbacktest event_dtype
   <dir>/<name>.orders.json   {"tick_size": f, "lot_size": f, "actions": [{"ts", "kind": "submit"|"cancel",
                               "order_id", "side": "B"|"A", "px", "qty", "tif": "GTX"|"GTC"}]}
 

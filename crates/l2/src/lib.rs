@@ -20,6 +20,7 @@ use qt_types::{BookSide, Dur, Px, QtError, QtResult, Qty};
 
 mod builder;
 mod npz;
+mod zipw;
 
 pub use builder::{L2Builder, bucket_end};
 pub use npz::{

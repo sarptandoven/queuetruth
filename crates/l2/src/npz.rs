@@ -1,20 +1,18 @@
 //! hftbacktest event `.npz` export (SPEC 5.3.5): a structured array of 64-byte records with numpy dtype
 //! `[("ev","<u8"),("exch_ts","<i8"),("local_ts","<i8"),("px","<f8"),("qty","<f8"),("order_id","<u8"),("ival","<i8"),
-//! ("fval","<f8")]`, saved as `np.savez_compressed(path, data=arr)` does: a zip archive with one deflated member
-//! `data.npy` (NPY format 1.0, header padded to a multiple of 64 bytes). Zip timestamps are fixed (1980-01-01) so
-//! the file is byte-reproducible. A trade row without an aggressor that is not a hidden print takes its side from
+//! ("fval","<f8")]`, saved as `np.savez(path, data=arr)` does: a zip archive with one STORED (uncompressed) member
+//! `data.npy` (NPY format 1.0, header padded to a multiple of 64 bytes), written by the in-crate `zipw` writer
+//! (ZIP64 only for a member of 4 GiB or more). Zip timestamps are fixed (1980-01-01) so the file is
+//! byte-reproducible. A trade row without an aggressor that is not a hidden print takes its side from
 //! the prevailing visible BBO (at the bid: sell, at the ask: buy) and is omitted if neither applies. Each npz gets an
 //! orders sidecar `<stem>.orders.json` (format of the hftbacktest cross-check driver, O-ZOO-3). Prices and sizes become `price * 10^price_exp`, `size * 10^size_exp` (division by
 //! the exact power of ten for negative exponents); hidden trades are omitted.
 
-use std::io::Write;
 use std::path::Path;
 
 use qt_schema::io::{FileEntry, sha256_file};
 use qt_schema::rows::{L2Kind, L2Row, l2flags};
 use qt_types::{BookSide, Dur, Instrument, Px, QtError, QtResult, Qty, Side, Ts};
-use zip::write::SimpleFileOptions;
-use zip::{CompressionMethod, DateTime, ZipWriter};
 
 /// Bytes per event record.
 pub const EVENT_SIZE: usize = 64;
@@ -209,17 +207,9 @@ pub fn write_hbt_npz(rows: &[L2Row], inst: &Instrument, feed_latency_ns: Dur, pa
         std::fs::create_dir_all(parent).map_err(|e| err(&e))?;
     }
     let f = std::fs::File::create(path).map_err(|e| err(&e))?;
-    let mut z = ZipWriter::new(f);
-    let opts = SimpleFileOptions::default()
-        .compression_method(CompressionMethod::Deflated)
-        .compression_level(Some(6))
-        .last_modified_time(DateTime::default())
-        .unix_permissions(0o644)
-        .large_file(npy.len() as u64 >= u64::from(u32::MAX));
-    z.start_file("data.npy", opts).map_err(|e| err(&e))?;
-    z.write_all(&npy).map_err(|e| err(&e))?;
-    let f = z.finish().map_err(|e| err(&e))?;
-    drop(f);
+    let w = std::io::BufWriter::with_capacity(1 << 20, f);
+    crate::zipw::write_stored_zip(w, &[("data.npy", npy.as_slice())], false).map_err(|e| err(&e))?;
+    drop(npy);
     let bytes = std::fs::metadata(path).map_err(|e| err(&e))?.len();
     write_hbt_orders(path, inst, &[])?;
     Ok(FileEntry {

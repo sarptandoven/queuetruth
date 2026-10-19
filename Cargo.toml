@@ -58,7 +58,6 @@ csv = "=1.4.0"
 sha2 = "=0.10.9"
 hex = "=0.4.3"
 indexmap = { version = "=2.14.2", features = ["serde"] }
-zip = { version = "=2.6.1", default-features = false, features = ["deflate"] }
 proptest = "=1.11.0"
 
 [profile.dev]

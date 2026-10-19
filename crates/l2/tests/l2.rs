@@ -4,7 +4,6 @@
 //! on `qt_testkit::generate` streams.
 
 use std::collections::BTreeMap;
-use std::io::Read;
 use std::path::PathBuf;
 
 use proptest::prelude::*;
@@ -476,6 +475,57 @@ fn inst(iid: u32, date: i32, venue: Venue, price_exp: i8, size_exp: i8) -> Instr
     }
 }
 
+fn le16(b: &[u8], o: usize) -> usize {
+    usize::from(u16::from_le_bytes([b[o], b[o + 1]]))
+}
+
+fn le32(b: &[u8], o: usize) -> u32 {
+    u32::from_le_bytes(b[o..o + 4].try_into().unwrap())
+}
+
+/// The bytes of the only member of a (non-ZIP64) zip archive, checked to be STORED, named `name`, with matching
+/// local / central sizes, a DOS 1980-01-01 timestamp and an end-of-central-directory record that covers the file.
+fn stored_zip_single_member(z: &[u8], name: &str) -> Vec<u8> {
+    let eocd = z.len() - 22;
+    assert_eq!(le32(z, eocd), 0x0605_4b50, "EOCD at the end (no comment)");
+    assert_eq!((le16(z, eocd + 8), le16(z, eocd + 10)), (1, 1), "one entry");
+    let (cd_size, cd_off) = (le32(z, eocd + 12) as usize, le32(z, eocd + 16) as usize);
+    assert_eq!(cd_off + cd_size, eocd);
+    assert_eq!(le32(z, cd_off), 0x0201_4b50);
+    assert_eq!(le16(z, cd_off + 10), 0, "STORED");
+    assert_eq!(
+        (le16(z, cd_off + 12), le16(z, cd_off + 14)),
+        (0, 0x21),
+        "1980-01-01 00:00"
+    );
+    let size = le32(z, cd_off + 24) as usize;
+    assert_eq!(le32(z, cd_off + 20) as usize, size, "stored: compressed = uncompressed");
+    let nl = le16(z, cd_off + 28);
+    assert_eq!(&z[cd_off + 46..cd_off + 46 + nl], name.as_bytes());
+    let lh = le32(z, cd_off + 42) as usize;
+    assert_eq!((lh, le32(z, lh)), (0, 0x0403_4b50));
+    assert_eq!(le16(z, lh + 8), 0, "STORED");
+    assert_eq!(le32(z, lh + 14), le32(z, cd_off + 16), "same CRC");
+    assert_eq!(le32(z, lh + 22) as usize, size);
+    let data = lh + 30 + le16(z, lh + 26) + le16(z, lh + 28);
+    assert_eq!(data + size, cd_off, "member data ends at the central directory");
+    let member = &z[data..data + size];
+    // Bitwise CRC-32 (independent of the writer's table implementation).
+    let mut crc = !0u32;
+    for &b in member {
+        crc ^= u32::from(b);
+        for _ in 0..8 {
+            crc = if crc & 1 != 0 {
+                0xEDB8_8320 ^ (crc >> 1)
+            } else {
+                crc >> 1
+            };
+        }
+    }
+    assert_eq!(le32(z, cd_off + 16), !crc, "CRC-32 of the member");
+    member.to_vec()
+}
+
 #[test]
 fn npz_layout_header_dtype_and_64_byte_records() {
     let mut b = L2Builder::new(cfg(5, TradePosition::Before), rules(Venue::Nasdaq), 1);
@@ -502,12 +552,7 @@ fn npz_layout_header_dtype_and_64_byte_records() {
     let fe2 = write_hbt_npz(&rows, &i, 1_000, &dir.join("again.npz")).unwrap();
     assert_eq!(fe.sha256, fe2.sha256, "byte-reproducible");
     assert_eq!(fe.rows, Some(5)); // clear, snapshot, depth ask, trade, depth ask
-    let mut z = zip::ZipArchive::new(std::fs::File::open(&p).unwrap()).unwrap();
-    assert_eq!(z.len(), 1);
-    let mut f = z.by_name("data.npy").unwrap();
-    assert_eq!(f.compression(), zip::CompressionMethod::Deflated);
-    let mut npy = Vec::new();
-    f.read_to_end(&mut npy).unwrap();
+    let npy = stored_zip_single_member(&std::fs::read(&p).unwrap(), "data.npy");
     assert_eq!(&npy[..8], b"\x93NUMPY\x01\x00");
     let hl = usize::from(u16::from_le_bytes([npy[8], npy[9]]));
     assert_eq!((10 + hl) % 64, 0, "header padded to 64 bytes");
