@@ -1,7 +1,7 @@
 {
   "schema": "qt.dataset_manifest",
   "schema_version": 1,
-  "dataset_id": "fff39e8aebad3fe09900cff7804c23e90b7c3bc8f4d8d6ec88c0c81d6e84f2a9",
+  "dataset_id": "53413aa6dc25f17676e3c3359af8085e48c9897634ba9da61daceb034843e630",
   "kind": "mbo",
   "source_format": "synthetic",
   "venue": "nasdaq",
@@ -15,7 +15,7 @@
         {
           "path": "mbo/date=2026-06-15/instrument_id=1/part-00000.parquet",
           "rows": 7,
-          "sha256": "60ecdb8de4ebe8d528132e99972b8115a26f569f14fa35e128f5b75e72e00642"
+          "sha256": "c8a1ea5f2995141df30f2059689db293bfde98dd4db09d9b796102e2ce1191de"
         }
       ],
       "rows": 7,
@@ -26,7 +26,7 @@
   "price_exp_by_instrument": {
     "1": -9
   },
-  "created_by": "queuetruth-testkit 0.1.0",
+  "created_by": "queuetruth-testkit 0.1.1",
   "validation_status": "fixture_only",
   "rule_set": null,
   "source_vintage": null

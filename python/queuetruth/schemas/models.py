@@ -404,6 +404,11 @@ class LeaderboardEntry(QtModel):
     ttf_iad: float | None
     qtrack_mae: float | None = None
     mcnemar: McNemarSmall
+    #: 0.1.1 (additive): exact fill rate by horizon, the truth Aalen-Johansen CIF of the leaderboard population (the
+    #: same for every model); `fill_rate_bias = model_fill_rate - exact_fill_rate`.
+    exact_fill_rate: HMap = Field(default_factory=dict)
+    #: 0.1.1 (additive): the model's fill rate by horizon, its mean forecast over the label-eligible rows.
+    model_fill_rate: HMap = Field(default_factory=dict)
 
 
 class ZooSummary(QtDoc):
@@ -423,6 +428,12 @@ class ZooSummary(QtDoc):
     #: `InvalidOrderStatus` event (their prediction rows from the abort on carry status `hbt_312_abort`); models
     #: without an abort are absent. The `hbt_312_abort: ` warning lines stay.
     hbt_312_aborts: dict[str, int] = Field(default_factory=dict)
+    #: 0.1.1 (additive): shadows left out of every model's metrics because at least one faithful hbt pair aborted on
+    #: them at #312, so that every model is scored on one common population.
+    n_excluded_hbt_312: int = 0
+    #: 0.1.1 (additive): never-cancel shadows with an exact label in the leaderboard population (the same for every
+    #: model); null from the Rust runner, which does not evaluate.
+    n_leaderboard: int | None = None
 
 
 # ---- calibration ------------------------------------------------------------------------------------------------

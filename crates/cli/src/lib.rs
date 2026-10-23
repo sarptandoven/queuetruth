@@ -147,6 +147,13 @@ pub fn parse(argv: &[String]) -> Result<CliCommand, CliExit> {
             json_out,
         ));
     };
+    if grammar::lists_models(cmd, leaf) {
+        return Err(CliExit {
+            code: 0,
+            text: list_models(global.format == OutputFormat::Json),
+            to_stderr: false,
+        });
+    }
     let (args, implementation) = grammar::build_args(cmd, leaf, &m)
         .map_err(|msg| usage_exit(&msg, None, global.format == OutputFormat::Json))?;
     Ok(CliCommand {
@@ -155,6 +162,67 @@ pub fn parse(argv: &[String]) -> Result<CliCommand, CliExit> {
         args: Value::Object(args),
         implementation,
     })
+}
+
+/// `zoo --list-models`: the `all` set with one line per model, then the families that run only when named.
+fn list_models(json_out: bool) -> String {
+    use qt_zoo::{Exchange, Family, Mode};
+    let all = qt_zoo::default_models(Mode::Faithful, Exchange::Partial);
+    // the id as typed on the command line: mode, exch and particles come from --mode, --exchange, --particles
+    let short = |m: &qt_zoo::ModelId| {
+        let ps: Vec<String> = m
+            .params
+            .iter()
+            .filter(|(k, _)| k.as_str() != "particles")
+            .map(|(k, v)| format!("{k}={v}"))
+            .collect();
+        if ps.is_empty() {
+            m.family.name().to_owned()
+        } else {
+            format!("{}[{}]", m.family.name(), ps.join(";"))
+        }
+    };
+    let other: Vec<Family> = Family::ALL
+        .iter()
+        .copied()
+        .filter(|f| !all.iter().any(|m| m.family == *f) || !f.param_keys().is_empty())
+        .collect();
+    let template = |f: Family| {
+        let keys: Vec<String> = f
+            .param_keys()
+            .iter()
+            .filter(|k| **k != "particles")
+            .map(|k| format!("{k}={}", k.to_ascii_uppercase()))
+            .collect();
+        format!("{}[{}]", f.name(), keys.join(";"))
+    };
+    if json_out {
+        let row = |id: String, f: Family| serde_json::json!({"id": id, "family": f.name(), "summary": f.summary()});
+        let doc = serde_json::json!({
+            "all": all.iter().map(|m| row(short(m), m.family)).collect::<Vec<_>>(),
+            "other": other.iter().map(|f| row(template(*f), *f)).collect::<Vec<_>>(),
+        });
+        return doc.to_string();
+    }
+    let ids: Vec<String> = all.iter().map(short).collect();
+    let tpl: Vec<String> = other.iter().map(|f| template(*f)).collect();
+    let w = ids.iter().chain(&tpl).map(String::len).max().unwrap_or(0);
+    let mut out = format!(
+        "--models all ({} models; mode from --mode, hftbacktest exchange from --exchange, particles from --particles):\n",
+        all.len()
+    );
+    for (id, m) in ids.iter().zip(&all) {
+        out.push_str(&format!("  {id:<w$}  {}\n", m.family.summary()));
+    }
+    out.push_str("\nother parameters or families (name them in --models):\n");
+    for (t, f) in tpl.iter().zip(&other) {
+        out.push_str(&format!("  {t:<w$}  {}\n", f.summary()));
+    }
+    out.push_str(
+        "\nexample: --models \"hbt_power3[n=2],nt_prob_touch[p=0.3]\"\n\
+         rules: https://github.com/sarptandoven/queuetruth/blob/main/docs/concepts/l2-model-zoo.md",
+    );
+    out
 }
 
 /// Output format.

@@ -39,6 +39,12 @@
           "b": 1,
           "c": 1,
           "p_exact": 0.5
+        },
+        "exact_fill_rate": {
+          "1000000000": 0.5
+        },
+        "model_fill_rate": {
+          "1000000000": 0.5
         }
       }
     ],
@@ -55,6 +61,8 @@
     ],
     "hbt_312_aborts": {
       "k": 1
-    }
+    },
+    "n_excluded_hbt_312": 1,
+    "n_leaderboard": 1
   }
 }

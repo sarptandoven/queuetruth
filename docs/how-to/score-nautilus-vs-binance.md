@@ -323,8 +323,10 @@ done
 
 `nt_queue_l2` in faithful mode reproduces NautilusTrader 1.231.0's L2 queue position (`queue_position=True`) on an
 `OrderBookDelta` feed: on the Nasdaq days it fills the same orders as the real `BacktestEngine` at every horizon
-checked ([Results](../RESULTS.md#nautilustrader-cross-check)). On an `OrderBookDepth10` feed Nautilus resets queue
-position at every snapshot, so compare with `nt_prob_touch[p=1]` instead. If the matching zoo model agrees with your
+checked ([Results](../RESULTS.md#nautilustrader-cross-check)). On an `OrderBookDepth10` feed Nautilus 1.231.0 resets
+queue position at every snapshot, so compare with `nt_prob_touch[p=1]` there; from 2.0.0rc5 a depth feed keeps the
+queue position and fills like the delta feed, and 2.0's queue model differs from faithful `nt_queue_l2` on at most
+0.4% of orders. If the matching zoo model agrees with your
 Nautilus run, the gap to live is the model's, not your configuration's.
 
 ### 8. Put it in CI

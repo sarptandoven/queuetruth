@@ -834,7 +834,7 @@ required unless marked `?` (nullable/optional). `Files` = list of `{name, rows?,
 | `qt.ingest_summary` | spec (IngestSpec echo), manifest (qt.dataset_manifest), data_quality, files (Files), timings? |
 | `qt.replay_summary` | run_id (hex16, section 7.3), engine_version, spec (echo), stats {records, events, trades, instruments, partitions, snapshot_records}, invariants (8 counters), rank_oracle? {executions_checked, executions_unknown_order, price_priority_violations, fifo_rank_histogram[6], fifo_rank_histogram_sweep_adjusted[6], rank0_share, rank0_share_sweep_adjusted, sweeps, sweeps_multi_fill, sweep_gap_ns, first_60s_after_open {checked, rank_violations, rank_violations_sweep_adjusted, rank0_share, rank0_share_sweep_adjusted}, rank0_share_by_bucket {"HH:MM": {checked, rank0, rank0_sweep_adjusted, rank0_share, rank0_share_sweep_adjusted}}}, parity? {trades_compared, trades_mismatches, trades_missing_derived, trades_extra_derived, bbo_compared, bbo_mismatches, first_mismatches [object], pass}, shadows? {n, n_live, n_filled, n_partial_only, n_cancelled, n_censored, n_rejected, fills_rows, trajectory_rows}, data_quality, files, warnings [str], timings? {wall_s, records_per_s} |
 | `qt.shadow_sample_summary` | spec, n, by_instrument {id: n}, by_placement {offset: n}, files |
-| `qt.zoo_summary` | run_id, spec, n_shadows, models [model_id], leaderboard [{model_id, brier {h: v}, logloss {h: v}, fill_rate_bias {h: {value, ci_lo, ci_hi}}, overfill_bias {value, ci_lo, ci_hi}, qty_bias, ttf_log_ratio_median?, ttf_iad, qtrack_mae?, mcnemar {b, c, p_exact}}] (never-cancel shadows only, 5.6; `fill_rate_bias` is the AJ figure), files, warnings; 1.1 (additive, default {}): hbt_312_aborts {model_id: n_pairs} (5.3.2) |
+| `qt.zoo_summary` | run_id, spec, n_shadows, models [model_id], leaderboard [{model_id, brier {h: v}, logloss {h: v}, fill_rate_bias {h: {value, ci_lo, ci_hi}}, overfill_bias {value, ci_lo, ci_hi}, qty_bias, ttf_log_ratio_median?, ttf_iad, qtrack_mae?, mcnemar {b, c, p_exact}}] (never-cancel shadows only, 5.6; `fill_rate_bias` is the AJ figure), files, warnings; 1.1 (additive, default {}): hbt_312_aborts {model_id: n_pairs} (5.3.2); 0.1.1 (additive): leaderboard items `exact_fill_rate {h: v}` and `model_fill_rate {h: v}` (default {}; `fill_rate_bias = model_fill_rate - exact_fill_rate`), `n_excluded_hbt_312` (default 0), `n_leaderboard` (default null) |
 | `qt.calibration_result` | run_id, spec, kind, family, mode, param_name? (`n` for power families with estimate and CIs in n, not ln n; `k` databento; `p` NT), estimate?, ci_profile? [lo, hi], ci_bootstrap? [lo, hi], loglik?, n_events, n_shadows, train {dates|blocks}, test {dates|blocks}, held_out {model_id: {brier {h: v}, logloss {h: v}, fill_rate_bias {h: v}}}, baseline_held_out (same shape, default parameters), stratified [{stratum_kind, stratum, estimate, ci_lo?, ci_hi?, n}], latency? {entry_ns {p10,p50,p90,p99,n}, response_ns {...}, cancel_ns {...}, amend_ns {...}, clock_sync_assumed: bool}, exports {hftbacktest {python, notes [str]}, nautilus {python, notes [str]}, latency_npz?}, data_sources [{dataset_id, venue, source_venue, validation_status}], warnings |
 | `qt.feature_summary` | spec, n_orders, n_rows, by_cause {fill, cancel, censor}, feature_names [str], privileged_names [str], files |
 | `qt.hazard_model_card` | model_id, format_version (1), spec, grid_ns [int], causes ["fill","cancel"], feature_names, privileged (bool), split {scheme, train, calib, test}, n_orders {train, calib, test}, n_rows_train, scores_test {rcll, ipcw_logloss {h: v}, brier {h: v}, bss_vs_climatology {h: {value, ci_lo, ci_hi}}, ibs, calib_slope {h: v}, calib_intercept {h: v}, spiegelhalter_z {h: v}, hl_p {h: v}, c_index_uno (labelled improper), auc {h: v} (improper)}, zoo_comparison? {model_id: {brier {h: v}}}, recalibration ("isotonic"/"none"), files, warnings |
@@ -2004,8 +2004,10 @@ feed (behaviour re-implemented from documentation and observation, no NT code; a
 `scripts/nt_crosscheck`): they receive hidden prints as aggressor `N` (NT moves both book sides to the trade price),
 which count as touches and, in the queue families, consume queue ahead like displayed prints; book size updates
 never shrink their queue ahead; and the queue families do not fill on a trade-through or a cross while queue ahead
-is positive (5.3.3 d-f). NautilusTrader resets `queue_position` to 0 whenever an `OrderBookDepth10` arrives, so on
-a depth-10 feed its queue families behave like `nt_prob_touch`; the faithful NT models describe delta feeds only. Adopting these rules moved the faithful
+is positive (5.3.3 d-f). NautilusTrader 1.231.0 resets `queue_position` to 0 whenever an `OrderBookDepth10`
+arrives, so on a depth-10 feed its queue families behave like `nt_prob_touch`; from 2.0.0rc5 a depth snapshot keeps
+the queue position, and 2.0 caps queue ahead at a shrinking level's new size (RESULTS.md, NautilusTrader cross-check).
+The faithful NT models describe 1.231.0 on delta feeds. Adopting these rules moved the faithful
 day-one result at 1 s for the default `p = 1` by +3.13 pp (14.17% vs 11.03%), as verified by the cross-check.
 - MBO-input families receive `on_mbo` for every record of the instrument after activation instead of L2 rows, and
   `on_cross` from the exact book at event end.
@@ -2014,8 +2016,10 @@ day-one result at 1 s for the default `p = 1` by +3.13 pp (14.17% vs 11.03%), as
   #312 zombie (5.3.3 a) raises `InvalidOrderStatus` and stops the whole backtest. qt stops only that (model,
   shadow) pair at that event (`PairEnd::HbtError`); the model and every other pair run on. The pair's
   `qt.zoo_predictions` rows whose deadline `ts_live + h` is at or after the abort carry the 1.1 column `status =
-  hbt_312_abort` (null otherwise); they are not predictions and `queuetruth.eval` leaves them out of every metric
-  and the leaderboard (a sentence of the leaderboard notes the excluded share). Per model, the summary field
+  hbt_312_abort` (null otherwise); they are not predictions. Since 0.1.1 `queuetruth.eval` leaves out every row of a
+  shadow on which any model aborted, for every model (`common_population`; summary field `n_excluded_hbt_312`), so
+  all models share one population: the aborts select the shadows that reach a partial fill, and dropping them for
+  the aborted model only compared models on different populations. Per model, the summary field
   `hbt_312_aborts` {model_id: number of aborted pairs} (1.1, additive, models without an abort absent) and one
   warning line `hbt_312_abort: <model_id>: <n> of <n_shadows> shadow pair(s) aborted ...` (stable prefix, first
   pair's shadow id and abort time) report it. Corrected mode has no zombie and never aborts.
@@ -2172,9 +2176,11 @@ a shadow arriving out of view has `F` unknown and initialises `F = new_qty` at t
 for its level. Faithful mode keeps the behaviour above. As built only `nt_queue_l2` corrected ignores
 `OUT_OF_VIEW` (`crates/zoo/src/models.rs:233`; known limitation, Open conflicts D).
 
-5.3.4 **Default `all` set** (17): `hbt_risk_adverse`; `hbt_power[n=1|2|3]`; `hbt_power2[n=2]`;
+5.3.4 **Default `all` set** (16): `hbt_risk_adverse`; `hbt_power[n=2|3]`; `hbt_power2[n=2]`;
 `hbt_power3[n=1|2|3]`; `hbt_log`; `hbt_log2`; `hbt_l3_fifo`; `nt_queue_l2`; `nt_prob_touch[p=1]`;
 `databento_mc[k=-0.8]`; `databento_mc[k=-0.95]`; `front_of_queue`; `trade_through_only` (mode/exchange from spec).
+0.1.0 also ran `hbt_power[n=1]`, which equals `hbt_power3[n=1]` (`b / (b + f) = 1 - f / (f + b)`) in every cell;
+0.1.1 dropped the duplicate row. It still runs when named in `models`.
 
 5.3.5 **hftbacktest npz export** (`write_hbt_npz`): structured array, 64-byte records, numpy dtype
 `[("ev","<u8"),("exch_ts","<i8"),("local_ts","<i8"),("px","<f8"),("qty","<f8"),("order_id","<u8"),("ival","<i8"),("fval","<f8")]`,
@@ -2379,7 +2385,8 @@ Populations and censoring. `evaluate_zoo` requires `planned_life`
 predicted shadow has no row or a column is missing; planned ends before `ts_live` are clamped with a note);
 `api.run_zoo`, the calibrate held-out evaluation, the report and the hazard card read it from
 `zoo_shadows.parquet`. Label eligibility is never inferred from the outcome-flavoured `censored` column (A2, E38
-OC-7). Rows with `status = hbt_312_abort` (5.3.2) are left out before anything is computed. A row at horizon `h` is
+OC-7). Every row of a shadow with a `status = hbt_312_abort` row (5.3.2), for every model, is left out before
+anything is computed (one common population, 0.1.1). A row at horizon `h` is
 eligible iff `ts_admin_end >= ts_live + h` (outcome-independent). **Never-cancel** shadows (planned cancel null or `>= ts_live + h_max`) give the unprefixed
 metrics and the only leaderboard; **cancel-bearing** shadows (e.g. mirrors) are reported under `cancel_bearing/`,
 their own cancel a competing risk. Truth CIFs are Aalen-Johansen (cause 1 fill, 2 own cancel, censored at
@@ -2389,11 +2396,13 @@ their own cancel a competing risk. Truth CIFs are Aalen-Johansen (cause 1 fill, 
 Leaderboard (`queuetruth.eval.leaderboard`, used identically by the CLI and the
 report, which reuse `summary.json`'s leaderboard): sorted at the sort horizon (`ReportSpec.leaderboard_sort_horizon_ns`
 / `report --sort-horizon`, default 60 s; the largest horizon at or below the target, else the smallest) by
-`(bias missing, |fill_rate_bias|, brier, model_id)`. One sentence per model: `At {h}, {model} fills {x} pp
-{more|less} often than the exact replay[, within noise] (95% CI {lo} to {hi} pp).`, or `... fills as often as the
-exact replay (bias {x} pp)` when |bias| < 0.05 pp, or `... has no fill-rate bias: no shadow has an exact label at
-that horizon.`; the CLI appends `; n = N; at {h_max} cluster-robust discordance p = ...`; a model with #312 aborts
-adds `; <n> of <N> shadow pairs (<x>%) aborted at the hbt #312 event (excluded)`. The leaderboard value
+`(bias missing, |fill_rate_bias|, brier, model_id)`. One sentence per model: `At {h}, {model} fills {m}% of orders
+vs {e}% in the exact replay, {x} pp {more|less} often[, within noise] (95% CI {lo} to {hi} pp).` (0.1.1; without the
+rates `... fills {x} pp {more|less} often than the exact replay ...`), or `... fills {m}% of orders, as often as the
+exact replay ({e}%, bias {x} pp)` when |bias| < 0.05 pp, or `... has no fill-rate bias: no shadow has an exact label
+at that horizon.`; the CLI appends `; n = N; at {h_max} cluster-robust discordance p = ...`; with the optional
+`aborts` argument a model with #312 aborts adds `; <n> of <N> shadow pairs (<x>%) aborted at the hbt #312 event
+(excluded)`. The CLI table and the report table start with an "exact fill rate" row. The leaderboard value
 `fill_rate_bias[h]` (with its CI) is the never-cancel AJ bias `fill_rate_bias_aj` at `h` (A2): mean of `p` over
 the eligible never-cancel rows minus the truth AJ `CIF_fill(h)`, the same figure as the report column "bias vs AJ
 CIF", so the headline, the sort key and the report agree. The eligible-row `mean(p) - mean(y)` stays in

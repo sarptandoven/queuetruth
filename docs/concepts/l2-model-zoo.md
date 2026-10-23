@@ -77,9 +77,12 @@ Trade-throughs and crosses fill fully.
 Faithful quirks: a fill needs only half a lot of volume beyond the queue (`-F = 0.5 L` rounds to one lot). With the
 partial-fill exchange, a fill that leaves less than half a lot makes the order a resting "filled" zombie (hftbacktest
 issue #312, tagged `hbt_312`); hftbacktest raises `InvalidOrderStatus` on that order's next fill attempt and aborts
-the whole backtest. queuetruth stops only that order: from the abort on, its rows carry status `hbt_312_abort` and
-are left out of the model's metrics, and one `hbt_312_abort:` warning per model gives the number of affected shadows
-(you may see these warnings in [Getting started](../getting-started.md)). Corrected:
+the whole backtest. queuetruth stops only that order: from the abort on, its rows carry status `hbt_312_abort`.
+The aborts are not random (they hit the orders that reach a partial fill), so since 0.1.1 a shadow on which any
+model aborted is left out of every model's metrics: all models are scored on one common population. The summary
+gives the per-model counts (`hbt_312_aborts`, one `hbt_312_abort:` warning per model) and the number of shadows
+left out (`n_excluded_hbt_312`); the terminal prints one line for all of them, and `--verbose` prints each (you may
+see it in [Getting started](../getting-started.md)). Corrected:
 `lots = floor(max(-F, 0) / L + 1e-9)` (volume strictly beyond the queue, no rounding up), depth update
 `F = min(max(F, 0), new)`, and a fill equal to the leaves completes the order.
 
@@ -157,8 +160,11 @@ view, or a snapshot row resets it to 0), and a trade-through or cross does not f
 queue gate. (The specification extends the out-of-view correction to every corrected family; in v0.1 only
 `nt_queue_l2` has it.)
 
-NautilusTrader resets `queue_position` whenever an `OrderBookDepth10` arrives, so on a depth-10 feed its queue
-families fill like `nt_prob_touch`. These models describe NautilusTrader on a delta feed only.
+NautilusTrader 1.231.0 resets `queue_position` whenever an `OrderBookDepth10` arrives, so on a depth-10 feed its
+queue families fill like `nt_prob_touch`. From 2.0.0rc5 a depth snapshot keeps the queue position, and 2.0 also caps
+queue ahead at a level's new size when the level shrinks, so faithful `nt_queue_l2` (1.231.0's rules) agrees with
+2.0.0rc7 on 99.60% to 99.97% of orders ([Results](../RESULTS.md#nautilustrader-cross-check)). These models describe
+NautilusTrader 1.231.0 on a delta feed.
 
 ### (e) `nt_prob_touch[p]`
 
@@ -221,7 +227,7 @@ Computed in Python for the same orders: `climatology_aj` (fill probability by st
 
 ## The default set
 
-`--models all` runs 17 models: `hbt_risk_adverse`; `hbt_power[n=1,2,3]`; `hbt_power2[n=2]`; `hbt_power3[n=1,2,3]`;
+`--models all` runs 16 models: `hbt_risk_adverse`; `hbt_power[n=2,3]`; `hbt_power2[n=2]`; `hbt_power3[n=1,2,3]`;
 `hbt_log`; `hbt_log2`; `hbt_l3_fifo`; `nt_queue_l2`; `nt_prob_touch[p=1]`; `databento_mc[k=-0.8]`;
 `databento_mc[k=-0.95]`; `front_of_queue`; `trade_through_only`. Mode and exchange come from `--mode` and
 `--exchange`.

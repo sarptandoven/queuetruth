@@ -70,7 +70,7 @@ queuetruth shadows sample --data synth --n 1000 --out qt-shadows.parquet
 ```
 
 **Run the zoo.** One pass feeds every record to the exact FIFO engine, which knows where each shadow sits in the
-real queue, and to an L2 view built from the same data, which only shows total size per price level. The 17 models
+real queue, and to an L2 view built from the same data, which only shows total size per price level. The 16 models
 of the default set run on the L2 view. For every model and shadow you get the predicted fill probability at 100 ms,
 1 s, 10 s, 60 s and 300 s next to the exact outcome.
 
@@ -80,11 +80,13 @@ queuetruth zoo --data synth --shadows qt-shadows.parquet --out qt-zoo
 ls qt-zoo
 ```
 
-The terminal shows the answer first: the leaderboard of fill-rate bias (model minus exact truth, in percentage
-points, `*` where the 95% interval excludes 0) at every horizon, sorted by the absolute bias at 60 s
-(`--sort-horizon` picks another horizon), then one plain sentence per model. Faithful hftbacktest models also print a
-warning when hftbacktest itself would have aborted the backtest (its issue #312); see
-[The L2 model zoo](concepts/l2-model-zoo.md).
+The terminal shows the answer first: the exact fill rate at every horizon, then each model's fill-rate bias (model
+minus exact truth, in percentage points, `*` where the 95% interval excludes 0), sorted by the absolute bias at 60 s
+(`--sort-horizon` picks another horizon), then one plain sentence per model with both fill rates ("fills 56.2% of
+orders vs 57.0% in the exact replay, 0.8 pp less often"). Every model is scored on the same shadows. Faithful
+hftbacktest models stop on some orders where hftbacktest itself would have aborted the backtest (its issue #312);
+those shadows are left out of every model and one warning line counts them (`--verbose` prints each model's count;
+see [The L2 model zoo](concepts/l2-model-zoo.md)). `queuetruth zoo --list-models` lists the model ids.
 
 **Read these numbers as a demonstration of the workflow, not as evidence.** The synthetic order flow is not built to
 make queue position matter, so this leaderboard says nothing about real markets. The evidence about real markets is the leaderboard on two public
@@ -278,7 +280,7 @@ queuetruth report --in zoo --in cal-power3 --out nasdaq-20200130.html
 real order's cancel time. It gives a population that follows real traders' placement; its results are reported
 separately from never-cancel shadows (see [Rules from the independent audit](concepts/audit-rules.md)).
 
-On an Apple M1 Pro (8 cores) the zoo step for 17 models and 3,000 shadows took 11.6 to 12.8 s for 2019-12-30 and
+On an Apple M1 Pro (8 cores) the 0.1.0 zoo step for 17 models and 3,000 shadows took 11.6 to 12.8 s for 2019-12-30 and
 15.7 to 17.3 s for 2020-01-30 at 4 threads, measured while other builds were running ([Results](RESULTS.md), section
 4). To reproduce the published real-data numbers from the public Nasdaq files alone, run `make reproduce`
 (`scripts/repro/reproduce.py`; it streams both day files, keeps the four symbols and reruns ingest, replay, the

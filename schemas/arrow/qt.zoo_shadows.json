@@ -1,7 +1,7 @@
 {
   "name": "qt.zoo_shadows",
   "metadata": {
-    "qt.engine_version": "0.1.0",
+    "qt.engine_version": "0.1.1",
     "qt.schema": "qt.zoo_shadows",
     "qt.schema_version": "1.1"
   },

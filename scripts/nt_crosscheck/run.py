@@ -19,7 +19,8 @@ Three steps, each in the interpreter that has its dependencies (`all` chains the
                                  queue_p1        queue_position=True, prob_fill_on_limit=1.0
                                  queue_p0.29     queue_position=True, prob_fill_on_limit=0.29
                                with `--depth10` also the same configs fed OrderBookDepth10 (MBP-10 snapshots)
-                               instead of OrderBookDelta.
+                               instead of OrderBookDelta. Runs on nautilus_trader 1.x and 2.x (2.x: DefaultFillModel,
+                               OrderBookDepth, an explicit zero FixedFeeModel).
   compare   (queuetruth venv)  agreement table per model/horizon, discrepancy classes with examples, the
                                headline bias under real NautilusTrader, and replicas of both rule sets that
                                attribute every disagreement to one rule difference.
@@ -371,24 +372,69 @@ def _nt_worker(args: tuple) -> list[dict]:
 
 def run_instrument_nt(work: Path, iid: int, cfg_names: list[str], window_ns: int, chunk: int, seed: int) -> list[dict]:
     warnings.filterwarnings("ignore")
-    from nautilus_trader.backtest.engine import BacktestEngine, BacktestEngineConfig
-    from nautilus_trader.backtest.models import FillModel
-    from nautilus_trader.config import LoggingConfig, RiskEngineConfig, StrategyConfig
-    from nautilus_trader.model.currencies import USD
-    from nautilus_trader.model.data import BookOrder, OrderBookDelta, OrderBookDeltas, OrderBookDepth10, TradeTick
-    from nautilus_trader.model.enums import (
-        AccountType,
-        AggressorSide,
-        BookAction,
-        BookType,
-        OmsType,
-        OrderSide,
-        TimeInForce,
-    )
-    from nautilus_trader.model.identifiers import InstrumentId, Symbol, TradeId, Venue
-    from nautilus_trader.model.instruments import Equity
-    from nautilus_trader.model.objects import FIXED_PRECISION, Money, Price, Quantity
-    from nautilus_trader.trading.strategy import Strategy
+    import nautilus_trader
+
+    nt2 = int(nautilus_trader.__version__.split(".")[0]) >= 2
+    if nt2:
+        # 2.x: Rust (PyO3) API; FillModel -> DefaultFillModel, OrderBookDepth10 -> OrderBookDepth (rc6),
+        # LoggingConfig -> LoggerConfig
+        from nautilus_trader.backtest import BacktestEngine, BacktestEngineConfig
+        from nautilus_trader.common import LoggerConfig
+        from nautilus_trader.execution import DefaultFillModel as FillModel
+        from nautilus_trader.execution import FixedFeeModel
+        from nautilus_trader.model import (
+            FIXED_PRECISION,
+            AccountType,
+            AggressorSide,
+            BookAction,
+            BookOrder,
+            BookType,
+            Currency,
+            Equity,
+            InstrumentId,
+            Money,
+            OmsType,
+            OrderBookDelta,
+            OrderBookDeltas,
+            OrderSide,
+            Price,
+            Quantity,
+            StrategyId,
+            Symbol,
+            TimeInForce,
+            TradeId,
+            TraderId,
+            TradeTick,
+            Venue,
+        )
+
+        try:
+            from nautilus_trader.model import OrderBookDepth as OrderBookDepth10
+        except ImportError:  # before 2.0.0rc6
+            from nautilus_trader.model import OrderBookDepth10
+        from nautilus_trader.risk import RiskEngineConfig
+        from nautilus_trader.trading import Strategy, StrategyConfig
+
+        USD = Currency.from_str("USD")
+    else:
+        from nautilus_trader.backtest.engine import BacktestEngine, BacktestEngineConfig
+        from nautilus_trader.backtest.models import FillModel
+        from nautilus_trader.config import LoggingConfig, RiskEngineConfig, StrategyConfig
+        from nautilus_trader.model.currencies import USD
+        from nautilus_trader.model.data import BookOrder, OrderBookDelta, OrderBookDeltas, OrderBookDepth10, TradeTick
+        from nautilus_trader.model.enums import (
+            AccountType,
+            AggressorSide,
+            BookAction,
+            BookType,
+            OmsType,
+            OrderSide,
+            TimeInForce,
+        )
+        from nautilus_trader.model.identifiers import InstrumentId, Symbol, TradeId, Venue
+        from nautilus_trader.model.instruments import Equity
+        from nautilus_trader.model.objects import FIXED_PRECISION, Money, Price, Quantity
+        from nautilus_trader.trading.strategy import Strategy
 
     meta = json.loads((work / "instruments.json").read_text())[str(iid)]
     pexp, sexp = int(meta["price_exp"]), int(meta["size_exp"])
@@ -487,7 +533,10 @@ def run_instrument_nt(work: Path, iid: int, cfg_names: list[str], window_ns: int
                     hit = trade_hit_side(int(tp.side[i]), int(tp.aggressor[i]))
                     if hit is None:
                         continue  # unsided displayed print: the zoo drops it too
-                    ag = AggressorSide.SELLER if hit == S_BID else AggressorSide.BUYER
+                    if nt2:
+                        ag = AggressorSide.SELL if hit == S_BID else AggressorSide.BUY
+                    else:
+                        ag = AggressorSide.SELLER if hit == S_BID else AggressorSide.BUYER
                 q = int(tp.qty[i])
                 if q > 0:
                     out.append(TradeTick(inst_id, P(int(tp.price[i])), Q(q), ag, TradeId(f"T{i}"), t, t))
@@ -541,7 +590,10 @@ def run_instrument_nt(work: Path, iid: int, cfg_names: list[str], window_ns: int
 
     class ShadowStrategy(Strategy):
         def __init__(self, items: list[int]) -> None:
-            super().__init__(StrategyConfig(strategy_id="QTSHADOW-001", order_id_tag="001"))
+            if nt2:
+                super().__init__(StrategyConfig(strategy_id=StrategyId("QTSHADOW-001"), order_id_tag="001"))
+            else:
+                super().__init__(StrategyConfig(strategy_id="QTSHADOW-001", order_id_tag="001"))
             self.items = items
             self.orders: dict[int, object] = {}
             self.coid: dict[str, int] = {}
@@ -594,13 +646,19 @@ def run_instrument_nt(work: Path, iid: int, cfg_names: list[str], window_ns: int
         t0 = time.time()
         n_items = 0
         for ci, items in enumerate(chunks):
-            engine = BacktestEngine(
-                config=BacktestEngineConfig(
+            if nt2:
+                ecfg = BacktestEngineConfig(
+                    trader_id=TraderId("QT-001"),
+                    logging=LoggerConfig(bypass_logging=True),
+                    risk_engine=RiskEngineConfig(bypass=True),
+                )
+            else:
+                ecfg = BacktestEngineConfig(
                     trader_id="QT-001",
                     logging=LoggingConfig(log_level="ERROR", bypass_logging=True),
                     risk_engine=RiskEngineConfig(bypass=True),
                 )
-            )
+            engine = BacktestEngine(config=ecfg)
             engine.add_venue(
                 venue=venue,
                 oms_type=OmsType.NETTING,
@@ -611,6 +669,7 @@ def run_instrument_nt(work: Path, iid: int, cfg_names: list[str], window_ns: int
                 book_type=BookType.L2_MBP,
                 trade_execution=True,
                 queue_position=qpos,
+                **({"fee_model": FixedFeeModel(Money(0, USD))} if nt2 else {}),  # 2.x requires an explicit fee model
             )
             engine.add_instrument(
                 Equity(
@@ -708,6 +767,15 @@ ZOO_TOUCH = Rules(queue=False, hidden_at_price=True, depth_min=False, gate_throu
 NT_TOUCH = Rules(queue=False, hidden_at_price=True, depth_min=False, gate_through=False, snapshot_zero=False)
 ZOO_QUEUE = Rules(queue=True, hidden_at_price=True, depth_min=False, gate_through=True, snapshot_zero=False)
 NT_QUEUE = Rules(queue=True, hidden_at_price=True, depth_min=False, gate_through=True, snapshot_zero=True)
+# nautilus_trader 2.0.0rc7 (checked 2026-10-22): a book update that shrinks the order's level caps queue ahead at the
+# new level size, on OrderBookDelta and OrderBookDepth feeds alike (since 2.0.0rc5, #4942, a depth snapshot no longer
+# resets the queue position). snapshot_zero is carried over from 1.x untested: no checked window contains a CLEAR or
+# snapshot row.
+NT2_QUEUE = Rules(queue=True, hidden_at_price=True, depth_min=True, gate_through=True, snapshot_zero=True)
+
+
+def nt_queue_rules(ntver: str) -> Rules:
+    return NT2_QUEUE if int(ntver.split(".")[0]) >= 2 else NT_QUEUE
 
 
 def replica_run(
@@ -866,7 +934,8 @@ def cmd_compare(a: argparse.Namespace) -> None:
     tapes: dict[int, tuple[Tape, np.ndarray]] = {}
     ctx: dict[str, tuple] = {}
     reps: dict[str, dict[str, tuple]] = {}
-    named = (("zoo_touch", ZOO_TOUCH), ("nt_touch", NT_TOUCH), ("zoo_queue", ZOO_QUEUE), ("nt_queue", NT_QUEUE))
+    nt_queue = nt_queue_rules(ntver)
+    named = (("zoo_touch", ZOO_TOUCH), ("nt_touch", NT_TOUCH), ("zoo_queue", ZOO_QUEUE), ("nt_queue", nt_queue))
     if not a.no_replica:
         t0 = time.time()
         for iid, g in sh[sh.price.notna() & ~sh.crosses_at_live].groupby("instrument_id"):
@@ -990,7 +1059,7 @@ def cmd_compare(a: argparse.Namespace) -> None:
             "attributed to the smallest set of zoo->NT rule flips that reproduces NT on that shadow):",
         ]
         classes: dict = {}
-        for fam, zr, nr in (("touch", ZOO_TOUCH, NT_TOUCH), ("queue", ZOO_QUEUE, NT_QUEUE)):
+        for fam, zr, nr in (("touch", ZOO_TOUCH, NT_TOUCH), ("queue", ZOO_QUEUE, nt_queue)):
             cname = f"{fam}_p1"
             if cname not in ntby:
                 continue

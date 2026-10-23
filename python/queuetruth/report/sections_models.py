@@ -427,7 +427,18 @@ def zoo(ctx: Ctx) -> Raw | None:
             )
         )
         if z.warnings:
-            body.append(callout(WARN, "Zoo warnings", ul(z.warnings)))
+            # the faithful hbt #312 abort lines (one per model) collapse into one item with the per-model counts
+            aborts = [w for w in z.warnings if lbm.ABORT_PREFIX in w]
+            items = [w for w in z.warnings if lbm.ABORT_PREFIX not in w]
+            if aborts:
+                per_model = ", ".join(f"{m} {n:,}" for m, (n, _) in lbm.abort_shares(aborts).items())
+                items.insert(
+                    0,
+                    f"hftbacktest bug #312: {len(aborts)} faithful hbt model(s) aborted on some shadows ({per_model}); "
+                    f"the {z.n_excluded_hbt_312:,} shadows involved are left out of every model, so all models are "
+                    "scored on the same population",
+                )
+            body.append(callout(WARN, "Zoo warnings", ul(items)))
         idx = zi.errors_index(run)
         lb = z.leaderboard
         horizons = lbm.horizons_of(lb) if lb else []
@@ -441,8 +452,18 @@ def zoo(ctx: Ctx) -> Raw | None:
                 f"{F.esc(lbm.duration_text(hsort) if hsort else F.DASH)} (bias vs the Aalen-Johansen truth CIF); "
                 "closer to zero is better</h4>"
             )
-            aborts = lbm.abort_shares(z.warnings)
-            body.append(ul([lbm.bias_sentence(e, hsort, aborts) for e in ordered], "sentences"))
+            if z.n_leaderboard is not None:
+                body.append(
+                    f'<p class="lead">Every model is scored on the same {z.n_leaderboard:,} never-cancel shadows'
+                    + (
+                        f" ({z.n_excluded_hbt_312:,} shadows on which a faithful hftbacktest model hit its bug #312 "
+                        "are left out of every model)"
+                        if z.n_excluded_hbt_312
+                        else ""
+                    )
+                    + ".</p>"
+                )
+            body.append(ul([lbm.bias_sentence(e, hsort) for e in ordered], "sentences"))
             heads = (
                 ["model"]
                 + [f"fill-rate bias {F.dur(h)}" for h in horizons]
@@ -456,6 +477,10 @@ def zoo(ctx: Ctx) -> Raw | None:
                 ]
             )
             rows = []
+            exact = [next((r for e in ordered if (r := lbm.rates_at(e, h)[1]) is not None), None) for h in horizons]
+            if any(x is not None for x in exact):
+                # the base rate of every bias in its column: the truth AJ CIF, the same for every model (0.1.1)
+                rows.append(["exact fill rate (truth)", *(F.pct(x) for x in exact), *([""] * 6)])
             for e in ordered:
                 # the leaderboard bias is the AJ figure (A2); this column is the eligible-row diagnostic
                 aj = _err(idx, e.model_id, "fill_rate_bias", hsort)
@@ -504,7 +529,8 @@ def zoo(ctx: Ctx) -> Raw | None:
             )
             body.append(
                 '<p class="lead">Bias = mean forecast minus exact fill rate (positive = optimistic), with its 95% '
-                "block-bootstrap CI at every horizon. The table is sorted by the absolute bias at "
+                "block-bootstrap CI at every horizon; the first row gives the exact fill rate itself. The table is "
+                "sorted by the absolute bias at "
                 f"{F.esc(lbm.duration_text(hsort) if hsort else F.DASH)} (the horizon is a report setting, default "
                 "60 s, or the "
                 "longest horizon below it); Brier is only a tie-break, because models that never fill at short "

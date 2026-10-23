@@ -84,7 +84,7 @@ impl Family {
     }
 
     /// Parameter keys (besides `mode`/`exch`) the family accepts.
-    const fn param_keys(self) -> &'static [&'static str] {
+    pub const fn param_keys(self) -> &'static [&'static str] {
         match self {
             Family::HbtPower | Family::HbtPower2 | Family::HbtPower3 => &["n"],
             Family::NtProbTouch | Family::NtQueueL2ProbTouch => &["p"],
@@ -92,6 +92,72 @@ impl Family {
             _ => &[],
         }
     }
+}
+
+impl Family {
+    /// One line on what the family models (`zoo --list-models`; docs/concepts/l2-model-zoo.md has the rules).
+    pub const fn summary(self) -> &'static str {
+        match self {
+            Family::HbtRiskAdverse => {
+                "hftbacktest RiskAdverseQueueModel: every unexplained decrease came from behind you"
+            }
+            Family::HbtPower => "hftbacktest PowerProbQueueFunc: share of a decrease from ahead b^n / (b^n + f^n)",
+            Family::HbtPower2 => "hftbacktest PowerProbQueueFunc2: share of a decrease from ahead b^n / (b + f)^n",
+            Family::HbtPower3 => "hftbacktest PowerProbQueueFunc3: share of a decrease from ahead 1 - (f / (f + b))^n",
+            Family::HbtLog => "hftbacktest LogProbQueueFunc",
+            Family::HbtLog2 => "hftbacktest LogProbQueueFunc2",
+            Family::HbtL3Fifo => "hftbacktest L3FIFOQueueModel on the MBO records (order-level input, not L2)",
+            Family::NtQueueL2 => "NautilusTrader queue position on L2 (queue_position=True)",
+            Family::NtProbTouch => {
+                "NautilusTrader FillModel(prob_fill_on_limit=p): each at-price touch fills with probability p"
+            }
+            Family::NtQueueL2ProbTouch => {
+                "NautilusTrader queue position, then prob_fill_on_limit=p once the queue is gone"
+            }
+            Family::DatabentoMc => "Databento queue-position estimator (Monte Carlo over particles; k in (-1, 1))",
+            Family::FrontOfQueue => "upper bound: nothing ahead of you, every at-price trade fills",
+            Family::TradeThroughOnly => "lower bound: fills only when a displayed trade goes through your price",
+        }
+    }
+
+    /// The closest family name to an unknown one (`did you mean`): the first name containing it (3 characters or more),
+    /// else the longest name it starts with, else the smallest edit distance up to a third of its length (at least 2).
+    pub fn suggest(name: &str) -> Option<&'static str> {
+        let n = name.trim().to_ascii_lowercase();
+        if n.is_empty() {
+            return None;
+        }
+        let names = Family::ALL.iter().map(|f| f.name());
+        if n.len() >= 3 {
+            if let Some(hit) = names.clone().find(|f| f.contains(n.as_str())) {
+                return Some(hit);
+            }
+        }
+        if let Some(hit) = names.clone().filter(|f| n.starts_with(f)).max_by_key(|f| f.len()) {
+            return Some(hit);
+        }
+        let limit = (n.chars().count() / 3).max(2);
+        names
+            .map(|f| (edit_distance(&n, f), f))
+            .filter(|(d, _)| *d <= limit)
+            .min_by_key(|(d, _)| *d)
+            .map(|(_, f)| f)
+    }
+}
+
+/// Levenshtein distance over chars.
+fn edit_distance(a: &str, b: &str) -> usize {
+    let b: Vec<char> = b.chars().collect();
+    let mut prev: Vec<usize> = (0..=b.len()).collect();
+    for (i, ca) in a.chars().enumerate() {
+        let mut cur = vec![i + 1];
+        for (j, cb) in b.iter().enumerate() {
+            let sub = prev[j] + usize::from(ca != *cb);
+            cur.push(sub.min(prev[j + 1] + 1).min(cur[j] + 1));
+        }
+        prev = cur;
+    }
+    prev[b.len()]
 }
 
 impl std::fmt::Display for Family {
@@ -153,8 +219,12 @@ impl ModelId {
             }
             None => (s, None),
         };
-        let family =
-            Family::from_name(fam).ok_or_else(|| cfg_err(format!("model id {s:?}: unknown family {fam:?}")))?;
+        let family = Family::from_name(fam).ok_or_else(|| {
+            let hint = Family::suggest(fam).map_or(String::new(), |f| format!("; did you mean {f:?}?"));
+            cfg_err(format!(
+                "model id {s:?}: unknown family {fam:?}{hint} (`queuetruth zoo --list-models` lists every model)"
+            ))
+        })?;
         let mut params = BTreeMap::new();
         let mut mode_v: Option<Mode> = None;
         let mut exch_v: Option<Exchange> = None;
@@ -305,7 +375,8 @@ impl std::str::FromStr for ModelId {
     }
 }
 
-/// The `all` set of SPEC 5.3.4 (17 models).
+/// The `all` set of SPEC 5.3.4 (16 models). `hbt_power[n=1]` is not in it: `b / (b + f)` equals
+/// `hbt_power3[n=1]` = `1 - f / (f + b)`, so it only added a duplicate row (0.1.1).
 pub fn default_models(mode: Mode, exchange: Exchange) -> Vec<ModelId> {
     let mk = |f: Family, p: &[(&str, f64)]| {
         let mut params = BTreeMap::new();
@@ -324,7 +395,6 @@ pub fn default_models(mode: Mode, exchange: Exchange) -> Vec<ModelId> {
     };
     vec![
         mk(Family::HbtRiskAdverse, &[]),
-        mk(Family::HbtPower, &[("n", 1.0)]),
         mk(Family::HbtPower, &[("n", 2.0)]),
         mk(Family::HbtPower, &[("n", 3.0)]),
         mk(Family::HbtPower2, &[("n", 2.0)]),

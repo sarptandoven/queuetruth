@@ -11,6 +11,13 @@
 #   uv pip install --python .scratch/nt/venv/bin/python /tmp/nautilus_trader-1.231.0-cp313-cp313-macosx_11_0_arm64.whl
 #
 # On Linux / macOS 26: `uv pip install --python .scratch/nt/venv/bin/python -r scripts/nt_crosscheck/requirements.txt`.
+#
+# run.py and l3_mbo.py also run on the 2.0 release candidates (checked 2026-10-22 on 2.0.0rc4, rc5 and rc7; macOS
+# arm64 wheels are tagged macosx_11_0). rc7 postdates this repo's uv `exclude-newer`, so lift it for that package only:
+#
+#   uv venv .scratch/nt/venv-2.0rc7 --python /opt/homebrew/bin/python3.13
+#   uv pip install --python .scratch/nt/venv-2.0rc7/bin/python "nautilus_trader==2.0.0rc7" pyarrow numpy pandas \
+#     --prerelease=allow --exclude-newer-package "nautilus-trader=2026-10-16T00:00:00Z"
 nautilus_trader==1.231.0
 click==8.5.0
 fsspec==2026.2.0

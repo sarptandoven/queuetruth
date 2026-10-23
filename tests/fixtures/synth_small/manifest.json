@@ -1,7 +1,7 @@
 {
   "schema": "qt.dataset_manifest",
   "schema_version": 1,
-  "dataset_id": "1ccf35c1e37b2391386a6e4caf53d3cb0fcb5e53b83d1f6f4d0edd06faf108cf",
+  "dataset_id": "c711289dad97b5670362c6a3b64dec465aca1c98d4929e39001631c93f4d0219",
   "kind": "mbo",
   "source_format": "synthetic",
   "venue": "cme",
@@ -15,7 +15,7 @@
         {
           "path": "mbo/date=2026-06-15/instrument_id=1/part-00000.parquet",
           "rows": 49820,
-          "sha256": "86a55316a86274234274c65313438b4b606eabdaabda5548114cc3e19c03652e"
+          "sha256": "59718948df5a0ceb1f6a0310288495ed55530a97cf6cd4d69faeb273c16f7e47"
         }
       ],
       "rows": 49820,
@@ -29,7 +29,7 @@
         {
           "path": "mbo/date=2026-06-15/instrument_id=2/part-00000.parquet",
           "rows": 50246,
-          "sha256": "ab9f546d142496b6fb232ab1d0daf14f20905f21f84f2dbad50e4a1aae483a9e"
+          "sha256": "8087115aa3cc12b598287670ce45582b833d829994f97ed4c3b4aad921342bcc"
         }
       ],
       "rows": 50246,
@@ -43,7 +43,7 @@
         {
           "path": "mbo/date=2026-06-16/instrument_id=1/part-00000.parquet",
           "rows": 50224,
-          "sha256": "c553323c3d57a1cd3c41ab5c7bb1ba37f4bab4d5bcde6b0683f063753574b0a2"
+          "sha256": "a8594abdeef8c421c11fb6e10472f40681e748827cd60b60ae4d6880a421856e"
         }
       ],
       "rows": 50224,
@@ -57,7 +57,7 @@
         {
           "path": "mbo/date=2026-06-16/instrument_id=2/part-00000.parquet",
           "rows": 49592,
-          "sha256": "4fc7a369ec02a85669c47d62812c40bc064fab3ad9fc9d22f18be328af2cd446"
+          "sha256": "5de9bfc59327706ae6dc14f17887c1bfff1b4d18503552b1c20403be93150e3f"
         }
       ],
       "rows": 49592,
@@ -69,7 +69,7 @@
     "1": -9,
     "2": -9
   },
-  "created_by": "queuetruth-testkit 0.1.0",
+  "created_by": "queuetruth-testkit 0.1.1",
   "validation_status": "synthetic_only",
   "rule_set": null,
   "source_vintage": null

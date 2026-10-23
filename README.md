@@ -1,5 +1,9 @@
 # queuetruth
 
+[![PyPI](https://img.shields.io/pypi/v/queuetruth.svg)](https://pypi.org/project/queuetruth/)
+[![Python](https://img.shields.io/pypi/pyversions/queuetruth.svg)](https://pypi.org/project/queuetruth/)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](https://github.com/sarptandoven/queuetruth/blob/main/LICENSE)
+
 **Your backtest fills orders your live strategy never gets. queuetruth measures by how much, and why.**
 
 A passive order fills only after everything ahead of it in the queue has traded or cancelled. Backtesters that see
@@ -18,10 +22,16 @@ days (2019-12-30 and 2020-01-30), every order evaluated against the exact replay
 - **NautilusTrader's touch fill model, with the default `prob_fill_on_limit = 1`, overfills.** Verified in the real
   engine (nautilus_trader 1.231.0, `BacktestEngine` fed the L2 view as `OrderBookDelta`s,
   `FillModel(prob_fill_on_limit=1)`): it fills 14.17% of the orders within 1 s on 2019-12-30 where the exact replay
-  fills 11.03%, +3.13 percentage points (95% CI [+2.53, +3.77]); +2.80 pp on 2020-01-30. queuetruth's faithful
-  NautilusTrader models agree with the real engine on 100% of orders at 1 s, 10 s and 60 s on both days and on the
-  synthetic fixture. On an `OrderBookDepth10` feed Nautilus resets its queue position at every snapshot, so its
-  queue model then fills like the touch model (+0.9 to +3.3 pp above exact at 1 s to 60 s).
+  fills 11.03%, +3.13 percentage points (95% CI [+2.53, +3.77]); +2.80 pp on 2020-01-30. The 2.0 release candidate
+  (2.0.0rc7, `DefaultFillModel(prob_fill_on_limit=1)`) fills exactly the same orders. queuetruth's faithful
+  NautilusTrader models agree with 1.231.0 on 100% of orders at 1 s, 10 s and 60 s on both days and on the synthetic
+  fixture; on 2.0.0rc7 the touch model still agrees on 100%, the queue model on 99.6% to 99.97% (2.0 also caps the
+  queue ahead at a level's new size when the level shrinks). Nautilus's own queue model (`queue_position=True`) is
+  close to exact: within 0.8 pp on 1.231.0 and 0.4 pp on 2.0.0rc7 on an L2 delta feed, and fed the MBO book (L3),
+  2.0.0rc7's matches the exact replay on every order on day one, and on day two on all but 1 order at 0.1 s and 2 at
+  10 s. On 1.231.0 an `OrderBookDepth10` feed resets the queue position at every snapshot, so the queue model then
+  fills like the touch model (+0.9 to +3.3 pp above exact at 1 s to 60 s); the 2.0 release candidates (from rc5)
+  keep it.
 - **Calibration fixes it on the held-out Nasdaq day.** `p` fitted on day one is 0.29 (bootstrap CI [0.27, 0.30]); on
   day two it cuts the 1 s overfill from +2.8 pp to +0.4 pp and more than halves the 1 s Brier score. `p` is per
   print, so it is venue- and feed-specific: refit it for yours.
@@ -40,45 +50,50 @@ exact replay fills 17.0%. hftbacktest's `power3[n=2]` stays within 1.7 pp and `n
 60 s in every tier. Order size barely moves first-fill bias. This is still two days of one venue, scored on the
 first fill only.
 
-All 17 rows (15 model configurations and 2 bounds), both modes, by horizon, queue decile and liquidity, the breadth
-tables, and every artifact named: [docs/RESULTS.md](docs/RESULTS.md).
+All rows (every model configuration and the 2 bounds), both modes, by horizon, queue decile and liquidity, the breadth
+tables, and every artifact named:
+[docs/RESULTS.md](https://github.com/sarptandoven/queuetruth/blob/main/docs/RESULTS.md).
 
 ## Why the answer is exact
 
-- **Raw public bytes, our own reader.** The leaderboard, the breadth run and the calibration above are computed
-  from the raw Nasdaq ITCH 5.0 files with queuetruth's own ITCH reader. On the same build the leaderboard and the
-  calibration are identical, cell for cell, to the same runs on the earlier private prototype's CSV conversion of
-  those files. The book checks and the mirror-shadow checks below were also rerun from the raw bytes and match the
-  prototype's outputs exactly.
-- **The book is right.** 16,754,562 records with 0 invariant violations, 0 trade-parity mismatches over 633,287
-  printed executions, 0 price-priority violations; 98.7% and 99.1% of real executions hit the head of their queue in
-  our book after grouping sweeps.
-- **The shadow rules are right.** Under the prototype's fill rule (`--fill-rule et`), 3,000 of 3,000 mirror shadows
-  per day reproduce the prototype's fills and queue traces. An independent matching-engine oracle agrees with the
-  default `exact` fill rule on 2,992 and 2,985 of 3,000 shadows (raw ITCH bytes, queuetruth's own mirror sampler,
-  about half of them filling) and on 2,997 of 3,000 per day of the prototype's mirror shadows on its CSV conversion, with
-  equal total filled quantity in every run.
-- **The scorer is right.** 3,000 real orders per day used as a "live" log are reproduced exactly by the exact arm:
-  250 filled in both, 2,750 in neither, 0 discordant on 2019-12-30; 195 / 2,805 / 0 on 2020-01-30; the same filled
-  quantity and first-fill time on every order.
-- **Reproduce it**: `make reproduce` (`scripts/repro/reproduce.py`) streams the two public day files from Nasdaq,
-  keeps the four symbols (the raw files are never stored) and reruns ingest, replay, the leaderboard, calibration,
-  the learned model and the oracle from those bytes alone, without the prototype's artifacts (1,387 s at 4 threads
-  once the subsets are on disk). `make reproduce-breadth` (`scripts/repro/breadth.py`) reruns the 36-symbol breadth
-  study. Rerun on the 0.1.0 commit (`4be5240`, 1,162 s), it reproduced the leaderboard on both days, all four
-  calibrations, the learned model and the oracle identically. The checks that compare with the prototype's outputs
-  need its artifacts, which are not public. Commands and provenance: [docs/RESULTS.md](docs/RESULTS.md).
+- **Raw public bytes, our own reader.** The leaderboard, the breadth run and the calibration above are computed from the
+  raw Nasdaq ITCH 5.0 files with queuetruth's own ITCH reader. On the same build the leaderboard and the calibration are
+  identical, cell for cell, to the same runs on the earlier private prototype's CSV conversion of those files. The book
+  checks and the mirror-shadow checks below were also rerun from the raw bytes and match the prototype's outputs
+  exactly.
+- **The book is right.** 16,754,562 records with 0 invariant violations, 0 trade-parity mismatches over 633,287 printed
+  executions, 0 price-priority violations; 98.7% and 99.1% of real executions hit the head of their queue in our book
+  after grouping sweeps.
+- **The shadow rules are right.** Under the prototype's fill rule (`--fill-rule et`), 3,000 of 3,000 mirror shadows per
+  day reproduce the prototype's fills and queue traces. An independent matching-engine oracle agrees with the default
+  `exact` fill rule on 2,992 and 2,985 of 3,000 shadows (raw ITCH bytes, queuetruth's own mirror sampler, about half of
+  them filling) and on 2,997 of 3,000 per day of the prototype's mirror shadows on its CSV conversion, with equal total
+  filled quantity in every run.
+- **The scorer is right.** 3,000 real orders per day used as a "live" log are reproduced exactly by the exact arm: 250
+  filled in both, 2,750 in neither, 0 discordant on 2019-12-30; 195 / 2,805 / 0 on 2020-01-30; the same filled quantity
+  and first-fill time on every order.
+- **Reproduce it**: `make reproduce` (`scripts/repro/reproduce.py`) streams the two public day files from Nasdaq, keeps
+  the four symbols (the raw files are never stored) and reruns ingest, replay, the leaderboard, calibration, the learned
+  model and the oracle from those bytes alone, without the prototype's artifacts (1,387 s at 4 threads once the subsets
+  are on disk). `make reproduce-breadth` (`scripts/repro/breadth.py`) reruns the 36-symbol breadth study. Rerun on the
+  0.1.0 commit (`4be5240`, 1,162 s), it reproduced the leaderboard on both days, all four calibrations, the learned
+  model and the oracle identically. The checks that compare with the prototype's outputs need its artifacts, which are
+  not public. Commands and provenance:
+  [docs/RESULTS.md](https://github.com/sarptandoven/queuetruth/blob/main/docs/RESULTS.md).
 
 Also in 0.1.0: order-level ingest of IEX DEEP+ (free public data, redistributable with IEX's attribution;
-[guide](docs/how-to/iex-public-demo.md)), Coinbase Exchange `level3`, Kraken L3 and Hyperliquid node captures
-([guide](docs/how-to/crypto-l3-sources.md)), and `queuetruth dq`, a data-quality report for any dataset
-([guide](docs/how-to/check-a-feed.md)).
+[guide](https://github.com/sarptandoven/queuetruth/blob/main/docs/how-to/iex-public-demo.md)), Coinbase Exchange
+`level3`, Kraken L3 and Hyperliquid node captures
+([guide](https://github.com/sarptandoven/queuetruth/blob/main/docs/how-to/crypto-l3-sources.md)), and `queuetruth dq`, a
+data-quality report for any dataset
+([guide](https://github.com/sarptandoven/queuetruth/blob/main/docs/how-to/check-a-feed.md)).
 
-How every claim is tested, including what is not: [How queuetruth is tested](docs/testing.md).
+How every claim is tested, including what is not: [How queuetruth is
+tested](https://github.com/sarptandoven/queuetruth/blob/main/docs/testing.md).
 
 ## Install and quickstart (about 5 minutes)
 
-0.1.0 is not on PyPI yet. Until it is, build from a checkout (see [Development](#development)); after the release:
+Install from PyPI (or build from a checkout, see [Development](https://github.com/sarptandoven/queuetruth#development)):
 
 ```sh
 pip install queuetruth                 # CLI + Python API (abi3 wheels: macOS arm64/x86_64, Linux x86_64/aarch64)
@@ -96,10 +111,11 @@ queuetruth zoo --data synth --shadows shadows.parquet --out zoo   # prints the l
 queuetruth report --in zoo --out report.html
 ```
 
-The synthetic data shows the workflow, not the result: its order flow is not built to make queue position matter,
-so its leaderboard says nothing about real markets. The evidence about real markets is the Nasdaq table
-in [docs/RESULTS.md](docs/RESULTS.md); to get it on your own data, ingest a day you are licensed to use and run the
-same commands ([Getting started](docs/getting-started.md)).
+The synthetic data shows the workflow, not the result: its order flow is not built to make queue position matter, so its
+leaderboard says nothing about real markets. The evidence about real markets is the Nasdaq table in
+[docs/RESULTS.md](https://github.com/sarptandoven/queuetruth/blob/main/docs/RESULTS.md); to get it on your own data,
+ingest a day you are licensed to use and run the same commands ([Getting
+started](https://github.com/sarptandoven/queuetruth/blob/main/docs/getting-started.md)).
 
 From Python:
 
@@ -118,7 +134,7 @@ for row in z.leaderboard:  # fill-rate bias vs exact at 60 s, with its 95% CI
   counters, a queue-rank oracle and parity checks against the source's prints.
 - **Shadow orders**: "if I had joined the bid at 10:31:05.120 for 200 shares, when would I have filled?" Per-fill
   timeline, queue trajectory, latency, cancels and amends; `queuetruth why` explains one order event by event.
-- **Queue-model zoo**: 15 queue-model configurations from hftbacktest, NautilusTrader and Databento (one of them,
+- **Queue-model zoo**: 14 queue-model configurations from hftbacktest, NautilusTrader and Databento (one of them,
   `hbt_l3_fifo`, reads MBO rather than L2) plus 2 bounds, in `faithful` mode (each library's behaviour as
   implemented: bit for bit for hftbacktest; re-implemented for NautilusTrader and checked against nautilus_trader
   1.231.0 order by order; re-implemented from its tutorial for Databento) and
@@ -152,7 +168,7 @@ for row in z.leaderboard:  # fill-rate bias vs exact at 60 s, with its 95% CI
 | Exact book and replay, Nasdaq | 2 public days from the raw ITCH bytes: invariants, trade parity, rank oracle, BBO and rank traces identical to the earlier prototype's | validated |
 | Shadow orders | 2 x 3,000 mirror shadows identical to the prototype's (its fill rule); an independent oracle agrees on 2,992 and 2,985 of 3,000 (raw ITCH bytes) and 2,997 of 3,000 per day (prototype's CSV and shadows) | validated |
 | L2 queue-model zoo | 17 rows x 2 modes on 2 x 3,000 shadows, plus 36 more symbols in 5 tiers; the bracket `front_of_queue` >= exact >= `trade_through_only` holds order by order by construction, tested on scenario and synthetic tapes and with 0 per-order violations on real day one; `hbt_l3_fifo` corrected equals exact | real-data leaderboard published |
-| NautilusTrader models | faithful `nt_prob_touch` and `nt_queue_l2` agree with nautilus_trader 1.231.0's `BacktestEngine` (delta-fed L2) on 100% of orders at 1 s, 10 s and 60 s, on both days and the synthetic fixture (`scripts/nt_crosscheck`) | checked against the real engine |
+| NautilusTrader models | faithful `nt_prob_touch` and `nt_queue_l2` agree with nautilus_trader 1.231.0's `BacktestEngine` (delta-fed L2) on 100% of orders at 1 s, 10 s and 60 s, on both days and the synthetic fixture (`scripts/nt_crosscheck`); on 2.0.0rc7 `nt_prob_touch` agrees on 100% and `nt_queue_l2` on 99.6% to 99.97% (every difference is 2.0's queue cap on a shrinking level) | checked against the real engine (1.231.0 and 2.0.0rc7) |
 | Calibration and export | fitted on day one, scored on day two; NautilusTrader `p` improves day two, power and Databento do not beat their defaults | runs on real data |
 | Learned L2 fill model | Brier skill over climatology on the held-out day, lower 95% bound above 0 at 1 s and 10 s | validated |
 | Scorer | 3,000 real orders per day reproduced exactly by the exact arm on both days | validated |
@@ -165,9 +181,9 @@ for row in z.leaderboard:  # fill-rate bias vs exact at 60 s, with its 95% CI
 
 ## Your data
 
-You are responsible for holding a licence for the data you process. What queuetruth does with data, what its
-outputs contain and a summary of vendor terms (Nasdaq, Databento, Tardis, Coinbase, CME, IEX, Binance Vision) are in
-[Data and licensing](docs/data-and-licensing.md). It is not legal advice.
+You are responsible for holding a licence for the data you process. What queuetruth does with data, what its outputs
+contain and a summary of vendor terms (Nasdaq, Databento, Tardis, Coinbase, CME, IEX, Binance Vision) are in [Data and
+licensing](https://github.com/sarptandoven/queuetruth/blob/main/docs/data-and-licensing.md). It is not legal advice.
 
 ## Development
 
@@ -179,9 +195,10 @@ make realdata              # real-data checks against the earlier prototype's ar
 make check-docs            # every runnable block in the docs, links, generated reference pages
 ```
 
-How to contribute: [CONTRIBUTING.md](CONTRIBUTING.md). Security reports: [SECURITY.md](SECURITY.md). The design
-specification is [docs/design/spec.md](docs/design/spec.md); how it was built and verified is
-[docs/design/build-plan.md](docs/design/build-plan.md).
+How to contribute: [CONTRIBUTING.md](https://github.com/sarptandoven/queuetruth/blob/main/CONTRIBUTING.md). Security
+reports: [SECURITY.md](https://github.com/sarptandoven/queuetruth/blob/main/SECURITY.md). The design specification is
+[docs/design/spec.md](https://github.com/sarptandoven/queuetruth/blob/main/docs/design/spec.md); how it was built and
+verified is [docs/design/build-plan.md](https://github.com/sarptandoven/queuetruth/blob/main/docs/design/build-plan.md).
 
 ## Licence
 
@@ -189,3 +206,4 @@ Apache-2.0, Copyright 2026 Sarp Tandoven. Queue-model logic ported from hftbackt
 NautilusTrader behaviours are re-implemented from its public documentation and checked against its released package
 by calling its public API; no NautilusTrader code is included.
 Databento's queue-position estimator is re-implemented from its documented behaviour.
+

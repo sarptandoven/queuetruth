@@ -109,7 +109,7 @@ def test_exit_codes_and_error_documents(synth: Path, repo_root: Path, tmp_path: 
     code, out, _ = run("--help")
     assert code == 0 and "Usage: queuetruth" in out
     code, out, _ = run("--version")
-    assert (code, out.strip()) == (0, "queuetruth 0.1.0")
+    assert (code, out.strip()) == (0, "queuetruth 0.1.1")
     code, doc = run_json("replay", "--out", "x")
     assert (code, doc["code"]) == (2, "QT-USAGE-001")
     code, doc = run_json("replay", "--data", str(tmp_path / "missing"), "--out", str(tmp_path / "o"))

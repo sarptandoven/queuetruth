@@ -3347,6 +3347,8 @@ Summary of `zoo`; the Rust runner leaves `leaderboard` empty (filled by `queuetr
 | `files` | array of FileEntry | yes |  |  |
 | `warnings` | array of string | yes |  |  |
 | `hbt_312_aborts` | map of integer | no |  |  |
+| `n_excluded_hbt_312` | integer | no | `0` |  |
+| `n_leaderboard` | integer or null | no | `null` |  |
 
 **`CiValue`** (in `qt.zoo_summary`)
 
@@ -3385,6 +3387,8 @@ One model's metrics vs exact truth (SPEC 5.6).
 | `ttf_iad` | number or null | yes |  |  |
 | `qtrack_mae` | number or null | no | `null` |  |
 | `mcnemar` | McNemarSmall | yes |  |  |
+| `exact_fill_rate` | object | no |  |  |
+| `model_fill_rate` | object | no |  |  |
 
 **`McNemarSmall`** (in `qt.zoo_summary`)
 

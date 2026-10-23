@@ -105,6 +105,7 @@ def render_human(path: list[str], doc: Any) -> str:
 # what it needs (a view never fails a command that succeeded). `--verbose` appends the full `render_human` dump.
 
 H_DEFAULT_NS = 60_000_000_000
+HBT_312_URL = "https://github.com/nkaz001/hftbacktest/issues/312"
 
 
 def _pp(x: float | None, signed: bool = True) -> str:
@@ -181,9 +182,10 @@ def _render_zoo(doc: Doc, args: Doc, extra: Doc) -> str | None:
     below when it is not evaluated), smallest first, then Brier, then model id."""
     from queuetruth.eval.leaderboard import (
         DEFAULT_SORT_HORIZON_NS,
-        abort_shares,
         bias_sentence,
+        pct,
         rank_leaderboard,
+        rates_at,
         sort_horizon,
     )
 
@@ -209,10 +211,22 @@ def _render_zoo(doc: Doc, args: Doc, extra: Doc) -> str | None:
         if nc is not None
         else "never-cancel shadows (planned life >= h_max)"
     )
-    lines.append(f"leaderboard population: {pop}; sorted by |fill-rate bias| at {_hz(sort_h)}, smallest first")
+    lines.append(f"leaderboard population: {pop}, the same for every model")
+    excluded = doc.get("n_excluded_hbt_312")
+    if isinstance(excluded, int) and excluded > 0:
+        lines.append(
+            f"  {excluded} shadow(s) on which an hftbacktest model hit its bug #312 are left out of every model "
+            f"({HBT_312_URL})"
+        )
+    lines.append(f"sorted by |fill-rate bias| at {_hz(sort_h)}, smallest first")
     lines.append("")
-    lines.append("fill-rate bias, model minus exact truth, in pp (* = 95% CI excludes 0):")
-    rows = []
+    lines.append("exact fill rate in %, then each model's fill-rate bias (model minus exact) in pp")
+    lines.append("(* = 95% CI excludes 0):")
+    exact_cells = []
+    for h in horizons:
+        x = next((r for e in ranked if (r := rates_at(e, h)[1]) is not None), None)
+        exact_cells.append(f"{pct(x)}% " if x is not None else "-  ")
+    rows = [["exact fill rate", *exact_cells]] if any(c != "-  " for c in exact_cells) else []
     for e in ranked:
         cells = [str(e.get("model_id"))]
         for h in horizons:
@@ -227,7 +241,7 @@ def _render_zoo(doc: Doc, args: Doc, extra: Doc) -> str | None:
     lines.append("in plain words:")
     for e in ranked:
         mid = str(e.get("model_id"))
-        sentence = bias_sentence(e, sort_h, abort_shares(doc.get("warnings")))
+        sentence = bias_sentence(e, sort_h)
         more = []
         n_row = err.get((mid, "fill_rate_bias", key))
         if n_row and n_row.get("n") is not None:
@@ -770,6 +784,61 @@ def render(
     return text
 
 
+#: Summary warnings that inform rather than warn: stderr only with --verbose (or --log-level info|debug).
+_NOTE_PREFIXES = ("info: ", "ci_block=", "self_exclusion: matched ")
+_ZERO_COUNTERS = re.compile(r"\b\w+=(\d+)\b")
+
+
+def _is_note(w: str) -> bool:
+    if w.startswith(_NOTE_PREFIXES):
+        return True
+    # replay's shadow diagnostics when every counter is 0
+    counts = _ZERO_COUNTERS.findall(w)
+    return w.startswith("shadow diagnostics") and bool(counts) and all(int(c) == 0 for c in counts)
+
+
+def _hbt_312_line(lines: list[str], doc: Doc) -> str:
+    """One stderr line for the `hbt_312_abort: <model>: <n> of <N> ...` warnings of a zoo or calibration run."""
+    from queuetruth.eval.leaderboard import ABORT_PREFIX, abort_shares
+
+    shares = abort_shares(w[w.index(ABORT_PREFIX) :] for w in lines)
+    counts = sorted(n for n, _ in shares.values())
+    total = max((t for _, t in shares.values()), default=0)
+    span = f"{counts[0]}" if counts and counts[0] == counts[-1] else f"{counts[0]} to {counts[-1]}" if counts else "?"
+    excluded = doc.get("n_excluded_hbt_312")
+    left_out = (
+        f"the {excluded} shadows involved are left out of every model"
+        if isinstance(excluded, int) and excluded > 0
+        else "the shadows involved are left out"
+    )
+    return (
+        f"warning: hftbacktest bug #312 ({HBT_312_URL}): {len(shares) or len(lines)} faithful hbt model(s) aborted on "
+        f"{span} of {total} shadows; {left_out} (--verbose lists each model)"
+    )
+
+
+def stderr_lines(doc: Any, *, verbose: bool) -> list[str]:
+    """The stderr lines of a summary's `warnings`: `warning: <w>` each, except that the faithful hbt #312 abort lines
+    collapse into one line and informational lines (`info: `, `ci_block=`, `self_exclusion: matched`, all-zero shadow
+    diagnostics) are left out; `verbose` prints every line (`info: ` lines as they are). The summary itself always
+    keeps every warning."""
+    from queuetruth.eval.leaderboard import ABORT_PREFIX
+
+    raw = doc.get("warnings") if isinstance(doc, dict) else None
+    ws = [str(w) for w in raw] if isinstance(raw, list) else []
+    if verbose:
+        return [w if w.startswith("info: ") else f"warning: {w}" for w in ws]
+    aborts = [w for w in ws if ABORT_PREFIX in w]
+    out: list[str] = []
+    for w in ws:
+        if ABORT_PREFIX in w:
+            if w is aborts[0]:
+                out.append(_hbt_312_line(aborts, doc))
+        elif not _is_note(w):
+            out.append(f"warning: {w}")
+    return out
+
+
 def _wants_json(argv: list[str]) -> bool:
     pairs = itertools.pairwise(argv)
     return any(a in ("--format", "--output-format") and b == "json" for a, b in pairs) or any(
@@ -1123,12 +1192,10 @@ def main(argv: list[str] | None = None) -> int:
         args, extra = _split_cli(cmd["args"])
         print(render(cmd["path"], doc, args=args, extra=extra, view=ctx.get("view"), verbose=bool(g.get("verbose"))))
     if not quiet:
-        for w in doc.get("warnings", []) if isinstance(doc.get("warnings"), list) else []:
-            if str(w).startswith("info: "):  # informational lines: stderr only at --log-level info|debug
-                if level <= logging.INFO:
-                    print(w, file=sys.stderr)
-                continue
-            print(f"warning: {w}", file=sys.stderr)
+        sys.stdout.flush()  # the answer first, then the warnings, also when both go to one pipe
+        verbose = bool(g.get("verbose"))
+        for w in stderr_lines(doc, verbose=verbose or level <= logging.INFO):
+            print(w, file=sys.stderr)
         for w in ctx.get("notes", []):
             print(f"warning: {w}", file=sys.stderr)
         for w in caught:

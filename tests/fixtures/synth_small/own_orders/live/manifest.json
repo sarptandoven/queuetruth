@@ -10,7 +10,7 @@
   "n_orders": 200,
   "n_events": 879,
   "instrument_map_sha256": null,
-  "created_by": "queuetruth-testkit 0.1.0",
+  "created_by": "queuetruth-testkit 0.1.1",
   "coverage": null,
   "entry_fallback_share": null
 }

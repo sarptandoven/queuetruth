@@ -124,24 +124,35 @@ class RunDir:
         return None
 
 
+#: Status of a dataset read from a vendor file (`VENDOR_FORMATS`) whose venue rule set is validated on
+#: synthetic data only: the manifest's `synthetic_only` describes the rules, not the data (Databento CME files).
+RULES_SYNTHETIC_ONLY = "rules_validated_on_synthetic_only"
+#: `source_format`s read from vendor files by `ingest` (the testkit writes `synthetic`).
+VENDOR_FORMATS = frozenset({"dbn", "itch", "iex", "etcsv"})
+
+
 @dataclass
 class Provenance:
     """Validation statuses found for the data behind the report."""
 
     entries: list[tuple[str, str]] = field(default_factory=list)  # (source description, status)
     price_exp: dict[int, int | None] = field(default_factory=dict)
+    vendor_ids: set[str] = field(default_factory=set)  # dataset ids ingested from a vendor file
 
     def add(self, what: str, status: str) -> None:
         if (what, status) not in self.entries:
             self.entries.append((what, status))
 
     def level(self) -> str:
-        """`synthetic`, `assumed`, `real` or `unknown`."""
+        """`synthetic`, `assumed`, `rules` (vendor data, venue rules validated on synthetic data only), `real` or
+        `unknown`."""
         st = {s for _, s in self.entries}
         if not st:
             return "unknown"
         if st & {"synthetic_only", "fixture_only"}:
             return "synthetic"
+        if RULES_SYNTHETIC_ONLY in st:
+            return "rules"
         if "assumed" in st:
             return "assumed"
         return "real"
@@ -260,9 +271,14 @@ def _provenance(runs: list[RunDir], files: list[FileRec]) -> Provenance:
     prov = Provenance()
     seen_paths: set[str] = set()
     conflicts: set[int] = set()
+    calib_sources: list[tuple[str, Any]] = []  # resolved last: their manifests tell vendor data from synthetic
 
     def note_manifest(m: DatasetManifest, where: str) -> None:
-        prov.add(f"dataset {m.dataset_id[:12]} ({m.source_format}, venue {m.venue}) from {where}", m.validation_status)
+        status = m.validation_status
+        if m.source_format in VENDOR_FORMATS and status == "synthetic_only":
+            status = RULES_SYNTHETIC_ONLY
+            prov.vendor_ids.add(m.dataset_id)
+        prov.add(f"dataset {m.dataset_id[:12]} ({m.source_format}, venue {m.venue}) from {where}", status)
         for k, v in m.price_exp_by_instrument.items():
             iid = int(k)
             if iid in prov.price_exp and prov.price_exp[iid] != v:
@@ -278,9 +294,8 @@ def _provenance(runs: list[RunDir], files: list[FileRec]) -> Provenance:
                 note_manifest(m.manifest, d.rec.path)
             elif isinstance(m, CalibrationResult):
                 for s in m.data_sources:
-                    prov.add(
-                        f"dataset {s.dataset_id[:12]} (venue {s.venue}/{s.source_venue}) per {d.rec.path}",
-                        s.validation_status,
+                    calib_sources.append(
+                        (f"dataset {s.dataset_id[:12]} (venue {s.venue}/{s.source_venue}) per {d.rec.path}", s)
                     )
             elif isinstance(m, LiveImportSummary):
                 prov.add(
@@ -334,6 +349,11 @@ def _provenance(runs: list[RunDir], files: list[FileRec]) -> Provenance:
                         )
                     for v in sorted({str(x) for x in col if x is not None}):
                         prov.add(f"live log {lv}", "real_data" if v == "real" else "fixture_only")
+    for what, src in calib_sources:
+        status = src.validation_status
+        if status == "synthetic_only" and src.dataset_id in prov.vendor_ids:
+            status = RULES_SYNTHETIC_ONLY
+        prov.add(what, status)
     for iid in conflicts:
         prov.price_exp[iid] = None
     return prov

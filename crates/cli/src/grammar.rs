@@ -526,6 +526,12 @@ pub(crate) const COMMANDS: &[Cmd] = &[
                 "_cli.sort_horizon_ns",
                 "leaderboard sort horizon in the terminal output (default 60s)",
             ),
+            f(
+                "list-models",
+                Kind::Flag,
+                LIST_MODELS,
+                "print the model ids --models accepts (the `all` set first) and exit",
+            ),
         ],
         positional: &[],
         globals: Globals::SeedThreads,
@@ -1402,10 +1408,168 @@ fn flag_arg(fl: &Flag) -> Arg {
     a
 }
 
+/// The JSON Schema (`schema show` name) of the spec a command builds, for the `[default: ...]` of its help.
+fn spec_schema(path: &[&str]) -> Option<&'static str> {
+    Some(match path {
+        ["ingest"] => "qt.ingest_spec",
+        ["replay"] => "qt.replay_spec",
+        ["shadows", "sample"] => "qt.shadow_sample_spec",
+        ["shadows", "mirror-real"] => "qt.mirror_spec",
+        ["zoo"] => "qt.zoo_spec",
+        ["calibrate", "alloc" | "survival" | "nt-touch"] => "qt.calibration_spec",
+        ["calibrate-live"] => "qt.live_calibration_spec",
+        ["features"] => "qt.feature_spec",
+        ["fit-hazard"] => "qt.hazard_fit_spec",
+        ["live", "import"] => "qt.live_import_spec",
+        ["score"] => "qt.scorecard_spec",
+        ["report"] => "qt.report_spec",
+        ["dq"] => "qt.dq_spec",
+        ["referee", "run"] => "qt.referee_spec",
+        ["why"] => "qt.why_spec",
+        ["export", "hftbacktest" | "nautilus" | "l2-npz" | "latency-npz"] => "qt.export_spec",
+        _ => return None,
+    })
+}
+
+/// Defaults that the Pydantic specs build with `default_factory` (absent from the JSON Schemas), by spec field, in
+/// CLI spelling; `python/tests/cli/test_cli_help_defaults.py` checks them against the specs.
+const FACTORY_DEFAULTS: &[(&str, &str)] = &[
+    ("models", "all"),
+    ("horizons_ns", "100ms,1s,10s,60s (h_max is always added)"),
+    ("ttf_horizons_ns", "100ms,1s,10s,60s"),
+    ("sides", "B,A"),
+    ("placements", "0:0.6,-1:0.2,-2:0.1,1:0.1"),
+    ("qty", "lots:1:0.5,median:0.5"),
+    ("landmarks_ns", "0,1s,5s"),
+    ("trackers", "hbt_risk_adverse,hbt_power3[n=1],hbt_power3[n=3],hbt_log2"),
+    ("markout_refs", "mid"),
+];
+
+/// ns as the CLI writes a duration: the largest exact unit, minutes from 2 on (`5m`, `60s`, `100ms`, `0`).
+fn dur_text(ns: i64) -> String {
+    if ns == 0 {
+        return "0".into();
+    }
+    for (unit, size) in [
+        ("m", 60_000_000_000),
+        ("s", 1_000_000_000),
+        ("ms", 1_000_000),
+        ("us", 1_000),
+    ] {
+        if ns % size == 0 && (unit != "m" || ns >= 2 * size) {
+            return format!("{}{unit}", ns / size);
+        }
+    }
+    format!("{ns}ns")
+}
+
+/// The schema node behind `$ref` (or the first `anyOf` branch that is an object reference).
+fn deref<'a>(node: &'a Value, root: &'a Value) -> &'a Value {
+    let target = node.get("$ref").or_else(|| {
+        node.get("anyOf")
+            .and_then(Value::as_array)
+            .and_then(|a| a.iter().find_map(|b| b.get("$ref")))
+    });
+    match target.and_then(Value::as_str).and_then(|r| r.strip_prefix("#/$defs/")) {
+        Some(name) => root.get("$defs").and_then(|d| d.get(name)).unwrap_or(node),
+        None => node,
+    }
+}
+
+/// The schema `default` of a dotted spec field (descending into nested models' own defaults).
+fn schema_default(root: &Value, path: &str) -> Option<Value> {
+    let mut node = root;
+    for key in path.split('.') {
+        node = deref(node, root).get("properties")?.get(key)?;
+    }
+    if let Some(d) = node.get("default") {
+        return Some(d.clone());
+    }
+    // a nested model without a default of its own: its fields' defaults (`latency` -> {feed_ns: 0, ...})
+    let props = deref(node, root).get("properties")?.as_object()?;
+    let o: Map<String, Value> = props
+        .iter()
+        .filter_map(|(k, p)| p.get("default").map(|d| (k.clone(), d.clone())))
+        .collect();
+    (!o.is_empty()).then_some(Value::Object(o))
+}
+
+/// The default of a flag in CLI spelling, when the spec has one worth showing.
+fn default_text(fl: &Flag, schema: Option<&Value>) -> Option<String> {
+    if fl.to.starts_with('-') || fl.to.starts_with("_cli") || fl.help.contains("default") {
+        return None;
+    }
+    if matches!(
+        fl.kind,
+        Kind::Flag | Kind::NoFlag | Kind::EmptyObject | Kind::Path | Kind::PathAppend
+    ) {
+        return None;
+    }
+    let v = match schema.and_then(|s| schema_default(s, fl.to)) {
+        Some(v) => v,
+        None => {
+            return FACTORY_DEFAULTS
+                .iter()
+                .find(|(k, _)| *k == fl.to)
+                .map(|(_, t)| (*t).to_owned());
+        }
+    };
+    let scalar = |v: &Value| match v {
+        Value::String(x) => Some(x.clone()),
+        Value::Number(n) => Some(n.to_string()),
+        Value::Bool(b) => Some(b.to_string()),
+        _ => None,
+    };
+    match (fl.kind, &v) {
+        (_, Value::Null) => None,
+        (Kind::Dur, Value::Number(n)) => n.as_i64().map(dur_text),
+        (Kind::DurList, Value::Array(a)) => {
+            let xs: Option<Vec<String>> = a.iter().map(|x| x.as_i64().map(dur_text)).collect();
+            xs.map(|x| x.join(","))
+        }
+        (Kind::Latency, Value::Object(o)) => {
+            let f = |k: &str| o.get(k).and_then(Value::as_i64).map(dur_text);
+            Some(format!("{},{},{}", f("feed_ns")?, f("decision_ns")?, f("gateway_ns")?))
+        }
+        (Kind::Enum(_), Value::String(x)) => Some(x.replace('_', "-")),
+        (Kind::StrList, Value::Array(a)) => {
+            let xs: Option<Vec<String>> = a.iter().map(scalar).collect();
+            xs.map(|x| x.join(","))
+        }
+        (Kind::Int | Kind::Num | Kind::Frac | Kind::Str | Kind::Tz, _) => scalar(&v),
+        _ => None,
+    }
+}
+
+/// Target of `zoo --list-models`: a flag that prints and exits, so the required flags are not required with it.
+const LIST_MODELS: &str = "_cli.list_models";
+
+/// `zoo --list-models` was given.
+pub(crate) fn lists_models(cmd: &Cmd, m: &ArgMatches) -> bool {
+    cmd.flags.iter().any(|fl| fl.to == LIST_MODELS && m.get_flag(fl.long))
+}
+
 fn leaf(cmd: &Cmd, name: &'static str) -> Command {
     let mut c = Command::new(name).about(cmd.about).hide(cmd.hidden);
+    let lister = cmd.flags.iter().find(|fl| fl.to == LIST_MODELS).map(|fl| fl.long);
+    let schema: Option<Value> = spec_schema(cmd.path).and_then(|n| {
+        crate::schemas::JSON_SCHEMAS
+            .iter()
+            .find(|(k, _)| *k == n)
+            .and_then(|(_, text)| serde_json::from_str(text).ok())
+    });
     for fl in cmd.flags {
-        c = c.arg(flag_arg(fl));
+        let mut a = flag_arg(fl);
+        if let Some(d) = default_text(fl, schema.as_ref()) {
+            a = a.help(format!("{} [default: {d}]", fl.help));
+        }
+        if let (true, Some(l)) = (fl.required, lister) {
+            a = a
+                .required(false)
+                .required_unless_present(l)
+                .help(format!("{} (required)", fl.help));
+        }
+        c = c.arg(a);
     }
     for (pname, _, req) in cmd.positional {
         c = c.arg(Arg::new(*pname).required(*req).action(ArgAction::Set));
@@ -1467,7 +1631,7 @@ pub(crate) fn command(bin: &'static str) -> Command {
                 .long("verbose")
                 .global(true)
                 .action(ArgAction::SetTrue)
-                .help("human output: every summary field after the answer"),
+                .help("human output: every summary field after the answer; every warning and note on stderr"),
         );
     let mut seen: Vec<&str> = Vec::new();
     for cmd in COMMANDS {
@@ -1553,8 +1717,18 @@ fn parse_frac(flag: &str, s: &str) -> Result<Value, String> {
     Ok(json!(v * scale))
 }
 
+/// A duration; a bare integer is accepted only by the `*-ns` flags (and as `0`): `--lifetime 5` is an error, never
+/// 5 ns.
 fn parse_dur(flag: &str, s: &str) -> Result<i64, String> {
-    qt_schema::duration::parse(s).map_err(|e| usage(flag, e.message()))
+    let t = s.trim();
+    let v = qt_schema::duration::parse(t).map_err(|e| usage(flag, e.message()))?;
+    if v != 0 && !flag.ends_with("-ns") && !t.is_empty() && t.bytes().all(|b| b.is_ascii_digit()) {
+        return Err(usage(
+            flag,
+            format!("{t:?} has no unit; write {t}s, {t}ms, {t}us or {t}ns (units: ns, us, ms, s, m)"),
+        ));
+    }
+    Ok(v)
 }
 
 fn split_list(s: &str) -> Vec<&str> {

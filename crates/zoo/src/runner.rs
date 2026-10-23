@@ -978,15 +978,16 @@ pub fn run_zoo(spec: &ZooSpec) -> QtResult<json::ZooSummary> {
             .as_deref()
             .ok_or_else(|| QtError::Config("out: required".into()))?,
     );
-    let ds = Dataset::open(Path::new(root))?;
-    let specs = codec::read_shadow_specs(Path::new(shadows_path))?;
-    let n_shadows = specs.len() as u64;
     let mode = mode_of(spec.mode);
     let exchange = exch_of(spec.exchange);
     if spec.particles == 0 {
         return Err(QtError::Config("particles must be >= 1".into()));
     }
+    // model ids first: a typo fails (with its suggestion) before any data is read
     let models = expand_models(&spec.models, mode, exchange, spec.particles)?;
+    let ds = Dataset::open(Path::new(root))?;
+    let specs = codec::read_shadow_specs(Path::new(shadows_path))?;
+    let n_shadows = specs.len() as u64;
     let hs = horizons(&spec.horizons_ns, spec.h_max_ns)?;
     let mut warnings = Vec::new();
     if ds.manifest.kind == json::DatasetKindName::L2 {
@@ -1059,6 +1060,14 @@ pub fn run_zoo(spec: &ZooSpec) -> QtResult<json::ZooSummary> {
     if pred_liq.len() != preds.len() || pred_aborted.len() != preds.len() {
         return Err(QtError::Engine("zoo_predictions: liquidity column misaligned".into()));
     }
+    // 0.1.1: a shadow any faithful hbt pair aborted on is left out of every model's metrics (one common population)
+    let n_excluded_hbt_312 = preds
+        .iter()
+        .zip(&pred_aborted)
+        .filter(|(_, a)| **a)
+        .map(|(p, _)| p.shadow_id.as_str())
+        .collect::<HashSet<&str>>()
+        .len() as u64;
     std::fs::create_dir_all(&out).map_err(QtError::Io)?;
     let pred_batch = codec::with_added_columns(
         "qt.zoo_predictions",
@@ -1133,6 +1142,8 @@ pub fn run_zoo(spec: &ZooSpec) -> QtResult<json::ZooSummary> {
         files: files.clone(),
         warnings,
         hbt_312_aborts,
+        n_excluded_hbt_312,
+        n_leaderboard: None,
     };
     let text = serde_json::to_string_pretty(&summary).map_err(|e| QtError::Engine(format!("summary: {e}")))?;
     std::fs::write(out.join("summary.json"), text + "\n").map_err(QtError::Io)?;

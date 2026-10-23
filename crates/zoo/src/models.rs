@@ -267,9 +267,10 @@ pub fn nt_gate_blocks(queue: bool, mode: Mode, front: f64) -> bool {
 ///
 /// Corrected mode keeps queuetruth's semantics (hidden prints ignored, `F = min(F, new)`, no gate).
 ///
-/// Feed note: NautilusTrader resets `queue_position` (queue ahead to 0) whenever an `OrderBookDepth10` arrives, so on
-/// a depth-10 feed its queue families fill like `nt_prob_touch` (the `d10_*` rows of the cross-check report). These
-/// models, and the cross-check agreement, describe NT on an `OrderBookDelta` feed only.
+/// Feed note: NautilusTrader 1.231.0 resets `queue_position` (queue ahead to 0) whenever an `OrderBookDepth10`
+/// arrives, so on a depth-10 feed its queue families fill like `nt_prob_touch` (the `d10_*` rows of the cross-check
+/// report); from 2.0.0rc5 a depth snapshot keeps it. These models, and the cross-check agreement, describe NT 1.231.0
+/// on an `OrderBookDelta` feed; 2.0 also caps queue ahead at a shrinking level's new size (docs/RESULTS.md).
 pub struct NtModel {
     id: ModelId,
     queue: bool,

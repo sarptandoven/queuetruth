@@ -22,9 +22,10 @@ def _zoo_section(html: str) -> str:
 
 
 def _first_row(section: str) -> str:
-    m = re.search(r"<tbody><tr><td>([^<]+)</td>", section)
-    assert m
-    return m.group(1)
+    """The first model row of the leaderboard table (after the exact fill-rate row, 0.1.1)."""
+    rows = re.findall(r"<tr><td>([^<]+)</td>", section.split("<tbody>", 1)[1])
+    assert rows and rows[0] == "exact fill rate (truth)"
+    return rows[1]
 
 
 def test_spec_sort_horizon_is_used_and_the_keyword_wins(tmp_path: Path) -> None:

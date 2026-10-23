@@ -226,7 +226,8 @@ def test_e5_mcnemar_not_computable_and_sort_horizon_keyword(tmp_path: Path) -> N
         doc["leaderboard"],
         key=lambda e: (abs(e["fill_rate_bias"][str(h)]["value"]), e["brier"][str(h)], e["model_id"]),
     )["model_id"]
-    assert re.search(r"<tbody><tr><td>([^<]+)</td>", s).group(1) == rc.esc(want)
+    rows = re.findall(r"<tr><td>([^<]+)</td>", s.split("<tbody>", 1)[1])
+    assert rows[0] == "exact fill rate (truth)" and rows[1] == rc.esc(want)
     with pytest.raises(QtError):
         _render(tmp_path / "c", [tmp_path / "zoo"], leaderboard_sort_horizon_ns=0)
 

@@ -6,10 +6,13 @@ horizon that matters and state each model's bias in one plain-English sentence.
 - `rank_leaderboard(entries, horizon_ns)`: entries ordered by `|fill_rate_bias(h)|` at the sort horizon (models
   without a value last), then by Brier at that horizon, then by model id. Brier alone ties when most models never
   fill at short horizons (Brier 0.0000 for 15 of 17 models at 1 s in the review), so it is only a tie-break.
-- `bias_sentence(entry, horizon_ns, aborts=None)`: "At 60 s, hbt_power3[n=2] fills 0.7 pp less often than the exact
-  replay (95% CI -1.3 to -0.3 pp)."; a CI containing zero reads "..., within noise (95% CI ...)". With `aborts`
-  (`abort_shares` of the zoo summary's warnings) a model with faithful hbt #312 aborts adds "; 12 of 3,000 shadow
-  pairs (0.4%) aborted at the hbt #312 event (excluded)".
+- `bias_sentence(entry, horizon_ns, aborts=None)`: "At 60 s, hbt_power3[n=2] fills 10.3% of orders vs 11.0% in the
+  exact replay, 0.7 pp less often (95% CI -1.3 to -0.3 pp)."; a CI containing zero reads "..., within noise (95% CI
+  ...)". The two rates are the entry's `model_fill_rate` and `exact_fill_rate` (0.1.1); a summary without them reads
+  "fills 0.7 pp less often than the exact replay (...)". With `aborts` (`abort_shares` of the zoo summary's warnings)
+  a model with faithful hbt #312 aborts adds "; 12 of 3,000 shadow pairs (0.4%) aborted at the hbt #312 event
+  (excluded)".
+- `rates_at(entry, horizon_ns)`: (model fill rate, exact fill rate) at the horizon.
 - `abort_shares(warnings)`: model id -> (aborted pairs, shadows) from the `hbt_312_abort: ` warning lines.
 
 Entries are `qt.zoo_summary.leaderboard` items, as dicts (`evaluate_zoo`) or `LeaderboardEntry` models; the bias is
@@ -50,6 +53,18 @@ def bias_at(entry: Any, horizon_ns: int | None) -> tuple[float | None, float | N
     if cv is None:
         return None, None, None
     return _finite(_field(cv, "value")), _finite(_field(cv, "ci_lo")), _finite(_field(cv, "ci_hi"))
+
+
+def rates_at(entry: Any, horizon_ns: int | None) -> tuple[float | None, float | None]:
+    """(model fill rate, exact fill rate) of the entry at the horizon (Nones when absent, e.g. before 0.1.1)."""
+    if horizon_ns is None:
+        return None, None
+    key = str(int(horizon_ns))
+    out = []
+    for name in ("model_fill_rate", "exact_fill_rate"):
+        m = _field(entry, name) or {}
+        out.append(_finite(m.get(key)) if isinstance(m, dict) else None)
+    return out[0], out[1]
 
 
 def brier_at(entry: Any, horizon_ns: int | None) -> float | None:
@@ -103,6 +118,12 @@ def duration_text(ns: int) -> str:
     return f"{int(ns)} ns"
 
 
+def pct(x: float) -> str:
+    """A fraction as a percentage: one decimal (two below 0.1%), no sign (`11.0`, `0.04`)."""
+    v = 100.0 * x
+    return f"{v:.{1 if abs(v) >= 0.1 or v == 0 else 2}f}"
+
+
 def _pp(x: float, signed: bool = True) -> str:
     """Percentage points of a fraction: one decimal (two below 0.1 pp), explicit sign unless zero or unsigned."""
     v = 100.0 * x
@@ -154,10 +175,19 @@ def _bias_sentence(entry: Any, horizon_ns: int | None, m: str) -> str:
         return f"At {when}, {m} has no fill-rate bias: no shadow has an exact label at that horizon."
     ci = f"95% CI {_pp(lo)} to {_pp(hi)} pp" if lo is not None and hi is not None else "no CI"
     noise = lo is not None and hi is not None and lo <= 0.0 <= hi
+    rate, exact = rates_at(entry, horizon_ns)
+    more = "more" if v > 0 else "less"
     if abs(v) < NEGLIGIBLE_BIAS:
-        what = f"fills as often as the exact replay (bias {_pp(v)} pp)"
+        if rate is not None and exact is not None:
+            what = f"fills {pct(rate)}% of orders, as often as the exact replay ({pct(exact)}%, bias {_pp(v)} pp)"
+        else:
+            what = f"fills as often as the exact replay (bias {_pp(v)} pp)"
+    elif rate is not None and exact is not None:
+        what = (
+            f"fills {pct(rate)}% of orders vs {pct(exact)}% in the exact replay, {_pp(v, signed=False)} pp {more} often"
+        )
     else:
-        what = f"fills {_pp(v, signed=False)} pp {'more' if v > 0 else 'less'} often than the exact replay"
+        what = f"fills {_pp(v, signed=False)} pp {more} often than the exact replay"
     return f"At {when}, {m} {what}{', within noise' if noise and abs(v) >= NEGLIGIBLE_BIAS else ''} ({ci})."
 
 
@@ -170,6 +200,8 @@ __all__ = [
     "brier_at",
     "duration_text",
     "horizons_of",
+    "pct",
     "rank_leaderboard",
+    "rates_at",
     "sort_horizon",
 ]

@@ -6,8 +6,70 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-23
+
+A release for first-time users: a stranger should get a readable answer in five minutes. Data schema unchanged
+(1.2); the new summary fields are additive with defaults.
+
+### Real-data results
+
+- NautilusTrader cross-check re-run on nautilus_trader 2.0.0rc7 (2026-10-22, same 3,000 orders per day; `run.py`
+  now runs on 1.x and 2.x). The default touch model (`DefaultFillModel(prob_fill_on_limit=1)`) fills exactly the same
+  orders as 1.231.0 on both days and the synthetic fixture, so the overfill stands: +3.13 pp [+2.53, +3.77] at 1 s on
+  2019-12-30 and +2.80 pp [+2.23, +3.37] on 2020-01-30, and faithful `nt_prob_touch` still agrees on 100% of orders.
+- 2.0 changes Nautilus's queue model. On a delta feed it also caps queue ahead at a level's new size when the level
+  shrinks (present from 2.0.0rc4), so faithful `nt_queue_l2` (1.231.0's rules) agrees with 2.0.0rc7's
+  `queue_position=True` on 99.60% to 99.97% of orders per horizon; every difference (18 orders on day one, 10 on day
+  two) is the cap, and Nautilus fills each one earlier. Nautilus's own bias against exact at 1 s / 10 s / 60 s goes
+  from -0.10 / -0.77 / -0.70 pp to -0.03 / -0.37 / -0.37 pp on day one and from -0.10 / -0.17 / -0.23 pp to
+  -0.03 / -0.03 / -0.07 pp on day two.
+- The `OrderBookDepth10` reset is gone from 2.0.0rc5 (#4942): fed depth snapshots, 2.0's queue model fills exactly
+  the orders it fills on the delta feed (1.231.0: like the touch model, +2.87 and +2.67 pp at 1 s).
+- Fed the MBO book as L3 deltas (`book_type=L3_MBO`), 2.0.0rc7's queue model fills the same orders as the exact
+  replay at every horizon on day one; on day two it differs on 1 order at 0.1 s and 2 at 10 s (hidden prints, which
+  the harness passes as `NO_AGGRESSOR` trades and the exact replay does not count; bias at most +0.07 pp). 1.231.0's
+  L3 queue model overfills: +1.73 pp at 1 s on day one, +1.67 pp on day two.
+
+### Changed
+
+- **One common population for every zoo model.** A shadow on which any faithful hftbacktest model hit its bug #312
+  is now left out of every model's metrics (`queuetruth.eval.common_population`), not just the aborted model's.
+  The aborts hit the orders that reach a partial fill, so in 0.1.0 the hbt rows were scored on fewer, less
+  fill-prone shadows than the others (n = 945 against 994 in the quickstart), against a truth computed on all of
+  them. On the synthetic quickstart the hbt models move from about -2.9 pp to -0.8 pp at 60 s; expect the hbt rows of
+  a real-data leaderboard to move too, and every row to be computed on fewer shadows. New summary fields
+  `n_excluded_hbt_312` and `n_leaderboard`. The calibrate held-out comparison (fitted vs default) uses the same
+  rule.
+- **`--models all` runs 16 models, not 17.** `hbt_power[n=1]` (`b / (b + f)`) equals `hbt_power3[n=1]`
+  (`1 - f / (f + b)`) in every cell and was dropped from the default set; it still runs when named.
+- **Unit-less durations are rejected** on every flag whose name does not end in `-ns`: `--lifetime 5` was silently
+  5 ns and is now `QT-USAGE-001` ("write 5s, 5ms, 5us or 5ns"). `0` and the `*-ns` flags keep accepting bare
+  integers.
+- **Quiet terminal output.** The per-model `hbt_312_abort:` warnings collapse into one line with a link to the
+  hftbacktest issue; informational lines (`info: `, `ci_block=`, `self_exclusion: matched`, all-zero shadow
+  diagnostics) print only with `--verbose` or `--log-level info`. The answer is flushed to stdout before stderr.
+  `summary.json` keeps every warning.
+- **Real Databento CME data is no longer labelled synthetic.** The report used the manifest's `validation_status`
+  (the venue rule set's validation level) as the data's provenance, so a DBN file ingested with `--venue cme` got a
+  red "Synthetic or fixture data" banner. Vendor-format data (`dbn`, `itch`, `iex`, `etcsv`) whose rules are
+  validated on synthetic data only now gets "Vendor data; venue rules validated on synthetic data only".
+- README: the PyPI page no longer says the package is not on PyPI, every link is absolute (relative links 404 on
+  PyPI), and PyPI, Python and licence badges were added.
+- The NautilusTrader cross-check tests pin each version's rules: on 2.x the depth feed must fill like the delta
+  feed, and the `p = 0.29` expectation is checked under each side's own rules.
+
 ### Added
 
+- **Base rates next to every bias.** Leaderboard entries carry `exact_fill_rate` and `model_fill_rate` per horizon
+  (`fill_rate_bias = model_fill_rate - exact_fill_rate`). The CLI table and the report table start with an "exact
+  fill rate" row, and each plain-words sentence reads "fills 56.2% of orders vs 57.0% in the exact replay, 0.8 pp
+  less often".
+- `queuetruth zoo --list-models` (also `--format json`): the `all` set with one line per model, then the
+  parameterised and opt-in families.
+- "Did you mean": an unknown model family names the closest one (`hbt_powr3` -> `hbt_power3`), and model ids are
+  checked before any data is read.
+- `--help` shows each flag's default (from the spec's JSON Schema, e.g. `--lifetime [default: 5m]`,
+  `--horizons [default: 100ms,1s,10s,60s ...]`).
 - `sample_shadows`: `allocation: per_partition` with `partition_quotas` (`"<instrument_id>"` or
   `"<instrument_id>_<YYYYMMDD>"`): each instrument-day draws `n` (or its quota) shadows whatever else the dataset
   holds, so a dataset split into shards draws exactly the shadows of the whole. An empty `partition_quotas` stays out
@@ -18,6 +80,8 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 - `scripts/scale/`: the W1 full-market pipeline (ITCH day split into symbol buckets, planner, work units with shard
   manifests, aggregator with a Merkle-rooted run manifest, single-unit verifier, Modal entry points, and the local
   proof that 72 single-symbol units reproduce the 36-symbol breadth run of docs/RESULTS.md 4b).
+- `scripts/nt_crosscheck/l3_mbo.py` and `l3_score.py`: feed the shadows' MBO book to NautilusTrader as L3 deltas and
+  score each order's first fill against the exact replay.
 
 ## [0.1.0] - 2026-10-19
 

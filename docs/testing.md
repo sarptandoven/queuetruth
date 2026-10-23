@@ -136,8 +136,12 @@ specification's own claims, and their results became tests or rulings:
   `nt_prob_touch`, `nt_queue_l2` and `nt_queue_l2_prob_touch` (at `p = 1`) agree with it on 100% of orders at every
   horizon on both Nasdaq days and the synthetic fixture. The faithful rules for hidden prints, size updates that do
   not shrink the queue, and the queue gate on trade-throughs come from that work. Fed `OrderBookDepth10` snapshots
-  instead, Nautilus resets queue position at every snapshot and its queue model fills like the touch model; the zoo
-  models describe the delta feed.
+  instead, 1.231.0 resets queue position at every snapshot and its queue model fills like the touch model; the zoo
+  models describe the delta feed. The same harness runs on nautilus_trader 2.0.0rc7: the touch model fills the same
+  orders as 1.231.0, the queue model agrees with faithful `nt_queue_l2` on 99.60% to 99.97% of orders (2.0 caps queue
+  ahead when a level shrinks), the depth feed no longer resets the queue (from rc5), and fed the MBO book as L3
+  deltas, 2.0's queue model fills the same orders as the exact replay on all but 3 order-horizons
+  (`scripts/nt_crosscheck/l3_mbo.py`).
 - **Importer fixtures.** Synthetic inputs for all nine importers, written from each venue's public API
   documentation with invented ids, prices and accounts, with hand-specified expected canonical rows (O-LIVE-1).
 - **Real-data expectations.** Every real-data target was recomputed from the predecessor engine's artifacts by
