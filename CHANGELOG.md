@@ -6,7 +6,7 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ## [Unreleased]
 
-## [0.1.1] - 2026-10-22
+## [0.1.1] - 2026-10-23
 
 A release for first-time users: a stranger should get a readable answer in five minutes. Data schema unchanged
 (1.2); the new summary fields are additive with defaults.
@@ -49,6 +49,16 @@ A release for first-time users: a stranger should get a readable answer in five 
   checked before any data is read.
 - `--help` shows each flag's default (from the spec's JSON Schema, e.g. `--lifetime [default: 5m]`,
   `--horizons [default: 100ms,1s,10s,60s ...]`).
+- `sample_shadows`: `allocation: per_partition` with `partition_quotas` (`"<instrument_id>"` or
+  `"<instrument_id>_<YYYYMMDD>"`): each instrument-day draws `n` (or its quota) shadows whatever else the dataset
+  holds, so a dataset split into shards draws exactly the shadows of the whole. An empty `partition_quotas` stays out
+  of `run_id`; existing run ids are unchanged.
+- `queuetruth.eval.blocks`: summable zoo statistics per model, population, stratum, horizon, instrument-day and
+  30-minute block (`block_stats`); `evaluate_blocks` rebuilds `evaluate_zoo`'s ratio metrics and block-bootstrap
+  CIs from them across shards; `cluster_bootstrap` (two-way dates x symbols), `shrink` (empirical Bayes) and `bh`.
+- `scripts/scale/`: the W1 full-market pipeline (ITCH day split into symbol buckets, planner, work units with shard
+  manifests, aggregator with a Merkle-rooted run manifest, single-unit verifier, Modal entry points, and the local
+  proof that 72 single-symbol units reproduce the 36-symbol breadth run of docs/RESULTS.md 4b).
 
 ## [0.1.0] - 2026-10-19
 

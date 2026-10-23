@@ -1,7 +1,9 @@
 //! Shadow schedules from a dataset.
 //!
 //! `sample_shadows`: `n` shadows split over partitions (`equal`: n / P each, the remainder to the first partitions;
-//! `proportional`: largest remainder on record counts). Per partition, one stream
+//! `proportional`: largest remainder on record counts; `per_partition`: `n` per partition, or its
+//! `partition_quotas` entry, so the shadows of a partition do not depend on the other partitions of the dataset and
+//! a dataset split into shards draws exactly the shadows of the whole). Per partition, one stream
 //! `Xoshiro256StarStar::new(stable_seed(seed, [b"sample", instrument_id LE, session_date LE]))` draws, per shadow:
 //! `ts_submit` uniform in the window `[midnight + open_s + window_open_s, midnight + close_s - window_close_s)`
 //! intersected with the partition's `[ts_min, ts_max]` (the whole partition when that is empty), the side, the
@@ -113,6 +115,41 @@ fn median_add_size(part: &Partition, lot: Qty) -> QtResult<Qty> {
     Ok((m / lot * lot).max(lot))
 }
 
+/// Shadows per partition (`spec.allocation`).
+fn quotas(spec: &ShadowSampleSpec, parts: &[Partition]) -> QtResult<Vec<u64>> {
+    if spec.allocation != Allocation::PerPartition {
+        if !spec.partition_quotas.is_empty() {
+            return Err(QtError::Config(
+                "partition_quotas: only with allocation per_partition".into(),
+            ));
+        }
+        let weights: Vec<u64> = match spec.allocation {
+            Allocation::Proportional => parts.iter().map(|p| p.rows).collect(),
+            _ => vec![1; parts.len()],
+        };
+        return Ok(allocate(spec.n, &weights));
+    }
+    let out: Vec<u64> = parts
+        .iter()
+        .map(|p| {
+            let dated = format!("{}_{}", p.instrument_id, date_compact(p.session_date));
+            spec.partition_quotas
+                .get(&dated)
+                .or_else(|| spec.partition_quotas.get(&p.instrument_id.to_string()))
+                .copied()
+                .unwrap_or(spec.n)
+        })
+        .collect();
+    let total = out.iter().try_fold(0u64, |a, &q| a.checked_add(q));
+    if total.is_none_or(|t| t > MAX_SAMPLE) {
+        return Err(QtError::Config(format!(
+            "n: at most {MAX_SAMPLE} shadows per sample (per_partition total over {} partitions)",
+            parts.len()
+        )));
+    }
+    Ok(out)
+}
+
 /// Largest `n` of one `shadows sample` run.
 pub const MAX_SAMPLE: u64 = 10_000_000;
 
@@ -149,11 +186,7 @@ pub fn sample_shadows(spec: &ShadowSampleSpec) -> QtResult<ShadowSampleSummary> 
         return Err(QtError::Config("lifetime_ns must be > 0 and latency_ns >= 0".into()));
     }
     let parts = ds.partitions();
-    let weights: Vec<u64> = match spec.allocation {
-        Allocation::Equal => vec![1; parts.len()],
-        Allocation::Proportional => parts.iter().map(|p| p.rows).collect(),
-    };
-    let quotas = allocate(spec.n, &weights);
+    let quotas = quotas(spec, parts)?;
     let mut rows = Vec::new();
     let mut by_instrument: IndexMap<String, u64> = IndexMap::new();
     let mut by_placement: IndexMap<String, u64> = IndexMap::new();

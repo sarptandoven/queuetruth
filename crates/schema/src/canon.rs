@@ -16,10 +16,10 @@ const REF_KEYS: [&str; 4] = ["path", "dataset_id", "upload_id", "job_file"];
 /// `(discriminating top-level key, field path, default as JSON text)` of every 1.1 spec field: the spec is
 /// recognised by a key only it has (`sweep_gap_ns` = ReplaySpec, `write_fills` = ZooSpec, `markout_horizons_ns` =
 /// ScorecardSpec, `fix` = LiveImportSpec, `format` = IngestSpec, `max_events` = WhySpec, `target` = ExportSpec,
-/// `gbdt` = HazardFitSpec, `max_why` = ReportSpec). `family` is shared by CalibrationSpec and LiveCalibrationSpec; its
+/// `gbdt` = HazardFitSpec, `max_why` = ReportSpec, `window_open_s` = ShadowSampleSpec). `family` is shared by CalibrationSpec and LiveCalibrationSpec; its
 /// entries name fields only LiveCalibrationSpec has, so they never touch a CalibrationSpec.
 /// Same table as `queuetruth.schemas.runid.V1_1_DEFAULTS`.
-pub const V1_1_DEFAULTS: [(&str, &[&str], &str); 26] = [
+pub const V1_1_DEFAULTS: [(&str, &[&str], &str); 27] = [
     ("sweep_gap_ns", &["fill_rule"], "\"exact\""),
     ("sweep_gap_ns", &["hidden_print_policy"], "null"),
     ("sweep_gap_ns", &["exclude_order_ids"], "[]"),
@@ -46,6 +46,7 @@ pub const V1_1_DEFAULTS: [(&str, &[&str], &str); 26] = [
     ("max_why", &["leaderboard_sort_horizon_ns"], "null"),
     ("family", &["self_exclude"], "true"),
     ("family", &["match_window_ns"], "1000000"),
+    ("window_open_s", &["partition_quotas"], "{}"),
 ];
 
 /// Removes `path` from `v` where it holds `default` (`*` = every item of a list).

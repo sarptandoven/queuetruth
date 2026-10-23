@@ -7,8 +7,8 @@ they hold their default, so every spec that does not set them keeps its v0.1 `ru
 the hash as an ordinary field. `V1_1_DEFAULTS` lists them per spec, the spec being recognised by a top-level key
 that only it has (`sweep_gap_ns` = ReplaySpec, `write_fills` = ZooSpec, `markout_horizons_ns` = ScorecardSpec,
 `fix` = LiveImportSpec, `format` = IngestSpec, `max_events` = WhySpec, `target` = ExportSpec, `gbdt` =
-HazardFitSpec, `max_why` = ReportSpec). `family` is shared by CalibrationSpec and LiveCalibrationSpec; its entries name
-fields only LiveCalibrationSpec has, so they never touch a CalibrationSpec.
+HazardFitSpec, `max_why` = ReportSpec, `window_open_s` = ShadowSampleSpec). `family` is shared by CalibrationSpec
+and LiveCalibrationSpec; its entries name fields only LiveCalibrationSpec has, so they never touch a CalibrationSpec.
 Summary echoes (`spec_echo`) keep the fields.
 """
 
@@ -51,6 +51,7 @@ V1_1_DEFAULTS: tuple[tuple[str, tuple[str, ...], Any], ...] = (
     ("max_why", ("leaderboard_sort_horizon_ns",), None),
     ("family", ("self_exclude",), True),
     ("family", ("match_window_ns",), 1_000_000),
+    ("window_open_s", ("partition_quotas",), {}),
 )
 #: Key sets that identify a `DatasetRef` / `FileRef` object.
 REF_KEYS = (frozenset({"path"}), frozenset({"dataset_id"}), frozenset({"upload_id"}), frozenset({"job_file"}))

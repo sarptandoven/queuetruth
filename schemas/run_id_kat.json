@@ -81,6 +81,7 @@
         "n": 3000,
         "seed": 0,
         "allocation": "equal",
+        "partition_quotas": {},
         "sides": [
           "B",
           "A"
@@ -132,6 +133,7 @@
         "n": 3000,
         "seed": 0,
         "allocation": "equal",
+        "partition_quotas": {},
         "sides": [
           "B",
           "A"

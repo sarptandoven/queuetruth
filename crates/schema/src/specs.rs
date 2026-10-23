@@ -6,6 +6,8 @@
 //! Schema 1.1 (SPEC 3.11, E38): fields marked "1.1" are additive and default to the v0.1 behaviour; a 1.1
 //! field holding its default does not enter `run_id` (`crate::V1_1_DEFAULTS`).
 
+use std::collections::BTreeMap;
+
 use indexmap::IndexMap;
 use qt_types::LatencyModel;
 use serde::{Deserialize, Serialize};
@@ -563,6 +565,9 @@ pub enum Allocation {
     Equal,
     /// Proportional to records.
     Proportional,
+    /// `n` per instrument-day (or its `partition_quotas` entry), whatever else the dataset holds: a shard holding
+    /// a subset of the partitions draws the same shadows as the whole dataset.
+    PerPartition,
 }
 
 /// Side letter in specs.
@@ -593,6 +598,11 @@ pub struct ShadowSampleSpec {
     /// Allocation.
     #[serde(default)]
     pub allocation: Allocation,
+    /// Additive (W1 scale runs), `per_partition` only: shadows per instrument-day by key `"<instrument_id>"` or
+    /// `"<instrument_id>_<YYYYMMDD>"` (the dated key wins); other instrument-days get `n`. Not hashed when empty
+    /// (`crate::V1_1_DEFAULTS`).
+    #[serde(default)]
+    pub partition_quotas: BTreeMap<String, u64>,
     /// Sides.
     #[serde(default = "sides_default")]
     pub sides: Vec<SideName>,

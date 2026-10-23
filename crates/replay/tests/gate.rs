@@ -326,6 +326,45 @@ fn sample_and_mirror_shadows_deterministic_and_o_sh_4() {
     std::fs::remove_dir_all(&dir).ok();
 }
 
+#[test]
+#[cfg_attr(not(feature = "gate"), ignore = "gate test: needs the testkit and ingest crates")]
+fn per_partition_sampling_is_shard_invariant() {
+    // W1 scale runs: a shard holding some partitions draws exactly their shadows of the whole-dataset sample.
+    let dir = scratch("per_partition");
+    let dsj = json!({"path": fixture().display().to_string()});
+    let run = |name: &str, extra: serde_json::Value| -> Vec<ShadowSpec> {
+        let mut v = json!({"dataset": dsj, "out": dir.join(name).display().to_string(), "seed": 5});
+        let o = v.as_object_mut().unwrap();
+        for (k, x) in extra.as_object().unwrap() {
+            o.insert(k.clone(), x.clone());
+        }
+        qt_replay::sample_shadows(&serde_json::from_value(v).unwrap()).unwrap();
+        read(&dir.join(name))
+    };
+    let equal = run("eq.parquet", json!({"n": 402}));
+    let quotas = json!({"1_20260615": 101, "2_20260615": 101, "1_20260616": 100, "2_20260616": 100});
+    let per = run(
+        "pp.parquet",
+        json!({"n": 0, "allocation": "per_partition", "partition_quotas": quotas}),
+    );
+    assert_eq!(per, equal);
+    let one = run(
+        "one.parquet",
+        json!({"n": 0, "allocation": "per_partition", "partition_quotas": {"2_20260616": 100}}),
+    );
+    let want: Vec<ShadowSpec> = equal
+        .iter()
+        .filter(|s| s.shadow_id.starts_with("s2_20260616_"))
+        .cloned()
+        .collect();
+    assert_eq!(one.len(), 100);
+    assert_eq!(one, want);
+    let bad: ShadowSampleSpec =
+        serde_json::from_value(json!({"dataset": dsj, "n": 4, "partition_quotas": {"1": 3}})).unwrap();
+    assert!(qt_replay::sample_shadows(&bad).is_err());
+    std::fs::remove_dir_all(&dir).ok();
+}
+
 fn write_mbo_csv(events: &[MboEvent], path: &Path) {
     let mut s =
         String::from("ts_event,ts_recv,instrument_id,action,side,price,size,order_id,flags,sequence,channel_id\n");

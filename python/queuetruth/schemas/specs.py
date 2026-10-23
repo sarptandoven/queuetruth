@@ -268,7 +268,10 @@ class ShadowSampleSpec(SpecModel):
     out: str | None = None
     n: Annotated[int, Field(ge=0)]
     seed: NonNegInt = 0
-    allocation: Literal["equal", "proportional"] = "equal"
+    allocation: Literal["equal", "proportional", "per_partition"] = "equal"
+    #: Additive (W1 scale runs), `per_partition` only: shadows per instrument-day by key `"<instrument_id>"` or
+    #: `"<instrument_id>_<YYYYMMDD>"` (the dated key wins); other instrument-days get `n`.
+    partition_quotas: dict[str, NonNegInt] = Field(default_factory=dict)
     sides: list[Literal["B", "A"]] = Field(default_factory=lambda: ["B", "A"])
     placements: list[Placement] = Field(default_factory=_default_placements)
     qty: list[QtyRule] = Field(default_factory=_default_qty)
