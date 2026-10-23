@@ -13,7 +13,7 @@ fills, order by order.
 
 On two public Nasdaq TotalView-ITCH days (AAPL, MSFT, SPY, TSLA), NautilusTrader's touch fill model with the
 default `prob_fill_on_limit = 1`, run in the real engine (nautilus_trader 1.231.0, `BacktestEngine` fed the L2 view as
-`OrderBookDelta`s), fills 14.17% of 3,000 small orders at or near the touch within 1 s where the exact replay fills
+`OrderBookDelta`s; the same orders fill on 2.0.0rc7), fills 14.17% of 3,000 small orders at or near the touch within 1 s where the exact replay fills
 11.03% (+3.13 pp, 95% CI [+2.53, +3.77], 2019-12-30; +2.80 pp on 2020-01-30). queuetruth's faithful NautilusTrader
 models agree with that engine on 100% of orders at 1 s, 10 s and 60 s. Refitting `p` on the first day (`p = 0.29`)
 cuts the held-out next day's 1 s overfill from +2.8 pp to +0.4 pp (`p` is per print, so refit it per venue and

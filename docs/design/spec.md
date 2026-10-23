@@ -2004,8 +2004,10 @@ feed (behaviour re-implemented from documentation and observation, no NT code; a
 `scripts/nt_crosscheck`): they receive hidden prints as aggressor `N` (NT moves both book sides to the trade price),
 which count as touches and, in the queue families, consume queue ahead like displayed prints; book size updates
 never shrink their queue ahead; and the queue families do not fill on a trade-through or a cross while queue ahead
-is positive (5.3.3 d-f). NautilusTrader resets `queue_position` to 0 whenever an `OrderBookDepth10` arrives, so on
-a depth-10 feed its queue families behave like `nt_prob_touch`; the faithful NT models describe delta feeds only. Adopting these rules moved the faithful
+is positive (5.3.3 d-f). NautilusTrader 1.231.0 resets `queue_position` to 0 whenever an `OrderBookDepth10`
+arrives, so on a depth-10 feed its queue families behave like `nt_prob_touch`; from 2.0.0rc5 a depth snapshot keeps
+the queue position, and 2.0 caps queue ahead at a shrinking level's new size (RESULTS.md, NautilusTrader cross-check).
+The faithful NT models describe 1.231.0 on delta feeds. Adopting these rules moved the faithful
 day-one result at 1 s for the default `p = 1` by +3.13 pp (14.17% vs 11.03%), as verified by the cross-check.
 - MBO-input families receive `on_mbo` for every record of the instrument after activation instead of L2 rows, and
   `on_cross` from the exact book at event end.

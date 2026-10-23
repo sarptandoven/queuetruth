@@ -160,8 +160,11 @@ view, or a snapshot row resets it to 0), and a trade-through or cross does not f
 queue gate. (The specification extends the out-of-view correction to every corrected family; in v0.1 only
 `nt_queue_l2` has it.)
 
-NautilusTrader resets `queue_position` whenever an `OrderBookDepth10` arrives, so on a depth-10 feed its queue
-families fill like `nt_prob_touch`. These models describe NautilusTrader on a delta feed only.
+NautilusTrader 1.231.0 resets `queue_position` whenever an `OrderBookDepth10` arrives, so on a depth-10 feed its
+queue families fill like `nt_prob_touch`. From 2.0.0rc5 a depth snapshot keeps the queue position, and 2.0 also caps
+queue ahead at a level's new size when the level shrinks, so faithful `nt_queue_l2` (1.231.0's rules) agrees with
+2.0.0rc7 on 99.60% to 99.97% of orders ([Results](../RESULTS.md#nautilustrader-cross-check)). These models describe
+NautilusTrader 1.231.0 on a delta feed.
 
 ### (e) `nt_prob_touch[p]`
 
