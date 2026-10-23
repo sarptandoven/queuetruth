@@ -19,7 +19,7 @@ Steps, per public day (2019-12-30 and 2020-01-30), each recorded in `<out>/resul
 - `replay`: `qt.replay` with the rank oracle and trade parity (the RD-2 / RD-6 counters: 8 invariants, FIFO rank
   histograms, rank-0 shares, sweeps, trade parity) against `expected.json`.
 - `headline`: `scripts/realdata/headline.py`'s `run_day` (the published RD-8-extended leaderboard): 3,000 never-cancel
-  shadows from `qt.sample_shadows` (seed 0), 17 zoo models in faithful and corrected mode, bias at 1 s / 10 s / 60 s
+  shadows from `qt.sample_shadows` (seed 0), 16 zoo models in faithful and corrected mode, bias at 1 s / 10 s / 60 s
   overall, by queue-ahead decile and by liquidity bucket.
 - `calib`: `validate_et.rd_calibrate` (RD-9) on the two-day dataset: 4 families fitted on day one blocks 0-3 of 5,
   evaluated on day two.
@@ -407,7 +407,7 @@ class Run:
 
     def step_headline(self, date: str) -> V.Check:
         day = DATES[date]
-        c = V.Check("headline", f"17-model zoo leaderboard, 3,000 sampled never-cancel shadows {day}")
+        c = V.Check("headline", f"16-model zoo leaderboard, 3,000 sampled never-cancel shadows {day}")
         hout = self.out / "headline"
         res = H.run_day(self.ctx.ds[day], self.work / "headline", day, self.a.n_headline, 0, self.a.threads, False)
         res["rank_60s"] = {m: H.ranking(res, m, "60s") for m in ("faithful", "corrected")}
@@ -416,7 +416,7 @@ class Run:
         p.write_text(json.dumps(res, indent=1, sort_keys=True) + "\n")
         for mode in ("faithful", "corrected"):
             m = res["modes"][mode]
-            c.true(f"{mode}: 17 models with rows", m["n_models"] == 17, m["n_models"])
+            c.true(f"{mode}: 16 models with rows", m["n_models"] == 16, m["n_models"])
         c.record(
             artifact=str(p.relative_to(REPO)),
             exact_fill_rate=res["modes"]["faithful"]["exact_fill_rate"],

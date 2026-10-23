@@ -95,6 +95,21 @@ def test_run_zoo_fills_leaderboard_with_planned_life(synth: Path, work: Path, mo
     tto = next(k for k in by if k.startswith("trade_through_only"))
     h = "10000000000"
     assert by[foq].fill_rate_bias[h].value >= by[tto].fill_rate_bias[h].value
+    # 0.1.1: one common population. A shadow any model aborted on is left out of every model, so every model's
+    # metrics have the same n and the same exact fill rate, and each bias is model rate minus exact rate.
+    assert s.n_excluded_hbt_312 == len(set(aborted.column("shadow_id").to_pylist()))
+    assert s.n_leaderboard is not None and 0 < s.n_leaderboard <= s.n_shadows - s.n_excluded_hbt_312
+    errs = pq.read_table(out / "zoo_errors.parquet").to_pylist()
+    ns = {
+        r["model_id"]: r["n"]
+        for r in errs
+        if r["metric"] == "fill_rate_bias" and r["stratum_kind"] == "all" and str(r["horizon_ns"]) == h
+    }
+    assert len(ns) == 3 and len(set(ns.values())) == 1, ns
+    exact = {e.exact_fill_rate[h] for e in s.leaderboard}
+    assert len(exact) == 1 and None not in exact
+    for e in s.leaderboard:
+        assert e.fill_rate_bias[h].value == pytest.approx(e.model_fill_rate[h] - e.exact_fill_rate[h], abs=1e-12)
 
 
 def test_calibrate_alloc_held_out_and_exports(synth: Path, work: Path) -> None:

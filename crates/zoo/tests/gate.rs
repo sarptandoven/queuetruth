@@ -254,7 +254,7 @@ fn run_zoo_synth_small_threads_deterministic() {
     let (root, sh, specs) = synth_small_shadows(&base);
     let s1 = qt_zoo::run_zoo(&zoo_spec(&root, &sh, &base.join("t1"), 1)).unwrap();
     let s4 = qt_zoo::run_zoo(&zoo_spec(&root, &sh, &base.join("t4"), 4)).unwrap();
-    assert_eq!(s1.models.len(), 17);
+    assert_eq!(s1.models.len(), 16);
     assert_eq!(s1.n_shadows, specs.len() as u64);
     assert!(s1.leaderboard.is_empty());
     assert_eq!(s1.files, s4.files, "threads must not change outputs");
@@ -270,7 +270,7 @@ fn run_zoo_synth_small_threads_deterministic() {
         ]
     );
     let p = s1.files[0].rows.unwrap();
-    assert_eq!(p, 17 * specs.len() as u64 * 5);
+    assert_eq!(p, 16 * specs.len() as u64 * 5);
     // faithful hbt #312 (qt ends only the pair where hbt ends the run, E8): only the affected (model, shadow) pairs are
     // aborted, from the abort on; every model keeps its rows, the aborted ones carry status `hbt_312_abort`, and
     // the per-model warning counts the aborted pairs
@@ -320,6 +320,10 @@ fn run_zoo_synth_small_threads_deterministic() {
     }
     assert_eq!(s1.hbt_312_aborts.len(), aborted.len(), "{:?}", s1.hbt_312_aborts);
     assert_eq!(s4.hbt_312_aborts, s1.hbt_312_aborts, "thread count changes nothing");
+    // 0.1.1: the shadows any model aborted on, left out of every model by the evaluation
+    let union: HashSet<&String> = aborted.values().flatten().collect();
+    assert_eq!(s1.n_excluded_hbt_312, union.len() as u64);
+    assert_eq!(s1.n_leaderboard, None, "the Rust runner does not evaluate");
     // once a pair is aborted at a horizon it stays aborted at every longer one
     for v in by_pair.values_mut() {
         v.sort_unstable();

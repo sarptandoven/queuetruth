@@ -830,7 +830,12 @@ def make_hazard_dir(root: Path, seed: int = 4) -> None:
 
 
 def make_replay_dir(
-    root: Path, sids: list[str], ts_live: np.ndarray, qa: np.ndarray, status: str = "synthetic_only"
+    root: Path,
+    sids: list[str],
+    ts_live: np.ndarray,
+    qa: np.ndarray,
+    status: str = "synthetic_only",
+    source_format: str = "testkit",
 ) -> None:
     """A `replay` output directory with a summary, data quality, queue trajectories and the dataset manifest."""
     root.mkdir(parents=True, exist_ok=True)
@@ -939,7 +944,7 @@ def make_replay_dir(
     man = DatasetManifest(
         dataset_id="cd" * 32,
         kind="mbo",
-        source_format="testkit",
+        source_format=source_format,
         venue="cme",
         source_venue="cme",
         inputs=[],

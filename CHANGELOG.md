@@ -6,6 +6,50 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-22
+
+A release for first-time users: a stranger should get a readable answer in five minutes. Data schema unchanged
+(1.2); the new summary fields are additive with defaults.
+
+### Changed
+
+- **One common population for every zoo model.** A shadow on which any faithful hftbacktest model hit its bug #312
+  is now left out of every model's metrics (`queuetruth.eval.common_population`), not just the aborted model's.
+  The aborts hit the orders that reach a partial fill, so in 0.1.0 the hbt rows were scored on fewer, less
+  fill-prone shadows than the others (n = 945 against 994 in the quickstart), against a truth computed on all of
+  them. On the synthetic quickstart the hbt models move from about -2.9 pp to -0.8 pp at 60 s; expect the hbt rows of
+  a real-data leaderboard to move too, and every row to be computed on fewer shadows. New summary fields
+  `n_excluded_hbt_312` and `n_leaderboard`. The calibrate held-out comparison (fitted vs default) uses the same
+  rule.
+- **`--models all` runs 16 models, not 17.** `hbt_power[n=1]` (`b / (b + f)`) equals `hbt_power3[n=1]`
+  (`1 - f / (f + b)`) in every cell and was dropped from the default set; it still runs when named.
+- **Unit-less durations are rejected** on every flag whose name does not end in `-ns`: `--lifetime 5` was silently
+  5 ns and is now `QT-USAGE-001` ("write 5s, 5ms, 5us or 5ns"). `0` and the `*-ns` flags keep accepting bare
+  integers.
+- **Quiet terminal output.** The per-model `hbt_312_abort:` warnings collapse into one line with a link to the
+  hftbacktest issue; informational lines (`info: `, `ci_block=`, `self_exclusion: matched`, all-zero shadow
+  diagnostics) print only with `--verbose` or `--log-level info`. The answer is flushed to stdout before stderr.
+  `summary.json` keeps every warning.
+- **Real Databento CME data is no longer labelled synthetic.** The report used the manifest's `validation_status`
+  (the venue rule set's validation level) as the data's provenance, so a DBN file ingested with `--venue cme` got a
+  red "Synthetic or fixture data" banner. Vendor-format data (`dbn`, `itch`, `iex`, `etcsv`) whose rules are
+  validated on synthetic data only now gets "Vendor data; venue rules validated on synthetic data only".
+- README: the PyPI page no longer says the package is not on PyPI, every link is absolute (relative links 404 on
+  PyPI), and PyPI, Python and licence badges were added.
+
+### Added
+
+- **Base rates next to every bias.** Leaderboard entries carry `exact_fill_rate` and `model_fill_rate` per horizon
+  (`fill_rate_bias = model_fill_rate - exact_fill_rate`). The CLI table and the report table start with an "exact
+  fill rate" row, and each plain-words sentence reads "fills 56.2% of orders vs 57.0% in the exact replay, 0.8 pp
+  less often".
+- `queuetruth zoo --list-models` (also `--format json`): the `all` set with one line per model, then the
+  parameterised and opt-in families.
+- "Did you mean": an unknown model family names the closest one (`hbt_powr3` -> `hbt_power3`), and model ids are
+  checked before any data is read.
+- `--help` shows each flag's default (from the spec's JSON Schema, e.g. `--lifetime [default: 5m]`,
+  `--horizons [default: 100ms,1s,10s,60s ...]`).
+
 ## [0.1.0] - 2026-10-19
 
 First public version. Validated on real data for Nasdaq TotalView-ITCH (two public days, four symbols) and IEX

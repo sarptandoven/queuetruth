@@ -75,6 +75,15 @@ def test_section_header_banner_real_and_unknown(tmp_path: Path) -> None:
     assert "Data provenance unknown" in html
 
 
+def test_section_header_banner_vendor_cme(tmp_path: Path) -> None:
+    # a Databento CME file: `synthetic_only` is the cme rule set's validation, not the data's provenance (0.1.1)
+    zf = rc.make_zoo_dir(tmp_path / "zoo", n=30)
+    rc.make_replay_dir(tmp_path / "rep", zf["sids"], zf["ts_live"], zf["qa"], source_format="dbn")
+    _, html = _render(tmp_path / "a", [tmp_path / "rep"])
+    assert "Vendor data; venue rules validated on synthetic data only" in html
+    assert "Synthetic or fixture data" not in html
+
+
 def test_section_verdict(tmp_path: Path) -> None:
     rc.make_score_dir(tmp_path / "score", n=300)
     summary, html = _render(tmp_path, [tmp_path / "score"])
@@ -178,8 +187,9 @@ def test_section_zoo(tmp_path: Path) -> None:
         return (v is None, abs(v) if v is not None else math.inf, e["brier"].get(h60) or math.inf, e["model_id"])
 
     ranked = sorted(doc["leaderboard"], key=key)
-    first_row = re.search(r"<tbody><tr><td>([^<]+)</td>", s).group(1)
-    assert rc.esc(ranked[0]["model_id"]) == first_row
+    rows = re.findall(r"<tr><td>([^<]+)</td>", s.split("<tbody>", 1)[1])
+    assert rows[0] == "exact fill rate (truth)"  # the base rate of every bias in its column (0.1.1)
+    assert rc.esc(ranked[0]["model_id"]) == rows[1]
     assert "sorted by absolute fill-rate bias at 60 s" in s
     for h in [*rc.HORIZONS, rc.H_MAX]:
         assert f'<th scope="col" class="n">fill-rate bias {F.dur(h)}</th>' in s
@@ -188,7 +198,8 @@ def test_section_zoo(tmp_path: Path) -> None:
     assert sentences[0].startswith(f"At 60 s, {rc.esc(ranked[0]['model_id'])} ")
     v0 = ranked[0]["fill_rate_bias"][h60]
     word = "more" if v0["value"] > 0 else "less"
-    assert f"pp {word} often than the exact replay" in sentences[0] or "as often as" in sentences[0]
+    assert f"pp {word} often" in sentences[0] or "as often as" in sentences[0]
+    assert "in the exact replay" in sentences[0] or "as often as" in sentences[0]
     nh = len(rc.HORIZONS) + 1  # the real evaluation scores every horizon up to and including h_max
     assert s.count("Signed fill-rate bias by model at") == nh + 1  # never-cancel per horizon + cancel-bearing
     assert s.count('class="chart rel"') == len(rc.MODELS) * nh

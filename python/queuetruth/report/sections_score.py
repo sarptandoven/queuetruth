@@ -113,6 +113,15 @@ def header(ctx: Ctx) -> Raw:
             "<p>At least one data source is <code>synthetic_only</code> or <code>fixture_only</code>. The numbers "
             "below exercise the pipeline; they say nothing about the behaviour of a real venue.</p>" + srcs,
         )
+    elif level == "rules":
+        banner = callout(
+            WARN,
+            "Vendor data; venue rules validated on synthetic data only",
+            "<p>The data comes from a vendor file, but the venue rule set it was replayed with (for example "
+            "<code>cme</code>) has been validated on synthetic data only, not on a real session. The data is real; "
+            "what is not yet proven is how faithfully the rules (modify priority, snapshots, implied trades) "
+            "reproduce the venue's queue.</p>" + srcs,
+        )
     elif level == "assumed":
         banner = callout(
             WARN,

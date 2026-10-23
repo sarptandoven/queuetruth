@@ -1,7 +1,7 @@
 {
   "schema": "qt.dataset_manifest",
   "schema_version": 1,
-  "dataset_id": "ef3ff4f0fcbefe8f89f22aa7028e5fabe0a93219ddf85a32846976bf13089cb2",
+  "dataset_id": "9494997192a6566fbde8da36b058f38fc150cfa9b509d1a250bb3479dccdfccf",
   "kind": "mbo",
   "source_format": "synthetic",
   "venue": "nasdaq",
@@ -15,7 +15,7 @@
         {
           "path": "mbo/date=2026-06-15/instrument_id=1/part-00000.parquet",
           "rows": 49417,
-          "sha256": "0182f7d3e0fd145447b8be624e852cf4e91820546570651b85a964cfc1ed7f1d"
+          "sha256": "1371902d26734bd3c3eb291d0fd0672dc2b9b2460de3d7ee35bfc6836e7e0131"
         }
       ],
       "rows": 49417,
@@ -29,7 +29,7 @@
         {
           "path": "mbo/date=2026-06-15/instrument_id=2/part-00000.parquet",
           "rows": 49841,
-          "sha256": "4ca51b1d91f85b6928ac2d1ffa956c14ae82763f1127d59c9ed6411da83d6957"
+          "sha256": "9fd292cecb7af3d6a8dfc653a9626c8bd030900582d2652e95e81e68d3f917e6"
         }
       ],
       "rows": 49841,
@@ -43,7 +43,7 @@
         {
           "path": "mbo/date=2026-06-16/instrument_id=1/part-00000.parquet",
           "rows": 49364,
-          "sha256": "793a58ff3708f349f1a4e2d99c67a69e6b7c0f643018073f07e9280282f0b221"
+          "sha256": "ec5126bac88fc03db29ad1692e3e421f2e16bf17b18a20eb205462d7b23b922c"
         }
       ],
       "rows": 49364,
@@ -57,7 +57,7 @@
         {
           "path": "mbo/date=2026-06-16/instrument_id=2/part-00000.parquet",
           "rows": 49834,
-          "sha256": "8c68e34997f1cb3f3ba03b4504ed937f024b499953ed8a5a55ab799f38654129"
+          "sha256": "fd5d1a61933a1c50207d3a8712827dd55eed42ecaae8ee5ef97a727e2380d6f7"
         }
       ],
       "rows": 49834,
@@ -69,7 +69,7 @@
     "1": -9,
     "2": -9
   },
-  "created_by": "queuetruth-testkit 0.1.0",
+  "created_by": "queuetruth-testkit 0.1.1",
   "validation_status": "synthetic_only",
   "rule_set": null,
   "source_vintage": null

@@ -95,7 +95,11 @@ fn model_id_round_trip_and_canonical_form() {
 fn default_models_is_the_all_set() {
     let all = crate::default_models(Mode::Faithful, Exchange::Partial);
     let s: Vec<String> = all.iter().map(ToString::to_string).collect();
-    assert_eq!(s.len(), 17);
+    assert_eq!(s.len(), 16);
+    assert!(
+        !s.contains(&"hbt_power[exch=partial;mode=faithful;n=1]".to_owned()),
+        "duplicate of power3 n=1"
+    );
     assert_eq!(s[0], "hbt_risk_adverse[exch=partial;mode=faithful]");
     assert!(s.contains(&"hbt_power3[exch=partial;mode=faithful;n=2]".to_owned()));
     assert!(s.contains(&"databento_mc[k=-0.95;mode=faithful;particles=100]".to_owned()));
@@ -105,8 +109,8 @@ fn default_models_is_the_all_set() {
         assert!(crate::build(id).is_ok());
     }
     let c = crate::default_models(Mode::Corrected, Exchange::NoPartial);
-    assert_eq!(c[1].to_string(), "hbt_power[exch=no_partial;mode=corrected;n=1]");
-    assert_eq!(c[11].to_string(), "nt_queue_l2[mode=corrected]");
+    assert_eq!(c[1].to_string(), "hbt_power[exch=no_partial;mode=corrected;n=2]");
+    assert_eq!(c[10].to_string(), "nt_queue_l2[mode=corrected]");
     let e = crate::expand_models(
         &["all".into(), "hbt_power3[n=2]".into()],
         Mode::Faithful,
@@ -114,11 +118,30 @@ fn default_models_is_the_all_set() {
         50,
     )
     .unwrap();
-    assert_eq!(e.len(), 17);
+    assert_eq!(e.len(), 16);
     assert!(
         e.iter()
             .any(|m| m.to_string() == "databento_mc[k=-0.8;mode=faithful;particles=50]")
     );
+}
+
+#[test]
+fn unknown_family_suggests_the_closest_name() {
+    use crate::Family;
+    assert_eq!(Family::suggest("hbt_powr3"), Some("hbt_power3"));
+    assert_eq!(Family::suggest("power3"), Some("hbt_power3"));
+    assert_eq!(Family::suggest("nt_prob_tuch"), Some("nt_prob_touch"));
+    assert_eq!(Family::suggest("databento"), Some("databento_mc"));
+    assert_eq!(Family::suggest("zzzzzz"), None);
+    let e = ModelId::parse_with("hbt_powr3[n=2]", Mode::Faithful, Exchange::Partial, 100)
+        .err()
+        .map(|e| e.to_string())
+        .unwrap_or_default();
+    assert!(e.contains("did you mean \"hbt_power3\"?"), "{e}");
+    assert!(e.contains("--list-models"), "{e}");
+    for f in Family::ALL {
+        assert!(!f.summary().is_empty());
+    }
 }
 
 // ---- O-ZOO-1 ------------------------------------------------------------------------------------------------------

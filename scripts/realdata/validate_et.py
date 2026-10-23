@@ -862,7 +862,7 @@ def run_zoo(
 
 
 def rd_zoo(ctx: Ctx, rd: str) -> Check:
-    c = Check(rd, "zoo day one: 3,000 sampled + 3,000 et mirror shadows, 17 models, faithful and corrected")
+    c = Check(rd, "zoo day one: 3,000 sampled + 3,000 et mirror shadows, 16 models, faithful and corrected")
     s_samp = sample(ctx, "d1-sampled-3000", ctx.ds[DAY1], 3000, seed=0)
     s_mirror = ctx.et_path(DAY1, "fidelity", "shadows.csv")
     boards = {}
@@ -873,7 +873,7 @@ def rd_zoo(ctx: Ctx, rd: str) -> Check:
             pred = pq.read_table(find_table(out, "qt.zoo_predictions"))
             h_max = max(ints(pred["horizon_ns"]))
             mids = sorted(set(strs(pred["model_id"])))
-            c.eq(f"{name}: 17 models", len(mids), 17)
+            c.eq(f"{name}: 16 models", len(mids), 16)
             at = pred.filter(pc.equal(pred["horizon_ns"], h_max))
             m_ids, pf, tf = strs(at["model_id"]), at["p_fill"].to_pylist(), at["truth_filled"].to_pylist()
             sids = strs(at["shadow_id"])

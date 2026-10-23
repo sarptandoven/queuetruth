@@ -15,7 +15,7 @@ internal.
 
 Spec and summary models live in `queuetruth.schemas` and are documented field by field in [Schemas](schemas.md).
 
-Package version: `0.1.0`.
+Package version: `0.1.1`.
 
 ## `queuetruth`
 
@@ -291,12 +291,15 @@ Zoo evaluation against exact truth and Python baselines (SPEC 4.3 `queuetruth.ev
 | Name | Kind | Binding | Signature | Description |
 |---|---|---|---|---|
 | `abort_shares` | function |  | `(warnings: Iterable[str] \| None) -> dict[str, tuple[int, int]]` | Model id -> (aborted pairs, shadows) from a zoo summary's `hbt_312_abort: <model>: <n> of <N> shadow pair(s) ...` warning lines (faithful hbt #312 aborts, per (model, shadow) pair). |
+| `aborted_shadows` | function |  | `(predictions: pa.Table) -> set[str]` | Shadow ids with at least one `hbt_312_abort` row (a faithful hbt pair aborted at its #312 event). |
 | `assign_strata` | function | SPEC 4.3 | `(predictions: pa.Table) -> pa.Table` | Adds `queue_decile` and `liquidity_bucket` (SPEC 5.6). |
 | `baseline_predictions` | function | SPEC 4.3 | `(kind: str, train: pa.Table, test: pa.Table, horizons_ns: Sequence[int]) -> pa.Table` | `qt.zoo_predictions` rows of a Python baseline: climatology_aj \| mmw_bucket \| back_of_queue_rate. |
 | `bias_sentence` | function | SPEC 4.3 | `(entry: Any, horizon_ns: int \| None, aborts: dict[str, tuple[int, int]] \| None = None) -> str` | One plain-English sentence on the model's fill-rate bias at the horizon (module docstring). |
+| `common_population` | function |  | `(predictions: pa.Table) -> pa.Table` | The rows every model is scored on: without every row of a shadow that any faithful hbt pair aborted on at #312, so all models share one population (0.1.1; 0.1.0 dropped only the aborted pair's own rows). |
 | `evaluate_zoo` | function | SPEC 4.3 | `(predictions: pa.Table, *, h_max_ns: int, trajectory: pa.Table \| None = None, bootstrap_b: int = 1000, seed: int = 0, planned_life: pa.Table \| None = None) -> tuple[pa.Table, list[dict[str, Any]]]` | Metrics per model, horizon and stratum (`qt.zoo_errors`) and the leaderboard entries. `planned_life` is required (`QT-INPUT-001` without it, `QT-INPUT-002` when a predicted shadow has no row): label eligibility is never inferred from the outcome-flavoured `censored` column (audit ruling A2, E38 OC-7). |
 | `family` | function |  | `(model_id: str) -> str` | Family name of a ModelId (`hbt_power3[n=2]` -> `hbt_power3`). |
 | `join_features` | function | SPEC 4.3 | `(predictions: pa.Table, features: pa.Table, model_id: str \| None = None) -> pa.Table` | Shadow table: rows of one model of `qt.zoo_predictions` (default: the first) + landmark-0 feature columns. |
+| `leaderboard_population` | function |  | `(predictions: pa.Table, planned_life: pa.Table, h_max_ns: int) -> int` | Never-cancel shadows (no planned cancel before `ts_live + h_max`) with an exact arm in `common_population`: the shadows behind every leaderboard row. |
 | `planned_life_table` | function | SPEC 4.3 | `(shadow_ids: list[str], ts_cancel_planned: list[int \| None], ts_admin_end: list[int \| None]) -> pa.Table` | The `planned_life` input of `evaluate_zoo` (timestamps in ns UTC; None = none). |
 | `rank_leaderboard` | function | SPEC 4.3 | `(entries: Sequence[Any], horizon_ns: int \| None) -> list[Any]` | Entries sorted by absolute fill-rate bias at `horizon_ns`, then Brier, then model id. |
 | `sort_horizon` | function | SPEC 4.3 | `(horizons: Sequence[int], target_ns: int = 60000000000) -> int \| None` | The horizon the leaderboard is sorted at (module docstring). |

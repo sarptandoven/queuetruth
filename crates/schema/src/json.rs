@@ -693,6 +693,13 @@ pub struct LeaderboardEntry {
     pub qtrack_mae: Option<f64>,
     /// McNemar at h_max.
     pub mcnemar: McNemarSmall,
+    /// 0.1.1 (additive): exact fill rate by horizon, the truth Aalen-Johansen CIF of the leaderboard population
+    /// (the same for every model); `fill_rate_bias = model_fill_rate - exact_fill_rate`.
+    #[serde(default)]
+    pub exact_fill_rate: HMap,
+    /// 0.1.1 (additive): the model's fill rate by horizon, its mean forecast over the label-eligible rows.
+    #[serde(default)]
+    pub model_fill_rate: HMap,
 }
 
 /// Summary of `zoo`.
@@ -722,6 +729,14 @@ pub struct ZooSummary {
     /// `hbt_312_abort`); models without an abort are absent. The `hbt_312_abort: ` warning lines stay.
     #[serde(default)]
     pub hbt_312_aborts: IndexMap<String, u64>,
+    /// 0.1.1 (additive): shadows left out of every model's metrics because at least one faithful hbt pair aborted
+    /// on them at #312, so that every model is scored on one common population.
+    #[serde(default)]
+    pub n_excluded_hbt_312: u64,
+    /// 0.1.1 (additive): never-cancel shadows with an exact label in the leaderboard population (the same for every
+    /// model); null from the Rust runner, which does not evaluate.
+    #[serde(default)]
+    pub n_leaderboard: Option<u64>,
 }
 doc!(ZooSummary, "qt.zoo_summary");
 

@@ -116,7 +116,7 @@ def main() -> int:
                 *j,
             ],
         ),
-        # API[cli] zoo (hybrid), all 17 models
+        # API[cli] zoo (hybrid), all 16 models
         (
             "zoo",
             [

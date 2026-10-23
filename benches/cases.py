@@ -19,7 +19,6 @@ from qtbench.runner import Case, ProcRun
 
 ZOO_ALL = [
     "hbt_risk_adverse",
-    "hbt_power[n=1]",
     "hbt_power[n=2]",
     "hbt_power[n=3]",
     "hbt_power2[n=2]",
@@ -35,7 +34,7 @@ ZOO_ALL = [
     "databento_mc[k=-0.95]",
     "front_of_queue",
     "trade_through_only",
-]  # SPEC 5.3.4 (17)
+]  # SPEC 5.3.4 (16)
 
 DAY1 = {"dir": "out/itch-12302019", "midnight": 1577682000000000000, "records": 6_103_262, "date": "2019-12-30"}
 T71 = "SPEC 7.1"
@@ -261,7 +260,7 @@ def binding_overhead(ctx: Ctx, data: Path, tag: str) -> Group:
 
 
 def zoo_group(ctx: Ctx, data: Path, shadows: Path, tag: str, per_model: bool) -> list[Group]:
-    """Zoo: each of the 17 models alone (marginal = model - trade_through_only floor); all 17 at 1 and 4 threads."""
+    """Zoo: each of the 16 models alone (marginal = model - trade_through_only floor); all 16 at 1 and 4 threads."""
 
     def zoo(cid, models, threads, notes=None, target=None):
         # API[cli] zoo (hybrid): Rust run_zoo + Python qt.eval leaderboard -> qt.zoo_summary

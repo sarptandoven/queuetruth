@@ -60,6 +60,9 @@ fn cli_parse_covers_every_command_and_flag() {
             .collect();
         assert!(!mine.is_empty(), "no golden case for {:?}", info.path);
         for f in &info.flags {
+            if *f == "list-models" {
+                continue; // prints and exits instead of parsing (`zoo_list_models_exits_zero`)
+            }
             let flag = format!("--{f}");
             let alias = (*f == "format").then_some("--input-format");
             assert!(
@@ -70,6 +73,51 @@ fn cli_parse_covers_every_command_and_flag() {
             );
         }
     }
+}
+
+#[test]
+fn zoo_list_models_exits_zero() {
+    let a = |v: &[&str]| -> Vec<String> { v.iter().map(|s| (*s).to_owned()).collect() };
+    let x = parse(&a(&["queuetruth", "zoo", "--list-models"])).expect_err("prints and exits");
+    assert_eq!((x.code, x.to_stderr), (0, false));
+    assert!(x.text.starts_with("--models all (16 models;"), "{}", x.text);
+    assert!(x.text.contains("hbt_power3[n=2]") && !x.text.contains("  hbt_power[n=1] "));
+    let j = parse(&a(&["queuetruth", "zoo", "--list-models", "--format", "json"])).expect_err("json");
+    let v: Value = serde_json::from_str(&j.text).expect("one JSON document");
+    assert_eq!(v["all"].as_array().map(Vec::len), Some(16));
+    // without --list-models the zoo's required flags stay required
+    let e = parse(&a(&["queuetruth", "zoo", "--data", "d"])).expect_err("missing flags");
+    assert_eq!(e.code, 2);
+    assert!(e.text.contains("--shadows") && e.text.contains("--out"), "{}", e.text);
+}
+
+#[test]
+fn unit_less_durations_need_a_unit() {
+    let a = |v: &[&str]| -> Vec<String> { v.iter().map(|s| (*s).to_owned()).collect() };
+    let base = [
+        "queuetruth",
+        "shadows",
+        "sample",
+        "--data",
+        "d",
+        "--n",
+        "5",
+        "--out",
+        "o",
+    ];
+    let e = parse(&a(&[&base[..], &["--lifetime", "5"]].concat())).expect_err("unit-less");
+    assert!(
+        e.text.contains(r#"--lifetime: "5" has no unit; write 5s"#),
+        "{}",
+        e.text
+    );
+    let ok = parse_ok(&a(&[&base[..], &["--lifetime", "0"]].concat()));
+    assert_eq!(ok.args["lifetime_ns"], 0);
+    let ok = parse_ok(&a(&[&base[..], &["--lifetime", "5s", "--latency-ns", "250"]].concat()));
+    assert_eq!(
+        (ok.args["lifetime_ns"].as_i64(), ok.args["latency_ns"].as_i64()),
+        (Some(5_000_000_000), Some(250))
+    );
 }
 
 #[test]
@@ -408,7 +456,7 @@ fn usage_errors_and_help() {
     let sub = exit_of(&["queuetruth", "replay", "--help"]);
     assert_eq!((sub.code, sub.to_stderr), (0, false));
     let v = exit_of(&["queuetruth", "--version"]);
-    assert_eq!((v.code, v.text.trim()), (0, "queuetruth 0.1.0"));
+    assert_eq!((v.code, v.text.trim()), (0, "queuetruth 0.1.1"));
     for bad in [
         vec!["queuetruth", "replay", "--out", "o"],
         vec![

@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import Any
 
 from queuetruth.eval import DEFAULT_SORT_HORIZON_NS, bias_sentence, rank_leaderboard, sort_horizon
-from queuetruth.eval.leaderboard import duration_text, horizons_of
+from queuetruth.eval.leaderboard import duration_text, horizons_of, rates_at
 from queuetruth.schemas.models import LeaderboardEntry
 
 S = 1_000_000_000
@@ -70,4 +70,20 @@ def test_bias_sentences() -> None:
         "At 1 s, databento_mc[k=-0.8] fills as often as the exact replay (bias 0.0 pp)"
     )
     assert "has no fill-rate bias" in bias_sentence(by["no_estimate"], S)
+    # 0.1.1: with the two rates the bias reads against its base rate
+    rated = {
+        **by["hbt_power3[n=2]"],
+        "model_fill_rate": {str(60 * S): 0.103},
+        "exact_fill_rate": {str(60 * S): 0.110},
+    }
+    assert rates_at(rated, 60 * S) == (0.103, 0.110) and rates_at(by["front_of_queue"], 60 * S) == (None, None)
+    assert (
+        bias_sentence(rated, 60 * S)
+        == "At 60 s, hbt_power3[n=2] fills 10.3% of orders vs 11.0% in the exact replay, 0.7 pp less often (95% CI "
+        "-1.3 to -0.3 pp)."
+    )
+    flat = {**by["databento_mc[k=-0.8]"], "model_fill_rate": {str(S): 0.0004}, "exact_fill_rate": {str(S): 0.0004}}
+    assert bias_sentence(flat, S).startswith(
+        "At 1 s, databento_mc[k=-0.8] fills 0.04% of orders, as often as the exact replay (0.04%, bias 0.0 pp)"
+    )
     assert duration_text(300 * S) == "5 min" and duration_text(S // 10) == "100 ms"

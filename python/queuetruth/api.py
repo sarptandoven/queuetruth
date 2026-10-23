@@ -348,8 +348,8 @@ def _planned_life(out: Path) -> tuple[pa.Table, list[str]]:
 
 def _evaluate(
     preds: pa.Table, out: Path, *, h_max_ns: int, bootstrap_b: int, seed: int, trajectory: pa.Table | None
-) -> tuple[pa.Table, list[dict[str, Any]], list[str]]:
-    from queuetruth.eval import evaluate_zoo
+) -> tuple[pa.Table, list[dict[str, Any]], list[str], dict[str, Any]]:
+    from queuetruth.eval import aborted_shadows, evaluate_zoo, leaderboard_population
 
     planned, notes = _planned_life(out)
     errors, board = evaluate_zoo(
@@ -360,7 +360,11 @@ def _evaluate(
         seed=seed,
         planned_life=planned,
     )
-    return errors, board, notes
+    population = {
+        "n_excluded_hbt_312": len(aborted_shadows(preds)),
+        "n_leaderboard": leaderboard_population(preds, planned, h_max_ns),
+    }
+    return errors, board, notes, population
 
 
 def resolve_order_ids(value: str | Path | list[Any] | dict[str, Any], dataset: str | Path) -> list[dict[str, int]]:
@@ -385,7 +389,7 @@ def run_zoo(spec: s.ZooSpec | dict[str, Any]) -> m.ZooSummary:
         preds = pq.read_table(out / "zoo_predictions.parquet")
         traj_p = out / "zoo_trajectory.parquet"
         traj = pq.read_table(traj_p) if sp.write_trajectory and traj_p.exists() else None
-        errors, board, notes = _evaluate(
+        errors, board, notes, population = _evaluate(
             preds, out, h_max_ns=sp.h_max_ns, bootstrap_b=sp.bootstrap_b, seed=sp.seed, trajectory=traj
         )
         entry = m.FileEntry.model_validate(write_table(errors, out / "zoo_errors.parquet"))
@@ -395,6 +399,7 @@ def run_zoo(spec: s.ZooSpec | dict[str, Any]) -> m.ZooSummary:
                 "leaderboard": [m.LeaderboardEntry.model_validate(x) for x in board],
                 "files": files,
                 "warnings": [*summ.warnings, *notes],
+                **population,
             }
         )
         summary = m.ZooSummary.model_validate(summary.model_dump(mode="json"))
@@ -503,7 +508,8 @@ def _held_out(
     preds = pq.read_table(out / "held_out" / "zoo_predictions.parquet")
     preds = preds.filter(pa.array(_window_mask(preds, sp.test, dataset), pa.bool_()))
     warn = [f"held_out: fitted {fitted_id} vs default {base_id} on {preds.num_rows} test prediction rows"]
-    # faithful hbt #312: aborted (model, shadow) pairs are left out of the held-out metrics from the abort on
+    # faithful hbt #312: a shadow either model aborted on is left out of both models' held-out metrics (one common
+    # population, `queuetruth.eval.common_population`)
     warn += [f"held_out: {w}" for w in summ.warnings if w.startswith("hbt_312_abort: ")]
     if preds.num_rows == 0:
         return {}, {}, [*warn, "held_out: the test window holds no shadows"]
@@ -515,7 +521,7 @@ def _held_out(
     undefined = []
     for h in keys:
         preds_h = preds.filter(pc.equal(hcol, int(h)))
-        _, board, notes = _evaluate(
+        _, board, notes, _ = _evaluate(
             preds_h, out / "held_out", h_max_ns=int(h), bootstrap_b=sp.bootstrap.b, seed=sp.seed, trajectory=None
         )
         warn += [n for n in notes if n not in warn]

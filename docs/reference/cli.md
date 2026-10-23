@@ -98,7 +98,7 @@ Options:
       --midnight-ns <N>             local midnight as UTC ns (etcsv)
       --tz <TZ>                     session time zone: America/New_York or UTC
       --instruments <PATH>          etcsv instruments.csv
-      --price-exp <N>               price exponent
+      --price-exp <N>               price exponent [default: -9]
       --size-exp <N>                size exponent
       --tick-size <VALUE>           tick size (decimal)
       --lot-size <VALUE>            lot size (decimal)
@@ -111,7 +111,7 @@ Options:
       --quiet                       no progress or warnings on stderr
       --seed <seed>                 random seed (default 0)
       --threads <threads>           worker threads (outputs do not depend on it; default 1)
-      --verbose                     human output: every summary field after the answer
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth replay
@@ -131,29 +131,29 @@ Options:
       --amends <PATH>
           shadow amend file
       --latency <F,D,G>
-          shadow latency FEED,DECISION,GATEWAY (durations)
+          shadow latency FEED,DECISION,GATEWAY (durations) [default: 0,0,0]
       --jitter-ns <DURATION>
-          maximum uniform latency jitter
+          maximum uniform latency jitter [default: 0]
       --bbo <bbo>
-          BBO output [possible values: none, change, full]
+          BBO output [default: change] [possible values: none, change, full]
       --depth <N>
-          depth levels to write (0 = none)
+          depth levels to write (0 = none) [default: 0]
       --rank-oracle
           queue-rank oracle
       --sweep-gap-ns <DURATION>
-          sweep grouping gap
+          sweep grouping gap [default: 2ms]
       --trajectory <trajectory>
-          queue trajectory output [possible values: none, ahead, full]
+          queue trajectory output [default: ahead] [possible values: none, ahead, full]
       --race-window-ns <DURATION>
-          race window
+          race window [default: 0]
       --real-orders
           extract real-order lifecycles
       --l2-depth <N>
-          L2 view depth (0 = all levels)
+          L2 view depth (0 = all levels) [default: 10]
       --l2-cadence-ns <DURATION>
-          L2 conflation cadence (0 = per event)
+          L2 conflation cadence (0 = per event) [default: 0]
       --l2-trades <l2-trades>
-          trades before or after depth [possible values: before, after]
+          trades before or after depth [default: before] [possible values: before, after]
       --write-l2
           write the synthesized L2 view
       --parity-trades
@@ -165,7 +165,7 @@ Options:
       --strict
           exit 1 on any invariant, anomaly or parity mismatch
       --fill-rule <fill-rule>
-          shadow fill rule: exact (audit rulings) or et (parity with the earlier et prototype, RD-5) [possible values: exact, et]
+          shadow fill rule: exact (audit rulings) or et (parity with the earlier et prototype, RD-5) [default: exact] [possible values: exact, et]
       --hidden-print-policy <hidden-print-policy>
           hidden prints (default: behind-and-through on nasdaq, ignore elsewhere) [possible values: ignore, behind, behind-and-through]
       --exclude-order-ids <PATH>
@@ -183,7 +183,7 @@ Options:
       --threads <threads>
           worker threads (outputs do not depend on it; default 1)
       --verbose
-          human output: every summary field after the answer
+          human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth shadows
@@ -206,7 +206,7 @@ Options:
       --quiet                       no progress or warnings on stderr
       --seed <seed>                 random seed (default 0)
       --threads <threads>           worker threads (outputs do not depend on it; default 1)
-      --verbose                     human output: every summary field after the answer
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth shadows sample
@@ -220,21 +220,21 @@ Options:
       --data <PATH>                 dataset directory
       --n <N>                       number of shadows
       --out <VALUE>                 output shadow spec file
-      --placements <O:W,...>        OFFSET:WEIGHT,...
-      --qty <RULES>                 lots:N:WEIGHT,median:WEIGHT
-      --lifetime <DURATION>         shadow lifetime
-      --latency-ns <DURATION>       shadow latency
-      --window-open-s <N>           seconds after the open excluded
-      --window-close-s <N>          seconds before the close excluded
-      --allocation <allocation>     allocation across instrument-days [possible values: equal, proportional]
-      --sides <A,...>               sides to sample (B,A)
+      --placements <O:W,...>        OFFSET:WEIGHT,... [default: 0:0.6,-1:0.2,-2:0.1,1:0.1]
+      --qty <RULES>                 lots:N:WEIGHT,median:WEIGHT [default: lots:1:0.5,median:0.5]
+      --lifetime <DURATION>         shadow lifetime [default: 5m]
+      --latency-ns <DURATION>       shadow latency [default: 0]
+      --window-open-s <N>           seconds after the open excluded [default: 300]
+      --window-close-s <N>          seconds before the close excluded [default: 600]
+      --allocation <allocation>     allocation across instrument-days [default: equal] [possible values: equal, proportional]
+      --sides <A,...>               sides to sample (B,A) [default: B,A]
   -h, --help                        Print help
       --log-level <log_level>       stderr log level (default warn) [possible values: error, warn, info, debug]
       --output-format <human|json>  output format (also --format human|json) [possible values: human, json]
       --quiet                       no progress or warnings on stderr
       --seed <seed>                 random seed (default 0)
       --threads <threads>           worker threads (outputs do not depend on it; default 1)
-      --verbose                     human output: every summary field after the answer
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth shadows mirror-real
@@ -247,7 +247,7 @@ Usage: queuetruth shadows mirror-real [OPTIONS] --data <PATH> --out <VALUE>
 Options:
       --data <PATH>                 dataset directory
       --out <VALUE>                 output shadow spec file
-      --n <N>                       number of shadows
+      --n <N>                       number of shadows [default: 3000]
       --no-stratify                 do not stratify by instrument and outcome
   -h, --help                        Print help
       --log-level <log_level>       stderr log level (default warn) [possible values: error, warn, info, debug]
@@ -255,7 +255,7 @@ Options:
       --quiet                       no progress or warnings on stderr
       --seed <seed>                 random seed (default 0)
       --threads <threads>           worker threads (outputs do not depend on it; default 1)
-      --verbose                     human output: every summary field after the answer
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth shadows from-live
@@ -276,7 +276,7 @@ Options:
       --quiet                       no progress or warnings on stderr
       --seed <seed>                 random seed (default 0)
       --threads <threads>           worker threads (outputs do not depend on it; default 1)
-      --verbose                     human output: every summary field after the answer
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth zoo
@@ -284,36 +284,37 @@ Options:
 ```text
 run queue models on the L2 view and compare with exact truth
 
-Usage: queuetruth zoo [OPTIONS] --data <PATH> --shadows <PATH> --out <VALUE>
+Usage: queuetruth zoo [OPTIONS]
 
 Options:
-      --data <PATH>                 dataset directory
-      --shadows <PATH>              shadow spec file
-      --out <VALUE>                 output directory
-      --models <A,...>              all or model ids
-      --mode <mode>                 zoo mode [possible values: faithful, corrected]
-      --exchange <exchange>         hftbacktest exchange model [possible values: partial, no-partial]
-      --horizons <D,...>            evaluation horizons (durations)
-      --h-max <DURATION>            maximum horizon
-      --l2-depth <N>                L2 view depth (0 = all levels)
-      --l2-cadence-ns <DURATION>    L2 conflation cadence (0 = per event)
-      --l2-trades <l2-trades>       trades before or after depth [possible values: before, after]
-      --particles <N>               particles of Monte Carlo models
+      --data <PATH>                 dataset directory (required)
+      --shadows <PATH>              shadow spec file (required)
+      --out <VALUE>                 output directory (required)
+      --models <A,...>              all or model ids [default: all]
+      --mode <mode>                 zoo mode [default: faithful] [possible values: faithful, corrected]
+      --exchange <exchange>         hftbacktest exchange model [default: partial] [possible values: partial, no-partial]
+      --horizons <D,...>            evaluation horizons (durations) [default: 100ms,1s,10s,60s (h_max is always added)]
+      --h-max <DURATION>            maximum horizon [default: 5m]
+      --l2-depth <N>                L2 view depth (0 = all levels) [default: 10]
+      --l2-cadence-ns <DURATION>    L2 conflation cadence (0 = per event) [default: 0]
+      --l2-trades <l2-trades>       trades before or after depth [default: before] [possible values: before, after]
+      --particles <N>               particles of Monte Carlo models [default: 100]
       --no-fills                    do not write zoo_fills.parquet
       --write-trajectory            write zoo_trajectory.parquet
-      --latency <F,D,G>             shadow latency FEED,DECISION,GATEWAY (durations)
-      --jitter-ns <DURATION>        maximum uniform latency jitter
-      --bootstrap-b <N>             bootstrap resamples
+      --latency <F,D,G>             shadow latency FEED,DECISION,GATEWAY (durations) [default: 0,0,0]
+      --jitter-ns <DURATION>        maximum uniform latency jitter [default: 0]
+      --bootstrap-b <N>             bootstrap resamples [default: 1000]
       --amends <PATH>               qt.shadow_amend file of the shadows (priority-keeping size reductions)
       --exclude-order-ids <PATH>    real orders removed from the tape and the L2 view (A1): .json list, or one id / instrument_id,order_id per line
       --sort-horizon <DURATION>     leaderboard sort horizon in the terminal output (default 60s)
+      --list-models                 print the model ids --models accepts (the `all` set first) and exit
   -h, --help                        Print help
       --log-level <log_level>       stderr log level (default warn) [possible values: error, warn, info, debug]
       --output-format <human|json>  output format (also --format human|json) [possible values: human, json]
       --quiet                       no progress or warnings on stderr
       --seed <seed>                 random seed (default 0)
       --threads <threads>           worker threads (outputs do not depend on it; default 1)
-      --verbose                     human output: every summary field after the answer
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth calibrate
@@ -337,7 +338,7 @@ Options:
       --quiet                       no progress or warnings on stderr
       --seed <seed>                 random seed (default 0)
       --threads <threads>           worker threads (outputs do not depend on it; default 1)
-      --verbose                     human output: every summary field after the answer
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth calibrate alloc
@@ -361,25 +362,25 @@ Options:
       --test <WINDOW>
           test window: dates or blocks:I-J/N
       --mode <mode>
-          zoo mode [possible values: faithful, corrected]
+          zoo mode [default: faithful] [possible values: faithful, corrected]
       --exchange <exchange>
-          hftbacktest exchange model [possible values: partial, no-partial]
+          hftbacktest exchange model [default: partial] [possible values: partial, no-partial]
       --l2-depth <N>
-          L2 view depth (0 = all levels)
+          L2 view depth (0 = all levels) [default: 10]
       --l2-cadence-ns <DURATION>
-          L2 conflation cadence (0 = per event)
+          L2 conflation cadence (0 = per event) [default: 0]
       --l2-trades <l2-trades>
-          trades before or after depth [possible values: before, after]
+          trades before or after depth [default: before] [possible values: before, after]
       --bootstrap-b <N>
           bootstrap resamples
       --bootstrap-block <bootstrap-block>
-          bootstrap block [possible values: auto, day, 30min]
+          bootstrap block [default: auto] [possible values: auto, day, 30min]
       --particles <N>
-          particles of Monte Carlo models
+          particles of Monte Carlo models [default: 100]
       --horizons <D,...>
-          evaluation horizons (durations)
+          evaluation horizons (durations) [default: 100ms,1s,10s,60s (h_max is always added)]
       --h-max <DURATION>
-          maximum horizon
+          maximum horizon [default: 5m]
   -h, --help
           Print help
       --log-level <log_level>
@@ -393,7 +394,7 @@ Options:
       --threads <threads>
           worker threads (outputs do not depend on it; default 1)
       --verbose
-          human output: every summary field after the answer
+          human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth calibrate survival
@@ -417,25 +418,25 @@ Options:
       --test <WINDOW>
           test window: dates or blocks:I-J/N
       --mode <mode>
-          zoo mode [possible values: faithful, corrected]
+          zoo mode [default: faithful] [possible values: faithful, corrected]
       --exchange <exchange>
-          hftbacktest exchange model [possible values: partial, no-partial]
+          hftbacktest exchange model [default: partial] [possible values: partial, no-partial]
       --l2-depth <N>
-          L2 view depth (0 = all levels)
+          L2 view depth (0 = all levels) [default: 10]
       --l2-cadence-ns <DURATION>
-          L2 conflation cadence (0 = per event)
+          L2 conflation cadence (0 = per event) [default: 0]
       --l2-trades <l2-trades>
-          trades before or after depth [possible values: before, after]
+          trades before or after depth [default: before] [possible values: before, after]
       --bootstrap-b <N>
           bootstrap resamples
       --bootstrap-block <bootstrap-block>
-          bootstrap block [possible values: auto, day, 30min]
+          bootstrap block [default: auto] [possible values: auto, day, 30min]
       --particles <N>
-          particles of Monte Carlo models
+          particles of Monte Carlo models [default: 100]
       --horizons <D,...>
-          evaluation horizons (durations)
+          evaluation horizons (durations) [default: 100ms,1s,10s,60s (h_max is always added)]
       --h-max <DURATION>
-          maximum horizon
+          maximum horizon [default: 5m]
   -h, --help
           Print help
       --log-level <log_level>
@@ -449,7 +450,7 @@ Options:
       --threads <threads>
           worker threads (outputs do not depend on it; default 1)
       --verbose
-          human output: every summary field after the answer
+          human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth calibrate nt-touch
@@ -473,25 +474,25 @@ Options:
       --test <WINDOW>
           test window: dates or blocks:I-J/N
       --mode <mode>
-          zoo mode [possible values: faithful, corrected]
+          zoo mode [default: faithful] [possible values: faithful, corrected]
       --exchange <exchange>
-          hftbacktest exchange model [possible values: partial, no-partial]
+          hftbacktest exchange model [default: partial] [possible values: partial, no-partial]
       --l2-depth <N>
-          L2 view depth (0 = all levels)
+          L2 view depth (0 = all levels) [default: 10]
       --l2-cadence-ns <DURATION>
-          L2 conflation cadence (0 = per event)
+          L2 conflation cadence (0 = per event) [default: 0]
       --l2-trades <l2-trades>
-          trades before or after depth [possible values: before, after]
+          trades before or after depth [default: before] [possible values: before, after]
       --bootstrap-b <N>
           bootstrap resamples
       --bootstrap-block <bootstrap-block>
-          bootstrap block [possible values: auto, day, 30min]
+          bootstrap block [default: auto] [possible values: auto, day, 30min]
       --particles <N>
-          particles of Monte Carlo models
+          particles of Monte Carlo models [default: 100]
       --horizons <D,...>
-          evaluation horizons (durations)
+          evaluation horizons (durations) [default: 100ms,1s,10s,60s (h_max is always added)]
       --h-max <DURATION>
-          maximum horizon
+          maximum horizon [default: 5m]
   -h, --help
           Print help
       --log-level <log_level>
@@ -505,7 +506,7 @@ Options:
       --threads <threads>
           worker threads (outputs do not depend on it; default 1)
       --verbose
-          human output: every summary field after the answer
+          human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth calibrate latency
@@ -524,7 +525,7 @@ Options:
       --quiet                       no progress or warnings on stderr
       --seed <seed>                 random seed (default 0)
       --threads <threads>           worker threads (outputs do not depend on it; default 1)
-      --verbose                     human output: every summary field after the answer
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth calibrate-live
@@ -544,35 +545,35 @@ Options:
       --out <VALUE>
           output directory
       --entry <entry>
-          entry time rule [possible values: exchange-ack, send-plus-latency]
+          entry time rule [default: exchange-ack] [possible values: exchange-ack, send-plus-latency]
       --latency <F,D,G>
           shadow latency FEED,DECISION,GATEWAY (durations)
       --jitter-ns <DURATION>
-          maximum uniform latency jitter
+          maximum uniform latency jitter [default: 0]
       --mode <mode>
-          zoo mode [possible values: faithful, corrected]
+          zoo mode [default: faithful] [possible values: faithful, corrected]
       --exchange <exchange>
-          hftbacktest exchange model [possible values: partial, no-partial]
+          hftbacktest exchange model [default: partial] [possible values: partial, no-partial]
       --l2-depth <N>
-          L2 view depth (0 = all levels)
+          L2 view depth (0 = all levels) [default: 10]
       --l2-cadence-ns <DURATION>
-          L2 conflation cadence (0 = per event)
+          L2 conflation cadence (0 = per event) [default: 0]
       --l2-trades <l2-trades>
-          trades before or after depth [possible values: before, after]
+          trades before or after depth [default: before] [possible values: before, after]
       --horizons <D,...>
-          evaluation horizons (durations)
+          evaluation horizons (durations) [default: 100ms,1s,10s,60s (h_max is always added)]
       --window <DURATION>
-          evaluation window H
+          evaluation window H [default: 60s]
       --train <WINDOW>
           train window: dates or blocks:I-J/N
       --test <WINDOW>
           test window: dates or blocks:I-J/N
       --particles <N>
-          particles of Monte Carlo models
+          particles of Monte Carlo models [default: 100]
       --bootstrap-b <N>
           bootstrap resamples
       --bootstrap-block <bootstrap-block>
-          bootstrap block [possible values: auto, day, 30min]
+          bootstrap block [default: auto] [possible values: auto, day, 30min]
       --match-window-ns <DURATION>
           own-order twin match window (default 1ms)
       --no-self-exclude
@@ -590,7 +591,7 @@ Options:
       --threads <threads>
           worker threads (outputs do not depend on it; default 1)
       --verbose
-          human output: every summary field after the answer
+          human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth features
@@ -604,23 +605,23 @@ Options:
       --data <PATH>                 dataset directory
       --out <VALUE>                 output directory
       --shadows <PATH>              shadow spec file
-      --population <population>     shadows or real orders [possible values: shadows, real-orders]
+      --population <population>     shadows or real orders [default: shadows] [possible values: shadows, real-orders]
       --n-real <N>                  number of real orders
-      --landmarks <D,...>           landmarks (durations)
-      --cancel-away-ticks <N>       policy cancel distance in ticks (0 = never cancel, e.g. for the zoo comparison of fit-hazard)
-      --h-max <DURATION>            maximum horizon
+      --landmarks <D,...>           landmarks (durations) [default: 0,1s,5s]
+      --cancel-away-ticks <N>       policy cancel distance in ticks (0 = never cancel, e.g. for the zoo comparison of fit-hazard) [default: 2]
+      --h-max <DURATION>            maximum horizon [default: 60s]
       --no-privileged               omit exact-queue columns
-      --trackers <A,...>            tracker model ids
-      --l2-depth <N>                L2 view depth (0 = all levels)
-      --l2-cadence-ns <DURATION>    L2 conflation cadence (0 = per event)
-      --l2-trades <l2-trades>       trades before or after depth [possible values: before, after]
+      --trackers <A,...>            tracker model ids [default: hbt_risk_adverse,hbt_power3[n=1],hbt_power3[n=3],hbt_log2]
+      --l2-depth <N>                L2 view depth (0 = all levels) [default: 10]
+      --l2-cadence-ns <DURATION>    L2 conflation cadence (0 = per event) [default: 0]
+      --l2-trades <l2-trades>       trades before or after depth [default: before] [possible values: before, after]
   -h, --help                        Print help
       --log-level <log_level>       stderr log level (default warn) [possible values: error, warn, info, debug]
       --output-format <human|json>  output format (also --format human|json) [possible values: human, json]
       --quiet                       no progress or warnings on stderr
       --seed <seed>                 random seed (default 0)
       --threads <threads>           worker threads (outputs do not depend on it; default 1)
-      --verbose                     human output: every summary field after the answer
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth fit-hazard
@@ -633,13 +634,13 @@ Usage: queuetruth fit-hazard [OPTIONS] --features <PATH> --out <VALUE>
 Options:
       --features <PATH>                features directory or file
       --out <VALUE>                    output directory
-      --split <split>                  split scheme [possible values: auto, days, blocks]
-      --n-blocks <N>                   blocks per day
-      --embargo <DURATION>             embargo
+      --split <split>                  split scheme [default: auto] [possible values: auto, days, blocks]
+      --n-blocks <N>                   blocks per day [default: 5]
+      --embargo <DURATION>             embargo [default: 60s]
       --privileged                     use exact-queue features (upper bound)
-      --recalibration <recalibration>  recalibration [possible values: isotonic, none]
+      --recalibration <recalibration>  recalibration [default: isotonic] [possible values: isotonic, none]
       --grid <D,...>                   time grid (durations)
-      --bootstrap-b <N>                bootstrap resamples
+      --bootstrap-b <N>                bootstrap resamples [default: 1000]
       --zoo-predictions <PATH>         qt.zoo_predictions for zoo_comparison
       --zoo-shadows <PATH>             qt.zoo_shadows of those predictions (default: zoo_shadows.parquet next to them)
   -h, --help                           Print help
@@ -648,7 +649,7 @@ Options:
       --quiet                          no progress or warnings on stderr
       --seed <seed>                    random seed (default 0)
       --threads <threads>              worker threads (outputs do not depend on it; default 1)
-      --verbose                        human output: every summary field after the answer
+      --verbose                        human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth live
@@ -670,7 +671,7 @@ Options:
       --quiet                       no progress or warnings on stderr
       --seed <seed>                 random seed (default 0)
       --threads <threads>           worker threads (outputs do not depend on it; default 1)
-      --verbose                     human output: every summary field after the answer
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth live import
@@ -702,7 +703,7 @@ Options:
       --quiet                          no progress or warnings on stderr
       --seed <seed>                    random seed (default 0)
       --threads <threads>              worker threads (outputs do not depend on it; default 1)
-      --verbose                        human output: every summary field after the answer
+      --verbose                        human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth live validate
@@ -720,7 +721,7 @@ Options:
       --quiet                       no progress or warnings on stderr
       --seed <seed>                 random seed (default 0)
       --threads <threads>           worker threads (outputs do not depend on it; default 1)
-      --verbose                     human output: every summary field after the answer
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth score
@@ -744,37 +745,37 @@ Options:
       --data <PATH>
           dataset directory
       --entry <entry>
-          entry time rule [possible values: exchange-ack, send-plus-latency]
+          entry time rule [default: exchange-ack] [possible values: exchange-ack, send-plus-latency]
       --latency <F,D,G>
           shadow latency FEED,DECISION,GATEWAY (durations)
       --jitter-ns <DURATION>
-          maximum uniform latency jitter
+          maximum uniform latency jitter [default: 0]
       --markout-horizons <D,...>
           markout horizons
       --markout-refs <A,...>
-          markout references (mid,microprice)
+          markout references (mid,microprice) [default: mid]
       --ttf-horizons <D,...>
-          time-to-fill horizons
+          time-to-fill horizons [default: 100ms,1s,10s,60s]
       --bootstrap-b <N>
           bootstrap resamples
       --bootstrap-block <bootstrap-block>
-          bootstrap block [possible values: auto, day, 30min]
+          bootstrap block [default: auto] [possible values: auto, day, 30min]
       --fdr <fdr>
-          FDR method [possible values: bh, by]
+          FDR method [default: bh] [possible values: bh, by]
       --q <X>
-          FDR level
+          FDR level [default: 0.05]
       --fill-rate-margin <X>
-          TOST fill-rate margin
+          TOST fill-rate margin [default: 0.02]
       --markout-margin-ticks <X>
-          TOST markout margin
+          TOST markout margin [default: 0.25]
       --markout-horizon <DURATION>
-          TOST markout horizon
+          TOST markout horizon [default: 1s]
       --fail-abs-bias <X>
           exit 1 if |fill-rate bias| exceeds X (a fraction, e.g. 0.02 = 2 pp; or percentage points: 2pp)
       --fail-not-equivalent
           exit 1 unless equivalent
       --perm-b <N>
-          permutation resamples
+          permutation resamples [default: 2000]
       --l2-depth <N>
           L2 view depth (0 = all levels)
       --l2-cadence-ns <DURATION>
@@ -800,7 +801,7 @@ Options:
       --threads <threads>
           worker threads (outputs do not depend on it; default 1)
       --verbose
-          human output: every summary field after the answer
+          human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth report
@@ -813,8 +814,8 @@ Usage: queuetruth report [OPTIONS] --in <VALUE> --out <VALUE>
 Options:
       --in <VALUE>                  output directory (repeatable)
       --out <VALUE>                 output HTML file
-      --title <VALUE>               report title
-      --max-why <N>                 maximum why traces
+      --title <VALUE>               report title [default: queuetruth report]
+      --max-why <N>                 maximum why traces [default: 20]
       --sort-horizon <DURATION>     zoo leaderboard sort horizon (default 60s)
   -h, --help                        Print help
       --log-level <log_level>       stderr log level (default warn) [possible values: error, warn, info, debug]
@@ -822,7 +823,7 @@ Options:
       --quiet                       no progress or warnings on stderr
       --seed <seed>                 random seed (default 0)
       --threads <threads>           worker threads (outputs do not depend on it; default 1)
-      --verbose                     human output: every summary field after the answer
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth dq
@@ -870,7 +871,7 @@ Options:
       --threads <threads>
           worker threads (outputs do not depend on it; default 1)
       --verbose
-          human output: every summary field after the answer
+          human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth referee
@@ -892,7 +893,7 @@ Options:
       --quiet                       no progress or warnings on stderr
       --seed <seed>                 random seed (default 0)
       --threads <threads>           worker threads (outputs do not depend on it; default 1)
-      --verbose                     human output: every summary field after the answer
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth referee run
@@ -908,16 +909,16 @@ Options:
       --sim-fills <PATH>            simulator fills (live-log dir or qt.shadow_fills)
       --out <VALUE>                 output directory
       --simulator <NAME[@VER]>      NAME[@VERSION]
-      --max-discordant <N>          tolerated discordant orders
-      --max-qty-mismatch <N>        tolerated qty mismatches
-      --max-ttf-err-ns <DURATION>   tolerated |ttf error|
+      --max-discordant <N>          tolerated discordant orders [default: 0]
+      --max-qty-mismatch <N>        tolerated qty mismatches [default: 0]
+      --max-ttf-err-ns <DURATION>   tolerated |ttf error| [default: 0]
   -h, --help                        Print help
       --log-level <log_level>       stderr log level (default warn) [possible values: error, warn, info, debug]
       --output-format <human|json>  output format (also --format human|json) [possible values: human, json]
       --quiet                       no progress or warnings on stderr
       --seed <seed>                 random seed (default 0)
       --threads <threads>           worker threads (outputs do not depend on it; default 1)
-      --verbose                     human output: every summary field after the answer
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth referee fixtures
@@ -935,7 +936,7 @@ Options:
       --quiet                       no progress or warnings on stderr
       --seed <seed>                 random seed (default 0)
       --threads <threads>           worker threads (outputs do not depend on it; default 1)
-      --verbose                     human output: every summary field after the answer
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth fixtures
@@ -956,7 +957,7 @@ Options:
       --quiet                       no progress or warnings on stderr
       --seed <seed>                 random seed (default 0)
       --threads <threads>           worker threads (outputs do not depend on it; default 1)
-      --verbose                     human output: every summary field after the answer
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth fixtures synth
@@ -976,7 +977,7 @@ Options:
       --quiet                       no progress or warnings on stderr
       --seed <seed>                 random seed (default 0)
       --threads <threads>           worker threads (outputs do not depend on it; default 1)
-      --verbose                     human output: every summary field after the answer
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth why
@@ -992,7 +993,7 @@ Options:
       --shadow-id <VALUE>           shadow id
       --live <PATH>                 canonical live-log directory
       --order-key <VALUE>           live order key
-      --max-events <N>              maximum events
+      --max-events <N>              maximum events [default: 5000]
       --out <VALUE>                 output JSON file
       --model <VALUE>               zoo model whose queue estimate is shown next to the exact queue
       --zoo <VALUE>                 zoo output directory to read the model trajectory from (with --write-trajectory)
@@ -1002,7 +1003,7 @@ Options:
       --quiet                       no progress or warnings on stderr
       --seed <seed>                 random seed (default 0)
       --threads <threads>           worker threads (outputs do not depend on it; default 1)
-      --verbose                     human output: every summary field after the answer
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth export
@@ -1027,7 +1028,7 @@ Options:
       --quiet                       no progress or warnings on stderr
       --seed <seed>                 random seed (default 0)
       --threads <threads>           worker threads (outputs do not depend on it; default 1)
-      --verbose                     human output: every summary field after the answer
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth export hftbacktest
@@ -1047,7 +1048,7 @@ Options:
       --quiet                       no progress or warnings on stderr
       --seed <seed>                 random seed (default 0)
       --threads <threads>           worker threads (outputs do not depend on it; default 1)
-      --verbose                     human output: every summary field after the answer
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth export nautilus
@@ -1067,7 +1068,7 @@ Options:
       --quiet                       no progress or warnings on stderr
       --seed <seed>                 random seed (default 0)
       --threads <threads>           worker threads (outputs do not depend on it; default 1)
-      --verbose                     human output: every summary field after the answer
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth export replay-schedule
@@ -1091,7 +1092,7 @@ Options:
       --quiet                       no progress or warnings on stderr
       --seed <seed>                 random seed (default 0)
       --threads <threads>           worker threads (outputs do not depend on it; default 1)
-      --verbose                     human output: every summary field after the answer
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth export l2-npz
@@ -1106,17 +1107,17 @@ Options:
       --instrument-id <N>           instrument id
       --date <VALUE>                session date YYYY-MM-DD
       --out <VALUE>                 output .npz file
-      --l2-depth <N>                L2 view depth (0 = all levels)
-      --l2-cadence-ns <DURATION>    L2 conflation cadence (0 = per event)
-      --l2-trades <l2-trades>       trades before or after depth [possible values: before, after]
-      --feed-latency-ns <DURATION>  local_ts = ts_recv + latency
+      --l2-depth <N>                L2 view depth (0 = all levels) [default: 10]
+      --l2-cadence-ns <DURATION>    L2 conflation cadence (0 = per event) [default: 0]
+      --l2-trades <l2-trades>       trades before or after depth [default: before] [possible values: before, after]
+      --feed-latency-ns <DURATION>  local_ts = ts_recv + latency [default: 0]
   -h, --help                        Print help
       --log-level <log_level>       stderr log level (default warn) [possible values: error, warn, info, debug]
       --output-format <human|json>  output format (also --format human|json) [possible values: human, json]
       --quiet                       no progress or warnings on stderr
       --seed <seed>                 random seed (default 0)
       --threads <threads>           worker threads (outputs do not depend on it; default 1)
-      --verbose                     human output: every summary field after the answer
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth export latency-npz
@@ -1135,7 +1136,7 @@ Options:
       --quiet                       no progress or warnings on stderr
       --seed <seed>                 random seed (default 0)
       --threads <threads>           worker threads (outputs do not depend on it; default 1)
-      --verbose                     human output: every summary field after the answer
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth jobs
@@ -1160,7 +1161,7 @@ Options:
       --quiet                       no progress or warnings on stderr
       --seed <seed>                 random seed (default 0)
       --threads <threads>           worker threads (outputs do not depend on it; default 1)
-      --verbose                     human output: every summary field after the answer
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth jobs submit
@@ -1184,7 +1185,7 @@ Options:
       --quiet                       no progress or warnings on stderr
       --seed <seed>                 random seed (default 0)
       --threads <threads>           worker threads (outputs do not depend on it; default 1)
-      --verbose                     human output: every summary field after the answer
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth jobs status
@@ -1205,7 +1206,7 @@ Options:
       --quiet                       no progress or warnings on stderr
       --seed <seed>                 random seed (default 0)
       --threads <threads>           worker threads (outputs do not depend on it; default 1)
-      --verbose                     human output: every summary field after the answer
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth jobs wait
@@ -1226,7 +1227,7 @@ Options:
       --quiet                       no progress or warnings on stderr
       --seed <seed>                 random seed (default 0)
       --threads <threads>           worker threads (outputs do not depend on it; default 1)
-      --verbose                     human output: every summary field after the answer
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth jobs files
@@ -1247,7 +1248,7 @@ Options:
       --quiet                       no progress or warnings on stderr
       --seed <seed>                 random seed (default 0)
       --threads <threads>           worker threads (outputs do not depend on it; default 1)
-      --verbose                     human output: every summary field after the answer
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth jobs download
@@ -1269,7 +1270,7 @@ Options:
       --quiet                       no progress or warnings on stderr
       --seed <seed>                 random seed (default 0)
       --threads <threads>           worker threads (outputs do not depend on it; default 1)
-      --verbose                     human output: every summary field after the answer
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth schema
@@ -1291,7 +1292,7 @@ Options:
       --quiet                       no progress or warnings on stderr
       --seed <seed>                 random seed (default 0)
       --threads <threads>           worker threads (outputs do not depend on it; default 1)
-      --verbose                     human output: every summary field after the answer
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth schema list
@@ -1308,7 +1309,7 @@ Options:
       --quiet                       no progress or warnings on stderr
       --seed <seed>                 random seed (default 0)
       --threads <threads>           worker threads (outputs do not depend on it; default 1)
-      --verbose                     human output: every summary field after the answer
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth schema show
@@ -1328,7 +1329,7 @@ Options:
       --quiet                       no progress or warnings on stderr
       --seed <seed>                 random seed (default 0)
       --threads <threads>           worker threads (outputs do not depend on it; default 1)
-      --verbose                     human output: every summary field after the answer
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth doctor
@@ -1345,7 +1346,7 @@ Options:
       --quiet                       no progress or warnings on stderr
       --seed <seed>                 random seed (default 0)
       --threads <threads>           worker threads (outputs do not depend on it; default 1)
-      --verbose                     human output: every summary field after the answer
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth mcp
@@ -1366,7 +1367,7 @@ Options:
       --quiet                       no progress or warnings on stderr
       --seed <seed>                 random seed (default 0)
       --threads <threads>           worker threads (outputs do not depend on it; default 1)
-      --verbose                     human output: every summary field after the answer
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
 ```
 
 ## queuetruth mcp serve
@@ -1385,5 +1386,5 @@ Options:
       --quiet                       no progress or warnings on stderr
       --seed <seed>                 random seed (default 0)
       --threads <threads>           worker threads (outputs do not depend on it; default 1)
-      --verbose                     human output: every summary field after the answer
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
 ```

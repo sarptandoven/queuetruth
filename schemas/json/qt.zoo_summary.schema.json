@@ -186,6 +186,38 @@
         },
         "mcnemar": {
           "$ref": "#/$defs/McNemarSmall"
+        },
+        "exact_fill_rate": {
+          "patternProperties": {
+            "^[0-9]+$": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "title": "Exact Fill Rate",
+          "type": "object"
+        },
+        "model_fill_rate": {
+          "patternProperties": {
+            "^[0-9]+$": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "title": "Model Fill Rate",
+          "type": "object"
         }
       },
       "required": [
@@ -297,6 +329,23 @@
       },
       "title": "Hbt 312 Aborts",
       "type": "object"
+    },
+    "n_excluded_hbt_312": {
+      "default": 0,
+      "title": "N Excluded Hbt 312",
+      "type": "integer"
+    },
+    "n_leaderboard": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "N Leaderboard"
     }
   },
   "required": [

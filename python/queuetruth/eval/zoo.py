@@ -11,7 +11,9 @@ timestamps, null = none), the label at horizon `h` exists iff `ts_admin_end` is 
 independent of the fill outcome; an own cancel is never censoring. `planned_life` is required and must cover every
 predicted shadow (`QT-INPUT-001` / `QT-INPUT-002`; E38 OC-7: never a silent fallback to the `censored` column).
 Rows also need an exact arm (`truth_filled` not null). Rows whose 1.1 `status` is `hbt_312_abort` (a faithful hbt
-pair aborted at its #312 event; the model stays, the pair stops there) are not predictions and are left out.
+pair aborted at its #312 event; the model stays, the pair stops there) are not predictions, and since 0.1.1 every row
+of such a shadow is left out for every model (`common_population`): the aborts are not random (the shadows that reach
+the partial fill), so scoring each model on its own survivors would compare models on different populations.
 Populations: never-cancel shadows (no planned cancel before `ts_live + h_max`) give the unprefixed metrics and the
 leaderboard; cancel-bearing shadows (e.g. real-order mirrors) are evaluated separately under metric names prefixed
 `cancel_bearing/`, with the own cancel as a competing risk.
@@ -40,6 +42,8 @@ horizon `<= h_max_ns` and stratum (`all`; `queue_decile` 0..9; `liquidity_bucket
 - Leaderboard (`qt.zoo_summary.leaderboard`): `fill_rate_bias[h]` is the never-cancel `fill_rate_bias_aj` at `h`
   with its CI (audit ruling A2 and SPEC 5.6: fill-rate truth is the AJ CIF), so the headline and the report's "bias
   vs AJ CIF" agree; the eligible-row `fill_rate_bias` rows of `qt.zoo_errors` stay as per-stratum diagnostics.
+  Its two terms are `model_fill_rate[h]` (mean `p`) and `exact_fill_rate[h]` (the truth AJ CIF, the same for every
+  model), so every bias can be read against its base rate (0.1.1).
 - `ttf_log_ratio_median` (h_max) = median over jointly filled eligible rows (truth filled, model first fill within
   `h_max`; particle families `databento_mc` excluded) of `ln(max(model_ttf, 1us) / max(truth_ttf, 1us))`;
   `qtrack_mae` (with `trajectory`) = mean over (model, shadow) pairs of the time-weighted mean of
@@ -223,6 +227,40 @@ def _aj_fill_reps(time: np.ndarray, cause: np.ndarray, weights: np.ndarray, at: 
     return out
 
 
+def aborted_shadows(predictions: pa.Table) -> set[str]:
+    """Shadow ids with at least one `hbt_312_abort` row (a faithful hbt pair aborted at its #312 event)."""
+    if "status" not in predictions.column_names:
+        return set()
+    hit = predictions.filter(pc.is_valid(predictions.column("status")))
+    return {str(x) for x in hit.column("shadow_id").to_pylist()}
+
+
+def common_population(predictions: pa.Table) -> pa.Table:
+    """The rows every model is scored on: without every row of a shadow that any faithful hbt pair aborted on at
+    #312, so all models share one population (0.1.1; 0.1.0 dropped only the aborted pair's own rows)."""
+    ids = aborted_shadows(predictions)
+    if not ids:
+        return without_aborted(predictions)
+    keep = ~np.isin(C.strings(predictions, "shadow_id"), np.array(sorted(ids), dtype=object))
+    return without_aborted(predictions.filter(pa.array(keep)))
+
+
+def leaderboard_population(predictions: pa.Table, planned_life: pa.Table, h_max_ns: int) -> int:
+    """Never-cancel shadows (no planned cancel before `ts_live + h_max`) with an exact arm in `common_population`:
+    the shadows behind every leaderboard row."""
+    t = common_population(predictions)
+    sid = C.strings(t, "shadow_id")
+    if sid.size == 0:
+        return 0
+    _, yv = C.bools(t, "truth_filled")
+    live, _ = C.ints(t, "ts_live")
+    ids, first, inv = np.unique(sid, return_index=True, return_inverse=True)
+    has_truth = np.zeros(ids.size, dtype=bool)
+    has_truth[np.asarray(inv).reshape(-1)[yv]] = True
+    cancel_rel, _ = _planned_life(planned_life, ids, live[first])
+    return int((has_truth & (cancel_rel >= float(h_max_ns))).sum())
+
+
 def without_aborted(predictions: pa.Table) -> pa.Table:
     """The rows that are predictions: a 1.1 `status` of `hbt_312_abort` (faithful hbt pair aborted at its #312
     event at or before the row's deadline) is left out of every metric."""
@@ -251,7 +289,7 @@ def evaluate_zoo(
             "label eligibility is never inferred from the censored flag (audit ruling A2, E38 OC-7)",
             "pass planned_life=pyarrow.parquet.read_table('<zoo out>/zoo_shadows.parquet') or planned_life_table(...)",
         )
-    t = assign_strata(without_aborted(predictions))
+    t = assign_strata(common_population(predictions))
     model = C.strings(t, "model_id")
     sid = C.strings(t, "shadow_id")
     h, _ = C.ints(t, "horizon_ns")
@@ -356,6 +394,8 @@ def evaluate_zoo(
             "ttf_iad": None,
             "qtrack_mae": None,
             "mcnemar": {"b": 0, "c": 0, "p_exact": None},
+            "exact_fill_rate": {},
+            "model_fill_rate": {},
         }
         for prefix, pop in populations:
             lead = prefix == ""
@@ -434,7 +474,8 @@ def evaluate_zoo(
                     if not mh.any():
                         complete = False
                         continue
-                    diff = float(np.mean(p[mh])) - float(cif[prefix][j])
+                    model_rate = float(np.mean(p[mh]))
+                    diff = model_rate - float(cif[prefix][j])
                     # 95% CI on the shared block draws: replicate mean of p over the drawn eligible rows minus the
                     # replicate AJ CIF of the drawn shadows
                     nb = counts.shape[1]
@@ -451,6 +492,8 @@ def evaluate_zoo(
                             "ci_lo": _none(lo),
                             "ci_hi": _none(hi),
                         }
+                        entry["exact_fill_rate"][str(int(hz))] = _none(float(cif[prefix][j]))
+                        entry["model_fill_rate"][str(int(hz))] = _none(model_rate)
                     iad += abs(diff) * (float(hz) - prev)
                     prev = float(hz)
                 if complete:
@@ -463,6 +506,8 @@ def evaluate_zoo(
             entry["brier"].setdefault(key, None)
             entry["logloss"].setdefault(key, None)
             entry["fill_rate_bias"].setdefault(key, {"value": None, "ci_lo": None, "ci_hi": None})
+            entry["exact_fill_rate"].setdefault(key, None)
+            entry["model_fill_rate"].setdefault(key, None)
         if str(m) in qtrack:
             v, n_pairs = qtrack[str(m)]
             emit(m, "qtrack_mae", None, "all", "all", v, nan, nan, n_pairs)

@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "queuetruth"
-version = "0.1.0"
+version = "0.1.1"
 description = "Fill-realism and queue-truth kit: exact order-level replay, an L2 queue-model zoo measured against exact truth, calibration, a learned fill model and a sim-vs-live scorer."
 readme = "README.md"
 requires-python = ">=3.11"
