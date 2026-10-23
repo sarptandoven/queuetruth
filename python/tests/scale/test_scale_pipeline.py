@@ -304,3 +304,85 @@ def test_plan_breadth_quotas_match_equal_allocation(tmp_path) -> None:
     assert s["standard"]["BAC"] == 60 and s["large"]["BAC"] == 30
     assert P.pack([("a", 5.0), ("b", 4.0), ("c", 3.0), ("d", 9.0)], 9.0) == [["d"], ["a", "b"], ["c"]]
     shutil.rmtree(tmp_path, ignore_errors=True)
+
+
+@pytest.mark.requires_core
+def test_two_day_pipeline_reduce_and_combine(tmp_path) -> None:
+    import atlas
+    import plan as P
+    from unit import run_unit
+
+    day_dirs = []
+    for date, seed in (("01022020", 3), ("01032020", 4)):
+        src = tmp_path / f"{date}.NASDAQ_ITCH50.gz"
+        write_itch_day(src, SYMS, orders_per_symbol=120, seed=seed)
+        a = argparse.Namespace(
+            date=date,
+            url=f"file://{src}",
+            buckets=2,
+            out=tmp_path / "split",
+            symbols=None,
+            allow_missing=False,
+            level=1,
+            min_free_gib=0.0,
+        )
+        assert itch_split.run_split(a) == 0
+        pl = tmp_path / f"plan-{date}.json"
+        P.main(
+            [
+                "--split",
+                str(tmp_path / "split" / date),
+                "--out",
+                str(pl),
+                "--quota-rule",
+                "fixed",
+                "--fixed-n",
+                "30",
+                "--populations",
+                "standard",
+                "--modes",
+                "faithful",
+                "--unit-core-s",
+                "1e9",
+            ]
+        )
+        plan = json.loads(pl.read_text())
+        assert {u["tier"] for u in plan["universe"]} == {"T1_top100"}
+        assert all(u["ingest"] == K.INGEST_DEFAULTS for u in plan["units"])
+        for u in plan["units"]:
+            run_unit(u, tmp_path / "split" / date, tmp_path / "shards" / date / u["unit_id"], 1)
+        r = atlas.reduce_day(plan, tmp_path / "shards" / date, tmp_path / "days" / date)
+        assert r["units_valid"] == r["units_planned"] == len(plan["units"])
+        day_dirs.append(tmp_path / "days" / date)
+    res = atlas.combine(day_dirs, tmp_path / "atlas", bootstrap_b=100)
+    assert res["days"] == 2 and res["symbol_days"] == 10 and res["distinct_symbols"] == 5
+    man = json.loads((tmp_path / "atlas" / "atlas_manifest.json").read_text())
+    assert man["atlas_root"] == K.merkle_root([d["merkle_root"] for d in man["days"]])
+    lb = pq.read_table(tmp_path / "atlas" / "leaderboard_by_tier.parquet").to_pylist()
+    row = next(r for r in lb if r["tier"] == "ALL" and r["horizon_ns"] == 10 * S1)
+    assert row["n_dates"] == 2 and row["n_symbols"] == 5 and row["n"] > 0
+    # the leaderboard bias equals the pooled ratio of the day cells
+    cells = pa.concat_tables([pq.read_table(d / "cells_all.parquet") for d in day_dirs])
+    sel = cells.filter(pc.and_(pc.equal(cells["model_id"], row["model_id"]), pc.equal(cells["horizon_ns"], 10 * S1)))
+    assert abs(row["fill_rate_bias_value"] - pc.sum(sel["sum_d"]).as_py() / pc.sum(sel["n"]).as_py()) < 1e-12
+    per = pq.read_table(tmp_path / "atlas" / "per_symbol.parquet").to_pylist()
+    assert {r["symbol"] for r in per} == set(SYMS) and all(r["n_days"] == 2 for r in per)
+    assert pq.read_table(tmp_path / "atlas" / "maps_by_tier.parquet").num_rows > 0
+
+
+def test_session_hours_and_tiers() -> None:
+    import plan as P
+
+    sm = {"stream": {"system_events_ns_since_midnight": {"Q": 34_200_000_075_566, "M": 57_600_000_071_785}}}
+    assert P.session_hours(sm) == {}
+    sm["stream"]["system_events_ns_since_midnight"]["M"] = 46_800_000_012_345  # 13:00 close (half day)
+    assert P.session_hours(sm) == {"open_s": 34_200, "close_s": 46_800}
+    assert [P.tier_of(r) for r in (1, 100, 101, 500, 1500, 4000, 4001)] == [
+        "T1_top100",
+        "T1_top100",
+        "T2_101_500",
+        "T2_101_500",
+        "T3_501_1500",
+        "T4_1501_4000",
+        "T5_rest",
+    ]

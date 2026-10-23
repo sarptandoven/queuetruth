@@ -18,9 +18,14 @@ itch_split.py ─▶ split/<date>/ (K buckets) ─▶ plan.py ─▶ units ─�
 | `plan.py` | universe, exclusions with reasons (Nasdaq test symbols), per-symbol shadow quotas (`scale`, `fixed`, `breadth`), cost model, first-fit-decreasing units within a bucket, `run_id` |
 | `unit.py` | one unit: bucket sha256 check, ingest of its symbols, replay exactness checks, `per_partition` shadow sample, native zoo per population and mode, `block_stats`, 1% audit sample of predictions, `shard_manifest.json` with telemetry |
 | `aggregate.py` | verifies every shard (leaf hash, unit spec hash, output content digests), Merkle root, `zoo_errors_by_group`, `leaderboard` (two-way dates x symbols cluster bootstrap, BH), `per_symbol` (day-cluster CI, empirical-Bayes shrinkage, BH), summed exactness |
-| `verify_unit.py` | re-runs one unit and checks its leaf against the published root |
-| `prove_breadth.py` | the P0 proof below |
-| `modal_app.py` | Modal entry points for the pilot (dry run unless `--confirm-spend`) |
+| `atlas.py` | multi-day atlas: `reduce-day` streams a day's verified shards into per-symbol-day cells and per-tier strata with the day's Merkle root; `combine` builds tier leaderboards (two-way dates x symbols bootstrap, BH), per-symbol cross-day estimates (day bootstrap, shrinkage toward the tier, BH), tier x stratum maps, and the root over the day roots |
+| `verify_unit.py` | re-runs one unit and checks its leaf against the published root (a run's or a day's manifest) |
+| `prove_breadth.py` | the P0 proof below; `--compare-only --plan P --shards S` compares shards made elsewhere (the cloud gate) |
+| `modal_app.py` | Modal entry points: `check_image`, `days` (split, plan, units, reduce per day, spend guard; dry run unless `--confirm-spend`), `combine_days` |
+
+Liquidity tiers (`plan.py`) rank a day's symbols by executions (E, C and P messages): `T1_top100`, `T2_101_500`,
+`T3_501_1500`, `T4_1501_4000`, `T5_rest`. A day whose system events put the close away from 16:00 (2025-11-28 closes
+at 13:00) gets that session in its ingest spec.
 
 ## Why splitting does not change the numbers
 

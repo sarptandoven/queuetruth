@@ -425,10 +425,21 @@ def cluster_bootstrap(
         cinv = np.asarray(cinv).reshape(-1)
         cn = np.bincount(cinv, weights=num, minlength=len(cu))
         cd = np.bincount(cinv, weights=den, minlength=len(cu))
-        w = np.ones((bootstrap_b, len(cu)))
-        for j, dr in enumerate(draws):
-            w *= dr[:, cu[:, j]]
-        rn, rd = w @ cn, w @ cd
+        if len(draws) == 2:
+            # two-way: sum_{i,k} a_bi c_bk x_ik = rowsum(A * (C @ X^T)) over the cell's occupied clusters only
+            u0, i0 = np.unique(cu[:, 0], return_inverse=True)
+            u1, i1 = np.unique(cu[:, 1], return_inverse=True)
+            xn = np.zeros((u0.size, u1.size))
+            xd = np.zeros((u0.size, u1.size))
+            np.add.at(xn, (np.asarray(i0).reshape(-1), np.asarray(i1).reshape(-1)), cn)
+            np.add.at(xd, (np.asarray(i0).reshape(-1), np.asarray(i1).reshape(-1)), cd)
+            a, c = draws[0][:, u0], draws[1][:, u1]
+            rn, rd = (a * (c @ xn.T)).sum(axis=1), (a * (c @ xd.T)).sum(axis=1)
+        else:
+            w = np.ones((bootstrap_b, len(cu)))
+            for j, dr in enumerate(draws):
+                w *= dr[:, cu[:, j]]
+            rn, rd = w @ cn, w @ cd
         reps = np.where(rd > 0, rn / np.where(rd > 0, rd, 1.0), np.nan)
         lo, hi = percentile_ci(reps, alpha)
         finite = reps[np.isfinite(reps)]

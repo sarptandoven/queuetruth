@@ -275,9 +275,7 @@ def compare(
 
 
 def main(argv: list[str] | None = None) -> int:
-    import aggregate as A
     import plan as P
-    import pyarrow.parquet as pq
 
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", type=Path, default=K.REPO / ".realdata" / "scale" / "proof")
@@ -291,6 +289,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--threads", type=int, default=2)
     ap.add_argument("--tol", type=float, default=1e-12)
     ap.add_argument("--min-free-gib", type=float, default=2.5)
+    ap.add_argument("--compare-only", action="store_true", help="aggregate and compare existing --plan / --shards")
+    ap.add_argument("--plan", type=Path, help="with --compare-only: the gate plan (e.g. downloaded from Modal)")
+    ap.add_argument("--shards", type=Path, help="with --compare-only: its shard directories")
     a = ap.parse_args(argv)
     t_all = time.perf_counter()
     dates = [d for d in a.dates.split(",") if d]
@@ -301,6 +302,13 @@ def main(argv: list[str] | None = None) -> int:
     symbols = [s for t in K.TIERS.values() for s in t]
     a.out.mkdir(parents=True, exist_ok=True)
     timings: dict[str, float] = {}
+    errors: list[dict[str, str]] = []
+    if a.compare_only:
+        if not (a.plan and a.shards):
+            ap.error("--compare-only needs --plan and --shards")
+        plan_path, shards_dir = a.plan, a.shards
+        plan = json.loads(plan_path.read_text())
+        return _finish(a, breadth, plan, plan_path, shards_dir, errors, timings, t_all, dates, tiers, pops, modes)
     t0 = time.perf_counter()
     splits = [split_day(d, a.out, symbols, a.buckets, a.min_free_gib) for d in dates]
     timings["split_s"] = round(time.perf_counter() - t0, 1)
@@ -337,7 +345,6 @@ def main(argv: list[str] | None = None) -> int:
         flush=True,
     )
     t0 = time.perf_counter()
-    errors = []
     with ProcessPoolExecutor(max_workers=a.workers) as ex:
         futs = [ex.submit(_run_unit, t) for t in todo]
         for i, f in enumerate(as_completed(futs), 1):
@@ -348,6 +355,26 @@ def main(argv: list[str] | None = None) -> int:
             if err:
                 errors.append({"unit_id": uid, "error": err})
     timings["units_wall_s"] = round(time.perf_counter() - t0, 1)
+    return _finish(a, breadth, plan, plan_path, shards_dir, errors, timings, t_all, dates, tiers, pops, modes)
+
+
+def _finish(
+    a: argparse.Namespace,
+    breadth: dict,
+    plan: dict,
+    plan_path: Path,
+    shards_dir: Path,
+    errors: list,
+    timings: dict,
+    t_all: float,
+    dates: list[str],
+    tiers: list[str],
+    pops: list[str],
+    modes: list[str],
+) -> int:
+    import aggregate as A
+    import pyarrow.parquet as pq
+
     groups = {s: t for t, names in K.TIERS.items() for s in names}
     (a.out / "tiers.json").write_text(json.dumps(groups, indent=1) + "\n")
     t0 = time.perf_counter()
