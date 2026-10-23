@@ -80,6 +80,7 @@ class SplitPipeline(S.Pipeline):
         self.paths = paths
         self.level = level
         self.only = None if symbols is None else set(self.want)
+        self.repeated_dir: list[dict[str, Any]] = []
         self.route = [DROP] * 65536
         self.route[0] = BROADCAST
         self.exec_count = [0] * 65536
@@ -144,7 +145,10 @@ class SplitPipeline(S.Pipeline):
         if self.only is not None and raw not in self.only:
             return
         if sym in self.locates:
-            self.dup_dir.append({"symbol": sym, "locate": loc, "first_locate": self.locates[sym]})
+            entry = {"symbol": sym, "locate": loc, "first_locate": self.locates[sym]}
+            # the same symbol re-sent on its own locate (seen in the 2020-01-30 file) changes nothing; only a symbol
+            # reappearing on another locate would split its messages
+            (self.repeated_dir if loc == self.locates[sym] else self.dup_dir).append(entry)
             return
         self.locates[sym] = loc
         self.before_dir[sym] = self.loc_count[loc] - 1
@@ -250,7 +254,7 @@ def run_split(a: argparse.Namespace) -> int:
     missing = sorted(set(symbols or []) - set(pipe.locates))
     chk("every requested symbol found", missing, None if a.allow_missing else [])
     chk("no symbol message before its R", {s: n for s, n in pipe.before_dir.items() if n}, {})
-    chk("no duplicate directory entry", pipe.dup_dir, [])
+    chk("no symbol on two locates", pipe.dup_dir, [])
     chk("zero-length frames", pipe.zero_frames, 0)
     chk("short frames (< 3 bytes)", pipe.short_frames, 0)
     loc0 = pipe.loc_count[0]
@@ -302,6 +306,7 @@ def run_split(a: argparse.Namespace) -> int:
             "its R on to its symbol's bucket; messages before a locate's R dropped",
             "symbols": symbols,
             "missing_symbols": missing,
+            "repeated_directory_entries": pipe.repeated_dir,
             "gzip": f"python gzip, compresslevel {a.level}, mtime 0, empty name, one member",
         },
         "buckets": buckets,

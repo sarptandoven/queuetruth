@@ -72,6 +72,12 @@ def test_split_routes_every_symbol_to_one_bucket_in_file_order(tmp_path) -> None
         assert got == want
         assert b["messages"] == len(_frames(want))
     assert seen == set(SYMS)
+    # a directory entry re-sent on the same locate is recorded, not a failure
+    rep = raw + _frames(raw)[1]  # the first R again, at the end of the day
+    src.write_bytes(gzip.compress(rep, mtime=0))
+    m3 = _split(tmp_path / "rep", src, 3)
+    assert m3["ok"] and m3["routing"]["repeated_directory_entries"][0]["symbol"] == SYMS[0]
+    src.write_bytes(gzip.compress(raw, mtime=0))
     # --symbols keeps only those (every other R and message dropped)
     m2 = _split(tmp_path / "sub", src, 2, "AAA,CC")
     assert sorted(s for b in m2["buckets"] for s in b["symbols"]) == ["AAA", "CC"]
