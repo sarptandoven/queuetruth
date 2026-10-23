@@ -85,7 +85,7 @@ def render_text(doc: dict[str, Any]) -> str:
 
 
 def _horizon_order(h: str) -> tuple[int, str]:
-    return (int(h), h) if h.isdigit() else (1 << 62, h)
+    return (int(h), h) if h.isdecimal() else (1 << 62, h)
 
 
 def trust_lines(doc: dict[str, Any]) -> list[str]:

@@ -83,6 +83,13 @@ A release for first-time users: a stranger should get a readable answer in five 
 - `scripts/nt_crosscheck/l3_mbo.py` and `l3_score.py`: feed the shadows' MBO book to NautilusTrader as L3 deltas and
   score each order's first fill against the exact replay.
 
+### Fixed
+
+- The local store's signed-URL check and the live-log, FIX and CLI parsers guarded `int()` with `str.isdigit()`,
+  which accepts characters such as `²` that `int()` rejects; a tampered `exp` on `PUT /v1/_store/{key}` returned
+  500 instead of 403 (found by the API fuzz test). Every guard now uses `isdecimal()`, and signed-URL expiries must
+  be ASCII digits.
+
 ## [0.1.0] - 2026-10-19
 
 First public version. Validated on real data for Nasdaq TotalView-ITCH (two public days, four symbols) and IEX

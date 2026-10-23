@@ -159,7 +159,7 @@ def schedule_actions(
     def leg_no(r: Mapping[str, Any]) -> int:
         sid = str(r["shadow_id"])
         tail = sid.rsplit(".leg", 1)
-        return int(tail[1]) if len(tail) == 2 and tail[1].isdigit() else 1
+        return int(tail[1]) if len(tail) == 2 and tail[1].isdecimal() else 1
 
     out: list[ReplayAction] = []
     for key, ls in by_key.items():
@@ -424,7 +424,7 @@ def _kv(items, what):
     out = {{}}
     for item in items or []:
         k, sep, v = item.partition("=")
-        if not sep or not k.strip().isdigit():
+        if not sep or not k.strip().isdecimal():
             sys.exit(f"{{what}}: expected INSTRUMENT_ID=VALUE, got {{item!r}}")
         out[int(k)] = v
     return out

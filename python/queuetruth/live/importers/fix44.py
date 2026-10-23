@@ -202,7 +202,7 @@ class FixConfig:
         delim = str(raw.get("delimiter") or "auto")
         if delim.lower() not in ("auto", "soh") and delim != "^A" and len(delim) != 1:
             raise QtError("QT-CONFIG-001", f"fix.delimiter: 'auto', 'soh', '^A' or one character, got {delim!r}")
-        if delim in ("=", "\n") or delim.isdigit():
+        if delim in ("=", "\n") or delim.isdecimal():
             raise QtError("QT-CONFIG-001", f"fix.delimiter: {delim!r} cannot delimit FIX fields")
         cfg.delimiter = delim
         rx = raw.get("local_ts_regex")
@@ -229,7 +229,7 @@ class FixConfig:
         cfg.session_venues = {str(k): _venue(str(v), f"fix.session_venues[{k}]") for k, v in sv.items()}
         it = raw.get("instrument_tag")
         if it is not None:
-            if not str(it).isdigit():
+            if not str(it).isdecimal():
                 raise QtError("QT-CONFIG-001", f"fix.instrument_tag: a tag number, got {it!r}")
             cfg.instrument_tag = str(int(str(it)))
         tz = extra.get("tz")
@@ -273,7 +273,7 @@ def _regex_ts(text: str, loc: str, tz: str | None) -> tuple[int, str]:
             secs = local_to_utc_s(y, mo, d, h, mi, s, tz or "UTC", "log time", loc)
             prec = "s" if not frac else "ms" if len(frac) <= 3 else "us" if len(frac) <= 6 else "ns"
             return secs * 10**9 + int((frac + "000000000")[:9]), prec
-    if t.isdigit():
+    if t.isdecimal():
         return epoch_ns(t, "auto", "log time", loc)
     return rfc3339_ns(t, "log time", loc, default_tz=tz)
 
@@ -439,7 +439,7 @@ class _Tracker:
         st.max_seq = seq if st.max_seq is None else max(st.max_seq, seq)
         if m.mt == "4":
             new = f.get("36", "")
-            if new.isdigit():
+            if new.isdecimal():
                 nv = int(new)
                 if f.get("123") == "Y":
                     filled = {x for x in st.missing if seq <= x < nv}
@@ -1190,7 +1190,7 @@ def import_fix44(paths: list[str], opts: ImportOptions) -> ImportResult:
         sender, target = f.get("49", ""), f.get("56", "")
         begin = f.get("8", "")
         seq_txt = f.get("34", "")
-        seq = int(seq_txt) if seq_txt.isdigit() else seq_hint
+        seq = int(seq_txt) if seq_txt.isdecimal() else seq_hint
         key = _session_key(begin, sender, target, hint)
         s = sessions.get(key)
         if s is None:
@@ -1374,13 +1374,13 @@ def import_fix44(paths: list[str], opts: ImportOptions) -> ImportResult:
                 else:
                     ref = None
                     ref_seq = m.f.get(tags.RefSeqNum, "")
-                    if ref_seq.isdigit():
+                    if ref_seq.isdecimal():
                         ref = s.by_seq.get((m.target, m.epoch, int(ref_seq)))
                     fx.request_reject(m, rec, scope, ref, m.f.get(tags.RefMsgType))
             elif mt == "3":
                 ref_seq = m.f.get(tags.RefSeqNum, "")
                 ref = None
-                if ref_seq.isdigit():
+                if ref_seq.isdecimal():
                     ref = s.by_seq.get((m.target, m.epoch, int(ref_seq)))
                 if m.out:
                     if ref is not None and ref.mt == "8":

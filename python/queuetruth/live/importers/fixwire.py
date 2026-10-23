@@ -98,7 +98,7 @@ def frame(s: str, start: int, *, pipe_delims: bool = False) -> Framed:
         if b < 0:
             return Framed(s[start:], len(s), "truncated")
         txt = s[a + 3 : b]
-        if txt.isdigit():
+        if txt.isdecimal():
             declared = int(txt)
             body_start = b + 1
         else:
@@ -110,7 +110,7 @@ def frame(s: str, start: int, *, pipe_delims: bool = False) -> Framed:
     t = body_start + declared if declared >= 0 else -1
     end = -1
     cs_at = -1
-    if t >= body_start and s.startswith("10=", t) and t + 6 <= len(s) and s[t + 3 : t + 6].isdigit():
+    if t >= body_start and s.startswith("10=", t) and t + 6 <= len(s) and s[t + 3 : t + 6].isdecimal():
         if t + 6 == len(s) or s[t + 6] == SOH:
             cs_at = t
             end = min(t + 7, len(s))
@@ -152,7 +152,7 @@ def parse_fields(text: str) -> list[tuple[str, str]] | None:
                 return None
             break
         tag = text[i:eq]
-        if not tag.isdigit():
+        if not tag.isdecimal():
             return None
         if pending_tag is not None and tag == pending_tag and pending_len is not None:
             j = min(eq + 1 + pending_len, n)
@@ -167,7 +167,7 @@ def parse_fields(text: str) -> list[tuple[str, str]] | None:
             val = text[eq + 1 : j]
         out.append((tag, val))
         pending_tag, pending_len = None, None
-        if tag in LENGTH_DATA and val.isdigit():
+        if tag in LENGTH_DATA and val.isdecimal():
             pending_tag, pending_len = LENGTH_DATA[tag], int(val)
         i = j + 1
     return out

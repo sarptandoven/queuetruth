@@ -135,7 +135,7 @@ def _table_rows(path: Path, file_idx: int) -> list[Record]:
 def _ns(v: Any, what: str, loc: str) -> int | None:
     if v is None or (isinstance(v, str) and not v.strip()):
         return None
-    if isinstance(v, (int, Decimal)) or (isinstance(v, str) and v.strip().lstrip("-").isdigit()):
+    if isinstance(v, (int, Decimal)) or (isinstance(v, str) and v.strip().lstrip("-").isdecimal()):
         d = dec(v, what, loc)
         if d is None or d <= 0:
             return None
@@ -150,7 +150,7 @@ def _enum(v: Any, table: dict[int, str]) -> str | None:
     if v is None or (isinstance(v, str) and not v.strip()):
         return None
     s = str(v).strip().lower()
-    if s.lstrip("-").isdigit():
+    if s.lstrip("-").isdecimal():
         return table.get(int(s))
     return s.replace(" ", "_")
 

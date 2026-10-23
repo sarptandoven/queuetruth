@@ -206,7 +206,7 @@ def load_dictionary(paths: list[str] | str | None) -> FixDictionary | None:
         fields_el = root.find("fields")
         for f in fields_el.findall("field") if fields_el is not None else []:
             num, name = _attr(f, "number"), _attr(f, "name")
-            if not num.isdigit() or not name:
+            if not num.isdecimal() or not name:
                 raise QtError("QT-INPUT-002", f"{p}: <field> without a numeric number and a name")
             d.names[num] = name
             d.numbers[name] = num

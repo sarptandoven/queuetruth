@@ -601,7 +601,7 @@ def _render_calibration(doc: Doc, args: Doc, path: list[str]) -> str | None:
     labels = {str(h.horizon_ns): _TRUST_LABEL.get(h.label, h.label) for h in trust.horizons} if trust else {}
     for code in lines_kv.get("beats_default", "").split(" (", 1)[0].split(","):  # the calibration's own record
         h, _, label = code.strip().partition("=")
-        if h.isdigit() and label:
+        if h.isdecimal() and label:
             labels[h] = _TRUST_LABEL.get(label, label)
     if fit_id and base_id:
         f_ll = held[fit_id].get("logloss") or {}

@@ -147,7 +147,7 @@ def abort_shares(warnings: Iterable[str] | None) -> dict[str, tuple[int, int]]:
         rest = w[len(ABORT_PREFIX) :]
         model, _, tail = rest.partition(": ")
         parts = tail.split(" ", 3)
-        if len(parts) >= 3 and parts[1] == "of" and parts[0].isdigit() and parts[2].isdigit():
+        if len(parts) >= 3 and parts[1] == "of" and parts[0].isdecimal() and parts[2].isdecimal():
             out[model] = (int(parts[0]), int(parts[2]))
     return out
 

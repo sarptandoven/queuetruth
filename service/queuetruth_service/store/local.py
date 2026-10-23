@@ -65,7 +65,7 @@ class LocalStore:
 
     def verify(self, method: str, key: str, part: str, exp: str | None, sig: str | None) -> bool:
         """True for an unexpired URL signed for exactly this method, key and part."""
-        if not exp or not sig or not exp.isdigit() or int(exp) < time.time():
+        if not exp or not sig or not (exp.isascii() and exp.isdecimal()) or int(exp) < time.time():
             return False
         return hmac.compare_digest(self.signature(method, key, part, int(exp)), sig)
 

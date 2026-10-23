@@ -40,6 +40,14 @@ def test_local_signing_scoped_and_expiring(tmp_path):
     assert big.ttl_s == 900
 
 
+def test_local_verify_rejects_non_ascii_expiry(tmp_path):
+    """Regression (schemathesis, 2026-10-23): `"²".isdigit()` is True but `int("²")` raises, which turned a
+    tampered `exp` into a 500. Any expiry that is not ASCII decimal digits is simply not a valid signature."""
+    s = LocalStore(tmp_path, b"k", "http://api.example")
+    for bad in ("²", "١٢٣", "12³", " 12", "+12", "1_000"):
+        assert not s.verify("PUT", "7", "", bad, "0" * 64), bad
+
+
 def test_local_store_rejects_traversal(tmp_path):
     from queuetruth_service.store import StoreError, safe_filename
 

@@ -196,7 +196,7 @@ def _instrumentless(item: Any) -> bool:
     if isinstance(item, int):
         return True
     if isinstance(item, str):
-        return item.strip().isdigit()
+        return item.strip().isdecimal()
     return isinstance(item, dict) and item.get("instrument_id") is None and "order_id" in item
 
 
