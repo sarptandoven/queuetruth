@@ -181,7 +181,11 @@ def http_head(url: str) -> dict[str, Any]:
     if url.startswith("file://"):
         p = Path(url[7:])
         return {"status": 200, "content_length": p.stat().st_size, "headers": {}}
-    r = subprocess.run(["curl", "-sSIL", "--max-time", "60", url], capture_output=True, text=True)
+    for attempt in range(6):  # EMI drops connections now and then: retry with backoff before giving up
+        r = subprocess.run(["curl", "-sSIL", "--max-time", "60", url], capture_output=True, text=True)
+        if r.returncode == 0:
+            break
+        time.sleep(min(60, 5 * 2**attempt))
     if r.returncode != 0:
         raise OSError(f"HEAD {url}: curl exit {r.returncode}: {r.stderr.strip()}")
     blocks = [b for b in r.stdout.replace("\r", "").split("\n\n") if b.strip()]

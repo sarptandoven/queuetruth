@@ -227,6 +227,7 @@ def run_unit(unit: dict[str, Any], split: Path, out: Path, threads: int = 1, wor
 
         stats, shadows, exact, sample = [], [], [], []
         shadow_files: dict[str, str] = {}
+        samples: dict[str, dict[str, int]] = {}
         zoo_ids: dict[str, str] = {}
         zoo_flags: dict[str, Any] = {}
         n_shadows = 0
@@ -255,6 +256,7 @@ def run_unit(unit: dict[str, Any], split: Path, out: Path, threads: int = 1, wor
             )
             tel.step("sample", t0, c0)
             n_shadows += samp.n
+            samples[pop] = {loc2sym.get(int(k), k): int(v) for k, v in samp.by_instrument.items()}
             shadow_files[pop] = K.sha256_file(sh)
             for mode in unit["modes"]:
                 zout = wd / f"zoo-{pop}-{mode}"
@@ -322,6 +324,7 @@ def run_unit(unit: dict[str, Any], split: Path, out: Path, threads: int = 1, wor
             "outputs": outputs,
             "exactness": exactness,
             "zoo": zoo_flags,
+            "samples": samples,
         }
         manifest = {
             "schema": SHARD_SCHEMA,
