@@ -22,10 +22,16 @@ days (2019-12-30 and 2020-01-30), every order evaluated against the exact replay
 - **NautilusTrader's touch fill model, with the default `prob_fill_on_limit = 1`, overfills.** Verified in the real
   engine (nautilus_trader 1.231.0, `BacktestEngine` fed the L2 view as `OrderBookDelta`s,
   `FillModel(prob_fill_on_limit=1)`): it fills 14.17% of the orders within 1 s on 2019-12-30 where the exact replay
-  fills 11.03%, +3.13 percentage points (95% CI [+2.53, +3.77]); +2.80 pp on 2020-01-30. queuetruth's faithful
-  NautilusTrader models agree with the real engine on 100% of orders at 1 s, 10 s and 60 s on both days and on the
-  synthetic fixture. On an `OrderBookDepth10` feed Nautilus resets its queue position at every snapshot, so its
-  queue model then fills like the touch model (+0.9 to +3.3 pp above exact at 1 s to 60 s).
+  fills 11.03%, +3.13 percentage points (95% CI [+2.53, +3.77]); +2.80 pp on 2020-01-30. The 2.0 release candidate
+  (2.0.0rc7, `DefaultFillModel(prob_fill_on_limit=1)`) fills exactly the same orders. queuetruth's faithful
+  NautilusTrader models agree with 1.231.0 on 100% of orders at 1 s, 10 s and 60 s on both days and on the synthetic
+  fixture; on 2.0.0rc7 the touch model still agrees on 100%, the queue model on 99.6% to 99.97% (2.0 also caps the
+  queue ahead at a level's new size when the level shrinks). Nautilus's own queue model (`queue_position=True`) is
+  close to exact: within 0.8 pp on 1.231.0 and 0.4 pp on 2.0.0rc7 on an L2 delta feed, and fed the MBO book (L3),
+  2.0.0rc7's matches the exact replay on every order on day one, and on day two on all but 1 order at 0.1 s and 2 at
+  10 s. On 1.231.0 an `OrderBookDepth10` feed resets the queue position at every snapshot, so the queue model then
+  fills like the touch model (+0.9 to +3.3 pp above exact at 1 s to 60 s); the 2.0 release candidates (from rc5)
+  keep it.
 - **Calibration fixes it on the held-out Nasdaq day.** `p` fitted on day one is 0.29 (bootstrap CI [0.27, 0.30]); on
   day two it cuts the 1 s overfill from +2.8 pp to +0.4 pp and more than halves the 1 s Brier score. `p` is per
   print, so it is venue- and feed-specific: refit it for yours.
@@ -162,7 +168,7 @@ for row in z.leaderboard:  # fill-rate bias vs exact at 60 s, with its 95% CI
 | Exact book and replay, Nasdaq | 2 public days from the raw ITCH bytes: invariants, trade parity, rank oracle, BBO and rank traces identical to the earlier prototype's | validated |
 | Shadow orders | 2 x 3,000 mirror shadows identical to the prototype's (its fill rule); an independent oracle agrees on 2,992 and 2,985 of 3,000 (raw ITCH bytes) and 2,997 of 3,000 per day (prototype's CSV and shadows) | validated |
 | L2 queue-model zoo | 17 rows x 2 modes on 2 x 3,000 shadows, plus 36 more symbols in 5 tiers; the bracket `front_of_queue` >= exact >= `trade_through_only` holds order by order by construction, tested on scenario and synthetic tapes and with 0 per-order violations on real day one; `hbt_l3_fifo` corrected equals exact | real-data leaderboard published |
-| NautilusTrader models | faithful `nt_prob_touch` and `nt_queue_l2` agree with nautilus_trader 1.231.0's `BacktestEngine` (delta-fed L2) on 100% of orders at 1 s, 10 s and 60 s, on both days and the synthetic fixture (`scripts/nt_crosscheck`) | checked against the real engine |
+| NautilusTrader models | faithful `nt_prob_touch` and `nt_queue_l2` agree with nautilus_trader 1.231.0's `BacktestEngine` (delta-fed L2) on 100% of orders at 1 s, 10 s and 60 s, on both days and the synthetic fixture (`scripts/nt_crosscheck`); on 2.0.0rc7 `nt_prob_touch` agrees on 100% and `nt_queue_l2` on 99.6% to 99.97% (every difference is 2.0's queue cap on a shrinking level) | checked against the real engine (1.231.0 and 2.0.0rc7) |
 | Calibration and export | fitted on day one, scored on day two; NautilusTrader `p` improves day two, power and Databento do not beat their defaults | runs on real data |
 | Learned L2 fill model | Brier skill over climatology on the held-out day, lower 95% bound above 0 at 1 s and 10 s | validated |
 | Scorer | 3,000 real orders per day reproduced exactly by the exact arm on both days | validated |

@@ -14,8 +14,13 @@ horizon. Pinned facts (nautilus_trader 1.231.0, faithful zoo, cross-check of 202
   horizon, so the zoo's bias vs the exact replay is NautilusTrader's own.
 - At p = 0.29 the zoo reports exactly the fill-probability expectation under NautilusTrader's rules, and
   NautilusTrader's realised (seeded) fill rate falls within sampling noise of it.
-- `d10_queue_p1`: fed OrderBookDepth10 (MBP-10 snapshots), NautilusTrader resets queue positions on every update, so
-  `queue_position=True` behaves like the touch model.
+- `d10_queue_p1`: fed OrderBookDepth10 (MBP-10 snapshots), NautilusTrader 1.x resets queue positions on every update,
+  so `queue_position=True` behaves like the touch model. 2.x (checked on 2.0.0rc7, 2026-10-22) keeps the queue
+  position across snapshots, capped at the new level size, so the depth feed fills like the delta feed. 2.x applies
+  that cap on delta updates too. On the fixture it never moves a p = 1 fill, so the queue pairs still agree on every
+  order (on the real Nasdaq days 99.6% to 99.9%, every difference from the cap), but it changes touch counts at
+  p = 0.29, where the zoo matches the expectation under its own (1.x) rules and Nautilus's realised rate the
+  expectation under Nautilus's rules.
 
 Needs the compiled core (prepare/compare) and nautilus_trader (requires_nautilus; NT runs in its own interpreter).
 """
@@ -100,7 +105,12 @@ def test_queue_position_matches_queue_models(report: dict) -> None:
 
 @pytest.mark.requires_core
 @pytest.mark.requires_nautilus
-def test_depth10_input_disables_queue_position(report: dict) -> None:
+def test_depth10_input_queue_position(report: dict) -> None:
+    if int(report["nautilus_trader"].split(".")[0]) >= 2:
+        # 2.x keeps the queue position across depth snapshots: the depth feed fills like the delta feed
+        for h, q in report["configs"]["d10_queue_p1"]["horizons"].items():
+            assert q["nt_rate"] == report["configs"]["queue_p1"]["horizons"][h]["nt_rate"], h
+        return
     q = report["configs"]["d10_queue_p1"]["horizons"]["60s"]
     t = report["configs"]["touch_p1"]["horizons"]["60s"]
     assert q["nt_rate"] > q["zoo_rate"]
@@ -114,6 +124,8 @@ def test_low_p_matches_nt_rule_expectation(report: dict) -> None:
     for cname in ("touch_p0.29", "queue_p0.29"):
         for h, hz in report["configs"][cname]["horizons"].items():
             e = hz["expect_nt_rules"]
-            assert hz["zoo_rate"] == pytest.approx(e, abs=1e-9), (cname, h, hz)
+            assert hz["zoo_rate"] == pytest.approx(hz["expect_zoo_rules"], abs=1e-9), (cname, h, hz)
+            if int(report["nautilus_trader"].split(".")[0]) < 2:
+                assert hz["zoo_rate"] == pytest.approx(e, abs=1e-9), (cname, h, hz)
             sd = max((e * (1 - e) / n) ** 0.5, 1 / n)
             assert abs(hz["nt_rate"] - e) <= 4 * sd + 1e-9, (cname, h, hz)

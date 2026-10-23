@@ -11,6 +11,25 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 A release for first-time users: a stranger should get a readable answer in five minutes. Data schema unchanged
 (1.2); the new summary fields are additive with defaults.
 
+### Real-data results
+
+- NautilusTrader cross-check re-run on nautilus_trader 2.0.0rc7 (2026-10-22, same 3,000 orders per day; `run.py`
+  now runs on 1.x and 2.x). The default touch model (`DefaultFillModel(prob_fill_on_limit=1)`) fills exactly the same
+  orders as 1.231.0 on both days and the synthetic fixture, so the overfill stands: +3.13 pp [+2.53, +3.77] at 1 s on
+  2019-12-30 and +2.80 pp [+2.23, +3.37] on 2020-01-30, and faithful `nt_prob_touch` still agrees on 100% of orders.
+- 2.0 changes Nautilus's queue model. On a delta feed it also caps queue ahead at a level's new size when the level
+  shrinks (present from 2.0.0rc4), so faithful `nt_queue_l2` (1.231.0's rules) agrees with 2.0.0rc7's
+  `queue_position=True` on 99.60% to 99.97% of orders per horizon; every difference (18 orders on day one, 10 on day
+  two) is the cap, and Nautilus fills each one earlier. Nautilus's own bias against exact at 1 s / 10 s / 60 s goes
+  from -0.10 / -0.77 / -0.70 pp to -0.03 / -0.37 / -0.37 pp on day one and from -0.10 / -0.17 / -0.23 pp to
+  -0.03 / -0.03 / -0.07 pp on day two.
+- The `OrderBookDepth10` reset is gone from 2.0.0rc5 (#4942): fed depth snapshots, 2.0's queue model fills exactly
+  the orders it fills on the delta feed (1.231.0: like the touch model, +2.87 and +2.67 pp at 1 s).
+- Fed the MBO book as L3 deltas (`book_type=L3_MBO`), 2.0.0rc7's queue model fills the same orders as the exact
+  replay at every horizon on day one; on day two it differs on 1 order at 0.1 s and 2 at 10 s (hidden prints, which
+  the harness passes as `NO_AGGRESSOR` trades and the exact replay does not count; bias at most +0.07 pp). 1.231.0's
+  L3 queue model overfills: +1.73 pp at 1 s on day one, +1.67 pp on day two.
+
 ### Changed
 
 - **One common population for every zoo model.** A shadow on which any faithful hftbacktest model hit its bug #312
@@ -36,6 +55,8 @@ A release for first-time users: a stranger should get a readable answer in five 
   validated on synthetic data only now gets "Vendor data; venue rules validated on synthetic data only".
 - README: the PyPI page no longer says the package is not on PyPI, every link is absolute (relative links 404 on
   PyPI), and PyPI, Python and licence badges were added.
+- The NautilusTrader cross-check tests pin each version's rules: on 2.x the depth feed must fill like the delta
+  feed, and the `p = 0.29` expectation is checked under each side's own rules.
 
 ### Added
 
@@ -59,6 +80,8 @@ A release for first-time users: a stranger should get a readable answer in five 
 - `scripts/scale/`: the W1 full-market pipeline (ITCH day split into symbol buckets, planner, work units with shard
   manifests, aggregator with a Merkle-rooted run manifest, single-unit verifier, Modal entry points, and the local
   proof that 72 single-symbol units reproduce the 36-symbol breadth run of docs/RESULTS.md 4b).
+- `scripts/nt_crosscheck/l3_mbo.py` and `l3_score.py`: feed the shadows' MBO book to NautilusTrader as L3 deltas and
+  score each order's first fill against the exact replay.
 
 ## [0.1.0] - 2026-10-19
 
