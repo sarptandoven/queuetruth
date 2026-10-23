@@ -3,7 +3,7 @@
 A zoo run over thousands of instrument-days cannot keep `qt.zoo_predictions` (shadows x models x horizons rows per
 mode). `block_stats` reduces the predictions of one shard to sums per cell and the evaluators work from those sums:
 
-- `block_stats(predictions, planned_life, h_max_ns=...)`: the rows `evaluate_zoo` scores (the same `without_aborted`,
+- `block_stats(predictions, planned_life, h_max_ns=...)`: the rows `evaluate_zoo` scores (the same `common_population`,
   `assign_strata`, planned-life eligibility and never-cancel / cancel-bearing populations, horizons `<= h_max_ns`),
   summed per (`model_id`, `population`, `stratum_kind` in all / queue_decile / liquidity_bucket, `stratum`,
   `horizon_ns`, `instrument_id`, `session_date`, `block` = 30-minute bucket of `ts_live` as `block_labels`, or 0
@@ -44,7 +44,7 @@ import pyarrow as pa
 import pyarrow.compute as pc
 
 from queuetruth.eval import _cols as C
-from queuetruth.eval.zoo import LOGLOSS_EPS, _planned_life, assign_strata, without_aborted
+from queuetruth.eval.zoo import LOGLOSS_EPS, _planned_life, assign_strata, common_population
 from queuetruth.stats import (
     benjamini_hochberg,
     block_counts,
@@ -103,7 +103,7 @@ def block_stats(
         return np.floor_divide(ts, block_ns) if block_ns else np.zeros(ts.size, dtype=np.int64)
 
     raw = predictions
-    t = assign_strata(without_aborted(predictions))
+    t = assign_strata(common_population(predictions))
     model = C.strings(t, "model_id")
     sid = C.strings(t, "shadow_id")
     h, _ = C.ints(t, "horizon_ns")

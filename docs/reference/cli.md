@@ -226,7 +226,7 @@ Options:
       --latency-ns <DURATION>       shadow latency [default: 0]
       --window-open-s <N>           seconds after the open excluded [default: 300]
       --window-close-s <N>          seconds before the close excluded [default: 600]
-      --allocation <allocation>     allocation across instrument-days [default: equal] [possible values: equal, proportional]
+      --allocation <allocation>     allocation across instrument-days [default: equal] [possible values: equal, proportional, per_partition]
       --sides <A,...>               sides to sample (B,A) [default: B,A]
   -h, --help                        Print help
       --log-level <log_level>       stderr log level (default warn) [possible values: error, warn, info, debug]
