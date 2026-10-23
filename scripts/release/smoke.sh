@@ -71,7 +71,7 @@ import json
 s = json.load(open("qt-zoo/summary.json"))
 h = str(10_000_000_000)
 rows = sorted(s["leaderboard"], key=lambda r: r["fill_rate_bias"][h]["value"])
-assert len(rows) == 17, len(rows)
+assert len(rows) == 16, len(rows)  # 0.1.1: --models all drops hbt_power[n=1] (duplicate of hbt_power3[n=1])
 for r in rows:
     b = r["fill_rate_bias"][h]
     print(f'{r["model_id"]:52s} {b["value"]:+.4f}  [{b["ci_lo"]:+.4f}, {b["ci_hi"]:+.4f}]')
