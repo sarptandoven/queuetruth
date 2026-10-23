@@ -193,12 +193,14 @@ What it shows on these orders:
   verified against the real engine: nautilus_trader 1.231.0's `BacktestEngine`, fed the same L2 view as
   `OrderBookDelta`s with `FillModel(prob_fill_on_limit=1)` and the same orders, fills exactly the same orders as the
   faithful zoo model at 1 s, 10 s and 60 s on both days and on the synthetic fixture (100% agreement; Nautilus's own
-  bias +3.13 pp [+2.53, +3.77] and +2.80 pp [+2.23, +3.37] at 1 s, order-level bootstrap). See the NautilusTrader
-  cross-check below.
+  bias +3.13 pp [+2.53, +3.77] and +2.80 pp [+2.23, +3.37] at 1 s, order-level bootstrap). The 2.0 release
+  candidate 2.0.0rc7 (`DefaultFillModel(prob_fill_on_limit=1)`) fills exactly the same orders. See the
+  NautilusTrader cross-check below.
 - The hftbacktest power and log models stay within about 1 pp of exact at every horizon on both days, mostly slightly
   pessimistic; `hbt_risk_adverse` is pessimistic by up to 1.3 pp.
-- `nt_queue_l2` is within 0.8 pp on both days in faithful mode, and agrees with Nautilus's `queue_position=True` on
-  100% of orders on a delta feed.
+- `nt_queue_l2` is within 0.8 pp on both days in faithful mode, and agrees with nautilus_trader 1.231.0's
+  `queue_position=True` on 100% of orders on a delta feed (2.0.0rc7: 99.60% to 99.97%, which caps queue ahead when a
+  level shrinks and is within 0.4 pp of exact).
 - The bounds span `front_of_queue` +0.9 .. +3.3 pp and `trade_through_only` -6.0 .. -15.8 pp. Faithful
   `nt_prob_touch[p=1]` reaches `front_of_queue` in all six day and horizon cells. The bounds bracket the exact arm order by order by construction (O-ZOO-6, tested on
   scenario and synthetic tapes); see the RD-8 note below for the real-data record.
@@ -341,14 +343,42 @@ stay unfilled in both. Bias in pp against the exact arm, with an order-level boo
 | `queue_position=True`, `p = 1` | `nt_queue_l2` | 2019-12-30 | 10.93% / 47.67% / 74.30% | -0.10 [-0.23, +0.00] | 100% at every horizon |
 | `queue_position=True`, `p = 1` | `nt_queue_l2` | 2020-01-30 | 18.40% / 58.03% / 80.50% | -0.10 [-0.23, +0.00] | 100% at every horizon |
 
-On the synthetic fixture (400 orders) both configurations also agree on 100% of orders at every horizon. With
+These rows are nautilus_trader 1.231.0; 2.0 is below. On the synthetic fixture (400 orders) both configurations also
+agree on 100% of orders at every horizon. With
 `prob_fill_on_limit = 0.29` Nautilus draws each touch fill at random, so orders are not compared one by one; its
 realised fill rates are within 0.5 pp of the zoo's expected rates on both days.
 
-Feed type matters. Nautilus resets `queue_position` whenever an `OrderBookDepth10` arrives, so fed the same days as
-depth-10 snapshots its queue model fills like the touch model: 13.90% / 51.70% / 76.43% on day one (+2.87, +3.27,
-+1.43 pp against exact) and +2.67, +2.03, +0.93 pp on day two, while the touch model is unchanged. The faithful NT
-models describe a delta feed only.
+Feed type matters in 1.231.0. Nautilus resets `queue_position` whenever an `OrderBookDepth10` arrives, so fed the
+same days as depth-10 snapshots its queue model fills like the touch model: 13.90% / 51.70% / 76.43% on day one
+(+2.87, +3.27, +1.43 pp against exact) and +2.67, +2.03, +0.93 pp on day two, while the touch model is unchanged. The
+faithful NT models describe 1.231.0 on a delta feed.
+
+**NautilusTrader 2.0 (re-run 2026-10-22 on 2.0.0rc7, the latest release candidate; same orders, same harness, which
+now runs on 1.x and 2.x).** The touch default (`DefaultFillModel(prob_fill_on_limit=1)`) fills exactly the orders
+1.231.0 fills, on both days, both feeds and the synthetic fixture: the +3.13 and +2.80 pp at 1 s above are
+unchanged. The queue model changed in two ways, both of which bring it closer to exact:
+
+- On any L2 feed, a book update that shrinks the order's level below queue ahead caps queue ahead at the new level
+  size (1.231.0 only lowered it on trades at the price). A rule-set replica with that one change reproduces 2.0.0rc7
+  on every order and horizon on both days; faithful `nt_queue_l2` keeps 1.231.0's rules. Seen from 2.0.0rc4.
+- From 2.0.0rc5 (#4942) an `OrderBookDepth10` snapshot keeps the queue position (capped as above) instead of
+  resetting it, so the depth feed fills exactly as the delta feed.
+
+| Nautilus 2.0.0rc7 config | day | NT fill rate at 1 s / 10 s / 60 s | NT bias at 1 s / 10 s / 60 s | orders that agree with `nt_queue_l2` at 0.1 / 1 / 10 / 60 s |
+|---|---|---|---|---|
+| `queue_position=True`, delta or depth-10 feed | 2019-12-30 | 11.00% / 48.07% / 74.63% | -0.03 / -0.37 / -0.37 | 100% / 99.93% / 99.60% / 99.67% |
+| `queue_position=True`, delta or depth-10 feed | 2020-01-30 | 18.47% / 58.17% / 80.67% | -0.03 / -0.03 / -0.07 | 99.97% / 99.93% / 99.87% / 99.83% |
+
+All 18 (day one) and 10 (day two) differing orders fill in Nautilus and not in the zoo. With `p = 0.29` Nautilus's
+realised rates stay within 0.2 pp of the expectation under its own rules on both days.
+
+Fed the MBO book itself (`scripts/nt_crosscheck/l3_mbo.py`: every resting order with its ID as of the live time,
+then the day's add, cancel, modify and trade messages as L3 deltas and trade ticks; `book_type=L3_MBO`,
+`queue_position=True`), 2.0.0rc7's queue model fills the same orders as the exact replay: every order at every
+horizon on day one, and on day two all but 1 order at 0.1 s and 2 at 10 s (+0.03 and +0.07 pp; each fills on a
+hidden print, which the harness passes as a `NO_AGGRESSOR` trade and the exact replay does not count). The same feed
+in 1.231.0 overfills: +1.73 / +2.40 / +1.17 pp at 1 / 10 / 60 s on day one and +1.67 / +1.53 / +0.60 pp on day two.
+With `queue_position=False` the L3 feed fills like the L2 touch model in both versions.
 
 ## 4b. Breadth: 36 more Nasdaq symbols by liquidity tier
 
