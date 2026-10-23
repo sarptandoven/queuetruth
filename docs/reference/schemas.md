@@ -2934,7 +2934,8 @@ File: `schemas/json/qt.shadow_sample_spec.schema.json`.
 | `out` | string or null | no | `null` |  |
 | `n` | integer | yes |  |  |
 | `seed` | integer | no | `0` |  |
-| `allocation` | one of "equal", "proportional" | no | `"equal"` |  |
+| `allocation` | one of "equal", "proportional", "per_partition" | no | `"equal"` |  |
+| `partition_quotas` | map of integer | no |  |  |
 | `sides` | array of one of "B", "A" | no |  |  |
 | `placements` | array of Placement | no |  |  |
 | `qty` | array of QtyRule | no |  |  |

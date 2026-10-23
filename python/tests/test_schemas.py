@@ -438,6 +438,10 @@ def test_v1_1_non_defaults_change_run_id() -> None:
         assert _id({**sc, k: v}) != _id(sc), k
     zoo = s.ZooSpec.model_validate(MINIMAL[s.ZooSpec]).model_dump(mode="json")
     assert _id({**zoo, "exclude_order_ids": [{"instrument_id": 1, "order_id": 2}]}) != _id(zoo)
+    # W1: per-partition quotas enter the run id only when set
+    smp = s.ShadowSampleSpec.model_validate({"dataset": {"path": "x"}, "n": 10}).model_dump(mode="json")
+    assert _id({**smp, "partition_quotas": {"7": 3}}) != _id(smp)
+    assert _id(smp) == _id({k: v for k, v in smp.items() if k != "partition_quotas"})
     # float-typed defaults canonicalise like ints; the discriminator keeps other specs untouched.
     assert _id({**sc, "window_ns": 6e10}) == _id(sc)
     other = {"tz": None, "amends": None, "window_ns": 60_000_000_000}
@@ -455,6 +459,7 @@ def test_v1_1_non_defaults_change_run_id() -> None:
         "gbdt",
         "max_why",
         "family",
+        "window_open_s",
     }
     # `family` is shared with CalibrationSpec, which has none of LiveCalibrationSpec's 1.1 fields.
     cal = s.CalibrationSpec.model_validate({"kind": "alloc", "family": "power"}).model_dump(mode="json")

@@ -7,6 +7,9 @@
     "n": 1,
     "seed": 1,
     "allocation": "equal",
+    "partition_quotas": {
+      "k": 1
+    },
     "sides": [
       "B"
     ],
@@ -42,6 +45,7 @@
     "n": 1,
     "seed": 0,
     "allocation": "equal",
+    "partition_quotas": {},
     "sides": [
       "B",
       "A"

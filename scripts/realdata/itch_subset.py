@@ -393,6 +393,14 @@ class Pipeline:
             pos = end
         return pos, out
 
+    def _emit(self, kept: list[bytes]) -> None:
+        """Hands the kept frames of one scanned chunk to the writer (`scripts/scale/itch_split.py` overrides it)."""
+        if kept:
+            chunk = b"".join(kept)
+            self.kept_msgs += len(kept)
+            self.kept_framed_bytes += len(chunk)
+            self.q_out.put(chunk)
+
     def _directory(self, b: bytes, pos: int, loc: int) -> None:
         self.directory_entries += 1
         raw = bytes(b[pos + 13 : pos + 21])
@@ -449,11 +457,7 @@ class Pipeline:
                 used, kept = self._scan(buf)
                 self.filter_s += time.perf_counter() - f0
                 carry = buf[used:]
-                if kept:
-                    chunk = b"".join(kept)
-                    self.kept_msgs += len(kept)
-                    self.kept_framed_bytes += len(chunk)
-                    self.q_out.put(chunk)
+                self._emit(kept)
                 now = time.perf_counter()
                 if now - last_disk >= 2.0:
                     last_disk = now

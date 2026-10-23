@@ -133,10 +133,19 @@
       "default": "equal",
       "enum": [
         "equal",
-        "proportional"
+        "proportional",
+        "per_partition"
       ],
       "title": "Allocation",
       "type": "string"
+    },
+    "partition_quotas": {
+      "additionalProperties": {
+        "minimum": 0,
+        "type": "integer"
+      },
+      "title": "Partition Quotas",
+      "type": "object"
     },
     "sides": {
       "items": {
