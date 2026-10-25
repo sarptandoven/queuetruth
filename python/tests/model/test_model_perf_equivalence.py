@@ -22,6 +22,7 @@ import pyarrow as pa
 import pytest
 from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.isotonic import IsotonicRegression
+from sklearn.utils._openmp_helpers import _openmp_effective_n_threads
 
 from model.hazard_synth import make_features
 from model.legacy_model import v01_hazards
@@ -212,7 +213,9 @@ def test_fit_does_not_depend_on_fit_threads(features: pa.Table, fitted: HazardMo
     for n in (1, 4):
         m = HazardModel(_spec()).fit(features, threads=n)
         assert m.fit_threads_used == n and m.sklearn_estimator is not None
-        assert m.sklearn_estimator._bin_mapper.n_threads == n  # the limit reached scikit-learn's OpenMP code
+        # the limit reached scikit-learn's OpenMP code, which caps it at the cores this process may use (CI runners
+        # have 2 to 4): compare with scikit-learn's own effective count for the request
+        assert m.sklearn_estimator._bin_mapper.n_threads == _openmp_effective_n_threads(n)
         meta_a, arr_a = fitted.state()
         meta_b, arr_b = m.state()
         assert meta_a == meta_b and set(arr_a) == set(arr_b)
