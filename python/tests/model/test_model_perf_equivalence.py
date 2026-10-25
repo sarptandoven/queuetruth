@@ -213,9 +213,12 @@ def test_fit_does_not_depend_on_fit_threads(features: pa.Table, fitted: HazardMo
     for n in (1, 4):
         m = HazardModel(_spec()).fit(features, threads=n)
         assert m.fit_threads_used == n and m.sklearn_estimator is not None
-        # the limit reached scikit-learn's OpenMP code, which caps it at the cores this process may use (CI runners
-        # have 2 to 4): compare with scikit-learn's own effective count for the request
-        assert m.sklearn_estimator._bin_mapper.n_threads == _openmp_effective_n_threads(n)
+        # the limit reached scikit-learn's OpenMP code. scikit-learn calls _openmp_effective_n_threads() with no
+        # argument, which takes the OpenMP limit (n, set by fit) and caps it at the physical cores the process may
+        # use (CI runners have 2 to 4), so the expected count is that same call under the same limit
+        with hazard_mod._openmp_threads(n):
+            expected = _openmp_effective_n_threads()
+        assert m.sklearn_estimator._bin_mapper.n_threads == expected <= n
         meta_a, arr_a = fitted.state()
         meta_b, arr_b = m.state()
         assert meta_a == meta_b and set(arr_a) == set(arr_b)
