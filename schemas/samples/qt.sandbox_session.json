@@ -1,0 +1,169 @@
+{
+  "sample": {
+    "schema": "qt.sandbox_session",
+    "schema_version": 1,
+    "session_id": "x",
+    "engine_version": "x",
+    "spec_id": "0123456789abcdef",
+    "dataset_id": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "spec": {
+      "k": 1
+    },
+    "instrument": {
+      "instrument_id": 1,
+      "symbol": "x",
+      "session_date": "2020-01-02",
+      "venue": "x",
+      "rule_set": "x",
+      "tick_size": 1,
+      "lot_size": 1,
+      "price_exp": 1,
+      "size_exp": 1,
+      "contract_multiplier": 0.5,
+      "currency": "x",
+      "session_tz": "x",
+      "midnight_utc_ns": 1,
+      "open_ns": 1,
+      "close_ns": 1
+    },
+    "start_ns": 1,
+    "end_ns": 1,
+    "rules": [
+      "x"
+    ],
+    "observation": {
+      "schema": "qt.sandbox_observation",
+      "schema_version": 1,
+      "step": 1,
+      "clock_ns": 1,
+      "visible_ns": 1,
+      "time_local": "x",
+      "done": true,
+      "book": {
+        "ts_event": 1,
+        "bid": [
+          1,
+          1,
+          1
+        ],
+        "ask": [
+          1,
+          1,
+          1
+        ],
+        "bids": [
+          [
+            1,
+            1,
+            1
+          ]
+        ],
+        "asks": [
+          [
+            1,
+            1,
+            1
+          ]
+        ],
+        "spread_ticks": 1
+      },
+      "trades": [
+        {
+          "ts_event": 1,
+          "price": 1,
+          "size": 1,
+          "aggressor": "B",
+          "kind": "displayed"
+        }
+      ],
+      "trades_since_last": {
+        "n": 1,
+        "volume": 1,
+        "vwap_price": 0.5,
+        "high": 1,
+        "low": 1,
+        "last": 1,
+        "first_ts": 1,
+        "last_ts": 1
+      },
+      "session_trades": {
+        "n": 1,
+        "volume": 1,
+        "vwap_price": 0.5,
+        "high": 1,
+        "low": 1,
+        "last": 1,
+        "first_ts": 1,
+        "last_ts": 1
+      },
+      "orders": [
+        {
+          "order_id": "o1",
+          "client_order_id": "c1",
+          "side": "buy",
+          "type": "limit",
+          "tif": "day",
+          "price": 1,
+          "peg_offset_ticks": 1,
+          "qty": 1,
+          "filled_qty": 1,
+          "leaves_qty": 1,
+          "status": "pending",
+          "reason": "x",
+          "ts_submit": 1,
+          "ts_activated": 1,
+          "ts_done": 1,
+          "queue_ahead": 1,
+          "rank": 1,
+          "level_qty": 1,
+          "cancel_sent_ns": 1,
+          "n_fills": 1,
+          "avg_fill_price": 0.5
+        }
+      ],
+      "n_orders": 1,
+      "n_open": 1,
+      "fills": [
+        {
+          "order_id": "o1",
+          "fill_seq": 1,
+          "ts_event": 1,
+          "ts_known": 1,
+          "side": "buy",
+          "price": 1,
+          "qty": 1,
+          "liquidity": "maker",
+          "reason": "queue_depleted",
+          "queue_ahead_before": 1,
+          "fee": 0.5,
+          "step": 1
+        }
+      ],
+      "markouts": [
+        {
+          "order_id": "o1",
+          "fill_seq": 1,
+          "horizon_ns": 1,
+          "mo_ticks": 0.5,
+          "mo_bps": 0.5,
+          "mo_ccy": 0.5
+        }
+      ],
+      "position": {
+        "qty": 1,
+        "bought_qty": 1,
+        "sold_qty": 1,
+        "cash": 0.5,
+        "fees": 0.5,
+        "mark_price": 0.5,
+        "mark_source": "mid",
+        "pnl_gross": 0.5,
+        "pnl_net": 0.5,
+        "currency": "x"
+      },
+      "warnings": [
+        "x"
+      ]
+    }
+  }
+}

@@ -110,7 +110,13 @@ sim-vs-live comparison on unusable data measures the data, not the simulator.
   (iceberg) quantity beyond the displayed slice and CME implied liquidity are not modelled.
 - **Your own order's effect on others.** A shadow never takes volume from orders behind it and never changes anyone's
   behaviour. See [Shadow orders](shadow-orders.md#what-a-shadow-does-not-do).
-- **Auctions and halts.** Not modelled. Orders resting through them are censored.
+- **Auctions and halts.** Not modelled as matching; orders resting through an auction are censored. Halts are not
+  handled yet: the engine can censor shadows over halt spans a Rust caller supplies, but ingest does not record
+  Nasdaq's trading-state (`H`) messages and no Python, CLI or service path passes halt spans, so `replay`, the zoo
+  and calibration treat a halted symbol as trading continuously. A shadow resting through a halt, LULD pause or IPO
+  quotation period can be filled during it, at once when the halted book is displayed crossed. None of the four
+  symbols of the published Nasdaq days halted; leave halted symbol-days out until halts are carried from ingest
+  ([halt censoring](../design/extensions/halt-censoring.md)).
 - **Pro-rata and allocation matching.** There is no rule set for them; FIFO replay of such a product is not exact.
 - **L2-only data** (for example Tardis `incremental_book_L2`) drives the zoo, markouts and `calibrate-live`, never
   exact truth.

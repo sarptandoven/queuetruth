@@ -190,7 +190,8 @@
         "scorecard",
         "report",
         "dataset_validate",
-        "deletion"
+        "deletion",
+        "zoo"
       ],
       "title": "Kind",
       "type": "string"

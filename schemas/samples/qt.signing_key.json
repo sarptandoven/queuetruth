@@ -1,0 +1,12 @@
+{
+  "sample": {
+    "schema": "qt.signing_key",
+    "schema_version": 1,
+    "algorithm": "ed25519",
+    "public_key": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "key_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "private_key_path": "x",
+    "public_key_path": "x",
+    "encrypted": true
+  }
+}

@@ -26,7 +26,7 @@ def _render(tmp_path: Path, inputs: list[Any], **kw: Any) -> str:
 
 
 def _section(html: str, sid: str) -> str:
-    m = re.search(rf'<section id="{sid}">(.*?)</section>', html, re.S)
+    m = re.search(rf'<section id="{sid}"[^>]*>(.*?)</section>', html, re.S)
     assert m, f"section {sid} missing"
     return m.group(1)
 

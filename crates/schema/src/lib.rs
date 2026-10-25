@@ -17,13 +17,15 @@ pub use canon::{
 };
 pub use qt_types::{QtError, QtResult};
 pub use tables::{
-    FEATURES_INSERT_AT, added_columns, dict_type, dict_values, features_columns, features_full_schema, features_schema,
-    full_schema, schema, schema_dump, schema_json, schema_names, table_metadata, ts_type, type_name,
+    FEATURES_INSERT_AT, TABLE_VERSIONS, added_columns, dict_type, dict_values, features_columns, features_full_schema,
+    features_schema, full_schema, schema, schema_dump, schema_json, schema_names, table_metadata, table_version,
+    ts_type, type_name,
 };
 
 /// Integer major `schema_version` of every JSON document (unchanged by the additive 1.1 bump).
 pub const SCHEMA_VERSION: u32 = 1;
-/// `qt.schema_version` metadata of every Arrow table (SPEC 3.11: schema 1.1, additive).
+/// `qt.schema_version` metadata of every Arrow table (SPEC 3.11: schema 1.1, additive) except the version-1 extension
+/// tables of `TABLE_VERSIONS`.
 pub const ARROW_SCHEMA_VERSION: &str = "1.1";
 /// Engine version written into table metadata and summaries (the workspace version).
 pub const ENGINE_VERSION: &str = env!("CARGO_PKG_VERSION");

@@ -17,7 +17,20 @@ from pathlib import Path
 import pytest
 from e2e_support import REPO
 
-SKIP_DIRS = {"target", ".venv", ".realdata", ".scratch", ".git", ".hypothesis", ".pytest_cache", ".ruff_cache", "site"}
+# `.queuetruth` is the trial ledger's runtime directory (queuetruth.ledger): it writes its own `*` .gitignore, so
+# nothing in it can be committed, and it records runs made in this checkout (make examples, the CLI).
+SKIP_DIRS = {
+    "target",
+    ".venv",
+    ".realdata",
+    ".scratch",
+    ".git",
+    ".hypothesis",
+    ".pytest_cache",
+    ".ruff_cache",
+    "site",
+    ".queuetruth",
+}
 FORBIDDEN = (".itch", ".dbn", ".zst", ".pcap", ".pcapng", ".gz", ".tgz", ".bz2", ".xz")
 DATA_LIKE = (".parquet", ".csv", ".jsonl", ".npz", ".arrow", ".feather")
 FIXTURE_ROOTS = ("tests/fixtures/", "schemas/samples/")

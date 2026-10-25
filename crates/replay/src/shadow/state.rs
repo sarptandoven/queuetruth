@@ -182,6 +182,11 @@ pub(crate) struct Shadow {
     pub(crate) lvl_base: Option<LevelAcc>,
     /// Instrument event index of the activation.
     pub(crate) act_ev: u64,
+    /// Receipt-order priority bound (`Exact` rule on venues whose order references are assigned in receipt order,
+    /// `order_ref_priority`): the largest order reference added on the instrument before the shadow went live. A
+    /// later `A` with a smaller reference was received before the shadow and ranks ahead of it (Nasdaq releases
+    /// orders accepted before the open but held until it with their original receipt priority).
+    pub(crate) prio_ref: Option<u64>,
 }
 
 impl Shadow {
@@ -239,6 +244,7 @@ impl Shadow {
             ev_twin: Vec::new(),
             lvl_base: None,
             act_ev: 0,
+            prio_ref: None,
         }
     }
 
@@ -305,6 +311,23 @@ impl Shadow {
         self.qa_live = Some(total);
         self.rank_live = Some(self.rank);
         self.level_live = Some(total);
+    }
+
+    /// Receipt-order bound of a twin-linked shadow (A1) entering at its twin's `A` on an `order_ref_priority`
+    /// instrument: the shadow stands for the twin, received at reference `r`, so `prio_ref = r`, and resting orders
+    /// with a larger reference (received after the twin, displayed before it was released from the pre-open hold)
+    /// leave its queue ahead. Exact on ITCH data, where a priority-losing replace takes a new reference.
+    pub(crate) fn bind_ref(&mut self, r: u64, book: &Book) {
+        self.prio_ref = Some(r);
+        let later: Vec<u64> = self.ahead_set.iter().copied().filter(|&id| id > r).collect();
+        for id in later {
+            self.ahead_set.remove(&id);
+            let q = book.order(id).map_or(0, |(_, _, o)| o.size);
+            self.exact_qa = self.exact_qa.saturating_sub(q);
+            self.ahead = self.ahead.saturating_sub(q);
+            self.qa = self.qa.saturating_sub(q);
+        }
+        self.rank = self.ahead_set.len() as u32;
     }
 
     /// Records one fill and returns its row (without the shadow id, filled by the caller).

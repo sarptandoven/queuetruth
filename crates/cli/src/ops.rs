@@ -46,7 +46,8 @@ pub fn ingest(spec: &IngestSpec) -> QtResult<IngestSummary> {
         | IngestFormat::Dbn
         | IngestFormat::Etcsv
         | IngestFormat::Parquet
-        | IngestFormat::IexDeepPlus => qt_ingest::ingest(spec),
+        | IngestFormat::IexDeepPlus
+        | IngestFormat::NyseIbf => qt_ingest::ingest(spec),
         IngestFormat::Bitstamp
         | IngestFormat::Bitfinex
         | IngestFormat::Coinbase

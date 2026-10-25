@@ -189,13 +189,16 @@ Gradient-boosted hazard model with isotonic recalibration; `predict` returns `qt
 
 | Method | Signature | Description |
 |---|---|---|
-| `fit` | `(self, features: pa.Table) -> HazardModel` | Splits (purge / embargo), fits the GBDT on the train person-period rows and the isotonic layers on the calib split. Keeps the split table (`split_features`) and assignment (`split_result`) for scoring. |
+| `fit` | `(self, features: pa.Table, *, threads: int \| None = None) -> HazardModel` | Splits (purge / embargo), fits the GBDT on the train person-period rows and the isotonic layers on the calib split. Keeps the split table (`split_features`) and assignment (`split_result`) for scoring. `threads` (execution only) fixes the GBDT's OpenMP threads (`fit_threads`). A fit that raises leaves the model unfitted (no estimator, no split table, no cached hazards from an earlier fit). |
 | `hazards` | `(self, x: np.ndarray) -> tuple[np.ndarray, np.ndarray]` | Raw per-interval hazards `(h_fill, h_cancel)`, shape (rows, J), for a feature matrix in model order. |
-| `load` | `(path: str, *, sha256: str \| None = None, trusted: bool = False) -> HazardModel` | Loads a saved model. `path` is the output directory, its `model.json` or its `model.pkl`. |
+| `load` | `(path: str, *, sha256: str \| None = None, trusted: bool = False, allow_pickle: bool = False) -> HazardModel` | Loads a saved model. `path` is the output directory or a file in it (`model.json`, `model.npz`). |
 | `matrix` | `(self, features: pa.Table) -> np.ndarray` | The model's feature matrix of a features table (QT-INPUT-002 if a feature column is missing). |
 | `predict` | `(self, features: pa.Table) -> pa.Table` | `qt.hazard_predictions`: one row per input row and grid horizon (input order, then horizon). `split` is taken from the input's `split` column when present, else `test`; `y_fill` / `censored` need `event_ns` and `cause` (else null / false). |
 | `predict_arrays` | `(self, features: pa.Table) -> dict[str, np.ndarray]` | `h_fill`, `h_cancel`, `cif_fill_raw`, `cif_fill`, `cif_cancel`, `survival`, each (rows, J). |
-| `save` | `(self, out_dir: str) -> None` | Writes model.pkl and records its sha256 in the model card (`model.json`, written or updated). |
+| `predict_split` | `(self) -> pa.Table` | `predict(split_features)` through the hazard cache of `fit` (`split_arrays`: only rows not yet predicted are predicted). In-process only (`QT-USAGE-001` for a model that was loaded, not fitted here). |
+| `save` | `(self, out_dir: str) -> None` | Writes `model.npz` and records its sha256 in the model card (`model.json`, written or updated). |
+| `split_arrays` | `(self, mask: np.ndarray \| None = None) -> dict[str, np.ndarray]` | `predict_arrays(split_features)` (only the rows where the boolean `mask` is true when given), each row predicted at most once per fit and cached; equal to predicting those rows again. In-process only: a model that was loaded, not fitted here, has no split table (`QT-USAGE-001`). |
+| `state` | `(self) -> tuple[dict[str, Any], dict[str, np.ndarray]]` | `(meta, arrays)` of `model.npz` (`queuetruth.model.persist`). `fitted_with` is the version that fitted the model (kept through load, migrate and re-save), not the one saving it. |
 
 ### `QtApiError` **SPEC 4.3**
 
@@ -249,6 +252,7 @@ Statistics used by evaluation and the scorer (SPEC 4.3 `queuetruth.stats`, 5.5.7
 | `block_counts` | function |  | `(n_blocks: int, b: int, seed: int) -> np.ndarray` | `(b, n_blocks)` multiplicity of each block in each replicate (same draws as `day_block_bootstrap`). |
 | `block_labels` | function | SPEC 4.3 | `(session_date: np.ndarray, ts_ns: np.ndarray, min_dates: int = 5) -> tuple[np.ndarray, str]` | Block label per row and the block kind: `("day", days since epoch)` with >= `min_dates` distinct dates, else `("30min", floor(ts / 30 min))` (UTC half-hours; equal to local half-hours for whole/half-hour UTC offsets). |
 | `block_replicates` | function |  | `(blocks: np.ndarray, stat: Callable[[np.ndarray], float], b: int, seed: int) -> tuple[float, np.ndarray]` | `(stat(all rows), replicates)`; `stat` receives row indices (with repetition) into the caller's data. |
+| `bootstrap_indices` | function |  | `(n: int, b: int, *, block_size: int \| None = None, kind: Bootstrap = stationary, seed: int = 0, test_id: str = selection) -> np.ndarray` | `b x n` row indices of a stationary, circular or moving block bootstrap (module docstring), drawn from `bootstrap_rng(seed, test_id)` in chunks of at most `CHUNK_ELEMENTS` indices (the tests use the same draws internally without materialising all `b x n` of them). |
 | `bootstrap_p_two_sided` | function | SPEC 4.3 | `(replicates: np.ndarray, null: float = 0.0) -> float` | `min(1, 2 min((1 + #{rep <= null}) / (1 + B), (1 + #{rep >= null}) / (1 + B)))` over the B finite replicates (SPEC 5.7.5 test, capped at 1 and never exactly 0 by the (1 + #) / (1 + B) form). |
 | `bootstrap_rng` | function |  | `(seed: int, test_id: str) -> np.random.Generator` | `numpy.random.default_rng(stable_seed(seed, [b"bootstrap", test_id]))`. |
 | `bootstrap_se` | function | SPEC 4.3 | `(replicates: np.ndarray) -> float` | Bootstrap standard deviation (ddof = 1) of the finite replicates. |
@@ -259,6 +263,9 @@ Statistics used by evaluation and the scorer (SPEC 4.3 `queuetruth.stats`, 5.5.7
 | `clustered_mcnemar` | function | SPEC 4.3 | `(live_filled: np.ndarray, sim_filled: np.ndarray, clusters: np.ndarray, *, b: int = 1000, seed: int = 0, alpha: float = 0.05) -> ClusteredDiscordance` | Primary cluster-robust discordance test of paired fill outcomes (see module docstring). |
 | `ClusteredDiscordance` | class |  | | Cluster-robust discordance test result (primary) with plain McNemar as secondary. |
 | `day_block_bootstrap` | function | SPEC 4.3 | `(blocks: np.ndarray, stat: Callable[[np.ndarray], float], b: int, seed: int, alpha: float = 0.05) -> CI` | Block bootstrap percentile CI over resampled blocks. |
+| `deflated_sharpe_ratio` | function |  | `(sr: float, n: int, *, n_trials: int, var_sr: float, skew: float = 0.0, kurtosis: float = 3.0, mean_sr: float = 0.0) -> float` | PSR of the selected trial against `expected_max_sharpe(n_trials, var_sr, mean_sr)` (Bailey and Lopez de Prado 2014). Equal to PSR(0) for one trial with `mean_sr = 0`. |
+| `dsr_from_returns` | function |  | `(returns: np.ndarray, trial_sharpes: np.ndarray, *, n_trials: int \| None = None) -> float` | DSR of `returns` (the selected trial) with `V = var(trial_sharpes, ddof = 1)` and `N = n_trials`, or `len(trial_sharpes)` without it; `trial_sharpes` holds the per-period Sharpes of every trial that has a series, the selected one included. Pass `n_trials` (>= `len(trial_sharpes)`) when trials without a series were also tried, as a trial ledger counts them, so the deflation is not understated. |
+| `expected_max_sharpe` | function |  | `(n_trials: int, var_sr: float, mean_sr: float = 0.0) -> float` | Expected maximum Sharpe of `n_trials` independent skill-less trials whose Sharpes have variance `var_sr`. |
 | `gray_test` | function | SPEC 4.3 | `(time: np.ndarray, cause: np.ndarray, group: np.ndarray, cause_of_interest: int = 1) -> TestResult` | Gray's K-sample test on cumulative incidence (Gray 1988, rho = 0). |
 | `holm` | function | SPEC 4.3 | `(p: np.ndarray) -> np.ndarray` | Holm-adjusted p-values. |
 | `hosmer_lemeshow` | function | SPEC 4.3 | `(p: np.ndarray, y: np.ndarray, n_bins: int = 10) -> TestResult` | Hosmer-Lemeshow test on the equal-count bins, `max(n_bins - 2, 1)` df. |
@@ -267,15 +274,29 @@ Statistics used by evaluation and the scorer (SPEC 4.3 `queuetruth.stats`, 5.5.7
 | `logrank` | function | SPEC 4.3 | `(time_a: np.ndarray, event_a: np.ndarray, time_b: np.ndarray, event_b: np.ndarray) -> TestResult` | Two-sample log-rank test (matches lifelines `logrank_test`). |
 | `mcnemar` | function | SPEC 4.3 | `(b: int, c: int) -> McNemarResult` | McNemar test: chi2_cc, p_chi2, p_exact, odds_ratio, Wald CI on the log odds ratio. |
 | `McNemarResult` | class |  | | McNemar test on discordant counts (SPEC 5.7.5). |
+| `McsResult` | class |  | | Model confidence set: `included` = column indices (ascending) with `p_values > alpha`; `eliminated` = the elimination order (the surviving model last); `step_p` = the test p-value at each elimination; `studentize` = `"fixed"` (Hansen, Lunde and Nason) or `"wild"` (wild cluster bootstrap-t), module docstring. |
+| `min_track_record_length` | function |  | `(sr: float, *, sr_benchmark: float = 0.0, skew: float = 0.0, kurtosis: float = 3.0, alpha: float = 0.05) -> float` | Track record length at which `PSR(sr_benchmark) = 1 - alpha` (inf when `sr <= sr_benchmark`). |
+| `model_confidence_set` | function |  | `(losses: np.ndarray, *, alpha: float = 0.1, method: "Literal[R, max]" = R, b: int = 1000, seed: int = 0, test_id: str = mcs, bootstrap: Bootstrap = stationary, block_size: int \| None = None, blocks: np.ndarray \| None = None, indices: np.ndarray \| None = None, studentize: Studentize = auto) -> McsResult` | Hansen-Lunde-Nason MCS on an `n x m` loss matrix (rows = observations, columns = models). `studentize="auto"` is the wild cluster bootstrap-t (`"wild"`) with `blocks=` and the fixed bootstrap variance of Hansen, Lunde and Nason (`"fixed"`) otherwise (module docstring). |
 | `murphy` | function | SPEC 4.3 | `(p: np.ndarray, y: np.ndarray, n_bins: int = 10) -> dict[str, float]` | Murphy decomposition: brier, reliability, resolution, uncertainty, within_bin (they sum exactly to brier). |
 | `obuchowski` | function | SPEC 4.3 | `(b_k: np.ndarray, c_k: np.ndarray, n_k: np.ndarray) -> tuple[float, float] \| None` | `(z, p)` of the Obuchowski cluster-adjusted McNemar test from per-cluster counts; None if undefined. |
 | `paired_permutation` | function | SPEC 4.3 | `(x_live: np.ndarray, x_sim: np.ndarray, stat: Callable[..., float], b: int, seed: int) -> TestResult` | Paired permutation test: `stat(x_live, x_sim)` vs `b` arm-swapped resamples (rows = orders). |
+| `PboResult` | class |  | | CSCV outcome; arrays are per combination, in `itertools.combinations(range(S), S // 2)` order. |
 | `percentile_ci` | function | SPEC 4.3 | `(replicates: np.ndarray, alpha: float = 0.05) -> tuple[float, float]` | Percentile interval of the finite replicates (NaN if none). |
+| `probabilistic_sharpe_ratio` | function |  | `(sr: float, n: int, *, skew: float = 0.0, kurtosis: float = 3.0, sr_benchmark: float = 0.0) -> float` | `Phi((SR - SR*) / sigma(SR))` (Bailey and Lopez de Prado 2012); an infinite `SR` (a constant non-zero series) reads 1 above the benchmark and 0 below. |
+| `probability_of_backtest_overfitting` | function |  | `(performance: np.ndarray, *, n_splits: int = 16, metric: "Literal[sharpe, mean] \| Callable[[np.ndarray], np.ndarray]" = sharpe) -> PboResult` | PBO by combinatorially symmetric cross-validation (module docstring). `performance` is `T x N` (periods x trials); `metric` maps a `t x N` row subset to `N` performances (callables get the rows in time order). |
+| `psr_from_returns` | function |  | `(returns: np.ndarray, sr_benchmark: float = 0.0) -> float` | PSR of a return series with its own sample moments. |
 | `reliability_table` | function | SPEC 4.3 | `(p: np.ndarray, y: np.ndarray, n_bins: int = 10) -> dict[str, np.ndarray]` | Reliability table with Wilson CIs: columns bin, count, mean_p, observed_rate, p_min, p_max, rate_lo, rate_hi. |
+| `sharpe_moments` | function |  | `(returns: np.ndarray) -> tuple[float, int, float, float]` | `(SR, n, skewness, kurtosis)`: biased sample moments, Pearson (non-excess) kurtosis (3 for constant series). |
+| `sharpe_ratio` | function |  | `(returns: np.ndarray) -> float` | Per-period Sharpe ratio `mean / std (ddof = 1)`; 0 for a constant zero series, `+-inf` for a constant non-zero one. |
+| `sharpe_ratio_std` | function |  | `(sr: float, n: int, *, skew: float = 0.0, kurtosis: float = 3.0) -> float` | Standard error of the Sharpe estimator, `sqrt((1 - g3 SR + (g4 - 1) / 4 SR^2) / (n - 1))`. |
+| `spa_test` | function |  | `(benchmark: np.ndarray, models: np.ndarray, *, b: int = 1000, seed: int = 0, test_id: str = spa, bootstrap: Bootstrap = stationary, block_size: int \| None = None, blocks: np.ndarray \| None = None, indices: np.ndarray \| None = None, studentize: bool = True) -> SpaResult` | Hansen's test of superior predictive ability on losses: H0 = no model beats the benchmark. |
+| `SpaResult` | class |  | | Hansen's SPA test (module docstring). `mean_diff[k] = mean(L_benchmark - L_k)` (positive = model better), `omega[k]` the standard deviation of `sqrt(n) mean_diff[k]`, `t[k] = sqrt(n) mean_diff[k] / omega[k]`. |
 | `spiegelhalter_z` | function | SPEC 4.3 | `(p: np.ndarray, y: np.ndarray) -> TestResult` | Spiegelhalter z test (two-sided normal p-value). |
 | `splitmix64` | function |  | `(x: int) -> int` | One splitmix64 step (adds the golden gamma, then mixes), as `qt_types::splitmix64`. |
 | `stable_seed` | function |  | `(run_seed: int, parts: Sequence[bytes \| str]) -> int` | FNV-1a 64 over `run_seed` (8 LE bytes), then per part its length (4 LE bytes) and bytes; then splitmix64. |
 | `StepFunction` | class |  | | Right-continuous step function: `value[i]` holds on `[time[i], time[i + 1])`; `time[0] = 0` for estimators. |
+| `stepm` | function |  | `(benchmark: np.ndarray, models: np.ndarray, *, alpha: float = 0.05, b: int = 1000, seed: int = 0, test_id: str = stepm, bootstrap: Bootstrap = stationary, block_size: int \| None = None, blocks: np.ndarray \| None = None, indices: np.ndarray \| None = None, studentize: bool = True, recenter: Recenter = upper) -> StepMResult` | Stepwise multiple testing of every model against the benchmark at familywise error `alpha`. |
+| `StepMResult` | class |  | | Romano-Wolf StepM: `superior` = models (column indices, ascending) whose `H_k: E[L_benchmark - L_k] <= 0` is rejected; `steps[j]` = the models rejected at step `j`, `critical_values[j]` its critical value (t units). |
 | `TestResult` | class |  | | A test statistic and its p-value. |
 | `tost_from_ci` | function | SPEC 4.3 | `(ci90: tuple[float, float], margin: float) -> bool` | Equivalence iff the 90% CI lies inside `[-margin, margin]`. |
 | `tost_p` | function | SPEC 4.3 | `(estimate: float, se: float, margin: float) -> float` | TOST p-value `max(1 - Phi((est + m) / se), Phi((est - m) / se))`. |
@@ -321,15 +342,18 @@ Learned L2 fill model: discrete-time competing-risk hazard (SPEC 4.3 `queuetruth
 | `cif_from_hazards` | function |  | `(h_fill: np.ndarray, h_cancel: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]` | `(CIF_fill, CIF_cancel, S)` per grid point from per-interval hazards (shape (n, J)), SPEC 5.5.4. |
 | `Climatology` | class |  | | Fitted climatology: CIF_fill on the grid per fine stratum, per instrument x side, and overall. |
 | `expand_person_period` | function | SPEC 4.3 | `(features: pa.Table, grid_ns: list[int]) -> pa.Table` | Person-period rows (SPEC 5.5.3): every input column, then `row_id` (input row index), `interval_idx` (1..J), `log_tau_end` (ln of `tau_j` in s) and `target` (0 none, 1 fill, 2 cancel). |
-| `fit_hazard` | function | SPEC 4.3 | `(spec: HazardFitSpec \| dict[str, Any]) -> HazardModelCard` | `fit-hazard`: reads `qt.features`, fits, writes `predictions.parquet` (every split), `model.pkl` and `model.json` under `out` (nothing is written when `out` is null) and returns the model card. |
+| `fit_hazard` | function | SPEC 4.3 | `(spec: HazardFitSpec \| dict[str, Any]) -> HazardModelCard` | `fit-hazard`: reads `qt.features`, fits, writes `predictions.parquet` (every split), `model.npz` and `model.json` under `out` (nothing is written when `out` is null) and returns the model card. |
 | `HazardModel` | class | SPEC 4.3 | | Gradient-boosted hazard model with isotonic recalibration; `predict` returns `qt.hazard_predictions`. |
 | `ibs` | function |  | `(brier_by_tau: list[float] \| np.ndarray, grid_ns: list[int]) -> float` | Integrated Brier `sum_j BS(tau_j) (tau_j - tau_{j-1}) / tau_J` (`tau_0 = 0`). |
 | `ipcw_brier` | function | SPEC 4.3 | `(cif_fill: np.ndarray, event_ns: np.ndarray, cause: np.ndarray, tau_ns: int, *, censoring: CensoringKM \| None = None) -> float` | IPCW Brier of the fill cause at `tau`: `mean_i w_i (1{e_i <= tau, fill} - F_fill(tau \| x_i))^2`. |
 | `ipcw_logloss` | function | SPEC 4.3 | `(cif_fill: np.ndarray, cif_cancel: np.ndarray, event_ns: np.ndarray, cause: np.ndarray, tau_ns: int, *, censoring: CensoringKM \| None = None) -> float` | IPCW competing-risk log loss at `tau` (Alberge et al. 2024 eq. 2), `S = max(1 - F_fill - F_cancel, 1e-12)`; `censoring` defaults to the KM of censoring of the same rows. |
+| `LegacyPickleWarning` | class |  | | A legacy `model.pkl` was unpickled (`allow_pickle=True`): migrate it to `model.npz`. |
 | `make_split` | function | SPEC 4.3 | `(features: pa.Table, split: dict[str, Any] \| SplitSpec \| None = None, *, h_max_ns: int \| None = None, sessions: dict[str, tuple[int, int]] \| None = None) -> pa.Table` | Adds the `split` column and drops purged / embargoed rows (SPEC 5.5.6). `h_max_ns` defaults to `max(60 s, max event_ns)`; `sessions` maps `YYYY-MM-DD` to `(start_ns, end_ns)` session bounds. |
 | `model_feature_names` | function |  | `(table: pa.Table \| pa.Schema, privileged: bool) -> list[str]` | Model inputs in table order: `side_sign`, then every non-fixed column; `p_*` columns only if `privileged`. |
+| `model_sha256` | function |  | `(card: Any) -> str \| None` | The sha256 of the model file a `qt.hazard_model_card` lists (`model.npz`, else a legacy `model.pkl`; model or dict; None when neither is listed): the trusted digest to pass to `HazardModel.load` when the card comes from `fit_hazard` itself. |
 | `rcll` | function | SPEC 4.3 | `(h_fill: np.ndarray, h_cancel: np.ndarray, event_ns: np.ndarray, cause: np.ndarray, grid_ns: list[int]) -> float` | Right-censored log likelihood loss (mean `-ln P(observed)`, probabilities floored at 1e-12). |
 | `split_assignment` | function |  | `(features: pa.Table, split: SplitSpec \| dict[str, Any] \| None = None, *, h_max_ns: int \| None = None, sessions: dict[str, tuple[int, int]] \| None = None) -> SplitResult` | Computes the split of every row (see the module docstring) without dropping anything. |
+| `TreeEnsemble` | class |  | | Prediction form of a fitted `HistGradientBoostingClassifier` (module docstring). |
 
 ## `queuetruth.live`
 
@@ -429,6 +453,25 @@ Static self-contained HTML report (SPEC 4.3 `queuetruth.report`, 5.9).
 | Name | Kind | Binding | Signature | Description |
 |---|---|---|---|---|
 | `render` | function | SPEC 4.3 | `(spec: ReportSpec \| dict[str, Any], *, leaderboard_sort_horizon_ns: int \| None = None) -> ReportSummary` | Renders the report of SPEC 5.9 to `spec.out` and returns its `qt.report_summary`. The zoo leaderboard is sorted by absolute fill-rate bias at the keyword `leaderboard_sort_horizon_ns`, else the spec field of that name, else 60 s. |
+
+## `queuetruth.frames`
+
+Run outputs as pandas or polars DataFrames, for notebooks and ad-hoc analysis.
+
+| Name | Kind | Binding | Signature | Description |
+|---|---|---|---|---|
+| `available_backends` | function |  | `() -> list[str]` | The installed DataFrame libraries among `BACKENDS`, in `BACKENDS` order. |
+| `held_out` | function |  | `(calibration: Any, backend: str \| None = None) -> Any` | Held-out metrics of a calibration as one row per arm, model and horizon (`qt.calibration_result`: a `CalibrationResult`, its dict, a calibration output directory or its `calibration.json`). |
+| `leaderboard` | function |  | `(zoo: Any, backend: str \| None = None) -> Any` | The zoo leaderboard as one row per model and horizon (`qt.zoo_summary`: a `ZooSummary`, its dict, a zoo output directory or its `summary.json`). |
+| `load_run` | function |  | `(path: str \| Path, backend: str \| None = None, verify: bool = False) -> RunFrames` | Opens a run output directory (or its summary JSON file) as a `RunFrames`. |
+| `read` | function |  | `(path: str \| Path, expect: str \| None = None, columns: Sequence[str] \| None = None, backend: str \| None = None, filters: Any = None) -> Any` | Reads one queuetruth Parquet table as a DataFrame. |
+| `records` | function |  | `(doc: Any, field: str, backend: str \| None = None) -> Any` | A list-of-objects field of any summary document as a DataFrame, one row per element. |
+| `resolve_backend` | function |  | `(backend: str \| None = None) -> str` | The backend to use: `backend`, else env `QT_FRAMES_BACKEND`, else `"auto"` (pandas, then polars). |
+| `RunFrames` | class |  | | One run output directory: its summary document and its Parquet tables as DataFrames. |
+| `scorecards` | function |  | `(scores: Any, backend: str \| None = None) -> Any` | Scorecards side by side, one row each (`qt.scorecard_summary`). |
+| `to_frame` | function |  | `(data: Any, backend: str \| None = None) -> Any` | One Arrow table (or record batch, or list of row dicts) as a pandas or polars DataFrame (module docstring). |
+
+Constants: `BACKENDS`, `ENV_BACKEND`, `SUMMARY_FILES`.
 
 ## `queuetruth.client`
 

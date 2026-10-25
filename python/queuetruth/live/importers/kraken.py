@@ -22,9 +22,19 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
-from queuetruth.live._common import Record, as_bool, dec, dec_text, dsub, dsum, rfc3339_ns, text_or_none
+from queuetruth.live._common import (
+    Record,
+    as_bool,
+    dec,
+    dec_text,
+    dsub,
+    dsum,
+    input_error,
+    rfc3339_ns,
+    text_or_none,
+)
 from queuetruth.live.builder import ImportResult, LogBuilder
-from queuetruth.live.importers._base import ImportOptions, json_records, new_builder, side_of
+from queuetruth.live.importers._base import ImportOptions, json_records, list_field, new_builder, side_of
 
 VENUE = "kraken"
 _TIF = {"GTC": "gtc", "IOC": "ioc", "GTD": "gtd", "FOK": "fok"}
@@ -49,10 +59,12 @@ class _St:
 
 
 def _fee(b: LogBuilder, m: dict[str, Any], loc: str) -> tuple[Decimal | None, str | None]:
-    fees = m.get("fees")
-    if not isinstance(fees, list) or not fees:
+    fees = list_field(m.get("fees"), "fees", loc)
+    if not fees:
         return None, None
-    assets = {text_or_none(f.get("asset")) for f in fees if isinstance(f, dict)}
+    if not all(isinstance(f, dict) for f in fees):
+        raise input_error(loc, "fees must be an array of objects")
+    assets = {text_or_none(f.get("asset")) for f in fees}
     if len(assets) != 1:
         b.warn(
             f"{VENUE}: fill {m.get('exec_id')} has fees in several assets {sorted(map(str, assets))} (fee left null)"
@@ -182,6 +194,9 @@ def import_kraken(paths: list[str], opts: ImportOptions) -> ImportResult:
             continue
         data = obj.get("data") or []
         for i, m in enumerate(data if isinstance(data, list) else [data]):
+            if not isinstance(m, dict):
+                b.skip("non-object record")
+                continue
             sub = Record(m, rec.raw, f"{rec.location}/{i}", rec.file_idx, rec.line_idx, recv_ns=rec.recv_ns)
             _item(b, m, sub, str(obj.get("type", "update")), states)
     return b.finish()

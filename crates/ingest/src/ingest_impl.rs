@@ -359,6 +359,9 @@ struct Templates {
     tick: BTreeMap<u32, i64>,
     part_symbol: BTreeMap<(i32, u32), String>,
     part_tick: BTreeMap<(i32, u32), i64>,
+    /// Contract multiplier and currency per partition (DBN definitions; default 1 and USD).
+    part_multiplier: BTreeMap<(i32, u32), f64>,
+    part_currency: BTreeMap<(i32, u32), String>,
     seen: BTreeSet<(i32, u32)>,
     last_seen: Option<(i32, u32)>,
 }
@@ -399,7 +402,14 @@ impl Templates {
                     1
                 }
             };
-            out.push(c.instrument(iid, date, symbol, tick, c.lot.unwrap_or(1))?);
+            let mut row = c.instrument(iid, date, symbol, tick, c.lot.unwrap_or(1))?;
+            if let Some(m) = self.part_multiplier.get(&(date, iid)) {
+                row.contract_multiplier = *m;
+            }
+            if let Some(cur) = self.part_currency.get(&(date, iid)) {
+                row.currency.clone_from(cur);
+            }
+            out.push(row);
         }
         scan.add_source("instruments_default_tick_size", defaulted.len() as u64);
         scan.add_source("instruments_without_symbol", no_symbol);
@@ -488,6 +498,7 @@ pub(crate) fn ingest(spec: &IngestSpec) -> QtResult<IngestSummary> {
         IngestFormat::Etcsv => ingest_etcsv(spec, &inputs, &out)?,
         IngestFormat::Parquet => ingest_parquet(spec, &inputs, &out)?,
         IngestFormat::IexDeepPlus => ingest_iex(spec, &inputs, &out)?,
+        IngestFormat::NyseIbf => crate::nyse::ingest(spec, &inputs, &out)?,
         other => {
             return Err(cfg(format!(
                 "format: {:?} is ingested by qt_crypto::ingest, not qt_ingest",
@@ -1017,8 +1028,12 @@ impl<'a> Resolver<'a> {
             None => (id, self.sym.symbol_at(id, date)),
         };
         let label = name.map_or_else(|| iid.to_string(), str::to_owned);
-        if !c.selected(&label) {
+        if !c.selected(&label) && !self.sym.aliases_at(id, day).into_iter().any(|a| c.selected(a)) {
             return Ok(None);
+        }
+        // Spec 1.2 non-goal: pro-rata and allocation books are rejected at ingest, at their first selected record.
+        if let Some(m) = self.sym.non_fifo(iid, name, date) {
+            return Err(self.sym.non_fifo_error(date, iid, name, m, |s| c.selected(s)));
         }
         if let Some(n) = name {
             match self.part.get(&(date, iid)) {
@@ -1045,7 +1060,31 @@ impl<'a> Resolver<'a> {
     }
 }
 
+/// A refused DBN ingest (a vintage mix, a non-FIFO book, ...) removes what it wrote to `out`, so the same `out` can
+/// be used again. Only an `out` this ingest's writer created (or found empty) is cleaned; a non-empty `out` is never
+/// touched (the writer refuses it).
 fn ingest_dbn(spec: &IngestSpec, inputs: &[PathBuf], out: &Path) -> QtResult<IngestSummary> {
+    let existed = out.exists();
+    let mut created = false;
+    let r = ingest_dbn_into(spec, inputs, out, &mut created);
+    if r.is_err() && created {
+        if existed {
+            for e in std::fs::read_dir(out).into_iter().flatten().flatten() {
+                let p = e.path();
+                let _ = if p.is_dir() {
+                    std::fs::remove_dir_all(&p)
+                } else {
+                    std::fs::remove_file(&p)
+                };
+            }
+        } else {
+            let _ = std::fs::remove_dir_all(out);
+        }
+    }
+    r
+}
+
+fn ingest_dbn_into(spec: &IngestSpec, inputs: &[PathBuf], out: &Path, created: &mut bool) -> QtResult<IngestSummary> {
     let c = Common::new(spec, "dbn")?;
     no_instruments_file(spec, "dbn")?;
     let mut t = Templates::default();
@@ -1057,17 +1096,18 @@ fn ingest_dbn(spec: &IngestSpec, inputs: &[PathBuf], out: &Path) -> QtResult<Ing
         let (schema, start) = (r.metadata().schema, r.metadata().start);
         match schema {
             Some(Schema::Definition) => {
-                sym.add_metadata(r.metadata());
-                while let Some((iid, s, mpi, ts_recv)) = r.next_definition()? {
-                    sym.add_definition(iid, &s, mpi, ts_recv);
-                }
+                r.scan_symbology(&mut sym)?;
             }
             Some(Schema::Mbo) | None => {
-                sym.add_metadata(r.metadata());
+                if schema.is_none() {
+                    r.scan_symbology(&mut sym)?;
+                } else {
+                    sym.add_metadata_from(r.metadata(), p);
+                }
                 mbo_files.push((start, p.clone()));
             }
             Some(Schema::Trades) => {
-                sym.add_metadata(r.metadata());
+                sym.add_metadata_from(r.metadata(), p);
                 trade_files.push((start, p.clone()));
             }
             Some(other) => {
@@ -1078,9 +1118,11 @@ fn ingest_dbn(spec: &IngestSpec, inputs: &[PathBuf], out: &Path) -> QtResult<Ing
             }
         }
     }
+    sym.check()?;
     mbo_files.sort_by_key(|(s, _)| *s);
     trade_files.sort_by_key(|(s, _)| *s);
     let mut w = c.writer(out, DatasetKind::Mbo)?;
+    *created = true;
     let job = InputsJob::start(inputs);
     let mut scan = MboDqScan::new();
     let mut gaps = SeqGaps::new(c.rules.sequence_meaningful);
@@ -1104,7 +1146,17 @@ fn ingest_dbn(spec: &IngestSpec, inputs: &[PathBuf], out: &Path) -> QtResult<Ing
             scan_record(&mut scan, &e, date, &c.rules);
             w.push_mbo_at(&e, date)?;
         }
-        scan.add_source("dbn_other_records_skipped", r.skipped);
+        // Other record types are expected in a mixed-schema file (INFO), not in an mbo-schema one.
+        let mixed = r.metadata().schema.is_none();
+        scan.add_source(
+            if mixed {
+                "dbn_mixed_schema_other_records"
+            } else {
+                "dbn_other_records_skipped"
+            },
+            r.skipped,
+        );
+        scan.add_source("dbn_gateway_error_records", r.gateway_errors);
     }
     for (_, p) in &trade_files {
         let mut r = DbnReader::open(p)?;
@@ -1118,12 +1170,13 @@ fn ingest_dbn(spec: &IngestSpec, inputs: &[PathBuf], out: &Path) -> QtResult<Ing
             w.push_source_trade_at(&tr, date)?;
         }
         scan.add_source("dbn_other_records_skipped", r.skipped);
+        scan.add_source("dbn_gateway_error_records", r.gateway_errors);
     }
     scan.add_source("dbn_instrument_id_remapped", remapped);
     t.part_symbol = res.part.into_iter().collect();
-    if c.tick.is_none() {
-        for &(date, iid) in &t.seen {
-            let name = t.part_symbol.get(&(date, iid)).map(String::as_str);
+    for &(date, iid) in &t.seen {
+        let name = t.part_symbol.get(&(date, iid)).map(String::as_str);
+        if c.tick.is_none() {
             if let Some(tick) = sym
                 .min_price_increment(iid, name, date)
                 .and_then(|m| rescale(m, -9, c.price_exp))
@@ -1131,6 +1184,19 @@ fn ingest_dbn(spec: &IngestSpec, inputs: &[PathBuf], out: &Path) -> QtResult<Ing
                 t.part_tick.insert((date, iid), tick);
             }
         }
+        if let Some(m) = sym.contract_multiplier(iid, name, date) {
+            t.part_multiplier.insert((date, iid), m);
+        }
+        if let Some(cur) = sym.currency(iid, name, date) {
+            t.part_currency.insert((date, iid), cur.to_owned());
+        }
+    }
+    for (k, v) in sym.stats().counters() {
+        scan.add_source(k, v);
+    }
+    if let Some((n, warning)) = sym.unverified_xnas_vintage(t.seen.iter().copied()) {
+        scan.add_source("dbn_xnas_vintage_unverified", n);
+        w.add_warning(warning);
     }
     t.apply(&c, &mut scan, &mut w)?;
     job.join(&mut w)?;

@@ -45,7 +45,6 @@ from pathlib import Path
 from typing import Any
 
 import pyarrow as pa
-import pyarrow.parquet as pq
 
 from queuetruth.errors import QtError
 from queuetruth.live._common import (
@@ -67,10 +66,15 @@ from queuetruth.live._common import (
 )
 from queuetruth.live.builder import ImportResult, LogBuilder
 from queuetruth.live.importers._base import ImportOptions, side_of
+from queuetruth.live.importers._parquet import read_parquet
 
 HBT = "sim:hftbacktest"
 NT = "sim:nautilus"
 _LEG = re.compile(r"\.leg\d+$", re.IGNORECASE)
+#: An integer epoch given as text (ASCII digits only).
+_INT_TEXT = re.compile(r"-?[0-9]+")
+#: An enum given as its number (hftbacktest writes small integers; 18 digits keep `int()` cheap and in range).
+_ENUM_INT = re.compile(r"-?[0-9]{1,18}")
 _HBT_STATUS = {
     0: "none",
     1: "new",
@@ -86,13 +90,28 @@ _NT_TIF = {"GTC": "gtc", "IOC": "ioc", "FOK": "fok", "DAY": "day", "GTD": "gtd"}
 _NT_TYPE = {"LIMIT": "limit", "MARKET": "market", "STOP_MARKET": "stop", "STOP_LIMIT": "stop_limit"}
 
 
+def _size_exp(v: Any) -> int:
+    """Option `size_exp`: an integer in -18..18, or its decimal text (`QT-CONFIG-001` otherwise)."""
+    n: int | None = None
+    if isinstance(v, int) and not isinstance(v, bool):
+        n = v
+    elif isinstance(v, str) and _SIZE_EXP_TEXT.fullmatch(v.strip()):
+        n = int(v.strip())
+    if n is None or not -18 <= n <= 18:
+        raise QtError("QT-CONFIG-001", f"size_exp must be an integer in -18..18, got {v!r:.40}")
+    return n
+
+
+_SIZE_EXP_TEXT = re.compile(r"[+-]?[0-9]{1,3}")
+
+
 def _builder(name: str, opts: ImportOptions) -> LogBuilder:
     return LogBuilder(
         name,
         account=opts.account or "sim",
         imap=opts.imap,
         price_exp=-9,
-        size_exp=int(opts.extra.get("size_exp", -8)),
+        size_exp=_size_exp(opts.extra.get("size_exp", -8)),
         map_venue=str(opts.extra.get("map_venue") or opts.extra.get("venue") or name),
         source_override="sim",
         validation_status="simulated",
@@ -109,22 +128,31 @@ def _key(b: LogBuilder, h: int, ident: str | None, opts: ImportOptions, *, fallb
         b.set_order_field(h, "key_override", make_order_key(b.venue, b.account or "sim", base))
 
 
+#: Decoded-size slack of a simulator Parquet file (`_parquet.read_parquet`); smaller than the dq default because
+#: every value becomes a Python object here (about 50 bytes each, so 16 MiB of Arrow data is a few hundred MiB).
+_SIM_PARQUET_SLACK = 16 * 2**20
+
+
 def _table_rows(path: Path, file_idx: int) -> list[Record]:
     """Rows of a CSV, Parquet or JSON / JSON-lines file as records of string-ish values."""
     if path.suffix.lower() in (".parquet", ".pq"):
-        try:
-            t = pq.read_table(path)
-        except (OSError, pa.ArrowInvalid) as e:
-            raise QtError("QT-INPUT-001", f"{path}: {e}") from e
+        table = read_parquet(path, code="QT-INPUT-001", what="unreadable Parquet", slack=_SIM_PARQUET_SLACK)
         out = []
-        for i, row in enumerate(t.to_pylist()):
-            clean = {k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in row.items()}
-            out.append(Record(clean, repr(clean), f"{path}[{i}]", file_idx, i))
+        i = 0
+        for batch in table.to_batches():
+            try:
+                rows = batch.to_pylist()
+            except (ValueError, ArithmeticError, pa.ArrowException) as e:  # a date or time outside Python's range
+                raise QtError("QT-INPUT-002", f"{path}[{i}..]: value outside the supported range: {e}") from e
+            for row in rows:
+                clean = {k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in row.items()}
+                out.append(Record(clean, repr(clean), f"{path}[{i}]", file_idx, i))
+                i += 1
         return out
     text = read_text(path)
     if text.lstrip()[:1] in ("{", "["):
         return read_json_records(path, file_idx)
-    header, rows = read_csv_rows(text)
+    header, rows = read_csv_rows(text, str(path))
     out = []
     for i, r in enumerate(rows):
         row = {header[j]: (r[j] if j < len(r) else "") for j in range(len(header))}
@@ -135,7 +163,7 @@ def _table_rows(path: Path, file_idx: int) -> list[Record]:
 def _ns(v: Any, what: str, loc: str) -> int | None:
     if v is None or (isinstance(v, str) and not v.strip()):
         return None
-    if isinstance(v, (int, Decimal)) or (isinstance(v, str) and v.strip().lstrip("-").isdecimal()):
+    if isinstance(v, (int, Decimal)) or (isinstance(v, str) and _INT_TEXT.fullmatch(v.strip())):
         d = dec(v, what, loc)
         if d is None or d <= 0:
             return None
@@ -150,7 +178,7 @@ def _enum(v: Any, table: dict[int, str]) -> str | None:
     if v is None or (isinstance(v, str) and not v.strip()):
         return None
     s = str(v).strip().lower()
-    if s.lstrip("-").isdecimal():
+    if _ENUM_INT.fullmatch(s):
         return table.get(int(s))
     return s.replace(" ", "_")
 
@@ -158,7 +186,10 @@ def _enum(v: Any, table: dict[int, str]) -> str | None:
 def import_hftbacktest(paths: list[str], opts: ImportOptions) -> ImportResult:
     """hftbacktest order snapshots -> canonical rows (venue `sim:hftbacktest`)."""
     b = _builder(HBT, opts)
-    key_map: dict[str, str] = {str(k): str(v) for k, v in (opts.extra.get("order_key_map") or {}).items()}
+    raw_map = opts.extra.get("order_key_map") or {}
+    if not isinstance(raw_map, dict):
+        raise QtError("QT-CONFIG-001", "order_key_map must be an object {hftbacktest order_id: order_key}")
+    key_map: dict[str, str] = {str(k): str(v) for k, v in raw_map.items()}
     state: dict[str, dict[str, Any]] = {}
     for file_idx, p in enumerate(paths):
         for rec in _table_rows(Path(p), file_idx):

@@ -700,6 +700,21 @@ pub struct LeaderboardEntry {
     /// 0.1.1 (additive): the model's fill rate by horizon, its mean forecast over the label-eligible rows.
     #[serde(default)]
     pub model_fill_rate: HMap,
+    /// Additive (selection-stats): mean per-shadow first-fill error by horizon, a share of the horizon.
+    #[serde(default)]
+    pub first_fill_error: HMap,
+    /// Additive (selection-stats): in the 90% model confidence set for first-fill error at the horizon.
+    #[serde(default)]
+    pub mcs_member: IndexMap<String, Option<bool>>,
+    /// Additive (selection-stats): MCS p-value for first-fill error (resolution 1 / bootstrap_b).
+    #[serde(default)]
+    pub mcs_p: HMap,
+    /// Additive (selection-stats): in the 90% model confidence set for the Brier loss at the horizon.
+    #[serde(default)]
+    pub mcs_brier_member: IndexMap<String, Option<bool>>,
+    /// Additive (selection-stats): MCS p-value for the Brier loss.
+    #[serde(default)]
+    pub mcs_brier_p: HMap,
 }
 
 /// Summary of `zoo`.

@@ -1,0 +1,250 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.commitment_verification",
+  "$defs": {
+    "Check": {
+      "additionalProperties": false,
+      "description": "One verification check: `fail` makes the verdict fail; `warn` does not.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "pass",
+            "warn",
+            "fail",
+            "skip"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "details": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Details",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "status",
+        "summary"
+      ],
+      "title": "Check",
+      "type": "object"
+    },
+    "RevealOutcome": {
+      "additionalProperties": false,
+      "description": "One opened item: `match` (leaf and file agree), `leaf_mismatch` (the opening does not open this leaf),\n`content_mismatch` (no given file has the committed content) or `not_given` (no file given for it).",
+      "properties": {
+        "index": {
+          "title": "Index",
+          "type": "integer"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "match",
+            "leaf_mismatch",
+            "content_mismatch",
+            "not_given"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "file": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "File"
+        }
+      },
+      "required": [
+        "index",
+        "name",
+        "sha256",
+        "status",
+        "file"
+      ],
+      "title": "RevealOutcome",
+      "type": "object"
+    },
+    "VerifiedCommitment": {
+      "additionalProperties": false,
+      "description": "The commitment that was checked.",
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "root": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Root"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Label"
+        },
+        "committed_at": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Committed At"
+        },
+        "n_items": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "N Items"
+        },
+        "signed": {
+          "title": "Signed",
+          "type": "boolean"
+        },
+        "key_fingerprint": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Key Fingerprint"
+        },
+        "key_trusted": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Key Trusted"
+        }
+      },
+      "required": [
+        "path",
+        "root",
+        "label",
+        "committed_at",
+        "n_items",
+        "signed",
+        "key_fingerprint",
+        "key_trusted"
+      ],
+      "title": "VerifiedCommitment",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`qt.commitment_verification` (`queuetruth reveal`).",
+  "properties": {
+    "schema": {
+      "const": "qt.commitment_verification",
+      "default": "qt.commitment_verification",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "commitment": {
+      "$ref": "#/$defs/VerifiedCommitment"
+    },
+    "status": {
+      "enum": [
+        "pass",
+        "fail"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "n_revealed": {
+      "title": "N Revealed",
+      "type": "integer"
+    },
+    "revealed": {
+      "items": {
+        "$ref": "#/$defs/RevealOutcome"
+      },
+      "title": "Revealed",
+      "type": "array"
+    },
+    "unmatched_files": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Unmatched Files",
+      "type": "array"
+    },
+    "checks": {
+      "items": {
+        "$ref": "#/$defs/Check"
+      },
+      "title": "Checks",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "commitment",
+    "status",
+    "n_revealed",
+    "revealed",
+    "unmatched_files",
+    "checks"
+  ],
+  "type": "object"
+}

@@ -14,12 +14,15 @@
 //! - the stream must not end inside the metadata or a record (a truncated plain `.dbn` is `QT-INPUT-002` naming the
 //!   decompressed byte offset, not a shorter dataset).
 //!
-//! Symbology ([`Symbology`]): Databento instrument ids are only unique per UTC date (and the 2026-10-31 XNAS.ITCH
-//! re-issue assigns new ids to data before 2023-11-28), so ingest never joins dates on `instrument_id` alone: the
-//! metadata mappings (`stype_out = instrument_id`) are kept as dated intervals and definition records as dated
-//! entries, and symbols, ticks and the symbol filter are resolved per (instrument id, UTC date).
+//! Symbology ([`Symbology`], in `dbn_symbology.rs`): Databento instrument ids are only unique per UTC date (and the
+//! 2026-10-31 XNAS.ITCH re-issue assigns new ids to data before 2023-11-28), so ingest never joins dates on
+//! `instrument_id` alone: the metadata mappings (`stype_out = instrument_id`) are kept as dated intervals (raw symbols,
+//! or aliases for parent and continuous queries), definition and symbol-mapping records as dated entries, and
+//! symbols, ticks, match algorithms and the symbol filter are resolved per (instrument id, UTC date). Definitions are
+//! read from `definition` files and from mixed-schema files ([`DbnReader::scan_symbology`]); inputs whose symbology
+//! disagrees on one date (two vintages, two datasets) are refused by [`Symbology::check`].
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
@@ -28,12 +31,23 @@ use std::sync::atomic::AtomicU64;
 
 use ::dbn::decode::dbn::Decoder;
 use ::dbn::decode::{DbnMetadata, DecodeRecordRef, DynReader};
-use ::dbn::{InstrumentDefMsg, MboMsg, Metadata, RecordRef, SType, Schema, TradeMsg, VersionUpgradePolicy};
+use ::dbn::{
+    ErrorMsg, InstrumentDefMsg, MboMsg, Metadata, RecordRef, SType, Schema, SymbolMappingMsg, SystemCode, SystemMsg,
+    TradeMsg, VersionUpgradePolicy,
+};
 use qt_schema::rows::{TradeKind, TradeRow};
 use qt_types::{MboEvent, QtError, QtResult, Side, UNDEF_PRICE, VenueRules};
 
 use crate::guard::{CountingReader, GuardLimits, GuardedReader, READ_BUF, open_file};
 use crate::units::rescale;
+
+#[path = "dbn_symbology.rs"]
+mod symbology;
+
+pub use symbology::{
+    DbnDefinition, Symbology, SymbologyStats, XNAS_ITCH, XNAS_REISSUE_CUTOVER_DAY, format_utc_day,
+    is_continuous_symbol, looks_like_smart_symbol, match_algorithm_name, utc_day,
+};
 
 type Inner = FrameCheck<GuardedReader<DynReader<'static, BufReader<CountingReader<File>>>>>;
 
@@ -42,9 +56,6 @@ pub const MAX_METADATA_BYTES: u64 = 256 << 20;
 
 /// Newest DBN version the pinned `dbn` crate decodes (versions 1 to this one are accepted).
 pub const SUPPORTED_DBN_VERSION: u8 = ::dbn::DBN_VERSION;
-
-/// Nanoseconds per UTC day (DBN symbology dates are UTC dates).
-const NS_PER_DAY: i64 = 86_400_000_000_000;
 
 enum Frame {
     Prelude { buf: [u8; 8], got: usize },
@@ -225,8 +236,11 @@ impl std::fmt::Display for ConvError {
 pub struct DbnReader {
     dec: Decoder<Inner>,
     path: PathBuf,
-    /// Records skipped because they were not of the requested type.
+    /// Records skipped because they were not of the requested type (gateway errors excluded).
     pub skipped: u64,
+    /// Gateway error records skipped: `ErrorMsg` and slow-reader `SystemMsg` (live captures: a symbol that did not
+    /// resolve, records the gateway may have dropped). Never expected in clean data.
+    pub gateway_errors: u64,
     /// Records read (all types).
     pub records: u64,
 }
@@ -250,6 +264,7 @@ impl DbnReader {
             dec,
             path: path.to_owned(),
             skipped: 0,
+            gateway_errors: 0,
             records: 0,
         })
     }
@@ -276,6 +291,15 @@ impl DbnReader {
         Ok(r)
     }
 
+    /// Counts one skipped record (`gateway` from [`is_gateway_error`]).
+    fn skip(&mut self, gateway: bool) {
+        if gateway {
+            self.gateway_errors += 1;
+        } else {
+            self.skipped += 1;
+        }
+    }
+
     fn conv_err(&self, e: ConvError) -> QtError {
         let at = format!("{} record {}", self.path.display(), self.records);
         match e {
@@ -286,6 +310,7 @@ impl DbnReader {
 
     /// Next MBO record converted at `price_exp` (other record types are skipped and counted).
     pub fn next_mbo(&mut self, price_exp: i8) -> QtResult<Option<MboEvent>> {
+        let version = self.dec.metadata().version;
         loop {
             let path = self.path.clone();
             let Some(rec) = self.next_ref()? else { return Ok(None) };
@@ -294,12 +319,14 @@ impl DbnReader {
                 let out = convert_mbo(m, price_exp);
                 return out.map(Some).map_err(|e| self.conv_err(e));
             }
-            self.skipped += 1;
+            let gateway = is_gateway_error(&rec, version);
+            self.skip(gateway);
         }
     }
 
     /// Next trade print converted at `price_exp` (other record types are skipped and counted).
     pub fn next_trade(&mut self, price_exp: i8, rules: &VenueRules) -> QtResult<Option<TradeRow>> {
+        let version = self.dec.metadata().version;
         loop {
             let path = self.path.clone();
             let Some(rec) = self.next_ref()? else { return Ok(None) };
@@ -308,36 +335,159 @@ impl DbnReader {
                 let out = convert_trade(t, price_exp, rules);
                 return out.map(Some).map_err(|e| self.conv_err(e));
             }
-            self.skipped += 1;
+            let gateway = is_gateway_error(&rec, version);
+            self.skip(gateway);
         }
     }
 
-    /// Next instrument definition as `(instrument_id, raw_symbol, min_price_increment at 1e-9, ts_recv)`.
+    /// Next instrument definition as `(instrument_id, raw_symbol, min_price_increment at 1e-9, ts_recv)` (an
+    /// undefined increment is `i64::MAX`, as stored); see [`Self::next_definition_record`] for every field.
     pub fn next_definition(&mut self) -> QtResult<Option<(u32, String, i64, u64)>> {
+        Ok(self.next_definition_record()?.map(|d| {
+            (
+                d.instrument_id,
+                d.raw_symbol,
+                d.min_price_increment.unwrap_or(i64::MAX),
+                d.ts_recv,
+            )
+        }))
+    }
+
+    /// Next instrument definition record, read with the file's own DBN version (other record types are skipped and
+    /// counted).
+    pub fn next_definition_record(&mut self) -> QtResult<Option<DbnDefinition>> {
         let version = self.dec.metadata().version;
         loop {
             let path = self.path.clone();
             let Some(rec) = self.next_ref()? else { return Ok(None) };
             if rec.has::<InstrumentDefMsg>() {
-                macro_rules! def {
-                    ($t:ty) => {{
-                        let d = rec
-                            .try_get::<$t>()
-                            .map_err(|e| fmt_err(&path, describe(&e)))?;
-                        let sym = d.raw_symbol().unwrap_or("").to_owned();
-                        (d.hd.instrument_id, sym, d.min_price_increment, d.ts_recv)
-                    }};
-                }
-                let out = match version {
-                    1 => def!(::dbn::v1::InstrumentDefMsg),
-                    2 => def!(::dbn::v2::InstrumentDefMsg),
-                    _ => def!(::dbn::v3::InstrumentDefMsg),
-                };
-                return Ok(Some(out));
+                return definition_of(&rec, version).map(Some).map_err(|e| fmt_err(&path, e));
             }
-            self.skipped += 1;
+            let gateway = is_gateway_error(&rec, version);
+            self.skip(gateway);
         }
     }
+
+    /// Reads the file's metadata and every definition and symbol-mapping record into `sym` (a `definition` file,
+    /// or a mixed-schema file such as a live capture, whose other records are skipped and counted). Returns the
+    /// number of records added.
+    pub fn scan_symbology(&mut self, sym: &mut Symbology) -> QtResult<u64> {
+        let version = self.dec.metadata().version;
+        sym.add_metadata_from(self.dec.metadata(), &self.path);
+        let label = self.path.display().to_string();
+        let mut added = 0;
+        loop {
+            let path = self.path.clone();
+            let Some(rec) = self.next_ref()? else { return Ok(added) };
+            if rec.has::<InstrumentDefMsg>() {
+                let d = definition_of(&rec, version).map_err(|e| fmt_err(&path, e))?;
+                sym.add_definition_record(&d, &label);
+                added += 1;
+            } else if rec.has::<SymbolMappingMsg>() {
+                let (iid, raw, alias, at) = symbol_mapping_of(&rec, version).map_err(|e| fmt_err(&path, e))?;
+                sym.add_symbol_mapping(iid, raw.as_deref(), alias.as_deref(), at, &label);
+                added += 1;
+            } else {
+                let gateway = is_gateway_error(&rec, version);
+                self.skip(gateway);
+            }
+        }
+    }
+}
+
+/// A defined positive 1e-9 quantity (`i64::MAX` is DBN's undefined price).
+fn defined_px(v: i64) -> Option<i64> {
+    (v > 0 && v != i64::MAX).then_some(v)
+}
+
+/// A defined publisher instrument id: 0, `i32::MAX` (the SBE `Int32` null; Databento's old-vintage XNAS.ITCH
+/// definitions carry it), `u32::MAX` and `u64::MAX` are undefined.
+fn defined_raw_id(v: u64) -> Option<u64> {
+    const I32_NULL: u64 = i32::MAX as u64;
+    (v != 0 && v != I32_NULL && v != u64::from(u32::MAX) && v != u64::MAX).then_some(v)
+}
+
+/// A security update action byte: `A`, `M` or `D`, else `?`.
+fn update_action(b: u8) -> u8 {
+    if matches!(b, b'A' | b'M' | b'D') { b } else { b'?' }
+}
+
+/// True for a gateway error record: an `ErrorMsg` (for example a symbol that did not resolve), or a `SystemMsg`
+/// whose code is a slow-reader warning (records may have been dropped). Heartbeats, subscription and replay
+/// acknowledgements, and DBN v1 system messages (which carry no code) are not errors.
+fn is_gateway_error(rec: &RecordRef<'_>, version: u8) -> bool {
+    if rec.has::<ErrorMsg>() {
+        return true;
+    }
+    version > 1
+        && rec.has::<SystemMsg>()
+        && rec
+            .try_get::<SystemMsg>()
+            .is_ok_and(|m| matches!(m.code(), Ok(SystemCode::SlowReaderWarning)))
+}
+
+/// A NUL-padded DBN string field, trimmed (an invalid UTF-8 field reads as empty).
+fn text(r: ::dbn::Result<&str>) -> String {
+    r.map(|s| s.trim().to_owned()).unwrap_or_default()
+}
+
+/// One definition record of a file of DBN `version`, as a [`DbnDefinition`].
+fn definition_of(rec: &RecordRef<'_>, version: u8) -> Result<DbnDefinition, String> {
+    // `security_update_action` is read as a raw byte: DBN v1 declares it as a Rust enum, so reading the field of a
+    // record whose byte is not a variant would be undefined behaviour.
+    macro_rules! def {
+        ($t:ty) => {{
+            let action = AsRef::<[u8]>::as_ref(rec)
+                .get(std::mem::offset_of!($t, security_update_action))
+                .copied()
+                .map_or(b'?', update_action);
+            let d = rec.try_get::<$t>().map_err(|e| describe(&e))?;
+            DbnDefinition {
+                instrument_id: d.hd.instrument_id,
+                ts_recv: d.ts_recv,
+                ts_event: d.hd.ts_event,
+                raw_symbol: text(d.raw_symbol()),
+                raw_instrument_id: defined_raw_id(u64::from(d.raw_instrument_id)),
+                min_price_increment: defined_px(d.min_price_increment),
+                min_price_increment_amount: defined_px(d.min_price_increment_amount),
+                display_factor: (d.display_factor != i64::MAX).then_some(d.display_factor),
+                min_lot_size_round_lot: (d.min_lot_size_round_lot > 0 && d.min_lot_size_round_lot != i32::MAX)
+                    .then_some(d.min_lot_size_round_lot),
+                instrument_class: d.instrument_class as u8,
+                match_algorithm: d.match_algorithm as u8,
+                security_update_action: action,
+                exchange: text(d.exchange()),
+                asset: text(d.asset()),
+                security_type: text(d.security_type()),
+                currency: text(d.currency()),
+            }
+        }};
+    }
+    Ok(match version {
+        1 => def!(::dbn::v1::InstrumentDefMsg),
+        2 => def!(::dbn::v2::InstrumentDefMsg),
+        _ => def!(::dbn::v3::InstrumentDefMsg),
+    })
+}
+
+/// One symbol-mapping record as `(instrument_id, raw symbol, alias, valid from)`: the output symbol is a raw symbol
+/// when the output symbology is `raw_symbol` (DBN v1 records, from live sessions, always map to raw symbols), else
+/// the input symbol is when the input symbology is; the other is an alias. Valid from `start_ts`, else `ts_event`.
+fn symbol_mapping_of(rec: &RecordRef<'_>, version: u8) -> Result<(u32, Option<String>, Option<String>, u64), String> {
+    let pick = |a: u64, b: u64| if a != UNDEF_TIMESTAMP { a } else { b };
+    if version == 1 {
+        let m = rec.try_get::<::dbn::v1::SymbolMappingMsg>().map_err(|e| describe(&e))?;
+        let (i, o) = (text(m.stype_in_symbol()), text(m.stype_out_symbol()));
+        return Ok((m.hd.instrument_id, Some(o), Some(i), pick(m.start_ts, m.hd.ts_event)));
+    }
+    let m = rec.try_get::<::dbn::v3::SymbolMappingMsg>().map_err(|e| describe(&e))?;
+    let (i, o) = (text(m.stype_in_symbol()), text(m.stype_out_symbol()));
+    let (raw, alias) = match (m.stype_in(), m.stype_out()) {
+        (_, Ok(SType::RawSymbol)) => (Some(o), Some(i)),
+        (Ok(SType::RawSymbol), _) => (Some(i), None),
+        _ => (None, Some(i)),
+    };
+    Ok((m.hd.instrument_id, raw, alias, pick(m.start_ts, m.hd.ts_event)))
 }
 
 fn ts(v: u64, what: &str) -> Result<i64, ConvError> {
@@ -419,164 +569,6 @@ pub fn symbol_map(md: &Metadata) -> BTreeMap<u32, String> {
         }
     }
     out
-}
-
-/// UTC date (days since 1970-01-01) of a timestamp, as DBN symbology dates count.
-pub fn utc_day(ts: i64) -> i32 {
-    i32::try_from(ts.div_euclid(NS_PER_DAY)).unwrap_or(if ts < 0 { i32::MIN } else { i32::MAX })
-}
-
-/// `[start_day, end_day)` (days since 1970-01-01, UTC) of a metadata mapping interval (Julian day 2,440,588 is
-/// 1970-01-01).
-fn interval_days(i: &::dbn::MappingInterval) -> (i32, i32) {
-    (
-        i.start_date.to_julian_day() - 2_440_588,
-        i.end_date.to_julian_day() - 2_440_588,
-    )
-}
-
-#[derive(Clone, Debug)]
-struct DefEntry {
-    day: i32,
-    ts_recv: u64,
-    symbol: String,
-    min_price_increment: i64,
-}
-
-/// Dated DBN symbology: metadata mapping intervals (`stype_out = instrument_id`, UTC dates, end exclusive) and
-/// definition records (valid from the UTC date of their `ts_recv` until superseded). Lookups are per
-/// (instrument id, UTC date) or per (symbol, UTC date), never by instrument id alone.
-#[derive(Clone, Debug, Default)]
-pub struct Symbology {
-    by_id: HashMap<u32, Vec<(i32, i32, String)>>,
-    by_symbol: HashMap<String, Vec<(i32, i32, u32)>>,
-    defs: HashMap<u32, Vec<DefEntry>>,
-    defs_by_symbol: HashMap<String, Vec<(i32, u64, u32)>>,
-}
-
-impl Symbology {
-    /// Empty symbology.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Adds the mapping intervals of one file's metadata (only `stype_out = instrument_id`; duplicates ignored).
-    pub fn add_metadata(&mut self, md: &Metadata) {
-        if md.stype_out != SType::InstrumentId {
-            return;
-        }
-        for m in &md.mappings {
-            let sym = m.raw_symbol.trim();
-            if sym.is_empty() {
-                continue;
-            }
-            for i in &m.intervals {
-                let Ok(id) = i.symbol.trim().parse::<u32>() else {
-                    continue;
-                };
-                let (a, b) = interval_days(i);
-                if b <= a {
-                    continue;
-                }
-                let v = self.by_id.entry(id).or_default();
-                if !v.iter().any(|(x, y, s)| (*x, *y) == (a, b) && s == sym) {
-                    v.push((a, b, sym.to_owned()));
-                    v.sort_by_key(|(x, y, _)| (*x, *y));
-                    let w = self.by_symbol.entry(sym.to_owned()).or_default();
-                    w.push((a, b, id));
-                    w.sort_unstable();
-                }
-            }
-        }
-    }
-
-    /// Adds one definition record (`min_price_increment` at 1e-9; later `ts_recv` supersedes earlier ones).
-    pub fn add_definition(&mut self, instrument_id: u32, raw_symbol: &str, min_price_increment: i64, ts_recv: u64) {
-        let day = utc_day(i64::try_from(ts_recv).unwrap_or(i64::MAX));
-        let symbol = raw_symbol.trim().to_owned();
-        let v = self.defs.entry(instrument_id).or_default();
-        let at = v.partition_point(|d| d.ts_recv <= ts_recv);
-        v.insert(
-            at,
-            DefEntry {
-                day,
-                ts_recv,
-                symbol: symbol.clone(),
-                min_price_increment,
-            },
-        );
-        if !symbol.is_empty() {
-            let w = self.defs_by_symbol.entry(symbol).or_default();
-            let at = w.partition_point(|(_, t, _)| *t <= ts_recv);
-            w.insert(at, (day, ts_recv, instrument_id));
-        }
-    }
-
-    /// True when no mapping and no definition was added.
-    pub fn is_empty(&self) -> bool {
-        self.by_id.is_empty() && self.defs.is_empty()
-    }
-
-    /// Raw symbol of `instrument_id` on UTC date `day`: the metadata interval holding `day` (latest start wins),
-    /// else the latest definition at or before `day` that names a symbol.
-    pub fn symbol_at(&self, instrument_id: u32, day: i32) -> Option<&str> {
-        if let Some(v) = self.by_id.get(&instrument_id) {
-            if let Some((_, _, s)) = v.iter().rev().find(|(a, b, _)| *a <= day && day < *b) {
-                return Some(s);
-            }
-        }
-        self.defs
-            .get(&instrument_id)?
-            .iter()
-            .rev()
-            .find(|d| d.day <= day && !d.symbol.is_empty())
-            .map(|d| d.symbol.as_str())
-    }
-
-    /// Instrument id of `symbol` on UTC date `day` (metadata interval, else latest definition at or before `day`).
-    pub fn id_at(&self, symbol: &str, day: i32) -> Option<u32> {
-        if let Some(v) = self.by_symbol.get(symbol) {
-            if let Some((_, _, id)) = v.iter().rev().find(|(a, b, _)| *a <= day && day < *b) {
-                return Some(*id);
-            }
-        }
-        self.defs_by_symbol
-            .get(symbol)?
-            .iter()
-            .rev()
-            .find(|(d, _, _)| *d <= day)
-            .map(|(_, _, id)| *id)
-    }
-
-    /// `min_price_increment` (1e-9) for an instrument partition: the latest definition of `instrument_id` whose
-    /// symbol is `symbol` (or names none) valid on `day`, else the latest of any date, else the latest definition of
-    /// `symbol` under any id. Non-positive and undefined (`i64::MAX`) increments are skipped.
-    pub fn min_price_increment(&self, instrument_id: u32, symbol: Option<&str>, day: i32) -> Option<i64> {
-        let ok = |d: &&DefEntry| {
-            d.min_price_increment > 0
-                && d.min_price_increment != i64::MAX
-                && (d.symbol.is_empty() || symbol.is_none_or(|s| s == d.symbol))
-        };
-        if let Some(v) = self.defs.get(&instrument_id) {
-            if let Some(d) = v.iter().rev().filter(|d| d.day <= day).find(ok) {
-                return Some(d.min_price_increment);
-            }
-            if let Some(d) = v.iter().rev().find(ok) {
-                return Some(d.min_price_increment);
-            }
-        }
-        let s = symbol?;
-        let w = self.defs_by_symbol.get(s)?;
-        w.iter().rev().find_map(|(_, t, id)| {
-            self.defs
-                .get(id)?
-                .iter()
-                .find(|d| d.ts_recv == *t && d.symbol == s)
-                .and_then(|d| {
-                    (d.min_price_increment > 0 && d.min_price_increment != i64::MAX).then_some(d.min_price_increment)
-                })
-        })
-    }
 }
 
 /// Data vintage of one DBN input, from its metadata (not yet a `qt.dataset_manifest` field: requested for schema

@@ -1,0 +1,375 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://github.com/sarptandoven/queuetruth/integrations/nautilus/qt.nautilus_inspect.schema.json",
+ "title": "qt.nautilus_inspect",
+ "description": "`queuetruth-nautilus inspect --format json`: what a queuetruth calibration sets on a NautilusTrader venue.",
+ "type": "object",
+ "additionalProperties": false,
+ "required": [
+  "schema",
+  "schema_version",
+  "calibration",
+  "nautilus_trader",
+  "venue_options",
+  "refused",
+  "note"
+ ],
+ "properties": {
+  "schema": {
+   "const": "qt.nautilus_inspect"
+  },
+  "schema_version": {
+   "const": 1
+  },
+  "calibration": {
+   "type": "object",
+   "additionalProperties": false,
+   "required": [
+    "run_id",
+    "kind",
+    "family",
+    "mode",
+    "prob_fill_on_limit",
+    "queue_position",
+    "latency",
+    "trust",
+    "n_events",
+    "n_shadows",
+    "ci_bootstrap",
+    "train",
+    "test",
+    "data_sources",
+    "held_out",
+    "baseline_held_out",
+    "source_path",
+    "source_format",
+    "queuetruth_version"
+   ],
+   "properties": {
+    "run_id": {
+     "type": "string"
+    },
+    "kind": {
+     "type": "string"
+    },
+    "family": {
+     "type": "string"
+    },
+    "mode": {
+     "type": "string",
+     "description": "queuetruth fit mode; `unknown` for an export text that does not name it"
+    },
+    "prob_fill_on_limit": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "minimum": 0,
+     "maximum": 1
+    },
+    "queue_position": {
+     "type": "boolean"
+    },
+    "latency": {
+     "type": [
+      "object",
+      "null"
+     ],
+     "additionalProperties": false,
+     "required": [
+      "insert_latency_nanos",
+      "update_latency_nanos",
+      "cancel_latency_nanos",
+      "clock_sync_assumed"
+     ],
+     "properties": {
+      "insert_latency_nanos": {
+       "type": [
+        "integer",
+        "null"
+       ],
+       "minimum": 0
+      },
+      "update_latency_nanos": {
+       "type": [
+        "integer",
+        "null"
+       ],
+       "minimum": 0
+      },
+      "cancel_latency_nanos": {
+       "type": [
+        "integer",
+        "null"
+       ],
+       "minimum": 0
+      },
+      "clock_sync_assumed": {
+       "type": "boolean"
+      }
+     }
+    },
+    "trust": {
+     "type": "object",
+     "additionalProperties": false,
+     "required": [
+      "verdict",
+      "reasons",
+      "flags",
+      "beats_default",
+      "source"
+     ],
+     "properties": {
+      "verdict": {
+       "enum": [
+        "exportable",
+        "refused"
+       ]
+      },
+      "reasons": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      },
+      "flags": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      },
+      "beats_default": {
+       "type": "object",
+       "additionalProperties": {
+        "type": "string"
+       },
+       "propertyNames": {
+        "pattern": "^[0-9]+$"
+       }
+      },
+      "source": {
+       "enum": [
+        "structured",
+        "warnings",
+        "snippet",
+        "queuetruth",
+        "none"
+       ]
+      }
+     }
+    },
+    "n_events": {
+     "type": [
+      "integer",
+      "null"
+     ],
+     "minimum": 0
+    },
+    "n_shadows": {
+     "type": [
+      "integer",
+      "null"
+     ],
+     "minimum": 0
+    },
+    "ci_bootstrap": {
+     "type": [
+      "array",
+      "null"
+     ],
+     "minItems": 2,
+     "maxItems": 2,
+     "items": {
+      "type": [
+       "number",
+       "null"
+      ]
+     }
+    },
+    "train": {
+     "type": "string"
+    },
+    "test": {
+     "type": "string"
+    },
+    "data_sources": {
+     "type": "array",
+     "items": {
+      "type": "object"
+     }
+    },
+    "held_out": {
+     "type": [
+      "object",
+      "null"
+     ],
+     "additionalProperties": false,
+     "required": [
+      "model_id",
+      "brier",
+      "logloss",
+      "fill_rate_bias"
+     ],
+     "properties": {
+      "model_id": {
+       "type": "string"
+      },
+      "brier": {
+       "type": "object",
+       "additionalProperties": {
+        "type": "number"
+       },
+       "propertyNames": {
+        "pattern": "^[0-9]+$"
+       }
+      },
+      "logloss": {
+       "type": "object",
+       "additionalProperties": {
+        "type": "number"
+       },
+       "propertyNames": {
+        "pattern": "^[0-9]+$"
+       }
+      },
+      "fill_rate_bias": {
+       "type": "object",
+       "additionalProperties": {
+        "type": "number"
+       },
+       "propertyNames": {
+        "pattern": "^[0-9]+$"
+       }
+      }
+     }
+    },
+    "baseline_held_out": {
+     "type": [
+      "object",
+      "null"
+     ],
+     "additionalProperties": false,
+     "required": [
+      "model_id",
+      "brier",
+      "logloss",
+      "fill_rate_bias"
+     ],
+     "properties": {
+      "model_id": {
+       "type": "string"
+      },
+      "brier": {
+       "type": "object",
+       "additionalProperties": {
+        "type": "number"
+       },
+       "propertyNames": {
+        "pattern": "^[0-9]+$"
+       }
+      },
+      "logloss": {
+       "type": "object",
+       "additionalProperties": {
+        "type": "number"
+       },
+       "propertyNames": {
+        "pattern": "^[0-9]+$"
+       }
+      },
+      "fill_rate_bias": {
+       "type": "object",
+       "additionalProperties": {
+        "type": "number"
+       },
+       "propertyNames": {
+        "pattern": "^[0-9]+$"
+       }
+      }
+     }
+    },
+    "source_path": {
+     "type": "string"
+    },
+    "source_format": {
+     "enum": [
+      "calibration_result",
+      "nautilus_snippet"
+     ]
+    },
+    "queuetruth_version": {
+     "type": [
+      "string",
+      "null"
+     ]
+    }
+   }
+  },
+  "nautilus_trader": {
+   "type": [
+    "string",
+    "null"
+   ],
+   "description": "installed version; null when not installed"
+  },
+  "venue_options": {
+   "type": [
+    "object",
+    "null"
+   ],
+   "additionalProperties": {
+    "type": "string"
+   },
+   "description": "the objects built for the installed version, as text; null when not built"
+  },
+  "refused": {
+   "oneOf": [
+    {
+     "type": "null"
+    },
+    {
+     "type": "object",
+     "required": [
+      "schema",
+      "schema_version",
+      "code",
+      "message",
+      "hint",
+      "details"
+     ],
+     "properties": {
+      "schema": {
+       "const": "qt.error"
+      },
+      "schema_version": {
+       "const": 1
+      },
+      "code": {
+       "type": "string",
+       "pattern": "^QT-[A-Z]+-[0-9]{3}$"
+      },
+      "message": {
+       "type": "string"
+      },
+      "hint": {
+       "type": [
+        "string",
+        "null"
+       ]
+      },
+      "details": {
+       "type": "object"
+      }
+     }
+    }
+   ],
+   "description": "the qt.error document of a refused calibration (exit 1)"
+  },
+  "note": {
+   "type": [
+    "string",
+    "null"
+   ]
+  }
+ }
+}

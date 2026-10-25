@@ -111,7 +111,7 @@ def test_renders_without_javascript(rendered: tuple[Any, str]) -> None:
     assert not re.search(r"\son[a-z]+\s*=", html)
     stripped = re.sub(r"<script\b.*?</script>", "", html, flags=re.S)
     for sid in summary.sections[1:]:
-        assert f'<section id="{sid}">' in stripped
+        assert f'<section id="{sid}" ' in stripped
     assert "<noscript" not in html
 
 
@@ -180,5 +180,5 @@ def test_errors(tmp_path: Path) -> None:
 
 def test_single_file_input(bundle: Any, tmp_path: Path) -> None:
     summary, data = _render(tmp_path, [bundle.score / "summary.json"])
-    assert summary.sections[:2] == ["header", "verdict"]
-    assert b"qt.score_orders" not in data.split(b"<h3>Inputs</h3>")[1].split(b"</table>")[0]
+    assert summary.sections[:3] == ["header", "answer", "verdict"]
+    assert b"qt.score_orders" not in data.split(b"<summary><h2>Inputs</h2>")[1].split(b"</table>")[0]

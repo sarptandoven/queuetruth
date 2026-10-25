@@ -1,0 +1,297 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.pm_ingest_summary",
+  "$defs": {
+    "DatasetBrief": {
+      "additionalProperties": false,
+      "description": "One written dataset.",
+      "properties": {
+        "dataset_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Dataset Id",
+          "type": "string"
+        },
+        "records": {
+          "minimum": 0,
+          "title": "Records",
+          "type": "integer"
+        },
+        "verdict": {
+          "enum": [
+            "clean",
+            "warnings",
+            "unusable"
+          ],
+          "title": "Verdict",
+          "type": "string"
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        }
+      },
+      "required": [
+        "dataset_id",
+        "records",
+        "verdict",
+        "reasons"
+      ],
+      "title": "DatasetBrief",
+      "type": "object"
+    },
+    "FileEntry": {
+      "additionalProperties": false,
+      "description": "One output file: name relative to the output directory, row count for tables, size and sha256.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "rows": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rows"
+        },
+        "bytes": {
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "bytes",
+        "sha256"
+      ],
+      "title": "FileEntry",
+      "type": "object"
+    },
+    "InstrumentBrief": {
+      "additionalProperties": false,
+      "description": "One instrument of an ingest.",
+      "properties": {
+        "instrument_id": {
+          "minimum": 0,
+          "title": "Instrument Id",
+          "type": "integer"
+        },
+        "symbol": {
+          "title": "Symbol",
+          "type": "string"
+        },
+        "tick_size": {
+          "minimum": 1,
+          "title": "Tick Size",
+          "type": "integer"
+        },
+        "size_exp": {
+          "title": "Size Exp",
+          "type": "integer"
+        },
+        "batches": {
+          "minimum": 0,
+          "title": "Batches",
+          "type": "integer"
+        },
+        "trades": {
+          "minimum": 0,
+          "title": "Trades",
+          "type": "integer"
+        },
+        "trades_matched": {
+          "minimum": 0,
+          "title": "Trades Matched",
+          "type": "integer"
+        },
+        "trades_unmatched": {
+          "minimum": 0,
+          "title": "Trades Unmatched",
+          "type": "integer"
+        },
+        "block_trades": {
+          "minimum": 0,
+          "title": "Block Trades",
+          "type": "integer"
+        },
+        "feed_gaps": {
+          "minimum": 0,
+          "title": "Feed Gaps",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "instrument_id",
+        "symbol",
+        "tick_size",
+        "size_exp",
+        "batches",
+        "trades",
+        "trades_matched",
+        "trades_unmatched",
+        "block_trades",
+        "feed_gaps"
+      ],
+      "title": "InstrumentBrief",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Summary of `pm ingest` (`pm_ingest.json`).",
+  "properties": {
+    "schema": {
+      "const": "qt.pm_ingest_summary",
+      "default": "qt.pm_ingest_summary",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "run_id": {
+      "pattern": "^[0-9a-f]{16}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "spec": {
+      "additionalProperties": true,
+      "title": "Spec",
+      "type": "object"
+    },
+    "venue": {
+      "enum": [
+        "kalshi",
+        "polymarket"
+      ],
+      "title": "Venue",
+      "type": "string"
+    },
+    "terms": {
+      "title": "Terms",
+      "type": "string"
+    },
+    "book": {
+      "$ref": "#/$defs/DatasetBrief"
+    },
+    "book_own_free": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DatasetBrief"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "live": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Live"
+    },
+    "own_free": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Own Free"
+    },
+    "queue_samples": {
+      "minimum": 0,
+      "title": "Queue Samples",
+      "type": "integer"
+    },
+    "chain": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Chain"
+    },
+    "instruments": {
+      "items": {
+        "$ref": "#/$defs/InstrumentBrief"
+      },
+      "title": "Instruments",
+      "type": "array"
+    },
+    "counters": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "title": "Counters",
+      "type": "object"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/FileEntry"
+      },
+      "title": "Files",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "run_id",
+    "spec",
+    "venue",
+    "terms",
+    "book",
+    "book_own_free",
+    "live",
+    "own_free",
+    "queue_samples",
+    "chain",
+    "instruments",
+    "counters",
+    "warnings",
+    "files"
+  ],
+  "type": "object"
+}

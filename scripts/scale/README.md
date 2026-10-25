@@ -18,9 +18,18 @@ itch_split.py ─▶ split/<date>/ (K buckets) ─▶ plan.py ─▶ units ─�
 | `plan.py` | universe, exclusions with reasons (Nasdaq test symbols), per-symbol shadow quotas (`scale`, `fixed`, `breadth`), cost model, first-fit-decreasing units within a bucket, `run_id` |
 | `unit.py` | one unit: bucket sha256 check, ingest of its symbols, replay exactness checks, `per_partition` shadow sample, native zoo per population and mode, `block_stats`, 1% audit sample of predictions, `shard_manifest.json` with telemetry |
 | `aggregate.py` | verifies every shard (leaf hash, unit spec hash, output content digests), Merkle root, `zoo_errors_by_group`, `leaderboard` (two-way dates x symbols cluster bootstrap, BH), `per_symbol` (day-cluster CI, empirical-Bayes shrinkage, BH), summed exactness |
-| `verify_unit.py` | re-runs one unit and checks its leaf against the published root |
-| `prove_breadth.py` | the P0 proof below |
-| `modal_app.py` | Modal entry points for the pilot (dry run unless `--confirm-spend`) |
+| `atlas.py` | multi-day atlas: `reduce-day` streams a day's verified shards into per-symbol-day cells and per-tier strata with the day's Merkle root; `combine` builds tier leaderboards (two-way dates x symbols bootstrap, BH), per-symbol cross-day estimates (day bootstrap, shrinkage toward the tier, BH), tier x stratum maps, and the root over the day roots |
+| `verify_unit.py` | re-runs one unit and checks its leaf against the published root (a run's or a day's manifest) |
+| `symbol_exactness.py` | per-symbol exactness: when a unit's replay checks flag anything, replays each symbol alone (one-partition dataset views) and checks that the per-symbol counters add up to the unit's |
+| `itch_ref.py` | an independent Python reading of ITCH 5.0: rebuilds the displayed book of chosen symbols, counts crossed events and price-priority violations as the engine does, and keeps the trading-state timeline (`H`, `K`, `J`, `h`), `Q` crosses and crossed episodes that explain them |
+| `trace_flags.py` | traces a day's flagged units to symbols, ITCH message positions and causes; checks engine = reference per symbol; counts the flagged symbols' shadows submitted or filled while the symbol was not trading; writes the `symbol_flags.json` sidecar |
+| `findings/` | what the 2020-01-30 pilot's flags were (`README.md`) and a failing reproduction of the engine defect they exposed |
+| `prove_breadth.py` | the P0 proof below; `--compare-only --plan P --shards S` compares shards made elsewhere (the cloud gate) |
+| `modal_app.py` | Modal entry points: `check_image`, `days` (split, plan, units, reduce per day, spend guard; dry run unless `--confirm-spend`), `combine_days` |
+
+Liquidity tiers (`plan.py`) rank a day's symbols by executions (E, C and P messages): `T1_top100`, `T2_101_500`,
+`T3_501_1500`, `T4_1501_4000`, `T5_rest`. A day whose system events put the close away from 16:00 (2025-11-28 closes
+at 13:00) gets that session in its ingest spec.
 
 ## Why splitting does not change the numbers
 
@@ -47,6 +56,10 @@ itch_split.py ─▶ split/<date>/ (K buckets) ─▶ plan.py ─▶ units ─�
   `sha256(0x00 || canonical_json(leaf))`. Build info, telemetry and timings sit next to the leaf and are not hashed,
   so re-running the same unit on another machine gives the same leaf when the results agree.
 - Content digests hash table contents, not Parquet bytes: rows sorted, values in a fixed binary form (`common.py`).
+- A flagged unit's leaf also has `exactness_by_symbol` (`{"method": "per_partition_replay", "complete",
+  "sum_mismatches", "symbols": {symbol: {flag: count}}}`, flagged symbols only). An exact unit's leaf has no such
+  key, so its leaf hash is the same as before per-symbol attribution existed; `verify_unit.py` checks a re-run
+  flagged unit against a root published before it in the leaf's pre-attribution form.
 - `atlas_manifest.json` holds the Merkle root over the leaves in unit-id order (inner node `sha256(0x01 || l || r)`,
   odd node carried up) and every leaf's proof. `verify_unit.py` (or `modal run modal_app.py::verify`) re-runs a unit
   and checks it against the root.
@@ -107,3 +120,51 @@ speed, because shadows rather than records dominate). Volume storage is a few GB
 1 plus ~1 to 2 GB of shards), deleted after the run unless kept. Risks the pilot measures: Python split throughput on
 a full day (0.6 to 1.1M msgs/s here; it routes every message), the aggregator's memory at 51M rows, x86 versus arm64
 float drift (gate on `reproduce.py` first), and Modal's concurrency limit on the plan.
+
+## Flagged symbol-days: attribution, trading state, labels, tracing
+
+The replay checks of a unit (`unit.py` step 2) sum over its symbols. A flag is any non-zero book invariant,
+unknown-order execution, price-priority violation or trade-parity failure (`symbol_exactness.FLAG_FIELDS`). Clean
+replay checks do not make a symbol-day's fill truth exact: the exact fill rule does not model halts, so shadows of a
+halted or paused symbol are filled against a book the venue does not match (finding F2 in `findings/README.md`; the
+v0.1 contract, `docs/design/spec.md` 1.2, censors them instead). A symbol-day is therefore labelled on both.
+
+- **Attribution.** A flagged unit replays each of its symbols alone and records which symbols raised which flags in
+  its leaf. The per-symbol counters must add up to the unit's exactly (`complete`); instruments replay
+  independently, so they do. A one-symbol unit reuses its own counts; an attribution that raises is recorded as
+  incomplete and the unit still completes.
+- **Trading state.** `itch_split.py` records, for every symbol of the day, the spans in which its `H` (Stock Trading
+  Action) state was not T (`split_manifest.json` `trading_state`); `plan.py` copies them into the universe
+  (`non_t_spans`) and records `trading_state_recorded` in the source.
+- **Labels.** `atlas.py reduce-day` marks every symbol-day `replay_ok` (no replay-check flag), `trading_ok` (no
+  non-T span overlaps the regular session) and `exact_ok` (both) in `cells_all.parquet` (`strata_by_tier.parquet`:
+  `exact_ok`) and lists the others in `day_manifest.json` `flagged_symbols`, with the attribution source of their
+  replay flags: `leaf`, `symbol_flags` (a `trace_flags.py` sidecar for shards written before attribution, accepted
+  only for the same run, date and leaf hash, from a trace that reproduced the shard) or `unit` (no complete
+  attribution: every symbol of the unit is labelled, so nothing unverified passes as exact). For a plan made before
+  plans carried the trading state, pass the day's split manifest from a re-stream with `--trading-state`.
+- **Policy.** `atlas.py combine --flag-policy label` (the function's default) keeps the symbol-days that are not
+  `exact_ok` and marks them: `per_symbol.parquet` `n_flagged_days` and `flags` (date, counts, cause, non-T spans),
+  `leaderboard_by_tier` `n_flagged_symbol_days`, `flagged_n`, `flagged_share`, `maps_by_tier` `flagged_n`,
+  `flagged_share`. `--flag-policy exclude` drops them from every table; it refuses a day reduced without per-symbol
+  exactness or without a known trading state unless `--allow-legacy-days`. `local_day.py` and `modal_app.py`
+  (`combine`, `combine_days`) default to `exclude`. `atlas_manifest.json` lists every flagged symbol-day either way.
+- **Tracing.** Re-stream the flagged units' buckets (`trace_flags.py --restream-command
+  SPLIT/<date>/split_manifest.json --out NEW_SPLIT` prints the `itch_split.py` command and each bucket's expected
+  sha256) and run
+
+```
+uv run --frozen --no-sync python scripts/scale/trace_flags.py --plan plan.json --shards SHARDS --split SPLIT/<date> \
+    --out TRACE_DIR
+uv run --frozen --no-sync python scripts/scale/atlas.py reduce-day --plan plan.json --shards SHARDS --out DAY \
+    --symbol-flags TRACE_DIR/symbol_flags.json --trading-state SPLIT/<date>/split_manifest.json
+```
+
+  The per-unit trace files hold message-level evidence (positions, timestamps, prices) taken from the Nasdaq file:
+  keep them under `.scratch` or `.realdata`, never in the repository (`docs/data-and-licensing.md`).
+- **Test issues.** `itch_split.py` records every directory symbol whose Stock Directory Authenticity is `T`
+  (`routing.test_issues`) and `plan.py` excludes them (`test issue (Stock Directory authenticity T)`), next to the
+  `ZxZZT` prefixes. A source's `exclusions_sha256` enters the run id, so a different universe of the same day gets a
+  different run id.
+- **Tests.** `scripts/scale/tests/` (`pytest scripts/scale/tests`): outside the pytest `testpaths` until they move to
+  `python/tests/scale/`.

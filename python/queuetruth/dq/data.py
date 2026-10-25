@@ -16,9 +16,11 @@ from typing import Any
 
 import numpy as np
 import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
 from queuetruth.errors import QtError
+from queuetruth.live.importers._parquet import read_parquet
 
 # DBN record flags (SPEC 3.1, `qt_types::flags`).
 F_LAST = 1 << 7
@@ -76,6 +78,10 @@ RULES: dict[str, dict[str, bool]] = {
 RULES["crypto_l3"] = {**RULES["generic"], "supports_hidden_orders": False}
 #: Schema 1.2: IEX DEEP+ runs on the Nasdaq record semantics (`qt_types` `IEX_RULES`).
 RULES["iex"] = dict(RULES["nasdaq"])
+#: Schema 1.2: the NYSE TAQ Integrated Feed runs on the Nasdaq record semantics, but its record `sequence` (the
+#: channel number) has holes for the control messages the TAQ files omit, so it is not gap-checked
+#: (`qt_types::rules_for(RuleSet::Nyse)`; the reader checks Symbol Sequence Numbers at ingest).
+RULES["nyse"] = {**RULES["nasdaq"], "sequence_meaningful": False}
 
 #: Formats whose `sequence` is assigned by the reader (one per message, contiguous by construction): no gap check.
 SYNTHETIC_SEQUENCE_FORMATS = frozenset({"itch"})
@@ -105,6 +111,174 @@ def _days(v: Any) -> int:
     if isinstance(v, datetime.date):
         return (v - datetime.date(1970, 1, 1)).days
     return int(v)
+
+
+#: `price_exp` range of every queuetruth dataset (SPEC 1.2 `Price`; ingest refuses others).
+PRICE_EXP_MIN, PRICE_EXP_MAX = -12, 0
+#: date32 day numbers `date_str` can print (0001-01-01 .. 9999-12-31).
+MIN_DAY, MAX_DAY = -719_162, 2_932_896
+I64_MIN, I64_MAX = -(2**63), 2**63 - 1
+_MANIFEST_TEXT = ("kind", "source_format", "venue", "source_venue", "rule_set", "dataset_id", "validation_status")
+
+
+def _no_constant(name: str) -> Any:
+    raise ValueError(f"non-standard JSON constant {name}")
+
+
+def _bad(where: str, msg: str) -> QtError:
+    return QtError("QT-INPUT-002", f"{where}: {msg}")
+
+
+def _int(v: Any, where: str, lo: int, hi: int, *, optional: bool = False) -> int | None:
+    """A JSON integer in [lo, hi] (bools are not integers)."""
+    if v is None and optional:
+        return None
+    if isinstance(v, bool) or not isinstance(v, int) or not lo <= v <= hi:
+        raise _bad(where, f"expected an integer in [{lo}, {hi}], got {str(v)[:40]!r}")
+    return v
+
+
+def _list_of_dicts(v: Any, where: str) -> list[dict[str, Any]]:
+    if v is None:
+        return []
+    if not isinstance(v, list) or not all(isinstance(x, dict) for x in v):
+        raise _bad(where, "expected an array of objects")
+    return v
+
+
+def _check_manifest(m: dict[str, Any], mpath: Path) -> dict[str, Any]:
+    """The manifest with every field the checks read validated (copies; the file is not modified)."""
+    out = dict(m)
+    for k in _MANIFEST_TEXT:
+        if out.get(k) is not None and not isinstance(out[k], str):
+            raise _bad(f"{mpath}: {k}", "expected a string")
+    parts = []
+    for i, p in enumerate(_list_of_dicts(m.get("partitions"), f"{mpath}: partitions")):
+        where = f"{mpath}: partitions[{i}]"
+        files = []
+        for j, f in enumerate(_list_of_dicts(p.get("files"), f"{where}.files")):
+            if not isinstance(f.get("path"), str) or not f["path"]:
+                raise _bad(f"{where}.files[{j}].path", "expected a relative file path")
+            if f.get("sha256") is not None and not isinstance(f["sha256"], str):
+                raise _bad(f"{where}.files[{j}].sha256", "expected a string")
+            files.append(f)
+        parts.append(
+            {
+                **p,
+                "instrument_id": _int(p.get("instrument_id"), f"{where}.instrument_id", 0, 2**32 - 1),
+                "session_date": _int(p.get("session_date"), f"{where}.session_date", MIN_DAY, MAX_DAY),
+                "files": files,
+                "rows": _int(p.get("rows"), f"{where}.rows", 0, I64_MAX, optional=True),
+                "ts_min": _int(p.get("ts_min"), f"{where}.ts_min", I64_MIN, I64_MAX, optional=True),
+                "ts_max": _int(p.get("ts_max"), f"{where}.ts_max", I64_MIN, I64_MAX, optional=True),
+            }
+        )
+    out["partitions"] = parts
+    out["inputs"] = _list_of_dicts(m.get("inputs"), f"{mpath}: inputs")
+    for i, f in enumerate(out["inputs"]):
+        if f.get("path") is not None and not isinstance(f["path"], str):
+            raise _bad(f"{mpath}: inputs[{i}].path", "expected a string")
+        _int(f.get("bytes"), f"{mpath}: inputs[{i}].bytes", 0, I64_MAX, optional=True)
+        if f.get("sha256") is not None and not isinstance(f["sha256"], str):
+            raise _bad(f"{mpath}: inputs[{i}].sha256", "expected a string")
+    out["source_vintage"] = _list_of_dicts(m.get("source_vintage"), f"{mpath}: source_vintage")
+    pe = m.get("price_exp_by_instrument")
+    if pe is not None:
+        if not isinstance(pe, dict):
+            raise _bad(f"{mpath}: price_exp_by_instrument", "expected an object")
+        for k, v in pe.items():
+            _int(v, f"{mpath}: price_exp_by_instrument[{k}]", PRICE_EXP_MIN, PRICE_EXP_MAX, optional=True)
+    return out
+
+
+def _inside(root: Path, rel: str, where: str) -> Path:
+    """`root / rel` when `rel` is a relative path made only of normal components, else `QT-INPUT-002` (a manifest
+    must not make dq read `/etc/passwd` or a sibling dataset). The check is lexical and mirrors the engine's
+    (`qt_ingest` `check_rel_path`): no absolute path, drive, `..`, leading `.` or NUL. Symlinks are followed, as the
+    engine follows them (datasets with partitions on another volume are linked in); a symlink policy for untrusted
+    uploads belongs to the upload or archive extraction, not here."""
+    p = Path(rel)
+    if not rel or "\x00" in rel or p.is_absolute() or p.drive or p.root:
+        raise _bad(where, f"{rel[:80]!r} is not a relative path inside the dataset")
+    if rel == "." or rel.startswith(("./", ".\\")) or ".." in p.parts:  # Rust's CurDir / ParentDir components
+        raise _bad(where, f"{rel[:80]!r} points outside the dataset directory")
+    return root / p
+
+
+#: Instrument columns the checks read, with the type each must cast to (SPEC 3.3 `qt.instruments`).
+_INSTRUMENT_TYPES = {
+    "instrument_id": pa.uint32(),
+    "session_date": pa.date32(),
+    "price_exp": pa.int8(),
+    "tick_size": pa.int64(),
+    "lot_size": pa.uint64(),
+    "size_exp": pa.int8(),
+    "midnight_utc_ns": pa.int64(),
+    "open_s": pa.uint32(),
+    "close_s": pa.uint32(),
+}
+
+
+def _read_parquet(path: Path, what: str, columns: list[str] | None = None) -> pa.Table:
+    """A Parquet file's table (only `columns`, when given), `QT-INPUT-002` for every way a damaged file fails (Arrow
+    errors, invalid UTF-8 in a column name) and for a file that decodes past the expansion limit
+    (`_parquet.read_parquet`: a few KB of dictionary- or RLE-encoded Parquet can hold millions of rows)."""
+    return read_parquet(path, columns=columns, what=what)
+
+
+def _read_instruments(ipath: Path) -> list[dict[str, Any]]:
+    t = _read_parquet(ipath, "unreadable")
+    for c in ("instrument_id", "session_date"):
+        if c not in t.column_names:
+            raise _bad(str(ipath), f"no {c} column")
+    cols = {}
+    for name in t.column_names:
+        col = t.column(name)
+        want = _INSTRUMENT_TYPES.get(name)
+        if want is not None:
+            try:
+                col = col.cast(want, safe=True)
+            except (pa.ArrowException, ValueError, TypeError) as e:
+                raise _bad(f"{ipath}: {name}", f"not castable to {want}: {e}") from None
+            if name in ("instrument_id", "session_date") and col.null_count:
+                raise _bad(f"{ipath}: {name}", "null values")
+        cols[name] = col
+    for name, lo, hi in (("session_date", MIN_DAY, MAX_DAY), ("price_exp", PRICE_EXP_MIN, PRICE_EXP_MAX)):
+        if name in cols and len(cols[name]):
+            mm = pc.min_max(cols[name].cast(pa.int32()))
+            lo_v, hi_v = mm["min"].as_py(), mm["max"].as_py()
+            if lo_v is not None and (lo_v < lo or hi_v > hi):
+                bad = lo_v if lo_v < lo else hi_v
+                raise _bad(f"{ipath}: {name}", f"value {bad} outside [{lo}, {hi}]")
+    try:
+        rows = pa.table(cols).to_pylist()
+    except (pa.ArrowException, ValueError, ArithmeticError) as e:  # a date or time outside Python's range
+        raise QtError("QT-INPUT-002", f"{ipath}: unreadable: {e}") from None
+    for row in rows:
+        row["session_date"] = _days(row["session_date"])
+    return rows
+
+
+def _check_ingest_dq(doc: dict[str, Any], dpath: Path) -> dict[str, Any]:
+    """`data_quality.json` with the fields the checks read validated."""
+    from queuetruth.dq.book import DQ_SCALARS
+
+    for k in DQ_SCALARS:
+        v = doc.get(k)
+        if v is not None and (isinstance(v, bool) or not isinstance(v, (int, float))):
+            raise _bad(f"{dpath}: {k}", "expected a number")
+    ss = doc.get("source_specific")
+    if ss is not None:
+        if not isinstance(ss, dict):
+            raise _bad(f"{dpath}: source_specific", "expected an object")
+        for k, v in ss.items():
+            if v is not None and (isinstance(v, bool) or not isinstance(v, (int, float))):
+                raise _bad(f"{dpath}: source_specific.{k}", "expected a number")
+    _list_of_dicts(doc.get("feed_gaps"), f"{dpath}: feed_gaps")
+    reasons = doc.get("reasons")
+    if reasons is not None and (not isinstance(reasons, list) or not all(isinstance(r, str) for r in reasons)):
+        raise _bad(f"{dpath}: reasons", "expected an array of strings")
+    return doc
 
 
 @dataclass
@@ -159,7 +333,11 @@ def _to_numpy(col: pa.ChunkedArray) -> np.ndarray:
 
 
 class Dataset:
-    """A queuetruth dataset directory (SPEC 3.3)."""
+    """A queuetruth dataset directory (SPEC 3.3).
+
+    The manifest, `instruments.parquet` and `data_quality.json` are validated on load (every field the checks read
+    has its documented JSON / Arrow type; partition files are relative paths inside the dataset directory), so a
+    damaged or hand-edited dataset fails `QT-INPUT-002` naming the field instead of crashing a check."""
 
     def __init__(self, path: str | Path) -> None:
         self.root = Path(path)
@@ -171,11 +349,12 @@ class Dataset:
                 "pass a directory written by `queuetruth ingest` or `fixtures synth`",
             )
         try:
-            self.manifest: dict[str, Any] = json.loads(mpath.read_text(encoding="utf-8"))
-        except (OSError, ValueError) as e:
+            manifest = json.loads(mpath.read_text(encoding="utf-8"), parse_constant=_no_constant)
+        except (OSError, ValueError, RecursionError) as e:
             raise QtError("QT-INPUT-002", f"{mpath}: unreadable manifest: {e}") from None
-        if self.manifest.get("schema") != "qt.dataset_manifest":
+        if not isinstance(manifest, dict) or manifest.get("schema") != "qt.dataset_manifest":
             raise QtError("QT-INPUT-002", f"{mpath}: not a qt.dataset_manifest document")
+        self.manifest: dict[str, Any] = _check_manifest(manifest, mpath)
         self.kind: str = str(self.manifest.get("kind") or "mbo")
         self.source_format: str = str(self.manifest.get("source_format") or "")
         self.venue: str = str(self.manifest.get("venue") or "generic")
@@ -185,12 +364,7 @@ class Dataset:
         self.instruments: list[dict[str, Any]] = []
         ipath = self.root / "instruments.parquet"
         if ipath.is_file():
-            try:
-                self.instruments = pq.read_table(ipath).to_pylist()
-            except (OSError, pa.ArrowInvalid) as e:
-                raise QtError("QT-INPUT-002", f"{ipath}: unreadable: {e}") from None
-            for row in self.instruments:
-                row["session_date"] = _days(row["session_date"])
+            self.instruments = _read_instruments(ipath)
         self.inst_by_key: dict[tuple[int, int], dict[str, Any]] = {}
         self.duplicate_instrument_rows: list[tuple[int, int]] = []
         for row in self.instruments:
@@ -203,20 +377,20 @@ class Dataset:
         dpath = self.root / "data_quality.json"
         if dpath.is_file():
             try:
-                doc = json.loads(dpath.read_text(encoding="utf-8"))
-                self.ingest_dq = doc if isinstance(doc, dict) else None
-            except (OSError, ValueError):
-                self.ingest_dq = None
+                doc = json.loads(dpath.read_text(encoding="utf-8"), parse_constant=_no_constant)
+            except (OSError, ValueError, RecursionError):
+                doc = None  # an unreadable data_quality.json counts as absent (the dq_counters check warns)
+            self.ingest_dq = _check_ingest_dq(doc, dpath) if isinstance(doc, dict) else None
         self.parts: list[PartRef] = []
-        for p in self.manifest.get("partitions") or []:
-            files = [self.root / f["path"] for f in p.get("files") or []]
+        for i, p in enumerate(self.manifest["partitions"]):
+            files = [_inside(self.root, f["path"], f"{mpath}: partitions[{i}].files") for f in p["files"]]
             ref = PartRef(
-                instrument_id=int(p["instrument_id"]),
-                session_date=_days(p["session_date"]),
+                instrument_id=p["instrument_id"],
+                session_date=p["session_date"],
                 files=files,
-                rows=int(p.get("rows") or 0),
-                ts_min=p.get("ts_min"),
-                ts_max=p.get("ts_max"),
+                rows=p["rows"] or 0,
+                ts_min=p["ts_min"],
+                ts_max=p["ts_max"],
             )
             ref.instrument = self.inst_by_key.get(ref.key)
             self.parts.append(ref)
@@ -260,18 +434,35 @@ class Dataset:
     # ---- reading ------------------------------------------------------------------------------------------------
 
     def read(self, ref: PartRef, columns: tuple[str, ...] = MBO_COLUMNS) -> Part:
-        """The partition's records (all parts concatenated in order)."""
+        """The partition's records (all parts concatenated in order). MBO columns are cast to their `qt.mbo` types
+        (a column of another type, a missing column or a null fails `QT-INPUT-002`)."""
         missing = [f for f in ref.files if not f.is_file()]
         if missing:
             raise QtError("QT-INPUT-001", f"{missing[0]}: partition file missing (manifest lists it)")
+        tables = [_read_parquet(f, "unreadable partition", list(columns)) for f in ref.files]
         try:
-            tables = [pq.read_table(f) for f in ref.files]
-        except (OSError, pa.ArrowInvalid) as e:
+            t = (pa.concat_tables(tables) if len(tables) > 1 else tables[0]) if tables else None
+        except (ValueError, pa.ArrowException) as e:  # parts with different schemas
             raise QtError("QT-INPUT-002", f"{ref.files[0]}: unreadable partition: {e}") from None
-        if not tables:
+        if t is None:
             return Part(ref, {c: np.zeros(0, dtype=np.int64) for c in columns})
-        t = pa.concat_tables(tables) if len(tables) > 1 else tables[0]
-        cols = {c: _to_numpy(t.column(c)) for c in columns if c in t.column_names}
+        mbo = self.kind == "mbo"
+        cols = {}
+        for c in columns:
+            if c not in t.column_names:
+                if mbo:
+                    raise _bad(str(ref.files[0]), f"partition has no {c} column")
+                continue
+            col = t.column(c)
+            want = _MBO_TYPES.get(c) if mbo else None
+            if want is not None:
+                try:
+                    col = col.cast(want, safe=True)
+                except (pa.ArrowException, ValueError, TypeError) as e:
+                    raise _bad(f"{ref.files[0]}: {c}", f"not castable to {want}: {e}") from None
+                if col.null_count:
+                    raise _bad(f"{ref.files[0]}: {c}", f"{col.null_count} null value(s) in a non-null column")
+            cols[c] = _to_numpy(col)
         return Part(ref, cols)
 
     def iter_parts(self) -> Iterator[Part]:
@@ -284,7 +475,11 @@ class Dataset:
         files = sorted(d.glob("part-*.parquet")) if d.is_dir() else []
         if not files:
             return None
-        return pa.concat_tables([pq.read_table(f) for f in files])
+        tables = [_read_parquet(f, "unreadable trades_source") for f in files]
+        try:
+            return pa.concat_tables(tables)
+        except (ValueError, pa.ArrowException) as e:
+            raise QtError("QT-INPUT-002", f"{d}: unreadable trades_source: {e}") from None
 
     @property
     def has_trades_source(self) -> bool:
@@ -308,10 +503,30 @@ class Dataset:
         }
 
 
+#: `qt.mbo` column types (SPEC 3.1); timestamps as int64 ns.
+_MBO_TYPES: dict[str, pa.DataType] = {
+    "ts_event": pa.timestamp("ns", tz="UTC"),
+    "ts_recv": pa.timestamp("ns", tz="UTC"),
+    "instrument_id": pa.uint32(),
+    "action": pa.uint8(),
+    "side": pa.uint8(),
+    "price": pa.int64(),
+    "size": pa.uint64(),
+    "order_id": pa.uint64(),
+    "flags": pa.uint8(),
+    "sequence": pa.uint64(),
+    "channel_id": pa.uint16(),
+    "publisher_id": pa.uint16(),
+}
+
+
 def _l2_columns(ref: PartRef) -> list[str]:
     if not ref.files:
         return ["ts_event", "ts_recv"]
-    names = pq.read_schema(ref.files[0]).names
+    try:
+        names = pq.read_schema(ref.files[0]).names
+    except (OSError, ValueError, pa.ArrowException) as e:
+        raise QtError("QT-INPUT-002", f"{ref.files[0]}: unreadable partition: {e}") from None
     return [c for c in ("ts_event", "ts_recv", "kind", "side", "price", "new_qty", "sequence", "flags") if c in names]
 
 

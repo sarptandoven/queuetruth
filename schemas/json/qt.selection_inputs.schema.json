@@ -1,0 +1,457 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.selection_inputs",
+  "$defs": {
+    "Head": {
+      "additionalProperties": false,
+      "description": "The last record of a ledger: anchor it outside the ledger (`seq:hash`) to detect a rewritten history.",
+      "properties": {
+        "seq": {
+          "title": "Seq",
+          "type": "integer"
+        },
+        "hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "seq",
+        "hash"
+      ],
+      "title": "Head",
+      "type": "object"
+    },
+    "LedgerFilter": {
+      "additionalProperties": false,
+      "description": "Record selection. Every set field must match; prefixes and globs are case-sensitive.",
+      "properties": {
+        "kinds": {
+          "anyOf": [
+            {
+              "items": {
+                "enum": [
+                  "genesis",
+                  "zoo",
+                  "calibrate",
+                  "calibrate-live",
+                  "fit-hazard",
+                  "score",
+                  "shadows-sample",
+                  "variant"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Kinds"
+        },
+        "study": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Study"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "status": {
+          "default": "all",
+          "enum": [
+            "ok",
+            "error",
+            "all"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "since_ns": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Since Ns"
+        },
+        "until_ns": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Until Ns"
+        },
+        "dataset": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dataset"
+        },
+        "run_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Run Id"
+        },
+        "spec_hash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Spec Hash"
+        }
+      },
+      "title": "LedgerFilter",
+      "type": "object"
+    },
+    "SelectionTrial": {
+      "additionalProperties": false,
+      "description": "One entry of `selection_inputs`: a trial, or one of the different series of a conflicted trial.",
+      "properties": {
+        "trial_id": {
+          "pattern": "^[0-9a-f]{16}$",
+          "title": "Trial Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "genesis",
+            "zoo",
+            "calibrate",
+            "calibrate-live",
+            "fit-hazard",
+            "score",
+            "shadows-sample",
+            "variant"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "study": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Study"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Name"
+        },
+        "run_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Run Id"
+        },
+        "spec_hash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Spec Hash"
+        },
+        "dataset_hash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Dataset Hash"
+        },
+        "n_records": {
+          "title": "N Records",
+          "type": "integer"
+        },
+        "first_recorded_at_ns": {
+          "title": "First Recorded At Ns",
+          "type": "integer"
+        },
+        "conflict": {
+          "title": "Conflict",
+          "type": "boolean"
+        },
+        "series_sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Series Sha256"
+        },
+        "series": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Series"
+        },
+        "index": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Index"
+        },
+        "n_obs": {
+          "title": "N Obs",
+          "type": "integer"
+        },
+        "periods_per_year": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Periods Per Year"
+        },
+        "higher_is_better": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Higher Is Better"
+        }
+      },
+      "required": [
+        "trial_id",
+        "kind",
+        "study",
+        "name",
+        "run_id",
+        "spec_hash",
+        "dataset_hash",
+        "n_records",
+        "first_recorded_at_ns",
+        "conflict",
+        "series_sha256",
+        "series",
+        "index",
+        "n_obs",
+        "periods_per_year",
+        "higher_is_better"
+      ],
+      "title": "SelectionTrial",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`selection_inputs`: the trial count and per-trial series a selection statistic consumes. Plain data; nothing\nis computed from the series. `n_trials` with the variance of the trials' Sharpe ratios is what the Deflated\nSharpe Ratio needs; PBO, SPA and model confidence sets also need every trial's series on the same periods,\nwhich `aligned` reports.",
+  "properties": {
+    "schema": {
+      "const": "qt.selection_inputs",
+      "default": "qt.selection_inputs",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "ledger_id": {
+      "pattern": "^[0-9a-f]{32}$",
+      "title": "Ledger Id",
+      "type": "string"
+    },
+    "head": {
+      "$ref": "#/$defs/Head"
+    },
+    "chain_verified": {
+      "title": "Chain Verified",
+      "type": "boolean"
+    },
+    "filter": {
+      "$ref": "#/$defs/LedgerFilter"
+    },
+    "series_kind": {
+      "enum": [
+        "returns",
+        "scores"
+      ],
+      "title": "Series Kind",
+      "type": "string"
+    },
+    "n_trials": {
+      "title": "N Trials",
+      "type": "integer"
+    },
+    "n_configs": {
+      "title": "N Configs",
+      "type": "integer"
+    },
+    "by_kind": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "title": "By Kind",
+      "type": "object"
+    },
+    "studies": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Studies",
+      "type": "array"
+    },
+    "n_with_series": {
+      "title": "N With Series",
+      "type": "integer"
+    },
+    "conflicts": {
+      "items": {
+        "pattern": "^[0-9a-f]{16}$",
+        "type": "string"
+      },
+      "title": "Conflicts",
+      "type": "array"
+    },
+    "linked_run_ids": {
+      "items": {
+        "pattern": "^[0-9a-f]{16}$",
+        "type": "string"
+      },
+      "title": "Linked Run Ids",
+      "type": "array"
+    },
+    "aligned": {
+      "title": "Aligned",
+      "type": "boolean"
+    },
+    "index": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Index"
+    },
+    "trials": {
+      "items": {
+        "$ref": "#/$defs/SelectionTrial"
+      },
+      "title": "Trials",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "ledger_id",
+    "head",
+    "chain_verified",
+    "filter",
+    "series_kind",
+    "n_trials",
+    "n_configs",
+    "by_kind",
+    "studies",
+    "n_with_series",
+    "conflicts",
+    "linked_run_ids",
+    "aligned",
+    "index",
+    "trials"
+  ],
+  "type": "object"
+}

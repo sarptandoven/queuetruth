@@ -84,6 +84,50 @@ def split_day(date: str, out: Path, symbols: list[str], buckets: int, min_free: 
     return d
 
 
+def monolithic_reference(
+    a: argparse.Namespace, splits: list[Path], tiers: list[str], pops: list[str], modes: list[str]
+) -> dict[str, Any]:
+    """breadth.py's whole-tier step (ingest of the tier, replay checks, tier-wide sample, zoo) on each day's single
+    bucket, which holds exactly the 36-symbol subset stream: a breadth.json made by the current build."""
+    import breadth as BR
+
+    ref_path = a.out / "reference_monolithic.json"
+    build = K.build_info()["core_extension"]["sha256"]
+    if ref_path.exists():
+        doc = json.loads(ref_path.read_text())
+        if doc.get("core_sha256") == build and all(DATES[sp.name] in doc["days"] for sp in splits):
+            return doc
+    ns = argparse.Namespace(
+        out=a.out / "monolithic",
+        resume=False,
+        threads=a.threads * a.workers,
+        min_free_gib=a.min_free_gib,
+        populations=pops,
+        modes=modes,
+        keep_subsets=True,
+    )
+    br = BR.Breadth(ns)
+    br.work.mkdir(parents=True, exist_ok=True)
+    doc = {"schema": "qt.scale.monolithic_reference", "core_sha256": build, "days": {}}
+    for sp in splits:
+        m = json.loads((sp / "split_manifest.json").read_text())
+        b = m["buckets"][0]
+        sman = {
+            "selection": {
+                "locates": {s: v[0] for s, v in b["symbols"].items()},
+                "messages_by_symbol": {s: v[1] for s, v in b["symbols"].items()},
+                "prints_by_symbol": {},
+            }
+        }
+        day = doc["days"].setdefault(DATES[sp.name], {"tiers": {}})
+        for tier in tiers:
+            t0 = time.perf_counter()
+            day["tiers"][tier] = br.tier(sp.name, tier, sp / b["file"], sman)
+            print(f"  [monolithic {sp.name} {tier}] {time.perf_counter() - t0:.0f} s", file=sys.stderr, flush=True)
+    ref_path.write_text(json.dumps(doc, indent=1, default=str) + "\n")
+    return doc
+
+
 class Cmp:
     def __init__(self, tol: float):
         self.tol = tol
@@ -142,7 +186,6 @@ def compare(
             )
         ] = r
     ex_rows = exact_t.to_pylist()
-    sh_rows = shadows_t.to_pylist()
     loc = {(u["date"], u["symbol"]): u["locate"] for u in plan["universe"]}
     report: dict[str, Any] = {"by_day_tier": {}}
     total = Cmp(tol)
@@ -199,14 +242,9 @@ def compare(
                     continue
                 for inst, n in (pr.get("sample", {}).get("by_instrument") or {}).items():
                     sym = next(s for s in td["symbols"] if loc.get((date, s)) == int(inst))
-                    got = sum(
-                        x["n_shadows"]
-                        for x in sh_rows
-                        if x["session_date"] == sd
-                        and x["shadow_pop"] == pop
-                        and x["mode"] == modes[0]
-                        and x["symbol"] == sym
-                    )
+                    # shadows drawn (the leaf's sample counts), not the evaluated ones: 0.1.1 drops a shadow on
+                    # which any faithful hbt pair aborted from every model's metrics (common population)
+                    got = sum(m["leaf"].get("samples", {}).get(pop, {}).get(sym, 0) for m in ms)
                     c.num(f"{pop}.sample.{sym}", n, got, exact=True)
                 for mode in modes:
                     board = pr.get(mode)
@@ -275,9 +313,7 @@ def compare(
 
 
 def main(argv: list[str] | None = None) -> int:
-    import aggregate as A
     import plan as P
-    import pyarrow.parquet as pq
 
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", type=Path, default=K.REPO / ".realdata" / "scale" / "proof")
@@ -291,6 +327,17 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--threads", type=int, default=2)
     ap.add_argument("--tol", type=float, default=1e-12)
     ap.add_argument("--min-free-gib", type=float, default=2.5)
+    ap.add_argument(
+        "--reference",
+        choices=["published", "monolithic"],
+        default="published",
+        help="compare with the published breadth.json, or with whole-tier runs of breadth.py's own tier step on the "
+        "same stream under the current build (one bucket per day; the shard-vs-whole check when the evaluator "
+        "changed since the published run)",
+    )
+    ap.add_argument("--compare-only", action="store_true", help="aggregate and compare existing --plan / --shards")
+    ap.add_argument("--plan", type=Path, help="with --compare-only: the gate plan (e.g. downloaded from Modal)")
+    ap.add_argument("--shards", type=Path, help="with --compare-only: its shard directories")
     a = ap.parse_args(argv)
     t_all = time.perf_counter()
     dates = [d for d in a.dates.split(",") if d]
@@ -301,8 +348,19 @@ def main(argv: list[str] | None = None) -> int:
     symbols = [s for t in K.TIERS.values() for s in t]
     a.out.mkdir(parents=True, exist_ok=True)
     timings: dict[str, float] = {}
+    errors: list[dict[str, str]] = []
+    if a.compare_only:
+        if not (a.plan and a.shards):
+            ap.error("--compare-only needs --plan and --shards")
+        plan_path, shards_dir = a.plan, a.shards
+        plan = json.loads(plan_path.read_text())
+        return _finish(a, breadth, plan, plan_path, shards_dir, errors, timings, t_all, dates, tiers, pops, modes)
     t0 = time.perf_counter()
+    if a.reference == "monolithic":
+        a.buckets = 1
     splits = [split_day(d, a.out, symbols, a.buckets, a.min_free_gib) for d in dates]
+    if a.reference == "monolithic":
+        breadth = monolithic_reference(a, splits, tiers, pops, modes)
     timings["split_s"] = round(time.perf_counter() - t0, 1)
     plan_path = a.out / "plan.json"
     excl = ",".join(s for t, names in K.TIERS.items() if t not in tiers for s in names)
@@ -337,7 +395,6 @@ def main(argv: list[str] | None = None) -> int:
         flush=True,
     )
     t0 = time.perf_counter()
-    errors = []
     with ProcessPoolExecutor(max_workers=a.workers) as ex:
         futs = [ex.submit(_run_unit, t) for t in todo]
         for i, f in enumerate(as_completed(futs), 1):
@@ -348,6 +405,26 @@ def main(argv: list[str] | None = None) -> int:
             if err:
                 errors.append({"unit_id": uid, "error": err})
     timings["units_wall_s"] = round(time.perf_counter() - t0, 1)
+    return _finish(a, breadth, plan, plan_path, shards_dir, errors, timings, t_all, dates, tiers, pops, modes)
+
+
+def _finish(
+    a: argparse.Namespace,
+    breadth: dict,
+    plan: dict,
+    plan_path: Path,
+    shards_dir: Path,
+    errors: list,
+    timings: dict,
+    t_all: float,
+    dates: list[str],
+    tiers: list[str],
+    pops: list[str],
+    modes: list[str],
+) -> int:
+    import aggregate as A
+    import pyarrow.parquet as pq
+
     groups = {s: t for t, names in K.TIERS.items() for s in names}
     (a.out / "tiers.json").write_text(json.dumps(groups, indent=1) + "\n")
     t0 = time.perf_counter()
@@ -368,7 +445,7 @@ def main(argv: list[str] | None = None) -> int:
     by_group = pq.read_table(a.out / "atlas" / "zoo_errors_by_group.parquet").to_pylist()
     exact_t = A.concat_outputs(shards, "exact", groups)
     shadows_t = A.concat_outputs(shards, "shadows", groups)
-    print("comparison with the published breadth run:")
+    print(f"comparison with the {a.reference} reference:")
     rep = compare(breadth, by_group, exact_t, shadows_t, shards, plan, a.tol, dates, tiers, pops, modes)
     tel = [m["telemetry"] for m in shards]
     timings["total_s"] = round(time.perf_counter() - t_all, 1)
@@ -378,6 +455,7 @@ def main(argv: list[str] | None = None) -> int:
         "generator": "scripts/scale/prove_breadth.py",
         "claim": "the 36-symbol breadth result (docs/RESULTS.md 4b) is reproduced from one work unit per symbol-day "
         "aggregated from summable block statistics",
+        "reference": a.reference,
         "published": {
             "path": str(a.breadth),
             "sha256": K.sha256_file(a.breadth),

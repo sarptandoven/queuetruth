@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.pm_ingest_spec",
+  "$defs": {
+    "PathRef": {
+      "additionalProperties": false,
+      "description": "Local path reference (CLI, Python API, MCP local mode).",
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "PathRef",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`pm ingest`: the user's own captures -> datasets, live log and tables.",
+  "properties": {
+    "venue": {
+      "enum": [
+        "kalshi",
+        "polymarket"
+      ],
+      "title": "Venue",
+      "type": "string"
+    },
+    "inputs": {
+      "items": {
+        "$ref": "#/$defs/PathRef"
+      },
+      "minItems": 1,
+      "title": "Inputs",
+      "type": "array"
+    },
+    "chain": {
+      "items": {
+        "$ref": "#/$defs/PathRef"
+      },
+      "title": "Chain",
+      "type": "array"
+    },
+    "out": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Out"
+    },
+    "account": {
+      "default": "default",
+      "title": "Account",
+      "type": "string"
+    },
+    "kalshi_yes_price": {
+      "default": "auto",
+      "enum": [
+        "auto",
+        "true",
+        "false"
+      ],
+      "title": "Kalshi Yes Price",
+      "type": "string"
+    },
+    "markets": {
+      "additionalProperties": {
+        "maxItems": 2,
+        "minItems": 2,
+        "prefixItems": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "type": "array"
+      },
+      "title": "Markets",
+      "type": "object"
+    },
+    "instrument_ids": {
+      "additionalProperties": {
+        "minimum": 0,
+        "type": "integer"
+      },
+      "title": "Instrument Ids",
+      "type": "object"
+    },
+    "match_window_ns": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Match Window Ns"
+    },
+    "own_match_window_ns": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Own Match Window Ns"
+    },
+    "exchanges": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Exchanges"
+    }
+  },
+  "required": [
+    "venue",
+    "inputs"
+  ],
+  "type": "object"
+}

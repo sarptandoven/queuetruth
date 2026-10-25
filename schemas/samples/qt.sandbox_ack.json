@@ -1,0 +1,37 @@
+{
+  "sample": {
+    "schema": "qt.sandbox_ack",
+    "schema_version": 1,
+    "action": "submit",
+    "clock_ns": 1,
+    "order": {
+      "order_id": "o1",
+      "client_order_id": "c1",
+      "side": "buy",
+      "type": "limit",
+      "tif": "day",
+      "price": 1,
+      "peg_offset_ticks": 1,
+      "qty": 1,
+      "filled_qty": 1,
+      "leaves_qty": 1,
+      "status": "pending",
+      "reason": "x",
+      "ts_submit": 1,
+      "ts_activated": 1,
+      "ts_done": 1,
+      "queue_ahead": 1,
+      "rank": 1,
+      "level_qty": 1,
+      "cancel_sent_ns": 1,
+      "n_fills": 1,
+      "avg_fill_price": 0.5
+    },
+    "duplicate": true,
+    "log_seq": 1,
+    "log_hash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "warnings": [
+      "x"
+    ]
+  }
+}

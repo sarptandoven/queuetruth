@@ -1,0 +1,736 @@
+{
+ "events": 520,
+ "final_book": {
+  "A": {
+   "5400": 3700,
+   "5500": 15400,
+   "5600": 1600,
+   "5800": 2300,
+   "5900": 4900
+  },
+  "B": {
+   "3600": 4000,
+   "3700": 1400,
+   "3800": 1700,
+   "3900": 5400,
+   "4000": 800,
+   "4100": 6900,
+   "4200": 4100
+  }
+ },
+ "own": [
+  {
+   "ahead_at_entry": 10100,
+   "cid": "mm-1",
+   "clock": 1018,
+   "created_ms": 1792764001594,
+   "fills": [
+    {
+     "ahead_before": 600,
+     "price": 4400,
+     "qty": 1000,
+     "t_ms": 1792764002806
+    }
+   ],
+   "order_id": "c24f6aa8-3bf3-4a14-8c2f-7ad016edc5d4",
+   "price": 4400,
+   "qty": 1000,
+   "samples": [
+    {
+     "queue_ahead": 600,
+     "t_ms": 1792764002033
+    }
+   ],
+   "side": "B",
+   "sim_id": "own001"
+  },
+  {
+   "ahead_at_entry": 3200,
+   "cid": "mm-2",
+   "clock": 1030,
+   "created_ms": 1792764002670,
+   "fills": [
+    {
+     "ahead_before": 3200,
+     "price": 4500,
+     "qty": 1000,
+     "t_ms": 1792764003052
+    }
+   ],
+   "order_id": "e744b24e-7f61-401e-8607-b1c4b0f91306",
+   "price": 4500,
+   "qty": 1000,
+   "samples": [],
+   "side": "A",
+   "sim_id": "own002"
+  },
+  {
+   "ahead_at_entry": 12100,
+   "cancel_ms": 1792764011736,
+   "cid": "mm-3",
+   "clock": 1072,
+   "created_ms": 1792764004766,
+   "fills": [],
+   "order_id": "f98f7a0d-da23-4ea1-89c5-9a2deebb3167",
+   "price": 4600,
+   "qty": 1000,
+   "samples": [
+    {
+     "queue_ahead": 12100,
+     "t_ms": 1792764005625
+    },
+    {
+     "queue_ahead": 12100,
+     "t_ms": 1792764006592
+    },
+    {
+     "queue_ahead": 12100,
+     "t_ms": 1792764007879
+    },
+    {
+     "queue_ahead": 10700,
+     "t_ms": 1792764009796
+    }
+   ],
+   "side": "A",
+   "sim_id": "own003"
+  },
+  {
+   "ahead_at_entry": 7100,
+   "cid": "mm-4",
+   "clock": 1075,
+   "created_ms": 1792764005066,
+   "fills": [
+    {
+     "ahead_before": 1100,
+     "price": 4300,
+     "qty": 1000,
+     "t_ms": 1792764012175
+    }
+   ],
+   "order_id": "c3a90b68-cbe2-4b11-8362-3ae41dd1d616",
+   "price": 4300,
+   "qty": 1000,
+   "samples": [
+    {
+     "queue_ahead": 7100,
+     "t_ms": 1792764005625
+    },
+    {
+     "queue_ahead": 3800,
+     "t_ms": 1792764006592
+    },
+    {
+     "queue_ahead": 3800,
+     "t_ms": 1792764007879
+    },
+    {
+     "queue_ahead": 3800,
+     "t_ms": 1792764009796
+    },
+    {
+     "queue_ahead": 1100,
+     "t_ms": 1792764011736
+    }
+   ],
+   "side": "B",
+   "sim_id": "own004"
+  },
+  {
+   "ahead_at_entry": 7900,
+   "cancel_ms": 1792764017652,
+   "cid": "mm-5",
+   "clock": 1216,
+   "created_ms": 1792764013570,
+   "fills": [],
+   "order_id": "a1d61d8f-e36e-451e-8eca-05aa46ff0a6c",
+   "price": 4500,
+   "qty": 1000,
+   "samples": [
+    {
+     "queue_ahead": 7900,
+     "t_ms": 1792764014016
+    },
+    {
+     "queue_ahead": 7900,
+     "t_ms": 1792764015385
+    },
+    {
+     "queue_ahead": 7500,
+     "t_ms": 1792764016585
+    },
+    {
+     "queue_ahead": 6800,
+     "t_ms": 1792764017526
+    }
+   ],
+   "side": "A",
+   "sim_id": "own005"
+  },
+  {
+   "ahead_at_entry": 7100,
+   "cancel_ms": 1792764023650,
+   "cid": "mm-6",
+   "clock": 1219,
+   "created_ms": 1792764014016,
+   "fills": [],
+   "order_id": "3f7df7e8-f727-4198-8eeb-6c735c821f3c",
+   "price": 4300,
+   "qty": 1000,
+   "samples": [
+    {
+     "queue_ahead": 7100,
+     "t_ms": 1792764014016
+    },
+    {
+     "queue_ahead": 3900,
+     "t_ms": 1792764015385
+    },
+    {
+     "queue_ahead": 3900,
+     "t_ms": 1792764016585
+    },
+    {
+     "queue_ahead": 1400,
+     "t_ms": 1792764017526
+    },
+    {
+     "queue_ahead": 1400,
+     "t_ms": 1792764018308
+    },
+    {
+     "queue_ahead": 1400,
+     "t_ms": 1792764019224
+    },
+    {
+     "queue_ahead": 1400,
+     "t_ms": 1792764020080
+    },
+    {
+     "queue_ahead": 400,
+     "t_ms": 1792764021062
+    },
+    {
+     "queue_ahead": 400,
+     "t_ms": 1792764022210
+    },
+    {
+     "queue_ahead": 400,
+     "t_ms": 1792764023044
+    }
+   ],
+   "side": "B",
+   "sim_id": "own006"
+  },
+  {
+   "ahead_at_entry": 13000,
+   "cid": "mm-7",
+   "clock": 1272,
+   "created_ms": 1792764018881,
+   "fills": [
+    {
+     "ahead_before": 0,
+     "price": 4500,
+     "qty": 1000,
+     "t_ms": 1792764023745
+    }
+   ],
+   "order_id": "ca4f12bf-9988-4455-897c-da70b986ea79",
+   "price": 4500,
+   "qty": 1000,
+   "samples": [
+    {
+     "queue_ahead": 7300,
+     "t_ms": 1792764019224
+    },
+    {
+     "queue_ahead": 7300,
+     "t_ms": 1792764020080
+    },
+    {
+     "queue_ahead": 0,
+     "t_ms": 1792764021062
+    },
+    {
+     "queue_ahead": 0,
+     "t_ms": 1792764022210
+    },
+    {
+     "queue_ahead": 0,
+     "t_ms": 1792764023044
+    }
+   ],
+   "side": "A",
+   "sim_id": "own007"
+  },
+  {
+   "ahead_at_entry": 15100,
+   "cancel_ms": 1792764033498,
+   "cid": "mm-8",
+   "clock": 1383,
+   "created_ms": 1792764025221,
+   "fills": [],
+   "order_id": "828a6731-3b8c-4a2a-8595-ab53084eba30",
+   "price": 4400,
+   "qty": 1000,
+   "samples": [
+    {
+     "queue_ahead": 7300,
+     "t_ms": 1792764026135
+    },
+    {
+     "queue_ahead": 7300,
+     "t_ms": 1792764026920
+    },
+    {
+     "queue_ahead": 7300,
+     "t_ms": 1792764027914
+    },
+    {
+     "queue_ahead": 7300,
+     "t_ms": 1792764029050
+    },
+    {
+     "queue_ahead": 7300,
+     "t_ms": 1792764030095
+    },
+    {
+     "queue_ahead": 3600,
+     "t_ms": 1792764031343
+    },
+    {
+     "queue_ahead": 3600,
+     "t_ms": 1792764032300
+    }
+   ],
+   "side": "B",
+   "sim_id": "own008"
+  },
+  {
+   "ahead_at_entry": 2100,
+   "cid": "mm-9",
+   "clock": 1385,
+   "created_ms": 1792764025221,
+   "fills": [
+    {
+     "ahead_before": 2100,
+     "price": 4800,
+     "qty": 1000,
+     "t_ms": 1792764025775
+    }
+   ],
+   "order_id": "8fbe4652-79db-41d6-8dcd-fbec7bccd642",
+   "price": 4800,
+   "qty": 1000,
+   "samples": [],
+   "side": "A",
+   "sim_id": "own009"
+  },
+  {
+   "ahead_at_entry": 7400,
+   "cid": "mm-10",
+   "clock": 1437,
+   "created_ms": 1792764028130,
+   "fills": [
+    {
+     "ahead_before": 4100,
+     "price": 5000,
+     "qty": 1000,
+     "t_ms": 1792764032076
+    }
+   ],
+   "order_id": "255ab848-1315-436d-85d3-bb9181b0265a",
+   "price": 5000,
+   "qty": 1000,
+   "samples": [
+    {
+     "queue_ahead": 7400,
+     "t_ms": 1792764029050
+    },
+    {
+     "queue_ahead": 4100,
+     "t_ms": 1792764030095
+    },
+    {
+     "queue_ahead": 4100,
+     "t_ms": 1792764031343
+    }
+   ],
+   "side": "A",
+   "sim_id": "own010"
+  },
+  {
+   "ahead_at_entry": 8600,
+   "cid": "mm-11",
+   "clock": 1550,
+   "created_ms": 1792764033740,
+   "fills": [
+    {
+     "ahead_before": 0,
+     "price": 5000,
+     "qty": 1000,
+     "t_ms": 1792764041615
+    }
+   ],
+   "order_id": "ebc8488b-a1a1-4ea4-8f94-126a32c2e838",
+   "price": 5000,
+   "qty": 1000,
+   "samples": [
+    {
+     "queue_ahead": 8600,
+     "t_ms": 1792764033740
+    },
+    {
+     "queue_ahead": 2600,
+     "t_ms": 1792764035133
+    },
+    {
+     "queue_ahead": 2600,
+     "t_ms": 1792764036182
+    },
+    {
+     "queue_ahead": 2600,
+     "t_ms": 1792764037249
+    },
+    {
+     "queue_ahead": 0,
+     "t_ms": 1792764038432
+    },
+    {
+     "queue_ahead": 0,
+     "t_ms": 1792764039705
+    },
+    {
+     "queue_ahead": 0,
+     "t_ms": 1792764040787
+    }
+   ],
+   "side": "A",
+   "sim_id": "own011"
+  },
+  {
+   "ahead_at_entry": 2100,
+   "cid": "mm-12",
+   "clock": 1593,
+   "created_ms": 1792764035834,
+   "fills": [
+    {
+     "ahead_before": 1500,
+     "price": 4600,
+     "qty": 400,
+     "t_ms": 1792764040262
+    },
+    {
+     "ahead_before": 0,
+     "price": 4600,
+     "qty": 600,
+     "t_ms": 1792764041863
+    }
+   ],
+   "order_id": "28c6e002-4c4a-4675-8ec5-42378de7dd35",
+   "price": 4600,
+   "qty": 1000,
+   "samples": [
+    {
+     "queue_ahead": 1700,
+     "t_ms": 1792764036182
+    },
+    {
+     "queue_ahead": 1500,
+     "t_ms": 1792764037249
+    },
+    {
+     "queue_ahead": 1500,
+     "t_ms": 1792764038432
+    },
+    {
+     "queue_ahead": 1500,
+     "t_ms": 1792764039705
+    },
+    {
+     "queue_ahead": 0,
+     "t_ms": 1792764040787
+    }
+   ],
+   "side": "B",
+   "sim_id": "own012"
+  },
+  {
+   "ahead_at_entry": 2500,
+   "cid": "mm-13",
+   "clock": 1694,
+   "created_ms": 1792764042895,
+   "fills": [
+    {
+     "ahead_before": 0,
+     "price": 4600,
+     "qty": 1000,
+     "t_ms": 1792764045614
+    }
+   ],
+   "order_id": "49faf80c-b5fb-402c-80b5-e632168d7235",
+   "price": 4600,
+   "qty": 1000,
+   "samples": [
+    {
+     "queue_ahead": 2500,
+     "t_ms": 1792764043956
+    },
+    {
+     "queue_ahead": 0,
+     "t_ms": 1792764044715
+    }
+   ],
+   "side": "B",
+   "sim_id": "own013"
+  },
+  {
+   "ahead_at_entry": 800,
+   "cancel_ms": 1792764055964,
+   "cid": "mm-14",
+   "clock": 1709,
+   "created_ms": 1792764044095,
+   "fills": [],
+   "order_id": "5cb547cc-9efc-4cc9-891b-30cc8f4a0c6c",
+   "price": 5000,
+   "qty": 1000,
+   "samples": [
+    {
+     "queue_ahead": 800,
+     "t_ms": 1792764044715
+    },
+    {
+     "queue_ahead": 800,
+     "t_ms": 1792764045944
+    },
+    {
+     "queue_ahead": 800,
+     "t_ms": 1792764046699
+    },
+    {
+     "queue_ahead": 800,
+     "t_ms": 1792764047954
+    },
+    {
+     "queue_ahead": 800,
+     "t_ms": 1792764049798
+    },
+    {
+     "queue_ahead": 800,
+     "t_ms": 1792764050603
+    },
+    {
+     "queue_ahead": 800,
+     "t_ms": 1792764051928
+    },
+    {
+     "queue_ahead": 800,
+     "t_ms": 1792764053602
+    },
+    {
+     "queue_ahead": 0,
+     "t_ms": 1792764054797
+    },
+    {
+     "queue_ahead": 0,
+     "t_ms": 1792764055686
+    }
+   ],
+   "side": "A",
+   "sim_id": "own014"
+  },
+  {
+   "ahead_at_entry": 2500,
+   "cid": "mm-15",
+   "clock": 1762,
+   "created_ms": 1792764047954,
+   "fills": [
+    {
+     "ahead_before": 400,
+     "price": 4400,
+     "qty": 400,
+     "t_ms": 1792764050442
+    },
+    {
+     "ahead_before": 0,
+     "price": 4400,
+     "qty": 600,
+     "t_ms": 1792764051994
+    }
+   ],
+   "order_id": "d43470cf-bb06-4c91-8542-b789b1c054c9",
+   "price": 4400,
+   "qty": 1000,
+   "samples": [
+    {
+     "queue_ahead": 2500,
+     "t_ms": 1792764047954
+    },
+    {
+     "queue_ahead": 400,
+     "t_ms": 1792764049798
+    },
+    {
+     "queue_ahead": 0,
+     "t_ms": 1792764050603
+    },
+    {
+     "queue_ahead": 0,
+     "t_ms": 1792764051928
+    }
+   ],
+   "side": "B",
+   "sim_id": "own015"
+  },
+  {
+   "ahead_at_entry": 1900,
+   "cid": "mm-16",
+   "clock": 1820,
+   "created_ms": 1792764053602,
+   "fills": [
+    {
+     "ahead_before": 1900,
+     "price": 4300,
+     "qty": 1000,
+     "t_ms": 1792764054179
+    }
+   ],
+   "order_id": "67c986b4-4bfa-4c4f-814c-2567740759dd",
+   "price": 4300,
+   "qty": 1000,
+   "samples": [
+    {
+     "queue_ahead": 1900,
+     "t_ms": 1792764053602
+    }
+   ],
+   "side": "B",
+   "sim_id": "own016"
+  },
+  {
+   "ahead_at_entry": 5200,
+   "cid": "mm-17",
+   "clock": 1861,
+   "created_ms": 1792764055964,
+   "fills": [
+    {
+     "ahead_before": 3000,
+     "price": 4200,
+     "qty": 1000,
+     "t_ms": 1792764057603
+    }
+   ],
+   "order_id": "0f9fc46b-554e-4831-8b56-99cdd84ade86",
+   "price": 4200,
+   "qty": 1000,
+   "samples": [
+    {
+     "queue_ahead": 3000,
+     "t_ms": 1792764057096
+    }
+   ],
+   "side": "B",
+   "sim_id": "own017"
+  },
+  {
+   "ahead_at_entry": 2400,
+   "cid": "mm-18",
+   "clock": 1922,
+   "created_ms": 1792764058287,
+   "fills": [
+    {
+     "ahead_before": 2400,
+     "price": 5000,
+     "qty": 1000,
+     "t_ms": 1792764059079
+    }
+   ],
+   "order_id": "6df30722-f65b-4485-84e5-5d9722272ba5",
+   "price": 5000,
+   "qty": 1000,
+   "samples": [],
+   "side": "A",
+   "sim_id": "own018"
+  },
+  {
+   "ahead_at_entry": 200,
+   "cid": "mm-19",
+   "clock": 1930,
+   "created_ms": 1792764059079,
+   "fills": [
+    {
+     "ahead_before": 0,
+     "price": 4200,
+     "qty": 1000,
+     "t_ms": 1792764062617
+    }
+   ],
+   "order_id": "3c180b1e-4b09-49b5-8267-83160e07b68c",
+   "price": 4200,
+   "qty": 1000,
+   "samples": [
+    {
+     "queue_ahead": 200,
+     "t_ms": 1792764059327
+    },
+    {
+     "queue_ahead": 0,
+     "t_ms": 1792764060628
+    },
+    {
+     "queue_ahead": 0,
+     "t_ms": 1792764061807
+    }
+   ],
+   "side": "B",
+   "sim_id": "own019"
+  },
+  {
+   "ahead_at_entry": 1700,
+   "cid": "mm-20",
+   "clock": 1963,
+   "created_ms": 1792764060942,
+   "fills": [],
+   "order_id": "595f7513-dde3-49e4-885a-fabeaf779491",
+   "price": 5500,
+   "qty": 1000,
+   "samples": [
+    {
+     "queue_ahead": 1700,
+     "t_ms": 1792764061807
+    },
+    {
+     "queue_ahead": 1700,
+     "t_ms": 1792764063370
+    },
+    {
+     "queue_ahead": 500,
+     "t_ms": 1792764064927
+    }
+   ],
+   "side": "A",
+   "sim_id": "own020"
+  },
+  {
+   "ahead_at_entry": 10000,
+   "cid": "mm-21",
+   "clock": 2011,
+   "created_ms": 1792764064927,
+   "fills": [],
+   "order_id": "3746ca99-8cff-489c-8882-a031b1000347",
+   "price": 4100,
+   "qty": 1000,
+   "samples": [
+    {
+     "queue_ahead": 10000,
+     "t_ms": 1792764064927
+    }
+   ],
+   "side": "B",
+   "sim_id": "own021"
+  }
+ ],
+ "settlement": "1.0000",
+ "ticker": "KXDEMO-26OCT23-T50",
+ "venue": "kalshi"
+}

@@ -1,0 +1,1111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.forecast_scorecard",
+  "$defs": {
+    "AnchorEcho": {
+      "additionalProperties": false,
+      "description": "One anchored commitment that was checked against the ledger.",
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "commitment_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Commitment Sha256",
+          "type": "string"
+        },
+        "head_seq": {
+          "title": "Head Seq",
+          "type": "integer"
+        },
+        "head_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Head Sha256",
+          "type": "string"
+        },
+        "anchored_at_ns": {
+          "title": "Anchored At Ns",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "path",
+        "commitment_sha256",
+        "head_seq",
+        "head_sha256",
+        "anchored_at_ns"
+      ],
+      "title": "AnchorEcho",
+      "type": "object"
+    },
+    "Calibration": {
+      "additionalProperties": false,
+      "description": "Calibration of binary forecasts (`target: binary`) or the top-label confidence of categorical ones\n(`target: top_label`): ECE (equal-width bins) with a cluster-bootstrap CI, its expectation and p-value under\nperfect calibration (outcomes resampled from the forecasts), and the Murphy decomposition (equal-count bins).",
+      "properties": {
+        "target": {
+          "enum": [
+            "binary",
+            "top_label"
+          ],
+          "title": "Target",
+          "type": "string"
+        },
+        "n": {
+          "title": "N",
+          "type": "integer"
+        },
+        "n_bins": {
+          "title": "N Bins",
+          "type": "integer"
+        },
+        "ece": {
+          "$ref": "#/$defs/CiValue"
+        },
+        "ece_if_calibrated": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ece If Calibrated"
+        },
+        "ece_p_value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ece P Value"
+        },
+        "murphy": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Murphy",
+          "type": "object"
+        },
+        "bins": {
+          "items": {
+            "$ref": "#/$defs/ReliabilityBin"
+          },
+          "title": "Bins",
+          "type": "array"
+        }
+      },
+      "required": [
+        "target",
+        "n",
+        "n_bins",
+        "ece",
+        "ece_if_calibrated",
+        "ece_p_value",
+        "murphy",
+        "bins"
+      ],
+      "title": "Calibration",
+      "type": "object"
+    },
+    "CiValue": {
+      "additionalProperties": false,
+      "description": "Point estimate with a confidence interval.",
+      "properties": {
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        },
+        "ci_lo": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ci Lo"
+        },
+        "ci_hi": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ci Hi"
+        }
+      },
+      "required": [
+        "value",
+        "ci_lo",
+        "ci_hi"
+      ],
+      "title": "CiValue",
+      "type": "object"
+    },
+    "Comparison": {
+      "additionalProperties": false,
+      "description": "Paired comparison on common questions: `mean_diff` = mean loss of `reference` minus mean loss of `subject`\n(positive = subject better) with a cluster-bootstrap CI and two-sided p-value, `skill` = 1 - loss(subject) /\nloss(reference) with its CI, the DM test, and `p_holm`: the DM p-value Holm-adjusted across every comparison\nof the scorecard with the same kind and metric (baselines and forecaster pairs). A reference is a baseline\nname (`market`, `climatology`, `uniform`) or another forecaster; for forecaster pairs `lead_diff_ns` is the\nmedian over common questions of the subject's lead minus the reference's (positive = the subject committed\nearlier, with less information).",
+      "properties": {
+        "subject": {
+          "title": "Subject",
+          "type": "string"
+        },
+        "reference": {
+          "title": "Reference",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "binary",
+            "categorical",
+            "continuous"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "metric": {
+          "enum": [
+            "brier",
+            "log",
+            "spherical",
+            "rps",
+            "crps"
+          ],
+          "title": "Metric",
+          "type": "string"
+        },
+        "n": {
+          "title": "N",
+          "type": "integer"
+        },
+        "n_clusters": {
+          "title": "N Clusters",
+          "type": "integer"
+        },
+        "mean_diff": {
+          "$ref": "#/$defs/CiValue"
+        },
+        "skill": {
+          "$ref": "#/$defs/CiValue"
+        },
+        "p_bootstrap": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "P Bootstrap"
+        },
+        "dm": {
+          "$ref": "#/$defs/DmTest"
+        },
+        "p_holm": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "P Holm"
+        },
+        "lead_diff_ns": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lead Diff Ns"
+        }
+      },
+      "required": [
+        "subject",
+        "reference",
+        "kind",
+        "metric",
+        "n",
+        "n_clusters",
+        "mean_diff",
+        "skill",
+        "p_bootstrap",
+        "dm"
+      ],
+      "title": "Comparison",
+      "type": "object"
+    },
+    "DmTest": {
+      "additionalProperties": false,
+      "description": "Diebold-Mariano test of equal expected loss on per-question loss differentials ordered by resolution time:\nNewey-West (Bartlett) long-run variance with `lag` lags, Harvey-Leybourne-Newbold correction, Student t with\n`units - 1` df; two-sided. `units` is the number of questions, or of clusters when a cluster holds more than one\nrow (then the test runs on cluster sums: CR1 at lag 0). `statistic` > 0 when the subject has the lower loss;\nboth are null when the differences are constant but not zero, or fewer than 2 units.",
+      "properties": {
+        "statistic": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Statistic"
+        },
+        "p_value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "P Value"
+        },
+        "lag": {
+          "title": "Lag",
+          "type": "integer"
+        },
+        "units": {
+          "title": "Units",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "statistic",
+        "p_value",
+        "lag",
+        "units"
+      ],
+      "title": "DmTest",
+      "type": "object"
+    },
+    "FileEntry": {
+      "additionalProperties": false,
+      "description": "One output file: name relative to the output directory, row count for tables, size and sha256.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "rows": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rows"
+        },
+        "bytes": {
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "bytes",
+        "sha256"
+      ],
+      "title": "FileEntry",
+      "type": "object"
+    },
+    "ForecasterScore": {
+      "additionalProperties": false,
+      "description": "Every number for one forecaster (`n_rejected`: the leakage and validity guard; `n_anchored`: scored forecasts\ncovered by an anchored commitment).",
+      "properties": {
+        "forecaster": {
+          "title": "Forecaster",
+          "type": "string"
+        },
+        "n_forecasts": {
+          "title": "N Forecasts",
+          "type": "integer"
+        },
+        "n_scored": {
+          "title": "N Scored",
+          "type": "integer"
+        },
+        "n_rejected": {
+          "title": "N Rejected",
+          "type": "integer"
+        },
+        "selection": {
+          "$ref": "#/$defs/Selection"
+        },
+        "n_anchored": {
+          "title": "N Anchored",
+          "type": "integer"
+        },
+        "kinds": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Kinds",
+          "type": "object"
+        },
+        "scores": {
+          "items": {
+            "$ref": "#/$defs/MetricScore"
+          },
+          "title": "Scores",
+          "type": "array"
+        },
+        "calibration": {
+          "items": {
+            "$ref": "#/$defs/Calibration"
+          },
+          "title": "Calibration",
+          "type": "array"
+        },
+        "skill": {
+          "items": {
+            "$ref": "#/$defs/Comparison"
+          },
+          "title": "Skill",
+          "type": "array"
+        },
+        "power": {
+          "items": {
+            "$ref": "#/$defs/PowerAnalysis"
+          },
+          "title": "Power",
+          "type": "array"
+        },
+        "pnl": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PnlResult"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "median_lead_ns": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Median Lead Ns"
+        }
+      },
+      "required": [
+        "forecaster",
+        "n_forecasts",
+        "n_scored",
+        "n_rejected",
+        "selection",
+        "n_anchored",
+        "kinds",
+        "scores",
+        "calibration",
+        "skill",
+        "power",
+        "pnl",
+        "median_lead_ns"
+      ],
+      "title": "ForecasterScore",
+      "type": "object"
+    },
+    "LedgerEcho": {
+      "additionalProperties": false,
+      "description": "The ledger that was scored, and the anchored commitments it was checked against.",
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "ledger_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Ledger Id",
+          "type": "string"
+        },
+        "head_seq": {
+          "title": "Head Seq",
+          "type": "integer"
+        },
+        "head_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Head Sha256",
+          "type": "string"
+        },
+        "n_entries": {
+          "title": "N Entries",
+          "type": "integer"
+        },
+        "verified": {
+          "title": "Verified",
+          "type": "boolean"
+        },
+        "anchors": {
+          "items": {
+            "$ref": "#/$defs/AnchorEcho"
+          },
+          "title": "Anchors",
+          "type": "array"
+        }
+      },
+      "required": [
+        "path",
+        "ledger_id",
+        "head_seq",
+        "head_sha256",
+        "n_entries",
+        "verified"
+      ],
+      "title": "LedgerEcho",
+      "type": "object"
+    },
+    "MetricScore": {
+      "additionalProperties": false,
+      "description": "Mean loss over the forecaster's scored questions, with a cluster-bootstrap percentile CI.",
+      "properties": {
+        "kind": {
+          "enum": [
+            "binary",
+            "categorical",
+            "continuous"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "metric": {
+          "enum": [
+            "brier",
+            "log",
+            "spherical",
+            "rps",
+            "crps"
+          ],
+          "title": "Metric",
+          "type": "string"
+        },
+        "n": {
+          "title": "N",
+          "type": "integer"
+        },
+        "mean": {
+          "$ref": "#/$defs/CiValue"
+        },
+        "n_clipped": {
+          "default": 0,
+          "title": "N Clipped",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "metric",
+        "n",
+        "mean"
+      ],
+      "title": "MetricScore",
+      "type": "object"
+    },
+    "PnlResult": {
+      "additionalProperties": false,
+      "description": "Executable PnL (binary forecasts with quotes). `isolated_growth` = mean log return of each bet sized on a\nfresh bankroll (CI by cluster bootstrap): the per-question edge after costs. `frictionless_growth` = a full-Kelly\nbettor at the decision-time mid with no spread, fees, depth limit or latency, which equals the mean log-score\ndifference against that mid. The bankroll path: `log_growth` = log(final / bankroll) (null when the bankroll is\nlost), `growth_per_bet` = log_growth / n_bets, `total_return`, `max_drawdown`; `path_cash_limited` is true when\ncash skipped or trimmed more than 10% of the candidates, and the path then describes an arbitrary subset of\nbets (read `isolated_growth`).",
+      "properties": {
+        "n_candidates": {
+          "title": "N Candidates",
+          "type": "integer"
+        },
+        "n_bets": {
+          "title": "N Bets",
+          "type": "integer"
+        },
+        "n_skipped": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "N Skipped",
+          "type": "object"
+        },
+        "bankroll": {
+          "title": "Bankroll",
+          "type": "number"
+        },
+        "final_wealth": {
+          "title": "Final Wealth",
+          "type": "number"
+        },
+        "total_return": {
+          "title": "Total Return",
+          "type": "number"
+        },
+        "log_growth": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Log Growth"
+        },
+        "growth_per_bet": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Growth Per Bet"
+        },
+        "isolated_growth": {
+          "$ref": "#/$defs/CiValue"
+        },
+        "frictionless_growth": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Frictionless Growth"
+        },
+        "max_drawdown": {
+          "title": "Max Drawdown",
+          "type": "number"
+        },
+        "fees_paid": {
+          "title": "Fees Paid",
+          "type": "number"
+        },
+        "spread_paid": {
+          "title": "Spread Paid",
+          "type": "number"
+        },
+        "contracts": {
+          "title": "Contracts",
+          "type": "number"
+        },
+        "depth_limited": {
+          "title": "Depth Limited",
+          "type": "integer"
+        },
+        "cash_limited": {
+          "title": "Cash Limited",
+          "type": "integer"
+        },
+        "path_cash_limited": {
+          "title": "Path Cash Limited",
+          "type": "boolean"
+        },
+        "hit_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Hit Rate"
+        }
+      },
+      "required": [
+        "n_candidates",
+        "n_bets",
+        "n_skipped",
+        "bankroll",
+        "final_wealth",
+        "total_return",
+        "log_growth",
+        "growth_per_bet",
+        "isolated_growth",
+        "frictionless_growth",
+        "max_drawdown",
+        "fees_paid",
+        "spread_paid",
+        "contracts",
+        "depth_limited",
+        "cash_limited",
+        "path_cash_limited",
+        "hit_rate"
+      ],
+      "title": "PnlResult",
+      "type": "object"
+    },
+    "PowerAnalysis": {
+      "additionalProperties": false,
+      "description": "Resolved questions needed to detect an edge in `metric` against `reference` with a two-sided paired test at\n`alpha` and `power` (noncentral t, design effect from clustering): for the spec's `min_edge` (the planning\nnumber) and for the observed edge; `achieved_power` = power of the current sample against the observed edge.\nThe observed-edge numbers are noisy estimates (post-hoc power is a function of the p-value).",
+      "properties": {
+        "reference": {
+          "title": "Reference",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "binary",
+            "categorical",
+            "continuous"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "metric": {
+          "enum": [
+            "brier",
+            "log",
+            "spherical",
+            "rps",
+            "crps"
+          ],
+          "title": "Metric",
+          "type": "string"
+        },
+        "n": {
+          "title": "N",
+          "type": "integer"
+        },
+        "observed_edge": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Observed Edge"
+        },
+        "sd_diff": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sd Diff"
+        },
+        "design_effect": {
+          "title": "Design Effect",
+          "type": "number"
+        },
+        "achieved_power": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Achieved Power"
+        },
+        "n_required_observed": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "N Required Observed"
+        },
+        "min_edge": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Min Edge"
+        },
+        "n_required_min_edge": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "N Required Min Edge"
+        }
+      },
+      "required": [
+        "reference",
+        "kind",
+        "metric",
+        "n",
+        "observed_edge",
+        "sd_diff",
+        "design_effect",
+        "achieved_power",
+        "n_required_observed",
+        "min_edge",
+        "n_required_min_edge"
+      ],
+      "title": "PowerAnalysis",
+      "type": "object"
+    },
+    "Rejection": {
+      "additionalProperties": false,
+      "description": "One rejected forecast entry (the first 1,000; all of them are in `forecast_eligibility.parquet`).",
+      "properties": {
+        "seq": {
+          "title": "Seq",
+          "type": "integer"
+        },
+        "question_id": {
+          "title": "Question Id",
+          "type": "string"
+        },
+        "forecaster": {
+          "title": "Forecaster",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "scored",
+            "superseded",
+            "unresolved",
+            "void",
+            "after_resolution_entry",
+            "after_cutoff",
+            "short_lead",
+            "declared_clock",
+            "as_of_after_commit",
+            "kind_mismatch",
+            "outcome_mismatch",
+            "unanchored",
+            "anchored_after_cutoff"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "detail": {
+          "title": "Detail",
+          "type": "string"
+        }
+      },
+      "required": [
+        "seq",
+        "question_id",
+        "forecaster",
+        "status",
+        "detail"
+      ],
+      "title": "Rejection",
+      "type": "object"
+    },
+    "ReliabilityBin": {
+      "additionalProperties": false,
+      "description": "One equal-width bin of the reliability diagram: Wilson 95% interval of the observed rate and the\nconsistency band (2.5% and 97.5% quantiles of the rate when outcomes are drawn from the forecasts).",
+      "properties": {
+        "lo": {
+          "title": "Lo",
+          "type": "number"
+        },
+        "hi": {
+          "title": "Hi",
+          "type": "number"
+        },
+        "count": {
+          "title": "Count",
+          "type": "integer"
+        },
+        "mean_p": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Mean P"
+        },
+        "observed_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Observed Rate"
+        },
+        "rate_lo": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Rate Lo"
+        },
+        "rate_hi": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Rate Hi"
+        },
+        "consistency_lo": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Consistency Lo"
+        },
+        "consistency_hi": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Consistency Hi"
+        }
+      },
+      "required": [
+        "lo",
+        "hi",
+        "count",
+        "mean_p",
+        "observed_rate",
+        "rate_lo",
+        "rate_hi",
+        "consistency_lo",
+        "consistency_hi"
+      ],
+      "title": "ReliabilityBin",
+      "type": "object"
+    },
+    "ScoreCounts": {
+      "additionalProperties": false,
+      "description": "Forecast entries by eligibility status, and resolved questions.",
+      "properties": {
+        "forecasts": {
+          "title": "Forecasts",
+          "type": "integer"
+        },
+        "by_status": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "By Status",
+          "type": "object"
+        },
+        "questions": {
+          "title": "Questions",
+          "type": "integer"
+        },
+        "questions_resolved": {
+          "title": "Questions Resolved",
+          "type": "integer"
+        },
+        "questions_void": {
+          "title": "Questions Void",
+          "type": "integer"
+        },
+        "forecasters": {
+          "title": "Forecasters",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "forecasts",
+        "by_status",
+        "questions",
+        "questions_resolved",
+        "questions_void",
+        "forecasters"
+      ],
+      "title": "ScoreCounts",
+      "type": "object"
+    },
+    "Selection": {
+      "additionalProperties": false,
+      "description": "What the resolutions did to one forecaster's record. Resolutions, cutoffs and voids are trusted input: whoever\nwrites them can shape the record, so these counts make that visible. `unresolved` / `void`: forecast entries\non questions with no resolution, or a void effective resolution. `voided_after_outcome`: questions of this\nforecaster's entries first resolved with an outcome and later corrected to void. `outcome_corrected`:\nquestions whose scored outcome differs from the first resolution's. `cutoff_tightened`: questions whose\ncorrection moved the cutoff earlier.",
+      "properties": {
+        "unresolved": {
+          "default": 0,
+          "title": "Unresolved",
+          "type": "integer"
+        },
+        "void": {
+          "default": 0,
+          "title": "Void",
+          "type": "integer"
+        },
+        "voided_after_outcome": {
+          "default": 0,
+          "title": "Voided After Outcome",
+          "type": "integer"
+        },
+        "outcome_corrected": {
+          "default": 0,
+          "title": "Outcome Corrected",
+          "type": "integer"
+        },
+        "cutoff_tightened": {
+          "default": 0,
+          "title": "Cutoff Tightened",
+          "type": "integer"
+        }
+      },
+      "title": "Selection",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`qt.forecast_scorecard` (`forecast score`, `forecast_scorecard.json`).",
+  "properties": {
+    "schema": {
+      "const": "qt.forecast_scorecard",
+      "default": "qt.forecast_scorecard",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "run_id": {
+      "pattern": "^[0-9a-f]{16}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "engine_version": {
+      "title": "Engine Version",
+      "type": "string"
+    },
+    "spec": {
+      "additionalProperties": true,
+      "title": "Spec",
+      "type": "object"
+    },
+    "ledger": {
+      "$ref": "#/$defs/LedgerEcho"
+    },
+    "counts": {
+      "$ref": "#/$defs/ScoreCounts"
+    },
+    "forecasters": {
+      "items": {
+        "$ref": "#/$defs/ForecasterScore"
+      },
+      "title": "Forecasters",
+      "type": "array"
+    },
+    "comparisons": {
+      "items": {
+        "$ref": "#/$defs/Comparison"
+      },
+      "title": "Comparisons",
+      "type": "array"
+    },
+    "rejections": {
+      "items": {
+        "$ref": "#/$defs/Rejection"
+      },
+      "title": "Rejections",
+      "type": "array"
+    },
+    "rejections_truncated": {
+      "title": "Rejections Truncated",
+      "type": "boolean"
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/FileEntry"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "run_id",
+    "engine_version",
+    "spec",
+    "ledger",
+    "counts",
+    "forecasters",
+    "comparisons",
+    "rejections",
+    "rejections_truncated",
+    "files",
+    "warnings"
+  ],
+  "type": "object"
+}

@@ -786,6 +786,111 @@
   {
     "argv": [
       "queuetruth",
+      "zoo-toxicity",
+      "--zoo",
+      "out/zoo",
+      "--data",
+      "ds",
+      "--out",
+      "out/tox",
+      "--shadows",
+      "shadows.parquet",
+      "--horizons",
+      "100ms,1s,10s,60s",
+      "--window",
+      "60s",
+      "--rank-horizon",
+      "10s",
+      "--bootstrap-b",
+      "200",
+      "--amends",
+      "amends.parquet",
+      "--allow-truth-mismatch",
+      "--seed",
+      "3",
+      "--threads",
+      "2",
+      "--format",
+      "json"
+    ],
+    "command": {
+      "path": [
+        "zoo-toxicity"
+      ],
+      "global": {
+        "format": "json",
+        "log_level": "warn",
+        "threads": 2,
+        "seed": 3,
+        "quiet": false
+      },
+      "args": {
+        "zoo": {
+          "path": "out/zoo"
+        },
+        "dataset": {
+          "path": "ds"
+        },
+        "out": "out/tox",
+        "shadows": {
+          "path": "shadows.parquet"
+        },
+        "amends": {
+          "path": "amends.parquet"
+        },
+        "horizons_ns": [
+          100000000,
+          1000000000,
+          10000000000,
+          60000000000
+        ],
+        "window_ns": 60000000000,
+        "rank_horizon_ns": 10000000000,
+        "bootstrap_b": 200,
+        "allow_truth_mismatch": true,
+        "seed": 3,
+        "threads": 2
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "zoo-toxicity",
+      "--zoo",
+      "out/zoo",
+      "--data",
+      "ds",
+      "--out",
+      "out/tox"
+    ],
+    "command": {
+      "path": [
+        "zoo-toxicity"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "zoo": {
+          "path": "out/zoo"
+        },
+        "dataset": {
+          "path": "ds"
+        },
+        "out": "out/tox"
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
       "calibrate",
       "alloc",
       "--family",
@@ -1373,6 +1478,8 @@
       "zoo/zoo_predictions.parquet",
       "--zoo-shadows",
       "zoo/zoo_shadows.parquet",
+      "--conformal-alpha",
+      "0.1",
       "--seed",
       "5"
     ],
@@ -1410,6 +1517,9 @@
         },
         "zoo_shadows": {
           "path": "zoo/zoo_shadows.parquet"
+        },
+        "_cli": {
+          "conformal_alpha": 0.1
         },
         "seed": 5
       },
@@ -3094,6 +3204,1475 @@
           "path": "sh.parquet"
         },
         "cancel_away_ticks": 0
+      },
+      "implementation": "native"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "demo",
+      "--source",
+      "nasdaq",
+      "--symbols",
+      "AAPL,MSFT",
+      "--minutes",
+      "3",
+      "--n",
+      "3",
+      "--models",
+      "all",
+      "--url",
+      "https://example.com/day.gz",
+      "--input-format",
+      "iex",
+      "--date",
+      "2019-12-30",
+      "--out",
+      "out",
+      "--cache-dir",
+      "cache-dir",
+      "--refresh",
+      "--yes",
+      "--dry-run",
+      "--max-download-mb",
+      "0.25",
+      "--list-sources"
+    ],
+    "command": {
+      "path": [
+        "demo"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "source": "nasdaq",
+          "symbols": "AAPL,MSFT",
+          "minutes": 3,
+          "n": 3,
+          "models": "all",
+          "url": "https://example.com/day.gz",
+          "input_format": "iex",
+          "date": "2019-12-30",
+          "out": "out",
+          "cache_dir": "cache-dir",
+          "refresh": true,
+          "yes": true,
+          "dry_run": true,
+          "max_download_mb": 0.25,
+          "list_sources": true
+        }
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "demo",
+      "--from-file",
+      "day.gz"
+    ],
+    "command": {
+      "path": [
+        "demo"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "from_file": "day.gz"
+        }
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "forecast",
+      "commit",
+      "--forecasts",
+      "forecasts.csv",
+      "--ledger",
+      "ledger.jsonl",
+      "--forecaster",
+      "forecaster",
+      "--at",
+      "2026-10-01T00:00:00Z",
+      "--commitment-out",
+      "commitment-out.json",
+      "--allow-repeat"
+    ],
+    "command": {
+      "path": [
+        "forecast",
+        "commit"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "forecasts": "forecasts.csv",
+          "ledger": "ledger.jsonl",
+          "forecaster": "forecaster",
+          "at": "2026-10-01T00:00:00Z",
+          "commitment_out": "commitment-out.json",
+          "allow_repeat": true
+        }
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "forecast",
+      "resolve",
+      "--resolutions",
+      "resolutions.csv",
+      "--ledger",
+      "ledger.jsonl",
+      "--at",
+      "2026-10-01T00:00:00Z",
+      "--correct",
+      "--commitment-out",
+      "commitment-out.json"
+    ],
+    "command": {
+      "path": [
+        "forecast",
+        "resolve"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "resolutions": "resolutions.csv",
+          "ledger": "ledger.jsonl",
+          "at": "2026-10-01T00:00:00Z",
+          "correct": true,
+          "commitment_out": "commitment-out.json"
+        }
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "forecast",
+      "verify",
+      "--ledger",
+      "ledger.jsonl",
+      "--commitment",
+      "commitment.json"
+    ],
+    "command": {
+      "path": [
+        "forecast",
+        "verify"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "ledger": "ledger.jsonl",
+          "commitment": "commitment.json"
+        }
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "forecast",
+      "score",
+      "--ledger",
+      "ledger.jsonl",
+      "--out",
+      "out",
+      "--market",
+      "quotes.csv",
+      "--market-max-age",
+      "1h",
+      "--commitment",
+      "commitment.json",
+      "--commitment",
+      "commitment-2.json",
+      "--anchored-at",
+      "2026-10-02T00:00:00Z",
+      "--anchored-at",
+      "2026-10-02T00:00:00Z",
+      "--require-anchor",
+      "--unresolved",
+      "fail",
+      "--pairwise",
+      "3",
+      "--policy",
+      "mean",
+      "--baselines",
+      "market,uniform",
+      "--cluster",
+      "group",
+      "--bins",
+      "3",
+      "--bootstrap-b",
+      "3",
+      "--alpha",
+      "0.25",
+      "--power",
+      "0.25",
+      "--min-edge",
+      "0.25",
+      "--dm-lag",
+      "3",
+      "--min-lead",
+      "1h",
+      "--allow-declared-clock",
+      "--log-eps",
+      "0.25",
+      "--climatology-min-prior",
+      "3",
+      "--no-pnl",
+      "--kelly-fraction",
+      "0.25",
+      "--bankroll",
+      "0.25",
+      "--latency",
+      "250ms",
+      "--max-participation",
+      "0.25",
+      "--max-quote-age",
+      "5m",
+      "--price-at",
+      "arrival",
+      "--pnl-min-edge",
+      "0.25",
+      "--lot",
+      "0.25",
+      "--fee-per-contract",
+      "0.25",
+      "--fee-notional-rate",
+      "0.25",
+      "--fee-quadratic",
+      "0.25",
+      "--fee-round-up-to",
+      "0.25"
+    ],
+    "command": {
+      "path": [
+        "forecast",
+        "score"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "ledger": "ledger.jsonl",
+          "out": "out",
+          "market": "quotes.csv",
+          "market_max_age": "1h",
+          "commitment": [
+            "commitment.json",
+            "commitment-2.json"
+          ],
+          "anchored_at": [
+            "2026-10-02T00:00:00Z",
+            "2026-10-02T00:00:00Z"
+          ],
+          "require_anchor": true,
+          "unresolved": "fail",
+          "pairwise": "3",
+          "policy": "mean",
+          "baselines": "market,uniform",
+          "cluster": "group",
+          "bins": 3,
+          "bootstrap_b": 3,
+          "alpha": 0.25,
+          "power": 0.25,
+          "min_edge": 0.25,
+          "dm_lag": 3,
+          "min_lead": "1h",
+          "allow_declared_clock": true,
+          "log_eps": 0.25,
+          "climatology_min_prior": 3,
+          "no_pnl": true,
+          "kelly_fraction": 0.25,
+          "bankroll": 0.25,
+          "latency": "250ms",
+          "max_participation": 0.25,
+          "max_quote_age": "5m",
+          "price_at": "arrival",
+          "pnl_min_edge": 0.25,
+          "lot": 0.25,
+          "fee_per_contract": 0.25,
+          "fee_notional_rate": 0.25,
+          "fee_quadratic": 0.25,
+          "fee_round_up_to": 0.25
+        }
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "forecast",
+      "power",
+      "--edge",
+      "0.25",
+      "--sd",
+      "0.25",
+      "--alpha",
+      "0.25",
+      "--power",
+      "0.25",
+      "--design-effect",
+      "0.25",
+      "--n",
+      "3"
+    ],
+    "command": {
+      "path": [
+        "forecast",
+        "power"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "edge": 0.25,
+          "sd": 0.25,
+          "alpha": 0.25,
+          "power": 0.25,
+          "design_effect": 0.25,
+          "n": 3
+        }
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "forecast",
+      "simulate",
+      "--out",
+      "out",
+      "--questions",
+      "3",
+      "--edge-sd",
+      "0.25",
+      "--half-spread",
+      "0.25",
+      "--depth",
+      "0.25",
+      "--start",
+      "2026-10-01T00:00:00Z"
+    ],
+    "command": {
+      "path": [
+        "forecast",
+        "simulate"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "out": "out",
+          "questions": 3,
+          "edge_sd": 0.25,
+          "half_spread": 0.25,
+          "depth": 0.25,
+          "start": "2026-10-01T00:00:00Z"
+        }
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "ledger",
+      "list",
+      "--ledger",
+      "ledger.jsonl",
+      "--kind",
+      "variant",
+      "--kind",
+      "shadows-sample",
+      "--study",
+      "study",
+      "--name",
+      "name",
+      "--status",
+      "error",
+      "--since",
+      "2026-10-01",
+      "--until",
+      "2026-10-31",
+      "--dataset",
+      "ab12",
+      "--run-id",
+      "ab12",
+      "--spec-hash",
+      "ab12",
+      "--limit",
+      "3"
+    ],
+    "command": {
+      "path": [
+        "ledger",
+        "list"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "ledger": "ledger.jsonl",
+          "kind": [
+            "variant",
+            "shadows_sample"
+          ],
+          "study": "study",
+          "name": "name",
+          "status": "error",
+          "since": "2026-10-01",
+          "until": "2026-10-31",
+          "dataset": "ab12",
+          "run_id": "ab12",
+          "spec_hash": "ab12",
+          "limit": 3
+        }
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "ledger",
+      "stats",
+      "--ledger",
+      "ledger.jsonl",
+      "--kind",
+      "variant",
+      "--kind",
+      "shadows-sample",
+      "--study",
+      "study",
+      "--name",
+      "name",
+      "--status",
+      "error",
+      "--since",
+      "2026-10-01",
+      "--until",
+      "2026-10-31",
+      "--dataset",
+      "ab12",
+      "--run-id",
+      "ab12",
+      "--spec-hash",
+      "ab12"
+    ],
+    "command": {
+      "path": [
+        "ledger",
+        "stats"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "ledger": "ledger.jsonl",
+          "kind": [
+            "variant",
+            "shadows_sample"
+          ],
+          "study": "study",
+          "name": "name",
+          "status": "error",
+          "since": "2026-10-01",
+          "until": "2026-10-31",
+          "dataset": "ab12",
+          "run_id": "ab12",
+          "spec_hash": "ab12"
+        }
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "ledger",
+      "export",
+      "--ledger",
+      "ledger.jsonl",
+      "--kind",
+      "variant",
+      "--kind",
+      "shadows-sample",
+      "--study",
+      "study",
+      "--name",
+      "name",
+      "--status",
+      "error",
+      "--since",
+      "2026-10-01",
+      "--until",
+      "2026-10-31",
+      "--dataset",
+      "ab12",
+      "--run-id",
+      "ab12",
+      "--spec-hash",
+      "ab12",
+      "--out",
+      "out",
+      "--selection",
+      "--series",
+      "scores",
+      "--allow-mixed"
+    ],
+    "command": {
+      "path": [
+        "ledger",
+        "export"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "ledger": "ledger.jsonl",
+          "kind": [
+            "variant",
+            "shadows_sample"
+          ],
+          "study": "study",
+          "name": "name",
+          "status": "error",
+          "since": "2026-10-01",
+          "until": "2026-10-31",
+          "dataset": "ab12",
+          "run_id": "ab12",
+          "spec_hash": "ab12",
+          "out": "out",
+          "selection": true,
+          "series": "scores",
+          "allow_mixed": true
+        }
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "ledger",
+      "verify",
+      "--ledger",
+      "ledger.jsonl",
+      "--anchor",
+      "3:ab12"
+    ],
+    "command": {
+      "path": [
+        "ledger",
+        "verify"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "ledger": "ledger.jsonl",
+          "anchor": "3:ab12"
+        }
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "ledger",
+      "add",
+      "--ledger",
+      "ledger.jsonl",
+      "--name",
+      "name",
+      "--params",
+      "{\"k\":2}",
+      "--returns",
+      "returns.csv",
+      "--column",
+      "2",
+      "--index-column",
+      "2",
+      "--lower-is-better",
+      "--periods-per-year",
+      "0.25",
+      "--study",
+      "study",
+      "--dataset",
+      "@data",
+      "--code-version",
+      "code-version",
+      "--run-id",
+      "run-id",
+      "--run-id",
+      "run-id-2",
+      "--note",
+      "note"
+    ],
+    "command": {
+      "path": [
+        "ledger",
+        "add"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "ledger": "ledger.jsonl",
+          "name": "name",
+          "params": "{\"k\":2}",
+          "returns": "returns.csv",
+          "column": "2",
+          "index_column": "2",
+          "lower_is_better": true,
+          "periods_per_year": 0.25,
+          "study": "study",
+          "dataset": "@data",
+          "code_version": "code-version",
+          "run_id": [
+            "run-id",
+            "run-id-2"
+          ],
+          "note": "note"
+        }
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "ledger",
+      "add",
+      "--name",
+      "name",
+      "--scores",
+      "scores.csv"
+    ],
+    "command": {
+      "path": [
+        "ledger",
+        "add"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "name": "name",
+          "scores": "scores.csv"
+        }
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "pm",
+      "fixtures",
+      "--out",
+      "pm-out"
+    ],
+    "command": {
+      "path": [
+        "pm",
+        "fixtures"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "out": "pm-out"
+        }
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "pm",
+      "ingest",
+      "--venue",
+      "polymarket",
+      "--in",
+      "inputs",
+      "--in",
+      "inputs-2",
+      "--chain",
+      "chain",
+      "--chain",
+      "chain-2",
+      "--out",
+      "pm-out",
+      "--account",
+      "account",
+      "--kalshi-yes-price",
+      "false",
+      "--market",
+      "0xc=1,2",
+      "--market",
+      "0xc=1,2",
+      "--instrument-id",
+      "KXBTC=7",
+      "--instrument-id",
+      "KXBTC=7",
+      "--match-window",
+      "2s",
+      "--own-match-window",
+      "2s",
+      "--exchange",
+      "0xexchange",
+      "--exchange",
+      "0xexchange"
+    ],
+    "command": {
+      "path": [
+        "pm",
+        "ingest"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "venue": "polymarket",
+          "inputs": [
+            "inputs",
+            "inputs-2"
+          ],
+          "chain": [
+            "chain",
+            "chain-2"
+          ],
+          "out": "pm-out",
+          "account": "account",
+          "kalshi_yes_price": "false",
+          "market": [
+            "0xc=1,2",
+            "0xc=1,2"
+          ],
+          "instrument_id": [
+            "KXBTC=7",
+            "KXBTC=7"
+          ],
+          "match_window": "2s",
+          "own_match_window": "2s",
+          "exchange": [
+            "0xexchange",
+            "0xexchange"
+          ]
+        }
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "pm",
+      "calibrate",
+      "--pm",
+      "pm-out",
+      "--out",
+      "pm-out",
+      "--families",
+      "power,databento",
+      "--grid",
+      "-2:2:9",
+      "--train-fraction",
+      "0.25",
+      "--loss",
+      "mae",
+      "--sample-time",
+      "mid",
+      "--no-atomic",
+      "--bootstrap",
+      "3"
+    ],
+    "command": {
+      "path": [
+        "pm",
+        "calibrate"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "pm": "pm-out",
+          "out": "pm-out",
+          "families": "power,databento",
+          "grid": "-2:2:9",
+          "train_fraction": 0.25,
+          "loss": "mae",
+          "sample_time": "mid",
+          "atomic": false,
+          "bootstrap": 3
+        }
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "pm",
+      "score",
+      "--pm",
+      "pm-out",
+      "--out",
+      "pm-out",
+      "--quotes",
+      "quotes.csv",
+      "--calibration",
+      "pm-cal/calibration.json",
+      "--settle",
+      "KXBTC=1",
+      "--settle",
+      "KXBTC=1",
+      "--member",
+      "non-direct",
+      "--window",
+      "2s",
+      "--markout-horizons",
+      "1s,10s",
+      "--flat-taker",
+      "0.5",
+      "--flat-maker",
+      "0.5",
+      "--poly-multiplier",
+      "0.25",
+      "--poly-daily-reward",
+      "25",
+      "--poly-category",
+      "poly-category",
+      "--actual-rewards",
+      "0.5",
+      "--bootstrap",
+      "3"
+    ],
+    "command": {
+      "path": [
+        "pm",
+        "score"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "pm": "pm-out",
+          "out": "pm-out",
+          "quotes": "quotes.csv",
+          "calibration": "pm-cal/calibration.json",
+          "settle": [
+            "KXBTC=1",
+            "KXBTC=1"
+          ],
+          "member": "non_direct",
+          "window": "2s",
+          "markout_horizons": "1s,10s",
+          "flat_taker": "0.5",
+          "flat_maker": "0.5",
+          "poly_multiplier": 0.25,
+          "poly_daily_reward": "25",
+          "poly_category": "poly-category",
+          "actual_rewards": "0.5",
+          "bootstrap": 3
+        }
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "pm",
+      "score",
+      "--pm",
+      "pm-out",
+      "--out",
+      "pm-out",
+      "--model",
+      "power3[n=1.5]"
+    ],
+    "command": {
+      "path": [
+        "pm",
+        "score"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "pm": "pm-out",
+          "out": "pm-out",
+          "model": "power3[n=1.5]"
+        }
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "certify",
+      "run1",
+      "run2",
+      "--out",
+      "out",
+      "--claim",
+      "fill rate within 2pp",
+      "--claim",
+      "fill rate within 2pp",
+      "--key",
+      "signer.pem",
+      "--html",
+      "cert.html",
+      "--title",
+      "title",
+      "--issuer",
+      "issuer",
+      "--attach",
+      "attach",
+      "--attach",
+      "attach-2",
+      "--commitment",
+      "commitment.json",
+      "--commitment",
+      "commitment-2.json",
+      "--opening",
+      "opening.json",
+      "--opening",
+      "opening-2.json",
+      "--base",
+      "base"
+    ],
+    "command": {
+      "path": [
+        "certify"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "out": "out",
+          "claim": [
+            "fill rate within 2pp",
+            "fill rate within 2pp"
+          ],
+          "key": "signer.pem",
+          "html": "cert.html",
+          "title": "title",
+          "issuer": "issuer",
+          "attach": [
+            "attach",
+            "attach-2"
+          ],
+          "commitment": [
+            "commitment.json",
+            "commitment-2.json"
+          ],
+          "opening": [
+            "opening.json",
+            "opening-2.json"
+          ],
+          "base": "base"
+        },
+        "runs": [
+          "run1",
+          "run2"
+        ]
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "verify-cert",
+      "cert.json",
+      "--rerun",
+      "--only",
+      "only",
+      "--only",
+      "only-2",
+      "--base",
+      "base",
+      "--map",
+      "/old=/new",
+      "--map",
+      "/old=/new",
+      "--trust",
+      "SHA256:ab12",
+      "--trust",
+      "SHA256:ab12",
+      "--pubkey",
+      "signer.pub.pem",
+      "--pubkey",
+      "signer.pub.pem",
+      "--require-signature",
+      "--work",
+      "work",
+      "--force-rerun",
+      "--timeout",
+      "0.25",
+      "--out",
+      "out",
+      "--html",
+      "cert.html"
+    ],
+    "command": {
+      "path": [
+        "verify-cert"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "rerun": true,
+          "only": [
+            "only",
+            "only-2"
+          ],
+          "base": "base",
+          "map": [
+            "/old=/new",
+            "/old=/new"
+          ],
+          "trust": [
+            "SHA256:ab12",
+            "SHA256:ab12"
+          ],
+          "pubkey": [
+            "signer.pub.pem",
+            "signer.pub.pem"
+          ],
+          "require_signature": true,
+          "work": "work",
+          "force_rerun": true,
+          "timeout": 0.25,
+          "out": "out",
+          "html": "cert.html"
+        },
+        "cert": "cert.json"
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "commit",
+      "file1",
+      "file2",
+      "--out",
+      "out",
+      "--opening",
+      "opening.json",
+      "--name",
+      "name",
+      "--name",
+      "name-2",
+      "--label",
+      "orders for 2026-10-26",
+      "--key",
+      "signer.pem",
+      "--force"
+    ],
+    "command": {
+      "path": [
+        "commit"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "out": "out",
+          "opening": "opening.json",
+          "name": [
+            "name",
+            "name-2"
+          ],
+          "label": "orders for 2026-10-26",
+          "key": "signer.pem",
+          "force": true
+        },
+        "files": [
+          "file1",
+          "file2"
+        ]
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "reveal",
+      "commitment.json",
+      "file1",
+      "file2",
+      "--opening",
+      "opening.json",
+      "--trust",
+      "SHA256:ab12",
+      "--trust",
+      "SHA256:ab12",
+      "--pubkey",
+      "signer.pub.pem",
+      "--pubkey",
+      "signer.pub.pem"
+    ],
+    "command": {
+      "path": [
+        "reveal"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "opening": "opening.json",
+          "trust": [
+            "SHA256:ab12",
+            "SHA256:ab12"
+          ],
+          "pubkey": [
+            "signer.pub.pem",
+            "signer.pub.pem"
+          ]
+        },
+        "commitment": "commitment.json",
+        "files": [
+          "file1",
+          "file2"
+        ]
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "cert",
+      "keygen",
+      "--out",
+      "out",
+      "--force"
+    ],
+    "command": {
+      "path": [
+        "cert",
+        "keygen"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "out": "out",
+          "force": true
+        }
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "cert",
+      "pubkey",
+      "key.pem"
+    ],
+    "command": {
+      "path": [
+        "cert",
+        "pubkey"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "key": "key.pem"
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "cert",
+      "render",
+      "cert.json",
+      "--out",
+      "out",
+      "--verification",
+      "verification.json"
+    ],
+    "command": {
+      "path": [
+        "cert",
+        "render"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "out": "out",
+          "verification": "verification.json"
+        },
+        "cert": "cert.json"
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "cert",
+      "partial-opening",
+      "opening.json",
+      "--item",
+      "item",
+      "--item",
+      "item-2",
+      "--out",
+      "out",
+      "--force"
+    ],
+    "command": {
+      "path": [
+        "cert",
+        "partial-opening"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "item": [
+            "item",
+            "item-2"
+          ],
+          "out": "out",
+          "force": true
+        },
+        "opening": "opening.json"
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "mcp",
+      "serve",
+      "--local",
+      "--allow-run"
+    ],
+    "command": {
+      "path": [
+        "mcp",
+        "serve"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "local": true,
+        "allow_run": true
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "shadows",
+      "sample",
+      "--data",
+      "d",
+      "--n",
+      "3",
+      "--out",
+      "o",
+      "--allocation",
+      "per-partition"
+    ],
+    "command": {
+      "path": [
+        "shadows",
+        "sample"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "dataset": {
+          "path": "d"
+        },
+        "n": 3,
+        "out": "o",
+        "allocation": "per_partition"
       },
       "implementation": "native"
     }

@@ -509,7 +509,7 @@ class TimestampCheck(Check):
 
 
 #: Venues quoting in $0.01 above $1.00 and $0.0001 below (Reg NMS Rule 612).
-US_EQUITY_VENUES = frozenset({"nasdaq", "iex"})
+US_EQUITY_VENUES = frozenset({"nasdaq", "iex", "nyse"})
 
 
 class SizePriceCheck(Check):
@@ -597,7 +597,9 @@ class SizePriceCheck(Check):
             if us_equity and exp is not None and int(exp) <= -4:
                 # Reg NMS Rule 612: quotes below $1.00 may use $0.0001 increments
                 one, sub = 10 ** (-int(exp)), 10 ** (-4 - int(exp))
-                off = np.where(px < one, (px % sub) != 0, off)
+                i64 = np.iinfo(np.int64).max  # past it (price_exp below -18) every int64 price is below the bound
+                below = px < one if one <= i64 else np.ones(px.shape, dtype=bool)
+                off = np.where(below, (px % sub) != 0 if sub <= i64 else px != 0, off)
             self._flag("off_tick_resting", p, np.nonzero(np.isin(act, (A, M)) & ok & off)[0], tick)
             self.counts["off_tick_executions"] += int((np.isin(act, (F, T)) & ok & off).sum())
         else:

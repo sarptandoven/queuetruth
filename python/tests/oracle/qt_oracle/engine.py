@@ -33,6 +33,14 @@ everyone (its executions remain taker flow), as is any order excluded with `twin
 
 The taker flow is fixed: the engine cannot model takers that would have behaved differently because the shadow
 was there (a static counterfactual).
+
+Receipt-order priority (`InstrumentMeta.order_ref_priority`, Nasdaq data from TotalView-ITCH). Order ids are ITCH
+order reference numbers, increasing in receipt order within an instrument, and orders the venue held until the open
+keep their receipt priority when released: an `A` whose reference is below orders already resting there joins the
+queue at its reference's place, not at the tail. The tape and every fork key their
+orders that way (`TapeBook.key`); the shadow keys at `2 * max_ref + 1` (after every reference added on the tape
+before it went live, before every later one), so an order released after the shadow with an older reference is
+ahead of it. Elsewhere a level is in arrival order.
 """
 
 from __future__ import annotations
@@ -49,6 +57,7 @@ from .tape import (
     TapeBook,
     at_or_better,
     group_events,
+    insert_by_prio,
     opposite,
     strictly_better,
 )
@@ -106,15 +115,22 @@ class OracleConfig:
 
 
 class FOrder:
-    __slots__ = ("hidden", "oid", "price", "side", "size", "stamp")
+    """A fork order. `stamp` is its arrival number in the fork; `prio` its priority key within a displayed level
+    (smaller ranks first): the stamp, or under receipt-order priority the tape's key (`TapeBook.key`; the shadow
+    `2 * max_ref + 1`)."""
 
-    def __init__(self, oid: int, side: str, price: int, size: int, stamp: int, hidden: bool = False) -> None:
+    __slots__ = ("hidden", "oid", "price", "prio", "side", "size", "stamp")
+
+    def __init__(
+        self, oid: int, side: str, price: int, size: int, stamp: int, hidden: bool = False, prio: int | None = None
+    ) -> None:
         self.oid = oid
         self.side = side
         self.price = price
         self.size = size
         self.stamp = stamp
         self.hidden = hidden
+        self.prio = stamp if prio is None else prio
 
 
 class ShadowState:
@@ -194,10 +210,20 @@ class ForkBook:
     """A private copy of the tape book with one shadow inserted as a real order; a minimal price/display/time
     priority matching engine."""
 
-    def __init__(self, tape: TapeBook, st: ShadowState, facts: VenueFacts, cfg: OracleConfig) -> None:
+    def __init__(
+        self,
+        tape: TapeBook,
+        st: ShadowState,
+        facts: VenueFacts,
+        cfg: OracleConfig,
+    ) -> None:
         self.st = st
         self.facts = facts
         self.cfg = cfg
+        self.ref_priority = tape.ref_priority  # receipt-order priority (module docstring)
+        self.max_ref = tape.max_ref  # largest reference added on the tape before the shadow went live
+        # A twin-linked shadow entering at its twin's `A` stands for the twin, received at its reference (A1).
+        self.shadow_ref: int | None = None
         self.orders: dict[int, FOrder] = {}
         # side -> price -> [displayed {oid: FOrder}, hidden {oid: FOrder}]
         self.levels: dict[str, dict[int, list[dict[int, FOrder]]]] = {"B": {}, "A": {}}
@@ -206,7 +232,9 @@ class ForkBook:
         for side in ("B", "A"):
             for px in tape.prices[side]:
                 for o in tape.levels[side][px].values():
-                    self._insert(FOrder(o.oid, side, px, o.size, self._next()))
+                    self._insert(
+                        FOrder(o.oid, side, px, o.size, self._next(), prio=o.prio if self.ref_priority else None)
+                    )
         self.shadow: FOrder | None = None
         self.done = False
         self.ev_ts = 0
@@ -223,6 +251,13 @@ class ForkBook:
         self.stamp += 1
         return self.stamp
 
+    def _new(self, oid: int, side: str, px: int, size: int, reentry: bool, tape: TapeBook) -> FOrder:
+        """A real order entering the fork now, keyed like the tape keys it (`reentry`: it was on the book before)."""
+        stamp = self._next()
+        if not self.ref_priority:
+            return FOrder(oid, side, px, size, stamp)
+        return FOrder(oid, side, px, size, stamp, prio=2 * max(tape.max_ref, oid) + 1 if reentry else 2 * oid)
+
     # ----- structure
     def _insert(self, o: FOrder) -> None:
         side_lv = self.levels[o.side]
@@ -230,7 +265,10 @@ class ForkBook:
         if lv is None:
             lv = side_lv[o.price] = [{}, {}]
             bisect.insort(self.prices[o.side], o.price)
-        lv[1 if o.hidden else 0][o.oid] = o
+        if o.hidden:
+            lv[1][o.oid] = o
+        else:
+            insert_by_prio(lv[0], o)
         self.orders[o.oid] = o
 
     def _unlink(self, o: FOrder) -> None:
@@ -365,13 +403,31 @@ class ForkBook:
             self._end("filled", st.ts_live)
             st.trajectory.append(self._traj_row(st.ts_live, None, "live", 0, 0, 0, 0))
             return
-        self.shadow = FOrder(SHADOW, side, px, st.remaining, self._next())
+        self.shadow = FOrder(SHADOW, side, px, st.remaining, self._next(), prio=self._shadow_prio())
         self._insert(self.shadow)
         qa, rank = self.queue_ahead()
         st.queue_ahead_at_live = qa
         st.rank_at_live = rank
         self.qa_last, self.rank_last, self.filled_last = qa, rank, st.filled
         st.trajectory.append(self._traj_row(st.ts_live, None, "live", qa, qa, rank, rank))
+
+    def _shadow_prio(self) -> int | None:
+        if not self.ref_priority:
+            return None
+        return 2 * self.shadow_ref if self.shadow_ref is not None else 2 * self.max_ref + 1
+
+    def bind_ref(self, ref: int) -> None:
+        """Receipt-order priority of a twin-linked shadow whose twin enters by an `A` with reference `ref`: the shadow
+        keys at the twin's own place, `2 * ref` (the twin itself never reaches this fork)."""
+        if not self.ref_priority:
+            return
+        self.shadow_ref = ref
+        sh = self.shadow
+        if sh is not None and self.shadow_live():
+            self._unlink(sh)
+            sh.prio = 2 * ref
+            self._insert(sh)
+            self.dirty = True
 
     def _traj_row(self, ts: int, seq: int | None, kind: str, qa_b: int, qa_a: int, rk_b: int, rk_a: int) -> dict:
         return {
@@ -422,11 +478,14 @@ class ForkBook:
             self._end("filled", self.ev_ts)
 
     # ----- record application
-    def _place(self, oid: int, side: str, px: int, size: int, crosses_tape: bool, tape: TapeBook) -> None:
-        """An order arriving on the book (A, or M that lost priority)."""
+    def _place(
+        self, oid: int, side: str, px: int, size: int, crosses_tape: bool, tape: TapeBook, replaced: bool = False
+    ) -> None:
+        """An order arriving on the book (A, or M that lost priority: `replaced`)."""
         old = self.orders.get(oid)
         if old is not None:
             self._unlink(old)
+        reentry = old is not None or replaced
         st = self.st
         opp = opposite(side)
         ob = self.best(opp)
@@ -440,7 +499,7 @@ class ForkBook:
                     st.note(self.ev_ts, "crosses", "add_marketable_only_against_shadow")
                 self._check_filled()
         if size > 0:
-            self._insert(FOrder(oid, side, px, size, self._next()))
+            self._insert(self._new(oid, side, px, size, reentry, tape))
         if self.shadow_live() and side == st.spec.side and px == self.shadow.price:
             self.dirty = True
 
@@ -490,7 +549,7 @@ class ForkBook:
                 detail = "size_above_post_fill_remaining_lost_priority"
             else:
                 detail = "size_increase_lost_priority"
-            ahead = o is not None and o.price == self.shadow.price and o.side == side and o.stamp < self.shadow.stamp
+            ahead = o is not None and o.price == self.shadow.price and o.side == side and o.prio < self.shadow.prio
             st.note(self.ev_ts, "cme_modify", detail + ("_ahead" if ahead else "_behind_or_new"))
         if keeps:
             if o is not None:
@@ -502,7 +561,7 @@ class ForkBook:
         if o is not None:
             self._unlink(o)
         if new_fork > 0:
-            self._place(oid, side, new_px, new_fork, crosses_tape, tape)
+            self._place(oid, side, new_px, new_fork, crosses_tape, tape, replaced=True)
 
     def on_exec(
         self, side: str, resting_px: int, exec_px: int, oid: int, qty: int, limit: int, printed: bool, excluded: bool
@@ -566,7 +625,7 @@ class ForkBook:
         if (
             self.shadow_live()
             and sh.side == side
-            and (strictly_better(side, sh.price, o.price) or (sh.price == o.price and sh.stamp < o.stamp))
+            and (strictly_better(side, sh.price, o.price) or (sh.price == o.price and sh.prio < o.prio))
         ):
             take = min(qty, sh.size)
             if take > 0:
@@ -704,7 +763,7 @@ class PartitionRunner:
         self.cfg = cfg or OracleConfig()
         self.facts = facts or venue_facts(meta.venue, open_s=meta.open_s, close_s=meta.close_s)
         self.cross_sequences = cross_sequences
-        self.tape = TapeBook(self.facts)
+        self.tape = TapeBook(self.facts, meta.order_ref_priority)
         self.excluded = TapeBook(self.facts)
         self.states: list[ShadowState] = []
         pend = []
@@ -812,6 +871,8 @@ class PartitionRunner:
             st.twin = twin
             fork.drop_twin(twin)
             st.note(ts, "own_order_exclusion", "twin_linked")
+            if twin not in self.tape.orders:
+                fork.bind_ref(twin)
         fork.activate(self.tape, self.meta, ts)
         if self.cfg.exclude_order_ids and st.price is not None and self.excluded.level_total(sp.side, st.price) > 0:
             st.note(ts, "own_order_exclusion", "own_order_removed_from_shadow_level")
@@ -849,6 +910,8 @@ class PartitionRunner:
             st.twin = r.order_id
             fork.drop_twin(r.order_id)
             st.note(r.ts_event, "own_order_exclusion", "twin_linked")
+            if r.order_id not in self.tape.orders:
+                fork.bind_ref(r.order_id)
         self.stats["twins_linked"] += 1
         return True
 

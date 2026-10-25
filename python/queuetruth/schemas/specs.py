@@ -185,7 +185,8 @@ def _horizons() -> list[int]:
 class IngestSpec(SpecModel):
     """`ingest`: source files -> normalized dataset (SPEC 3.3)."""
 
-    #: 1.2 adds `iex_deep_plus` (qt_ingest) and `coinbase_level3`, `kraken_l3`, `hyperliquid_node` (qt_crypto).
+    #: 1.2 adds `iex_deep_plus` and `nyse_ibf` (qt_ingest) and `coinbase_level3`, `kraken_l3`, `hyperliquid_node`
+    #: (qt_crypto).
     format: Literal[
         "itch",
         "dbn",
@@ -199,6 +200,7 @@ class IngestSpec(SpecModel):
         "coinbase_level3",
         "kraken_l3",
         "hyperliquid_node",
+        "nyse_ibf",
     ]
     inputs: Annotated[list[FileRef], Field(min_length=1)]
     venue: str

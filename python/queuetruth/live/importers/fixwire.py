@@ -16,6 +16,7 @@ their declared length, as the FIX specification requires.
 from __future__ import annotations
 
 import calendar
+import datetime as dt
 import re
 from dataclasses import dataclass
 
@@ -41,11 +42,22 @@ LENGTH_DATA: dict[str, str] = {
     "621": "622",
 }
 
+#: Longest digit run read as an integer (BodyLength, data-field lengths, MsgSeqNum and friends). FIX integers are
+#: at most 20 digits (uint64); longer runs are malformed, and `int()` of thousands of digits is slow or fails.
+MAX_INT_DIGITS = 20
+
 #: Framing / validation problems (counted per input; see `frame`).
 PROBLEMS = ("bad_checksum", "bad_body_length", "truncated", "malformed")
 
-_TRAILER = re.compile(r"\x0110=(\d{3})(?:\x01|$)")
-_UTC = re.compile(r"^(\d{4})(\d{2})(\d{2})-(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,12}))?$")
+_TRAILER = re.compile(r"\x0110=(\d{3})(?:\x01|$)", re.ASCII)
+_UTC = re.compile(r"^(\d{4})(\d{2})(\d{2})-(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,12}))?$", re.ASCII)
+
+
+def fix_int(text: str) -> int | None:
+    """Value of a FIX integer field (ASCII digits, at most `MAX_INT_DIGITS`); None for anything else."""
+    if 0 < len(text) <= MAX_INT_DIGITS and text.isascii() and text.isdigit():
+        return int(text)
+    return None
 
 
 @dataclass
@@ -97,9 +109,9 @@ def frame(s: str, start: int, *, pipe_delims: bool = False) -> Framed:
         b = s.find(SOH, a + 1)
         if b < 0:
             return Framed(s[start:], len(s), "truncated")
-        txt = s[a + 3 : b]
-        if txt.isdecimal():
-            declared = int(txt)
+        n = fix_int(s[a + 3 : b])
+        if n is not None:
+            declared = n
             body_start = b + 1
         else:
             problem = "bad_body_length"
@@ -152,7 +164,7 @@ def parse_fields(text: str) -> list[tuple[str, str]] | None:
                 return None
             break
         tag = text[i:eq]
-        if not tag.isdecimal():
+        if not (tag.isascii() and tag.isdigit()):
             return None
         if pending_tag is not None and tag == pending_tag and pending_len is not None:
             j = min(eq + 1 + pending_len, n)
@@ -167,8 +179,8 @@ def parse_fields(text: str) -> list[tuple[str, str]] | None:
             val = text[eq + 1 : j]
         out.append((tag, val))
         pending_tag, pending_len = None, None
-        if tag in LENGTH_DATA and val.isdecimal():
-            pending_tag, pending_len = LENGTH_DATA[tag], int(val)
+        if tag in LENGTH_DATA and fix_int(val) is not None:
+            pending_tag, pending_len = LENGTH_DATA[tag], fix_int(val)
         i = j + 1
     return out
 
@@ -188,12 +200,17 @@ def display(text: str) -> str:
 
 def utc_ts(text: str) -> tuple[int, str, bool] | None:
     """FIX UTCTimestamp `YYYYMMDD-HH:MM:SS[.f{1,12}]` -> (UTC ns, precision, truncated): FIX 5.0SP2 allows
-    picoseconds; digits beyond ns are truncated (`truncated` true). None when the text is not a UTCTimestamp."""
+    picoseconds; digits beyond ns are truncated (`truncated` true). None when the text is not a UTCTimestamp or
+    names no real date-time (February 30, year 0, hour 24); second 60 (a leap second) is accepted."""
     m = _UTC.match(text.strip())
     if not m:
         return None
     y, mo, d, h, mi, s = (int(m.group(i)) for i in range(1, 7))
-    if not (1 <= mo <= 12 and 1 <= d <= 31 and h <= 23 and mi <= 59 and s <= 60):
+    if s > 60:
+        return None
+    try:
+        dt.datetime(y, mo, d, h, mi, min(s, 59))
+    except ValueError:
         return None
     frac = m.group(7) or ""
     secs = calendar.timegm((y, mo, d, h, mi, s, 0, 0, 0))

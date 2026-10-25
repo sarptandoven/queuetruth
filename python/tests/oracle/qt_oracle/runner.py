@@ -216,7 +216,7 @@ def run_et_csv_stream(
     runners: dict[int, PartitionRunner] = {}
     bufs: dict[int, list] = {}
     for inst, sh in by_inst.items():
-        meta = InstrumentMeta(inst, session_date, venue, tick_size, midnight_utc_ns, open_s, close_s)
+        meta = InstrumentMeta(inst, session_date, venue, tick_size, midnight_utc_ns, open_s, close_s, "etcsv")
         facts = venue_facts(venue, open_s=open_s, close_s=close_s, cross_window_s=cross_window_s)
         runners[inst] = PartitionRunner(meta, sh, amends or {}, cfg, facts)
         bufs[inst] = []

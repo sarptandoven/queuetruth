@@ -1,0 +1,248 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.sandbox_spec",
+  "$defs": {
+    "FeeSchedule": {
+      "additionalProperties": false,
+      "description": "Fees per fill by liquidity. `*_per_unit`: currency per size unit (real units, e.g. USD per share); `*_bps`:\nbasis points of the fill's notional. Positive = cost, negative = rebate (SPEC 0.1). Both parts add up.",
+      "properties": {
+        "maker_per_unit": {
+          "default": 0.0,
+          "title": "Maker Per Unit",
+          "type": "number"
+        },
+        "taker_per_unit": {
+          "default": 0.0,
+          "title": "Taker Per Unit",
+          "type": "number"
+        },
+        "maker_bps": {
+          "default": 0.0,
+          "title": "Maker Bps",
+          "type": "number"
+        },
+        "taker_bps": {
+          "default": 0.0,
+          "title": "Taker Bps",
+          "type": "number"
+        }
+      },
+      "title": "FeeSchedule",
+      "type": "object"
+    },
+    "PathRef": {
+      "additionalProperties": false,
+      "description": "Local path reference (CLI, Python API, MCP local mode).",
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "PathRef",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One sandbox episode (`qt.sandbox_spec`): one instrument-day of an MBO dataset, an episode window and the\nexchange simulation settings. Times are absolute ns since the epoch; `Sandbox.open` also accepts local\ntimes of day (`\"10:30\"`) and duration strings (`\"1ms\"`) and converts them before validation.",
+  "properties": {
+    "dataset": {
+      "$ref": "#/$defs/PathRef"
+    },
+    "instrument_id": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Instrument Id"
+    },
+    "symbol": {
+      "anyOf": [
+        {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Symbol"
+    },
+    "session_date": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Session Date"
+    },
+    "start_ns": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Start Ns"
+    },
+    "end_ns": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "End Ns"
+    },
+    "latency_ns": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Latency Ns",
+      "type": "integer"
+    },
+    "jitter_ns": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Jitter Ns",
+      "type": "integer"
+    },
+    "feed_latency_ns": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Feed Latency Ns",
+      "type": "integer"
+    },
+    "seed": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Seed",
+      "type": "integer"
+    },
+    "depth_levels": {
+      "default": 5,
+      "maximum": 50,
+      "minimum": 1,
+      "title": "Depth Levels",
+      "type": "integer"
+    },
+    "max_trades": {
+      "default": 20,
+      "maximum": 1000,
+      "minimum": 0,
+      "title": "Max Trades",
+      "type": "integer"
+    },
+    "fees": {
+      "$ref": "#/$defs/FeeSchedule"
+    },
+    "markout_horizons_ns": {
+      "items": {
+        "minimum": 1,
+        "type": "integer"
+      },
+      "maxItems": 16,
+      "minItems": 1,
+      "title": "Markout Horizons Ns",
+      "type": "array"
+    },
+    "market_collar_bps": {
+      "default": 100.0,
+      "exclusiveMinimum": 0,
+      "maximum": 10000,
+      "title": "Market Collar Bps",
+      "type": "number"
+    },
+    "max_order_qty": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Max Order Qty"
+    },
+    "max_position": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Max Position"
+    },
+    "max_open_orders": {
+      "default": 100,
+      "maximum": 10000,
+      "minimum": 1,
+      "title": "Max Open Orders",
+      "type": "integer"
+    },
+    "self_trade_prevention": {
+      "default": "reject_new",
+      "enum": [
+        "reject_new",
+        "off"
+      ],
+      "title": "Self Trade Prevention",
+      "type": "string"
+    },
+    "hidden_print_policy": {
+      "anyOf": [
+        {
+          "enum": [
+            "ignore",
+            "behind",
+            "behind_and_through"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Hidden Print Policy"
+    },
+    "max_steps": {
+      "default": 100000,
+      "maximum": 1000000,
+      "minimum": 1,
+      "title": "Max Steps",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "dataset"
+  ],
+  "type": "object"
+}

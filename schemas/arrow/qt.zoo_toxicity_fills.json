@@ -1,0 +1,87 @@
+{
+  "name": "qt.zoo_toxicity_fills",
+  "metadata": {
+    "qt.engine_version": "0.1.1",
+    "qt.schema": "qt.zoo_toxicity_fills",
+    "qt.schema_version": "1.1"
+  },
+  "fields": [
+    {
+      "name": "arm",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "shadow_id",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "fill_seq",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "instrument_id",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "side",
+      "type": "uint8",
+      "nullable": false
+    },
+    {
+      "name": "ts_event",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": false
+    },
+    {
+      "name": "px",
+      "type": "int64",
+      "nullable": true
+    },
+    {
+      "name": "fill_qty",
+      "type": "float64",
+      "nullable": false
+    },
+    {
+      "name": "liquidity",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "maker",
+        "taker"
+      ]
+    },
+    {
+      "name": "mechanism",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "queue",
+        "swept",
+        "cross_on_arrival",
+        "crossed_resting",
+        "hidden_print",
+        "touch",
+        "particle"
+      ]
+    },
+    {
+      "name": "status",
+      "type": "dictionary<int8, utf8>",
+      "nullable": true,
+      "values": [
+        "confirmed",
+        "phantom"
+      ]
+    },
+    {
+      "name": "reason",
+      "type": "utf8",
+      "nullable": false
+    }
+  ]
+}

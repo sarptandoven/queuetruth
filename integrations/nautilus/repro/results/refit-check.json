@@ -1,0 +1,23 @@
+{
+ "purpose": "refit of the RD-9 nt_prob_touch calibration with the current queuetruth build (heldout.py fit), compared field by field with the published calibration used for the held-out runs",
+ "published": {
+  "run_id": "8fd2495564b974f8",
+  "dataset_id": "1a00f70976b648282e2680b23f5239ef4cf04eb91d6227fb113543cf52eacd37",
+  "estimate": 0.28662597114317423
+ },
+ "refit": {
+  "run_id": "12d17fbd10ef6893",
+  "dataset_id": "68913f7d28f1f74ed0f55728e6ebe0c008b7d40b50db11a7de6ec31cb87e22ef",
+  "estimate": 0.28662597114317423,
+  "seconds": 19
+ },
+ "identical": {
+  "estimate": true,
+  "ci_bootstrap": true,
+  "n_events": true,
+  "n_shadows": true,
+  "held_out": true,
+  "baseline_held_out": true,
+  "trust": true
+ }
+}

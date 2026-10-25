@@ -130,8 +130,10 @@ def test_sequence_per_instrument_and_filtered_numbering(nasdaq: Path) -> None:
 def test_rule_sets_mirror_the_venue_table() -> None:
     from queuetruth.dq.data import RULES
 
-    assert set(RULES) == {"nasdaq", "cme", "coinbase", "generic", "crypto_l3", "iex"}
+    assert set(RULES) == {"nasdaq", "cme", "coinbase", "generic", "crypto_l3", "iex", "nyse"}
     assert RULES["iex"] == RULES["nasdaq"]  # IEX DEEP+ runs on Nasdaq record semantics (schema 1.2)
+    # NYSE TAQ: Nasdaq record semantics; the channel sequence has holes for omitted control messages (schema 1.2)
+    assert RULES["nyse"] == {**RULES["nasdaq"], "sequence_meaningful": False}
     assert [RULES[v]["sequence_meaningful"] for v in ("nasdaq", "cme", "coinbase", "generic")] == [1, 1, 1, 0]
     assert RULES["cme"]["snapshot_begins_with_clear"] and not RULES["crypto_l3"]["supports_hidden_orders"]
 

@@ -10,9 +10,18 @@ use qt_types::{MboEvent, VenueRules, flags};
 /// `source_specific` counters reported for information only, never part of the verdict: zero-share ITCH
 /// opening / closing crosses (sent for every issue after each cross), ITCH cross prints (OC-28: a
 /// `Q` print is neither a hidden print nor an anomaly), DBN instrument ids remapped from the definitions
-/// (Databento re-issues remap ids routinely) and the IEX DEEP+ volumes of priority-maintaining / priority-resetting /
-/// no-op Order Modify messages, A/B duplicate messages dropped and segments of other IEX-TP protocols.
-pub const INFO_SOURCE_COUNTERS: [&str; 8] = [
+/// (Databento re-issues remap ids routinely), the IEX DEEP+ volumes of priority-maintaining / priority-resetting /
+/// no-op Order Modify messages, A/B duplicate messages dropped and segments of other IEX-TP protocols, the DBN
+/// symbology volumes (definitions repeated by midnight snapshots, definition deletes, definitions without a tick as on
+/// XNAS.ITCH, live symbol-mapping records, parent / continuous mapping intervals kept as aliases, records of other
+/// schemas in a mixed-schema file; records of other schemas in a single-schema file, `dbn_other_records_skipped`,
+/// and gateway error records, `dbn_gateway_error_records`, are not INFO), and the NYSE TAQ Integrated Feed volumes of
+/// executions allocated by parity (the label is `nyse_parity_ranks_approximate`), priority-keeping / priority-losing /
+/// no-op Modify Order messages, Replace Order messages and the same-price reductions among them, non-printable
+/// (auction) executions and non-displayed trades, zero-share crosses, firm-attributed adds, Trade Cancel and Cross
+/// Correction messages (a bust does not restore the executed order, so book builders may ignore them, TAQ spec v2.4b
+/// sections 14 and 15) and books kept after a refresh that did not cover them.
+pub const INFO_SOURCE_COUNTERS: [&str; 27] = [
     "itch_zero_share_cross",
     "cross_prints",
     "dbn_instrument_id_remapped",
@@ -21,6 +30,25 @@ pub const INFO_SOURCE_COUNTERS: [&str; 8] = [
     "iex_modify_noop",
     "iex_duplicate_messages",
     "iex_other_protocol_segments",
+    "dbn_definition_repeats",
+    "dbn_definition_deletes",
+    "dbn_definitions_without_tick",
+    "dbn_symbol_mapping_records",
+    "dbn_alias_mapping_intervals",
+    "dbn_mixed_schema_other_records",
+    "nyse_modify_keep_priority",
+    "nyse_modify_lose_priority",
+    "nyse_modify_noop",
+    "nyse_replace_orders",
+    "nyse_nonprintable_executions",
+    "nyse_nonprintable_hidden_trades",
+    "nyse_zero_volume_crosses",
+    "nyse_attributed_adds",
+    "nyse_parity_executions",
+    "nyse_replace_reduce_same_price",
+    "nyse_trade_cancels",
+    "nyse_cross_corrections",
+    "nyse_failover_books_kept",
 ];
 
 /// Whether a `source_specific` counter is an INFO counter (`INFO_SOURCE_COUNTERS`).

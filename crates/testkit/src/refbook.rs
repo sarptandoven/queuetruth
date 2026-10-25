@@ -568,7 +568,8 @@ impl DqTracker {
 
     /// Final counters with the verdict of SPEC 5.1.5. Warnings = any anomaly counter non-zero: every counter except
     /// the volumes `records` and `snapshot_records` and the INFO counters `hidden_prints` and `off_price_executions`
-    /// (normal on Nasdaq, E36(b): reported, never part of the verdict).
+    /// (normal on Nasdaq, E36(b): reported, never part of the verdict), and the `source_specific` INFO counters of
+    /// `qt_ingest::dq::INFO_SOURCE_COUNTERS`.
     pub fn finish(mut self) -> (DataQuality, u64) {
         let mut unterminated = 0;
         if self.in_event {
@@ -637,13 +638,8 @@ pub fn finalize_verdict(dq: &mut DataQuality, events: u64) {
             }
         }
         for (k, v) in &dq.source_specific {
-            // INFO source counters (zero-share ITCH crosses, cross prints, DBN id remaps) never raise the verdict.
-            if *v > 0
-                && !matches!(
-                    k.as_str(),
-                    "itch_zero_share_cross" | "cross_prints" | "dbn_instrument_id_remapped"
-                )
-            {
+            // INFO source counters (`qt_ingest::dq::INFO_SOURCE_COUNTERS`) never raise the verdict.
+            if *v > 0 && !qt_ingest::dq::is_info_source_counter(k) {
                 reasons.push(format!("{k} = {v}"));
             }
         }

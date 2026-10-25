@@ -25,6 +25,7 @@ from queuetruth.report.sections_score import _shadow_liquidity
 from queuetruth.schemas.arrow import FULL_SCHEMAS, SCHEMAS
 from queuetruth.schemas.io import write_table
 from queuetruth.schemas.models import CalibrationResult, WhyTrace
+from report import pageparse as pp
 from report import synth as rc
 
 S = 1_000_000_000
@@ -39,7 +40,7 @@ def _render(tmp_path: Path, inputs: list[Any], **kw: Any) -> tuple[Any, str]:
 
 
 def _section(html: str, sid: str) -> str:
-    m = re.search(rf'<section id="{sid}">(.*?)</section>', html, re.S)
+    m = re.search(rf'<section id="{sid}"[^>]*>(.*?)</section>', html, re.S)
     assert m, f"section {sid} missing"
     return m.group(1)
 
@@ -161,7 +162,7 @@ def test_e4_profile_block_window_uses_dataset_sessions(tmp_path: Path) -> None:
     s = _section(html, "calibration")
     assert "2,000 of 4,000 events, train-window events (blocks [0] of 2" in s
     assert "matches the published profile CI" in s
-    head = re.search(r'<header id="header">(.*?)</header>', html, re.S).group(1)
+    head = re.search(r'<header id="header"[^>]*>(.*?)</header>', html, re.S).group(1)
     assert "instruments.parquet" in head  # the file the report read is listed with its hash
 
 
@@ -214,19 +215,19 @@ def test_e5_mcnemar_not_computable_and_sort_horizon_keyword(tmp_path: Path) -> N
     first["mcnemar"] = {"b": 0, "c": 0, "p_exact": None}  # nothing labelled at h_max
     (tmp_path / "zoo" / "summary.json").write_text(json.dumps(doc), encoding="utf-8")
     _, html = _render(tmp_path, [tmp_path / "zoo"])
-    s = _section(html, "zoo")
-    row = re.search(rf"<tr><td>{re.escape(rc.esc(first['model_id']))}</td>(.*?)</tr>", s).group(1)
+    s = _section(html, "leaderboard").split("<summary>Full leaderboard", 1)[1]  # the tests are in the full table
+    row = re.search(rf'<tr><th scope="row">{re.escape(rc.esc(first["model_id"]))}</th>(.*?)</tr>', s).group(1)
     assert row.count("not computable") == 2 and "0 / 0" not in row
     # configurable sort horizon (default 60 s); the order follows |bias| at that horizon
     h = 10 * S
     _, html = _render(tmp_path / "b", [tmp_path / "zoo"], leaderboard_sort_horizon_ns=h)
-    s = _section(html, "zoo")
+    s = _section(html, "leaderboard")
     assert "sorted by absolute fill-rate bias at 10 s" in s
     want = min(
         doc["leaderboard"],
         key=lambda e: (abs(e["fill_rate_bias"][str(h)]["value"]), e["brier"][str(h)], e["model_id"]),
     )["model_id"]
-    rows = re.findall(r"<tr><td>([^<]+)</td>", s.split("<tbody>", 1)[1])
+    rows = pp.leaderboard_rows(html)
     assert rows[0] == "exact fill rate (truth)" and rows[1] == rc.esc(want)
     with pytest.raises(QtError):
         _render(tmp_path / "c", [tmp_path / "zoo"], leaderboard_sort_horizon_ns=0)

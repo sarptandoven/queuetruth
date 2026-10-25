@@ -31,7 +31,20 @@ from queuetruth.report import cols
 from queuetruth.report import fmt as F
 from queuetruth.report.ctx import MAX_WHY_EVENTS, Ctx
 from queuetruth.report.load import RunDir
-from queuetruth.report.page import INFO, WARN, Raw, callout, code_block, figure, kv, section, table, ul
+from queuetruth.report.page import (
+    INFO,
+    WARN,
+    Raw,
+    badge,
+    callout,
+    code_block,
+    details,
+    figure,
+    kv,
+    section,
+    table,
+    ul,
+)
 from queuetruth.report.svg import Series, line_chart
 from queuetruth.schemas.models import ScorecardSummary, WhyTrace, ZooSummary
 
@@ -93,6 +106,8 @@ class Explained:
 
 _MODEL_NOTE = re.compile(r"(?:^|;\s*)model_ahead=(?P<v>[-+0-9.eEinfa]+)")
 _DIV_NOTE = "first_divergence:"
+#: Element id of the cross-summary warning list in the config section (the answer block links to it).
+WARNINGS_ID = "config-warnings"
 
 
 def _strip_model_notes(note: str | None) -> str:
@@ -573,15 +588,10 @@ def why_section(ctx: Ctx) -> Raw | None:
             if key and key not in docs:
                 docs[key] = d
     body: list[str] = []
-    toc = []
+    many_runs = len({id(it.run) for it in items}) > 1
     for n, it in enumerate(items, 1):
         aid = f"why-{n}"
-        toc.append(Raw(f'<a href="#{aid}">{F.esc(it.title)}</a> · {F.esc(it.reason)}'))
-        parts = [
-            f'<div class="why" id="{aid}"><h3>{n}. {F.esc(it.title)}</h3>',
-            f'<p class="lead">{F.esc(it.source)} · {F.esc(it.reason)} · {F.esc(it.run.label)}</p>',
-            kv(it.facts),
-        ]
+        parts = [kv(it.facts)]
         x = explained(docs.get(it.subject))
         origin = "qt.why_trace document in the inputs" if x else ""
         if x is None and it.why_spec is not None and WHY_EXPLAIN_PROVIDER is not None and zoo_dirs:
@@ -650,13 +660,24 @@ def why_section(ctx: Ctx) -> Raw | None:
                         "another report input.</p>" + (code_block(cmd) if cmd else ""),
                     )
                 )
-        parts.append("</div>")
-        body.append("".join(parts))
+        # one collapsed trace per order: the summary line is the index entry, the trace opens in place
+        body.append(
+            details(
+                "",
+                parts,
+                cls="item why",
+                sid=aid,
+                summary_html=f"<h3>{n}. {F.esc(it.title)}</h3>",
+                note=f"· {it.reason} · {it.source}" + (f" · {it.run.label}" if many_runs else ""),
+            )
+        )
     return section(
         "why",
         "Why did this fill?",
-        [ul(toc), *body],
-        lead="Event-by-event exact FIFO view of the orders where simulation and truth disagree most.",
+        body,
+        lead="Event-by-event exact FIFO view of the orders where simulation and truth disagree most "
+        f"({len(items)} traced); open an order to see its at-price events, its queue "
+        "position and the first event where the model and the exact queue diverge.",
     )
 
 
@@ -699,10 +720,22 @@ def _safe(s: str) -> str:
 # ---- config echo -------------------------------------------------------------------------------------------------
 
 
+def summary_warnings(ctx: Ctx) -> tuple[list[str], int]:
+    """Every summary's `warnings`, each prefixed with its file path, and the number of summaries that carry any (the
+    config section lists them; the answer block shows the count)."""
+    lines: list[str] = []
+    n_docs = 0
+    for run in ctx.inputs.runs:
+        for d in run.docs:
+            warns = getattr(d.model, "warnings", None) or []
+            n_docs += bool(warns)
+            lines += [f"{d.rec.path}: {w}" for w in warns]
+    return lines, n_docs
+
+
 def config(ctx: Ctx) -> Raw:
     """Spec echo of every summary and the file hashes it recorded, checked against the files read."""
     body: list[str] = []
-    warn_all: list[str] = []
     for run in ctx.inputs.runs:
         actual = {Path(x.rec.path).name: x.rec.sha256 for x in [*run.docs, *run.superseded, *run.extras, *run.tables]}
         for d in run.docs:
@@ -710,12 +743,10 @@ def config(ctx: Ctx) -> Raw:
             spec = getattr(m, "spec", None)
             files = getattr(m, "files", None)
             warns = getattr(m, "warnings", None) or []
-            warn_all += [f"{d.rec.path}: {w}" for w in warns]
             if spec is None and not files:
                 continue
             rid = getattr(m, "run_id", None)
-            body.append(f"<h3>{F.esc(d.rec.path)}</h3>")
-            body.append(
+            block = [
                 kv(
                     [
                         ("schema", m.SCHEMA),
@@ -723,18 +754,20 @@ def config(ctx: Ctx) -> Raw:
                         ("engine", getattr(m, "engine_version", None) or F.DASH),
                         ("warnings", F.num(len(warns))),
                     ]
-                )
-            )
+                ),
+            ]
             if spec is not None:
-                body.append("<details><summary>Spec echo</summary>")
-                body.append(code_block(json.dumps(spec, indent=2, ensure_ascii=False)))
-                body.append("</details>")
+                block.append("<h4>Spec echo</h4>")
+                block.append(code_block(json.dumps(spec, indent=2, ensure_ascii=False)))
+            checks = ""
             if files:
                 rows = []
+                n_bad = 0
                 for f in files:
                     name = Path(f.name).name
                     got = actual.get(name)
                     status = "not in input" if got is None else ("match" if got == f.sha256 else "CHANGED")
+                    n_bad += status == "CHANGED"
                     rows.append(
                         (
                             f.name,
@@ -744,11 +777,33 @@ def config(ctx: Ctx) -> Raw:
                             status,
                         )
                     )
-                body.append("<details><summary>Files recorded by this summary</summary>")
-                body.append(table(["file", "rows", "size", "sha256", "check"], rows, numeric=(1, 2)))
-                body.append("</details>")
+                checks = f", {len(files)} file hash(es)" + (f", {n_bad} CHANGED" if n_bad else "")
+                block.append("<h4>Files recorded by this summary</h4>")
+                block.append(table(["file", "rows", "size", "sha256", "check"], rows, numeric=(1, 2)))
+            # provenance is collapsed: the summary line carries what a reader scans for (schema, run id, changes)
+            body.append(
+                details(
+                    d.rec.path,
+                    block,
+                    cls="item",
+                    summary_html=f"<h3>{F.esc(d.rec.path)}</h3>",
+                    note=f"· {m.SCHEMA} · run {rid or F.DASH}" + (" · spec echo" if spec is not None else "") + checks,
+                )
+            )
+    warn_all, n_warned = summary_warnings(ctx)
     if warn_all:
-        body.insert(0, callout(WARN, f"{len(warn_all)} warning(s) across all summaries", ul(warn_all)))
+        # collapsed, but its summary line is a warning badge with the count (the answer block links here)
+        what = f"{len(warn_all)} warning(s) across {n_warned} summar{'y' if n_warned == 1 else 'ies'}"
+        body.insert(
+            0,
+            details(
+                what,
+                [ul(warn_all)],
+                sid=WARNINGS_ID,
+                cls="more warns",
+                summary_html=f"{badge(WARN, 'WARNINGS')} {F.esc(what)}",
+            ),
+        )
     return section(
         "config",
         "Configuration and file hashes",

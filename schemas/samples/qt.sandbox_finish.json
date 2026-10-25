@@ -1,0 +1,311 @@
+{
+  "sample": {
+    "schema": "qt.sandbox_finish",
+    "schema_version": 1,
+    "session_id": "x",
+    "run_id": "0123456789abcdef",
+    "spec_id": "0123456789abcdef",
+    "engine_version": "x",
+    "dataset_id": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "instrument": {
+      "instrument_id": 1,
+      "symbol": "x",
+      "session_date": "2020-01-02",
+      "venue": "x",
+      "rule_set": "x",
+      "tick_size": 1,
+      "lot_size": 1,
+      "price_exp": 1,
+      "size_exp": 1,
+      "contract_multiplier": 0.5,
+      "currency": "x",
+      "session_tz": "x",
+      "midnight_utc_ns": 1,
+      "open_ns": 1,
+      "close_ns": 1
+    },
+    "start_ns": 1,
+    "end_ns": 1,
+    "finish_ns": 1,
+    "steps": 1,
+    "n_orders": 1,
+    "n_fills": 1,
+    "n_fills_maker": 1,
+    "pnl": {
+      "currency": "x",
+      "position_end": 1,
+      "bought_qty": 1,
+      "sold_qty": 1,
+      "cash": 0.5,
+      "mark_ns": 1,
+      "mark_price": 0.5,
+      "mark_source": "mid",
+      "pnl_gross": 0.5,
+      "fees": 0.5,
+      "fees_maker": 0.5,
+      "fees_taker": 0.5,
+      "pnl_net": 0.5,
+      "pnl_net_at_touch": 0.5,
+      "notional_traded": 0.5
+    },
+    "fill_rates": [
+      {
+        "order_class": "passive_limit",
+        "n_orders": 1,
+        "n_live": 1,
+        "n_any_fill": 1,
+        "n_full_fill": 1,
+        "qty_live": 1,
+        "filled_qty": 1,
+        "rate_any": 0.5,
+        "rate_full": 0.5,
+        "rate_qty": 0.5,
+        "median_ttf_ns": 1
+      }
+    ],
+    "markouts": [
+      {
+        "horizon_ns": 1,
+        "liquidity": "all",
+        "n": 1,
+        "n_null": 1,
+        "mean_ticks": 0.5,
+        "mean_bps": 0.5,
+        "total_ccy": 0.5,
+        "n_adverse": 1
+      }
+    ],
+    "adverse_selection": [
+      {
+        "horizon_ns": 1,
+        "n_maker_fills": 1,
+        "cost_ccy": 0.5,
+        "mean_ticks": 0.5,
+        "adverse_fraction": 0.5
+      }
+    ],
+    "execution_cost": {
+      "n_fills": 1,
+      "edge_ccy": 0.5,
+      "edge_maker_ccy": 0.5,
+      "edge_taker_ccy": 0.5,
+      "mean_edge_ticks": 0.5
+    },
+    "consistency": {
+      "method": "x",
+      "steps": 1,
+      "window_replays": 1,
+      "fills_reported": 1,
+      "fills_matched": 1,
+      "fills_unreported": 1,
+      "fills_misattributed": 1,
+      "fills_after_last_cut": 1,
+      "statuses_checked": 1,
+      "statuses_mismatched": 1,
+      "timestamps_monotone": true,
+      "equal": true
+    },
+    "diagnostics": {
+      "same_price_overlaps": 1,
+      "taker_same_event_overlaps": 1,
+      "self_cross_pairs": 1,
+      "out_of_session_orders": 1,
+      "rejected_instructions": 1
+    },
+    "data_quality": "x",
+    "warnings": [
+      "x"
+    ],
+    "certificate": {
+      "dataset_id": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "engine_version": "x",
+      "spec_id": "0123456789abcdef",
+      "log_root": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "run_id": "0123456789abcdef",
+      "scorecard_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    },
+    "out_dir": "x",
+    "files": [
+      {
+        "name": "x",
+        "rows": 1,
+        "bytes": 1,
+        "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      }
+    ],
+    "scorecard": {
+      "schema": "qt.sandbox_scorecard",
+      "schema_version": 1,
+      "run_id": "0123456789abcdef",
+      "spec_id": "0123456789abcdef",
+      "engine_version": "x",
+      "dataset_id": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "instrument": {
+        "instrument_id": 1,
+        "symbol": "x",
+        "session_date": "2020-01-02",
+        "venue": "x",
+        "rule_set": "x",
+        "tick_size": 1,
+        "lot_size": 1,
+        "price_exp": 1,
+        "size_exp": 1,
+        "contract_multiplier": 0.5,
+        "currency": "x",
+        "session_tz": "x",
+        "midnight_utc_ns": 1,
+        "open_ns": 1,
+        "close_ns": 1
+      },
+      "start_ns": 1,
+      "end_ns": 1,
+      "finish_ns": 1,
+      "steps": 1,
+      "orders": [
+        {
+          "order_id": "o1",
+          "client_order_id": "c1",
+          "side": "buy",
+          "type": "limit",
+          "tif": "day",
+          "price": 1,
+          "peg_offset_ticks": 1,
+          "qty": 1,
+          "filled_qty": 1,
+          "leaves_qty": 1,
+          "status": "pending",
+          "reason": "x",
+          "ts_submit": 1,
+          "ts_activated": 1,
+          "ts_done": 1,
+          "queue_ahead": 1,
+          "rank": 1,
+          "level_qty": 1,
+          "cancel_sent_ns": 1,
+          "n_fills": 1,
+          "avg_fill_price": 0.5
+        }
+      ],
+      "fills": [
+        {
+          "order_id": "o1",
+          "fill_seq": 1,
+          "ts_event": 1,
+          "ts_known": 1,
+          "side": "buy",
+          "price": 1,
+          "qty": 1,
+          "liquidity": "maker",
+          "reason": "queue_depleted",
+          "queue_ahead_before": 1,
+          "fee": 0.5,
+          "step": 1
+        }
+      ],
+      "fill_rates": [
+        {
+          "order_class": "passive_limit",
+          "n_orders": 1,
+          "n_live": 1,
+          "n_any_fill": 1,
+          "n_full_fill": 1,
+          "qty_live": 1,
+          "filled_qty": 1,
+          "rate_any": 0.5,
+          "rate_full": 0.5,
+          "rate_qty": 0.5,
+          "median_ttf_ns": 1
+        }
+      ],
+      "pnl": {
+        "currency": "x",
+        "position_end": 1,
+        "bought_qty": 1,
+        "sold_qty": 1,
+        "cash": 0.5,
+        "mark_ns": 1,
+        "mark_price": 0.5,
+        "mark_source": "mid",
+        "pnl_gross": 0.5,
+        "fees": 0.5,
+        "fees_maker": 0.5,
+        "fees_taker": 0.5,
+        "pnl_net": 0.5,
+        "pnl_net_at_touch": 0.5,
+        "notional_traded": 0.5
+      },
+      "markouts": [
+        {
+          "horizon_ns": 1,
+          "liquidity": "all",
+          "n": 1,
+          "n_null": 1,
+          "mean_ticks": 0.5,
+          "mean_bps": 0.5,
+          "total_ccy": 0.5,
+          "n_adverse": 1
+        }
+      ],
+      "adverse_selection": [
+        {
+          "horizon_ns": 1,
+          "n_maker_fills": 1,
+          "cost_ccy": 0.5,
+          "mean_ticks": 0.5,
+          "adverse_fraction": 0.5
+        }
+      ],
+      "execution_cost": {
+        "n_fills": 1,
+        "edge_ccy": 0.5,
+        "edge_maker_ccy": 0.5,
+        "edge_taker_ccy": 0.5,
+        "mean_edge_ticks": 0.5
+      },
+      "consistency": {
+        "method": "x",
+        "steps": 1,
+        "window_replays": 1,
+        "fills_reported": 1,
+        "fills_matched": 1,
+        "fills_unreported": 1,
+        "fills_misattributed": 1,
+        "fills_after_last_cut": 1,
+        "statuses_checked": 1,
+        "statuses_mismatched": 1,
+        "timestamps_monotone": true,
+        "equal": true
+      },
+      "diagnostics": {
+        "same_price_overlaps": 1,
+        "taker_same_event_overlaps": 1,
+        "self_cross_pairs": 1,
+        "out_of_session_orders": 1,
+        "rejected_instructions": 1
+      },
+      "data_quality": "x",
+      "warnings": [
+        "x"
+      ],
+      "certificate": {
+        "dataset_id": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "engine_version": "x",
+        "spec_id": "0123456789abcdef",
+        "log_root": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "run_id": "0123456789abcdef",
+        "scorecard_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      },
+      "timings": {
+        "k": 0.5
+      },
+      "files": [
+        {
+          "name": "x",
+          "rows": 1,
+          "bytes": 1,
+          "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        }
+      ]
+    }
+  }
+}

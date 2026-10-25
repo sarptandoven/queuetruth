@@ -88,6 +88,13 @@ def main(argv: list[str] | None = None) -> int:
             for mode, m in day["modes"].items():
                 ex = {k: f"{v['n_filled']}/{v['n_defined']}" for k, v in m["exact_fill_rate"].items()}
                 print(f"\n{date} {mode}: exact filled {ex}; zoo wall {m['wall_s']} s")
+                pop = m.get("population")  # 0.1.1 common population (headline.py since the 0.1.1 rerun)
+                if pop:
+                    rates = {k: f"{100 * v:.2f}%" for k, v in pop["exact_fill_rate"].items() if v is not None}
+                    print(
+                        f"scored: {pop['n_leaderboard']} of {pop['n_shadows']} shadows "
+                        f"({pop['n_excluded_hbt_312']} left out at hftbacktest #312); exact fill rate there {rates}"
+                    )
                 print("| model | 1 s | 10 s | 60 s | 60 s decile range | 60 s liquidity range |")
                 print("|---|---|---|---|---|---|")
                 for mid, st in sorted(m["models"].items()):

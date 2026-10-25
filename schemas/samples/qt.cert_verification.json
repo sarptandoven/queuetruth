@@ -1,0 +1,53 @@
+{
+  "sample": {
+    "schema": "qt.cert_verification",
+    "schema_version": 1,
+    "certificate": {
+      "path": "x",
+      "certificate_id": "0123456789abcdef",
+      "body_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "issued_at": 1,
+      "signed": true,
+      "key_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "key_trusted": true
+    },
+    "rerun": true,
+    "status": "pass",
+    "counts": {
+      "pass": 1,
+      "warn": 1,
+      "fail": 1,
+      "skip": 1
+    },
+    "checks": [
+      {
+        "id": "x",
+        "status": "pass",
+        "summary": "x",
+        "details": [
+          "x"
+        ]
+      }
+    ],
+    "runs": [
+      {
+        "label": "x",
+        "kind": "x",
+        "run_id": "x",
+        "inputs_ok": true,
+        "outputs_ok": true,
+        "binding_ok": true,
+        "rerun": "identical",
+        "differing": [
+          "x"
+        ],
+        "within_tolerance": [
+          "x"
+        ]
+      }
+    ],
+    "warnings": [
+      "x"
+    ]
+  }
+}

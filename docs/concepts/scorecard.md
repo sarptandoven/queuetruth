@@ -190,8 +190,10 @@ headline says so. Markouts and the time-to-fill comparison conditional on fill a
 
 `score --out DIR` writes `summary.json` (`qt.scorecard_summary`), `score_orders.parquet` (one row per order with both
 arms' outcomes), `score_fills.parquet`, `score_markouts.parquet`, `score_position.parquet` (cumulative position per
-arm and instrument, the plot people usually make by hand), `score_tests.parquet` (every test with raw and adjusted p)
-and `schedule.parquet` (the scheduled legs).
+arm and instrument, the plot people usually make by hand), `score_tests.parquet` (every test with raw and adjusted p),
+`score_shortfall.parquet` (`qt.score_shortfall`: each order's sim-live gap split into delay, spread, missed fills,
+adverse selection, partial fills and fees, per markout horizon; see
+[Decompose the sim-live gap](../how-to/decompose-the-sim-live-gap.md)) and `schedule.parquet` (the scheduled legs).
 
 ## Caveats the report states
 

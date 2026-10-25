@@ -1,0 +1,155 @@
+[package]
+name = "queuetruth-fuzz"
+description = "cargo-fuzz targets for the untrusted-input parsers of queuetruth (ITCH, IEX DEEP+, DBN, etcsv, Parquet, crypto JSON / CSV)."
+version = "0.0.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[lib]
+name = "qt_fuzz"
+path = "src/lib.rs"
+
+# Exact pins as in the main workspace (every release dated on or before 2026-10-04).
+[dependencies]
+libfuzzer-sys = "=0.4.13"
+queuetruth-types = { path = "../crates/types" }
+queuetruth-schema = { path = "../crates/schema" }
+queuetruth-ingest = { path = "../crates/ingest" }
+queuetruth-crypto = { path = "../crates/crypto" }
+dbn = "=0.71.0"
+flate2 = "=1.1.10"
+indexmap = { version = "=2.14.2", features = ["serde"] }
+serde_json = { version = "=1.0.151", features = ["preserve_order", "float_roundtrip"] }
+# As resolved for `dbn` 0.71.0 (already in the lock tree): `dbn_known_metadata_panic` peeks at zstd preludes.
+zstd = "=0.13.3"
+
+# Standalone workspace: the fuzz crate is not a member of the queuetruth workspace (it needs nightly and links
+# libFuzzer), so `cargo test --workspace` at the repository root never builds it.
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "itch"
+path = "fuzz_targets/itch.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "itch_parse"
+path = "fuzz_targets/itch_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "iex"
+path = "fuzz_targets/iex.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "iex_parse"
+path = "fuzz_targets/iex_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "dbn"
+path = "fuzz_targets/dbn.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ingest"
+path = "fuzz_targets/ingest.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "etcsv"
+path = "fuzz_targets/etcsv.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "parquet"
+path = "fuzz_targets/parquet.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "crypto_bitstamp"
+path = "fuzz_targets/crypto_bitstamp.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "crypto_bitfinex"
+path = "fuzz_targets/crypto_bitfinex.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "crypto_coinbase"
+path = "fuzz_targets/crypto_coinbase.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "crypto_coinbase_level3"
+path = "fuzz_targets/crypto_coinbase_level3.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "crypto_kraken_l3"
+path = "fuzz_targets/crypto_kraken_l3.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "crypto_hyperliquid"
+path = "fuzz_targets/crypto_hyperliquid.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "crypto_tardis"
+path = "fuzz_targets/crypto_tardis.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "crypto_prepare"
+path = "fuzz_targets/crypto_prepare.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "crypto_json"
+path = "fuzz_targets/crypto_json.rs"
+test = false
+doc = false
+bench = false

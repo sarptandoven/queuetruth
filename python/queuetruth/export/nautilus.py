@@ -1,5 +1,11 @@
-"""NautilusTrader `FillModel` / `LatencyModel` config values (SPEC 5.10). Generated from NT's documented API at
-develop 5247ad5 (LGPL code is not copied; only constructor names and keyword names are emitted).
+"""NautilusTrader `FillModel` / `LatencyModel` config values (SPEC 5.10). LGPL code is not copied; only constructor
+names and keyword names are emitted.
+
+The snippet runs on both release lines (checked on nautilus_trader 1.231.0 and 2.0.0rc7): its import tries the 2.x
+names (`nautilus_trader.execution.DefaultFillModel` / `StaticLatencyModel`) and falls back to the 1.x ones
+(`nautilus_trader.backtest.models.FillModel` / `LatencyModel`), binding either to `FillModel` / `LatencyModel`. Both
+lines take the cancel latency as `cancel_latency_nanos` (queuetruth 0.1.1 wrote `delete_latency_nanos`, which
+neither accepts).
 
 Only FITTED values are emitted as code (trader review D4): pasting a snippet must never overwrite a setting the
 calibration did not estimate.
@@ -9,7 +15,7 @@ calibration did not estimate.
   censored, E28). Other families, or no estimate, give a commented line with the reason (NT's default
   `prob_fill_on_limit=1` is shown commented, never emitted). `prob_slippage` and `random_seed` are never fitted.
 - `latency_model = LatencyModel(base_latency_nanos=0, ...)` only with a latency calibration, and only the
-  components that have samples: `insert` = p50 entry, `update` = p50 amend, `delete` = p50 cancel (integer ns).
+  components that have samples: `insert` = p50 entry, `update` = p50 amend, `cancel` = p50 cancel (integer ns).
   `base_latency_nanos=0` is emitted with them because the fitted values are the whole one-way latencies (NT adds the
   base to each). Components without samples, and a calibration with no entry samples at all (acks without an
   exchange match/gateway timestamp, e.g. `record_time` acks from bybit, okx, coinbase, deribit, hyperliquid), are
@@ -29,6 +35,8 @@ from queuetruth.export._text import VERSION, data_sources_text, family_key, g6, 
 from queuetruth.schemas.models import CalibrationResult, Quantiles
 
 NT_FAMILIES = ("nt_prob_touch", "nt_queue_l2_prob_touch")
+#: nautilus_trader 2.x name of each 1.x class the snippet binds (2.x has no `nautilus_trader.backtest.models`)
+NT2_NAMES = {"FillModel": "DefaultFillModel", "LatencyModel": "StaticLatencyModel"}
 NO_EXCH_TS = (
     "no ack carries an exchange match/gateway timestamp (acks stamped record_time, as from bybit, okx, coinbase, "
     "deribit or hyperliquid, give no one-way latency)"
@@ -50,7 +58,7 @@ def fill_probability(cal: CalibrationResult) -> float | None:
 
 
 def latencies(cal: CalibrationResult) -> tuple[int | None, int | None, int | None]:
-    """(insert, update, delete) p50 ns from the result's latency fit; None for a component without samples."""
+    """(insert, update, cancel) p50 ns from the result's latency fit; None for a component without samples."""
     lat = cal.latency
     if lat is None:
         return None, None, None
@@ -85,14 +93,14 @@ def nautilus_notes(cal: CalibrationResult) -> list[str]:
             f"prob_fill_on_limit not fitted ({_fill_reason(cal)}): no FillModel line is emitted, keep your own; "
             "use queue_position=True for an L2 queue tracker."
         )
-    ins, upd, dele = latencies(cal)
-    if ins is None and upd is None and dele is None:
+    ins, upd, cnl = latencies(cal)
+    if ins is None and upd is None and cnl is None:
         notes.append(
             f"latency not fitted ({_latency_reason(cal)}): no LatencyModel line is emitted; set it from your own "
             "measurements."
         )
     else:
-        missing = [name for name, v in (("insert", ins), ("update", upd), ("delete", dele)) if v is None]
+        missing = [name for name, v in (("insert", ins), ("update", upd), ("cancel", cnl)) if v is None]
         notes.append(
             "latencies are p50 one-way values (entry, amend, cancel) and assume synchronized clocks; "
             "NautilusTrader's LatencyModel is static (no time-varying latency)."
@@ -113,6 +121,10 @@ def nautilus_notes(cal: CalibrationResult) -> list[str]:
         "High-level BacktestVenueConfig accepts built-in fill/latency models only; pass these objects to "
         "BacktestEngine.add_venue(...) when your version requires it."
     )
+    notes.append(
+        "nautilus_trader 2.0.0rc7 requires an explicit fee_model on every backtest venue; queuetruth fits none, so "
+        "pass your own."
+    )
     return notes
 
 
@@ -128,20 +140,23 @@ def _param_text(cal: CalibrationResult) -> str:
 def nautilus_snippet(cal: CalibrationResult) -> str:
     """NautilusTrader `FillModel` / `LatencyModel` lines for the fitted values only (SPEC 5.10 layout, D4)."""
     p = fill_probability(cal)
-    ins, upd, dele = latencies(cal)
+    ins, upd, cnl = latencies(cal)
     gated = "yes" if family_key(cal.family) == "nt_queue_l2_prob_touch" else "no"
-    has_lat = any(v is not None for v in (ins, upd, dele))
+    has_lat = any(v is not None for v in (ins, upd, cnl))
     names = [n for n, used in (("FillModel", p is not None), ("LatencyModel", has_lat)) if used]
     lines = [
-        f"# queuetruth {VERSION} | calibration {cal.run_id} | NautilusTrader API as documented at develop 5247ad5 "
-        "(verify names",
-        "# for your version; newer builds expose FillModel under nautilus_trader.execution)",
+        f"# queuetruth {VERSION} | calibration {cal.run_id} | NautilusTrader 1.x and 2.x (names checked on 1.231.0 "
+        "and 2.0.0rc7;",
+        "# 2.x renamed FillModel to DefaultFillModel and LatencyModel to StaticLatencyModel; the import picks either)",
         f"# {cal.family} fitted on {window_text(cal.train)}; held-out {window_text(cal.test)}; "
         f"data: {data_sources_text(cal)}",
         *trust.header_lines(cal, _param_text(cal)),
     ]
     if names:
-        lines.append(f"from nautilus_trader.backtest.models import {', '.join(names)}")
+        lines.append("try:  # nautilus_trader 2.x")
+        lines.append(f"    from nautilus_trader.execution import {', '.join(f'{NT2_NAMES[n]} as {n}' for n in names)}")
+        lines.append("except ImportError:  # nautilus_trader 1.x")
+        lines.append(f"    from nautilus_trader.backtest.models import {', '.join(names)}")
     else:
         lines.append("# nothing fitted for NautilusTrader in this calibration: no import or constructor is emitted")
     if p is not None:
@@ -153,11 +168,11 @@ def nautilus_snippet(cal: CalibrationResult) -> str:
     if has_lat:
         args = ["base_latency_nanos=0"] + [
             f"{k}={v}"
-            for k, v in (("insert_latency_nanos", ins), ("update_latency_nanos", upd), ("delete_latency_nanos", dele))
+            for k, v in (("insert_latency_nanos", ins), ("update_latency_nanos", upd), ("cancel_latency_nanos", cnl))
             if v is not None
         ]
         lines.append(f"latency_model = LatencyModel({', '.join(args)})")
-        missing = [k for k, v in (("insert", ins), ("update", upd), ("delete", dele)) if v is None]
+        missing = [k for k, v in (("insert", ins), ("update", upd), ("cancel", cnl)) if v is None]
         if missing:
             lines.append(
                 f"# not fitted (no samples): {', '.join(m + '_latency_nanos' for m in missing)}; set them yourself"

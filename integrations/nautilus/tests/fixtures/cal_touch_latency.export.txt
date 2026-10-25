@@ -1,0 +1,11 @@
+# queuetruth 0.1.1 | calibration 000000000000a7e1 | NautilusTrader API as documented at develop 5247ad5 (verify names
+# for your version; newer builds expose FillModel under nautilus_trader.execution)
+# nt_prob_touch fitted on 2019-12-30; held-out 2020-01-30; data: nasdaq (real_data, dataset 1a00f70976b6)
+# fit: p = 0.286626 (nt_touch); 3604 events from 1536 shadows; bootstrap CI [0.269047, 0.302945]; profile CI [-, -]
+# held-out: beats the default nt_prob_touch[mode=faithful;p=1] out of sample: better at 100ms, 1s, 10s, 60s, 5m
+from nautilus_trader.backtest.models import FillModel, LatencyModel
+fill_model = FillModel(prob_fill_on_limit=0.286626)
+# not fitted: prob_slippage, random_seed (set them as in your current FillModel)
+latency_model = LatencyModel(base_latency_nanos=0, insert_latency_nanos=250400, delete_latency_nanos=180000)
+# not fitted (no samples): update_latency_nanos; set them yourself
+# queue_position=True and trade_execution=True on the venue config when the fit was queue-gated (no)

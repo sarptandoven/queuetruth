@@ -292,10 +292,10 @@ class FakeService:
         r("GET", "/v1/datasets", self._list_datasets, "read")
         r("GET", f"/v1/datasets/{ident}", self._get_dataset, "read")
         r("DELETE", f"/v1/datasets/{ident}", self._delete_dataset, "write")
-        r("POST", "/v1/(replays|calibrations|scorecards)/estimate", self._estimate, "read")
-        r("POST", "/v1/(replays|calibrations|scorecards|reports)", self._submit, "write", True)
-        r("GET", "/v1/(replays|calibrations|scorecards)", self._list_runs, "read")
-        r("GET", f"/v1/(replays|calibrations|scorecards)/{ident}", self._get_run, "read")
+        r("POST", "/v1/(replays|zoos|calibrations|scorecards)/estimate", self._estimate, "read")
+        r("POST", "/v1/(replays|zoos|calibrations|scorecards|reports)", self._submit, "write", True)
+        r("GET", "/v1/(replays|zoos|calibrations|scorecards)", self._list_runs, "read")
+        r("GET", f"/v1/(replays|zoos|calibrations|scorecards)/{ident}", self._get_run, "read")
         r("GET", f"/v1/reports/{ident}", self._get_report, "read")
         r("GET", "/v1/jobs", self._list_jobs, "read")
         r("GET", f"/v1/jobs/{ident}", self._get_job, "read")
@@ -668,7 +668,7 @@ class FakeService:
     def _submit(self, request: httpx.Request, collection: str) -> httpx.Response:
         kind = COLLECTION_KIND[collection]
         spec = self._validate_spec(kind, request)
-        prefix = {"replay": "rp", "calibration": "cal", "scorecard": "sc", "report": "rpt"}[kind]
+        prefix = {"replay": "rp", "zoo": "zoo", "calibration": "cal", "scorecard": "sc", "report": "rpt"}[kind]
         run_id = self.new_id(prefix)
         job = self._new_job(kind, kind, run_id, spec)
         self.runs[kind][run_id] = {"id": run_id, "spec": spec, "job_id": job["id"]}

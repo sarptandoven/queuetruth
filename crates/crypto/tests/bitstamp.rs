@@ -514,3 +514,247 @@ fn bitstamp_auto_instruments_and_tie_order() {
     let got: Vec<(char, u32)> = rows.iter().map(|r| (r.action as char, r.instrument_id)).collect();
     assert_eq!(got, vec![('A', 2), ('A', 1), ('T', 1), ('F', 1)]);
 }
+
+fn book_r(us: i64, bids: &str, asks: &str, recv: i64) -> String {
+    book(us, bids, asks, "detail_order_book_btcusd").replace(r#""recv_ns":0"#, &format!(r#""recv_ns":{recv}"#))
+}
+
+/// `(action, order_id)` of the records after the seed.
+fn ids_after(rows: &[MboEvent], skip: usize) -> Vec<(char, u64)> {
+    rows[skip..].iter().map(|r| (r.action as char, r.order_id)).collect()
+}
+
+#[test]
+fn bitstamp_same_millisecond_orders_rank_by_order_id() {
+    // livefill-kit finding: Bitstamp queues orders entered at one price in the same millisecond by order id, and
+    // their messages can arrive in the opposite order. 13 and 12 arrive in reverse at 61190; 12's change keeps its
+    // place after its create; 14 at another price and 15 a millisecond later are not reordered.
+    let v = vec![
+        seeds_line(),
+        order_r("order_created", 13, 0, "61190.00", "1", 1000, 1),
+        order_r("order_created", 14, 0, "61180.00", "1", 1000, 2),
+        order_r("order_changed", 13, 0, "61190.00", "0.5", 1000, 3),
+        order_r("order_created", 12, 0, "61190.00", "1", 1000, 4),
+        order_r("order_created", 11, 0, "61190.00", "2", 2000, 5),
+    ];
+    let (rows, _, st) = run(v, &cfg());
+    assert_eq!(
+        ids_after(&rows, 3),
+        vec![('A', 12), ('A', 13), ('A', 14), ('M', 13), ('A', 11)]
+    );
+    // sequence is the position in the re-ranked stream
+    let seqs: Vec<u64> = rows[3..].iter().map(|r| r.sequence).collect();
+    assert_eq!(seqs, vec![2, 3, 4, 5, 6]);
+    assert_eq!(get(&st, "id_ties_reranked"), 1);
+    let book = common::replay(&rows).unwrap();
+    let q: Vec<u64> = book.levels[&(1, b'B')][&61_190_000_000_000]
+        .iter()
+        .map(|o| o.0)
+        .collect();
+    assert_eq!(q, vec![12, 13, 11]);
+    // in id order already: nothing moves
+    let (_, _, st) = run(
+        vec![
+            order_r("order_created", 12, 0, "61190.00", "1", 1000, 1),
+            order_r("order_created", 13, 0, "61190.00", "1", 1000, 2),
+        ],
+        &cfg(),
+    );
+    assert_eq!(get(&st, "id_ties_reranked"), 0);
+}
+
+#[test]
+fn bitstamp_maker_filled_within_the_taker_window_is_kept() {
+    // livefill-kit finding: an order that rests and is filled within the taker window has only order_created and
+    // order_deleted within 100 us, like a taker; the trade naming it as the maker shows it rested. The trade
+    // arrives first (as on the real feed) and is placed after the maker's create.
+    let v = vec![
+        seeds_line(),
+        trade(0, "61204.00", "0.30000000", 500, 42, 41, 1),
+        order_r("order_created", 41, 1, "61204.00", "0.30000000", 500, 2),
+        order_r("order_deleted", 41, 1, "61204.00", "0", 500, 3),
+        order_r("order_created", 42, 0, "61204.00", "0.30000000", 500, 4),
+        order_r("order_deleted", 42, 0, "61204.00", "0", 500, 5),
+    ];
+    let (rows, tr, st) = run(v, &cfg());
+    assert_eq!(
+        act6(&rows[3..]),
+        vec![
+            ('A', 'A', 61_204_000_000_000, 30_000_000, 41, 128),
+            ('T', 'B', 61_204_000_000_000, 30_000_000, 42, 0),
+            ('F', 'A', 61_204_000_000_000, 30_000_000, 41, 128),
+            ('C', 'A', 61_204_000_000_000, 30_000_000, 41, 128),
+        ]
+    );
+    assert_eq!(tr[0].maker_order_id, Some(41));
+    assert_eq!(
+        (
+            get(&st, "taker_orders_suppressed"),
+            get(&st, "maker_in_taker_window"),
+            get(&st, "trades_after_maker_create"),
+            get(&st, "trade_maker_unknown"),
+        ),
+        (1, 1, 1, 0)
+    );
+    common::replay(&rows).unwrap();
+}
+
+#[test]
+fn bitstamp_seeds_from_the_first_unambiguous_snapshot() {
+    // livefill-kit finding: live_orders stamps are whole milliseconds and the snapshot channel runs ahead, so a
+    // message arriving after a snapshot can be stamped before it and may or may not be in it. The first snapshot
+    // after which no message arrives stamped earlier seeds the book.
+    let first = book_r(
+        1500,
+        r#"[["61200.00","1.00000000","1"]]"#,
+        r#"[["61205.00","0.80000000","2"]]"#,
+        10,
+    );
+    let second = book_r(
+        2500,
+        r#"[["61200.00","1.00000000","1"],["61199.00","0.40000000","3"]]"#,
+        r#"[["61205.00","0.80000000","2"]]"#,
+        30,
+    );
+    let late = order_r("order_created", 3, 0, "61199.00", "0.40000000", 1000, 20);
+    let after = order_r("order_created", 4, 0, "61198.00", "1", 3000, 40);
+    let (rows, _, st) = run(vec![first.clone(), second, late.clone(), after.clone()], &cfg());
+    assert_eq!(rows[0].ts_event, (US0 + 2500) * 1000);
+    assert_eq!(
+        ids_after(&rows, 0),
+        vec![('R', 0), ('A', 1), ('A', 3), ('A', 2), ('A', 4)]
+    );
+    assert_eq!(
+        (
+            get(&st, "seed_snapshots_skipped"),
+            get(&st, "seed_ambiguous"),
+            get(&st, "skipped_before_snapshot"),
+            get(&st, "seeded_orders"),
+        ),
+        (1, 0, 1, 3)
+    );
+    // no unambiguous snapshot: the first one seeds, flagged as a data-quality counter
+    let (rows, _, st) = run(vec![first, late, after], &cfg());
+    assert_eq!(rows[0].ts_event, (US0 + 1500) * 1000);
+    assert_eq!((get(&st, "seed_ambiguous"), get(&st, "seed_snapshots_skipped")), (1, 0));
+    assert!(qt_crypto::bitstamp::DQ_COUNTERS.contains(&"seed_ambiguous"));
+}
+
+/// Queue-order check of converter output against the venue's `detail_order_book` snapshots: the records are
+/// replayed up to each snapshot's microtimestamp, and at every price level the orders both hold must be in the same
+/// priority order. Returns `(snapshots compared, snapshots with an inversion, levels with an inversion)`. Only
+/// relative order is compared: amounts and missing orders depend on the channels' skew, priority order does not
+/// (it changes only on a re-queue). Compared region (as livefill's `check`): a side cut at 100 entries skips its
+/// worst level, and only prices strictly better than the seed's worst price are compared when the seed side was cut
+/// (beyond it the seed did not show every order, so an order first seen there joins its level at an unknown place).
+fn queue_order_inversions(rows: &[MboEvent], snapshots: &[String], seed_us: i64) -> (u64, u64, u64) {
+    let seeded = |side: u8| {
+        rows.iter()
+            .filter(move |r| r.flags & qt_types::flags::SNAPSHOT != 0 && r.side == side)
+    };
+    let bid_limit = (seeded(b'B').count() >= 100).then(|| seeded(b'B').map(|r| r.price).min().unwrap());
+    let ask_limit = (seeded(b'A').count() >= 100).then(|| seeded(b'A').map(|r| r.price).max().unwrap());
+    let known = |side: u8, px: i64| match side {
+        b'B' => bid_limit.is_none_or(|l| px > l),
+        _ => ask_limit.is_none_or(|l| px < l),
+    };
+    let mut book = common::MiniBook::default();
+    let mut next = 0usize;
+    let (mut compared, mut bad_snaps, mut bad_levels) = (0u64, 0u64, 0u64);
+    for text in snapshots {
+        let v: serde_json::Value = serde_json::from_str(text).unwrap();
+        let d = &v["data"];
+        let us: i64 = d["microtimestamp"].as_str().unwrap().parse().unwrap();
+        if us <= seed_us {
+            continue;
+        }
+        while next < rows.len() && rows[next].ts_event <= us * 1000 {
+            book.apply(&rows[next]).unwrap();
+            next += 1;
+        }
+        compared += 1;
+        let mut bad = false;
+        for (key, side) in [("bids", b'B'), ("asks", b'A')] {
+            let entries = d[key].as_array().unwrap();
+            let mut levels: Vec<(i64, Vec<u64>)> = Vec::new();
+            for e in entries {
+                let px = qt_crypto::units::price(e[0].as_str().unwrap(), -9).unwrap();
+                let id: u64 = e[2].as_str().unwrap().parse().unwrap();
+                match levels.last_mut() {
+                    Some((p, ids)) if *p == px => ids.push(id),
+                    _ => levels.push((px, vec![id])),
+                }
+            }
+            if entries.len() >= 100 {
+                levels.pop();
+            }
+            let Some(lv) = book.levels.get(&(1, side)) else {
+                continue;
+            };
+            for (px, snap_ids) in levels {
+                let Some(q) = lv.get(&px).filter(|_| known(side, px)) else {
+                    continue;
+                };
+                let ours: Vec<u64> = q.iter().map(|(id, _)| *id).filter(|id| snap_ids.contains(id)).collect();
+                let theirs: Vec<u64> = snap_ids.iter().copied().filter(|id| ours.contains(id)).collect();
+                if ours != theirs {
+                    bad_levels += 1;
+                    bad = true;
+                }
+            }
+        }
+        bad_snaps += u64::from(bad);
+    }
+    (compared, bad_snaps, bad_levels)
+}
+
+/// RD-12 re-verification on the real 10-minute BTC/USD capture (`QT_RD12_BITSTAMP=<capture dir>`; not shipped):
+/// prints the converter counters, the record counts by action and the queue-order check, and pins them. The seed is
+/// the 12th snapshot (11 ambiguous ones skipped, as livefill's `check` found); 3 creates are re-ranked by order id,
+/// and no level inside the seed's known region is then in another priority order than the venue's snapshots (with
+/// arrival ranking, 133 of the 5,418 snapshots after the first one had such a level).
+#[test]
+#[ignore = "needs the RD-12 Bitstamp capture: QT_RD12_BITSTAMP=<dir> cargo test -- --ignored"]
+fn bitstamp_rd12_capture_counters() {
+    let dir = std::path::PathBuf::from(std::env::var("QT_RD12_BITSTAMP").expect("QT_RD12_BITSTAMP"));
+    let files: Vec<_> = ["live_orders.jsonl", "live_trades.jsonl", "detail_order_book.jsonl"]
+        .iter()
+        .map(|f| dir.join(f))
+        .collect();
+    let (rows, trades, st) = convert(qt_crypto::input::lines(&files).unwrap(), &cfg()).unwrap();
+    let mut by_action: std::collections::BTreeMap<char, u64> = std::collections::BTreeMap::new();
+    for r in &rows {
+        *by_action.entry(r.action as char).or_insert(0) += 1;
+    }
+    let seed_us = rows
+        .iter()
+        .find(|r| r.action == b'R')
+        .map(|r| r.ts_event / 1000)
+        .unwrap();
+    let snaps: Vec<String> = qt_crypto::input::lines(&files[2..])
+        .unwrap()
+        .map(Result::unwrap)
+        .filter(|l| l.contains("detail_order_book_btcusd"))
+        .collect();
+    let (compared, bad_snaps, bad_levels) = queue_order_inversions(&rows, &snaps, seed_us);
+    println!("records {} trades {} actions {by_action:?}", rows.len(), trades.len());
+    println!("seed_us {seed_us}");
+    println!("counters {st:?}");
+    println!("queue order: compared {compared} snapshots, {bad_snaps} with an inversion ({bad_levels} levels)");
+    assert_eq!(
+        (rows.len(), trades.len(), seed_us),
+        (77_157, 135, 1_791_770_864_726_373)
+    );
+    assert_eq!((compared, bad_snaps), (5_407, 0));
+    assert_eq!(
+        (
+            get(&st, "seed_snapshots_skipped"),
+            get(&st, "seed_ambiguous"),
+            get(&st, "skipped_before_snapshot"),
+            get(&st, "id_ties_reranked"),
+            get(&st, "maker_in_taker_window"),
+            get(&st, "trades_after_maker_create"),
+        ),
+        (11, 0, 266, 3, 0, 0)
+    );
+}

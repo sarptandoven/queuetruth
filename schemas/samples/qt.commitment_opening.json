@@ -1,0 +1,16 @@
+{
+  "sample": {
+    "schema": "qt.commitment_opening",
+    "schema_version": 1,
+    "root": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "items": [
+      {
+        "index": 1,
+        "name": "x",
+        "bytes": 1,
+        "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "nonce": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      }
+    ]
+  }
+}

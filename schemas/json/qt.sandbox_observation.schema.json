@@ -1,0 +1,844 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.sandbox_observation",
+  "$defs": {
+    "BookState": {
+      "additionalProperties": false,
+      "description": "The displayed book at the visible cut: best levels and the top `depth_levels` per side as\n`[price, size, count]`, best first. `ts_event` = time of the last event in view.",
+      "properties": {
+        "ts_event": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ts Event"
+        },
+        "bid": {
+          "anyOf": [
+            {
+              "maxItems": 3,
+              "minItems": 3,
+              "prefixItems": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Bid"
+        },
+        "ask": {
+          "anyOf": [
+            {
+              "maxItems": 3,
+              "minItems": 3,
+              "prefixItems": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ask"
+        },
+        "bids": {
+          "items": {
+            "maxItems": 3,
+            "minItems": 3,
+            "prefixItems": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "type": "array"
+          },
+          "title": "Bids",
+          "type": "array"
+        },
+        "asks": {
+          "items": {
+            "maxItems": 3,
+            "minItems": 3,
+            "prefixItems": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "type": "array"
+          },
+          "title": "Asks",
+          "type": "array"
+        },
+        "spread_ticks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Spread Ticks"
+        }
+      },
+      "required": [
+        "ts_event",
+        "bid",
+        "ask",
+        "bids",
+        "asks",
+        "spread_ticks"
+      ],
+      "title": "BookState",
+      "type": "object"
+    },
+    "FillView": {
+      "additionalProperties": false,
+      "description": "One fill of one of your orders (a `qt.shadow_fills` row). `ts_known` = when the sandbox could know it: the\nfill's event, or for an arrival (taker) fill the first event after arrival. `step` = the step that reported it\n(null: after the session's last visible cut, reported only by the scorecard).",
+      "properties": {
+        "order_id": {
+          "pattern": "^o[1-9][0-9]*$",
+          "title": "Order Id",
+          "type": "string"
+        },
+        "fill_seq": {
+          "title": "Fill Seq",
+          "type": "integer"
+        },
+        "ts_event": {
+          "title": "Ts Event",
+          "type": "integer"
+        },
+        "ts_known": {
+          "title": "Ts Known",
+          "type": "integer"
+        },
+        "side": {
+          "enum": [
+            "buy",
+            "sell"
+          ],
+          "title": "Side",
+          "type": "string"
+        },
+        "price": {
+          "title": "Price",
+          "type": "integer"
+        },
+        "qty": {
+          "title": "Qty",
+          "type": "integer"
+        },
+        "liquidity": {
+          "enum": [
+            "maker",
+            "taker"
+          ],
+          "title": "Liquidity",
+          "type": "string"
+        },
+        "reason": {
+          "enum": [
+            "queue_depleted",
+            "trade_through",
+            "crossed",
+            "crossed_at_live"
+          ],
+          "title": "Reason",
+          "type": "string"
+        },
+        "queue_ahead_before": {
+          "title": "Queue Ahead Before",
+          "type": "integer"
+        },
+        "fee": {
+          "title": "Fee",
+          "type": "number"
+        },
+        "step": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Step"
+        }
+      },
+      "required": [
+        "order_id",
+        "fill_seq",
+        "ts_event",
+        "ts_known",
+        "side",
+        "price",
+        "qty",
+        "liquidity",
+        "reason",
+        "queue_ahead_before",
+        "fee",
+        "step"
+      ],
+      "title": "FillView",
+      "type": "object"
+    },
+    "MarkoutView": {
+      "additionalProperties": false,
+      "description": "Markout of one fill at one horizon against the mid (SPEC 5.7.5): `d (mid(t+h) - P)` in ticks, basis points\nand currency (positive = the fill was good for you). Listed once `t + h` is visible.",
+      "properties": {
+        "order_id": {
+          "pattern": "^o[1-9][0-9]*$",
+          "title": "Order Id",
+          "type": "string"
+        },
+        "fill_seq": {
+          "title": "Fill Seq",
+          "type": "integer"
+        },
+        "horizon_ns": {
+          "title": "Horizon Ns",
+          "type": "integer"
+        },
+        "mo_ticks": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Mo Ticks"
+        },
+        "mo_bps": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Mo Bps"
+        },
+        "mo_ccy": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Mo Ccy"
+        }
+      },
+      "required": [
+        "order_id",
+        "fill_seq",
+        "horizon_ns",
+        "mo_ticks",
+        "mo_bps",
+        "mo_ccy"
+      ],
+      "title": "MarkoutView",
+      "type": "object"
+    },
+    "OrderView": {
+      "additionalProperties": false,
+      "description": "An order as the agent knows it at the visible cut. `pending` = sent, not yet confirmed at the venue (the\nfirst market event after its arrival confirms it, SPEC 5.2.1); `working` = resting (queue fields set);\n`expired` = still open at the end of the data; `censored` = the venue cleared the book or the feed had a gap.",
+      "properties": {
+        "order_id": {
+          "pattern": "^o[1-9][0-9]*$",
+          "title": "Order Id",
+          "type": "string"
+        },
+        "client_order_id": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.:\\-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Client Order Id"
+        },
+        "side": {
+          "enum": [
+            "buy",
+            "sell"
+          ],
+          "title": "Side",
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "limit",
+            "market"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "tif": {
+          "enum": [
+            "day",
+            "ioc"
+          ],
+          "title": "Tif",
+          "type": "string"
+        },
+        "price": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Price"
+        },
+        "peg_offset_ticks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Peg Offset Ticks"
+        },
+        "qty": {
+          "title": "Qty",
+          "type": "integer"
+        },
+        "filled_qty": {
+          "title": "Filled Qty",
+          "type": "integer"
+        },
+        "leaves_qty": {
+          "title": "Leaves Qty",
+          "type": "integer"
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "working",
+            "filled",
+            "cancelled",
+            "rejected",
+            "expired",
+            "censored"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reason"
+        },
+        "ts_submit": {
+          "title": "Ts Submit",
+          "type": "integer"
+        },
+        "ts_activated": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ts Activated"
+        },
+        "ts_done": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ts Done"
+        },
+        "queue_ahead": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Queue Ahead"
+        },
+        "rank": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Rank"
+        },
+        "level_qty": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Level Qty"
+        },
+        "cancel_sent_ns": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Cancel Sent Ns"
+        },
+        "n_fills": {
+          "title": "N Fills",
+          "type": "integer"
+        },
+        "avg_fill_price": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Avg Fill Price"
+        }
+      },
+      "required": [
+        "order_id",
+        "client_order_id",
+        "side",
+        "type",
+        "tif",
+        "price",
+        "peg_offset_ticks",
+        "qty",
+        "filled_qty",
+        "leaves_qty",
+        "status",
+        "reason",
+        "ts_submit",
+        "ts_activated",
+        "ts_done",
+        "queue_ahead",
+        "rank",
+        "level_qty",
+        "cancel_sent_ns",
+        "n_fills",
+        "avg_fill_price"
+      ],
+      "title": "OrderView",
+      "type": "object"
+    },
+    "PositionView": {
+      "additionalProperties": false,
+      "description": "Position (size units, signed), cash and fees (currency) from the fills so far, marked at `mark_price` (the mid\nat the visible cut, else the last print). `pnl_gross = cash + position * mark`, `pnl_net = pnl_gross - fees`.",
+      "properties": {
+        "qty": {
+          "title": "Qty",
+          "type": "integer"
+        },
+        "bought_qty": {
+          "title": "Bought Qty",
+          "type": "integer"
+        },
+        "sold_qty": {
+          "title": "Sold Qty",
+          "type": "integer"
+        },
+        "cash": {
+          "title": "Cash",
+          "type": "number"
+        },
+        "fees": {
+          "title": "Fees",
+          "type": "number"
+        },
+        "mark_price": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Mark Price"
+        },
+        "mark_source": {
+          "anyOf": [
+            {
+              "enum": [
+                "mid",
+                "last_trade"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Mark Source"
+        },
+        "pnl_gross": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Pnl Gross"
+        },
+        "pnl_net": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Pnl Net"
+        },
+        "currency": {
+          "title": "Currency",
+          "type": "string"
+        }
+      },
+      "required": [
+        "qty",
+        "bought_qty",
+        "sold_qty",
+        "cash",
+        "fees",
+        "mark_price",
+        "mark_source",
+        "pnl_gross",
+        "pnl_net",
+        "currency"
+      ],
+      "title": "PositionView",
+      "type": "object"
+    },
+    "TradeStats": {
+      "additionalProperties": false,
+      "description": "Prints over an interval: count, volume (size units), `vwap_price` (a real price, float), high/low/last (raw\nfixed-point prices, like every other price field).",
+      "properties": {
+        "n": {
+          "title": "N",
+          "type": "integer"
+        },
+        "volume": {
+          "title": "Volume",
+          "type": "integer"
+        },
+        "vwap_price": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Vwap Price"
+        },
+        "high": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "High"
+        },
+        "low": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Low"
+        },
+        "last": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Last"
+        },
+        "first_ts": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "First Ts"
+        },
+        "last_ts": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Last Ts"
+        }
+      },
+      "required": [
+        "n",
+        "volume",
+        "vwap_price",
+        "high",
+        "low",
+        "last",
+        "first_ts",
+        "last_ts"
+      ],
+      "title": "TradeStats",
+      "type": "object"
+    },
+    "TradeView": {
+      "additionalProperties": false,
+      "description": "One print (`T` record): aggressor side `B`/`A`, or `N` (none); kind as in `qt.trades`.",
+      "properties": {
+        "ts_event": {
+          "title": "Ts Event",
+          "type": "integer"
+        },
+        "price": {
+          "title": "Price",
+          "type": "integer"
+        },
+        "size": {
+          "title": "Size",
+          "type": "integer"
+        },
+        "aggressor": {
+          "enum": [
+            "B",
+            "A",
+            "N"
+          ],
+          "title": "Aggressor",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "displayed",
+            "hidden",
+            "cross"
+          ],
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ts_event",
+        "price",
+        "size",
+        "aggressor",
+        "kind"
+      ],
+      "title": "TradeView",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "What the agent sees after `open`, `observe` or `advance`: the market and its own orders at the visible cut,\nand what happened since the previous step (prints, fills, markouts that became computable).",
+  "properties": {
+    "schema": {
+      "const": "qt.sandbox_observation",
+      "default": "qt.sandbox_observation",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "step": {
+      "title": "Step",
+      "type": "integer"
+    },
+    "clock_ns": {
+      "title": "Clock Ns",
+      "type": "integer"
+    },
+    "visible_ns": {
+      "title": "Visible Ns",
+      "type": "integer"
+    },
+    "time_local": {
+      "title": "Time Local",
+      "type": "string"
+    },
+    "done": {
+      "title": "Done",
+      "type": "boolean"
+    },
+    "book": {
+      "$ref": "#/$defs/BookState"
+    },
+    "trades": {
+      "items": {
+        "$ref": "#/$defs/TradeView"
+      },
+      "title": "Trades",
+      "type": "array"
+    },
+    "trades_since_last": {
+      "$ref": "#/$defs/TradeStats"
+    },
+    "session_trades": {
+      "$ref": "#/$defs/TradeStats"
+    },
+    "orders": {
+      "items": {
+        "$ref": "#/$defs/OrderView"
+      },
+      "title": "Orders",
+      "type": "array"
+    },
+    "n_orders": {
+      "title": "N Orders",
+      "type": "integer"
+    },
+    "n_open": {
+      "title": "N Open",
+      "type": "integer"
+    },
+    "fills": {
+      "items": {
+        "$ref": "#/$defs/FillView"
+      },
+      "title": "Fills",
+      "type": "array"
+    },
+    "markouts": {
+      "items": {
+        "$ref": "#/$defs/MarkoutView"
+      },
+      "title": "Markouts",
+      "type": "array"
+    },
+    "position": {
+      "$ref": "#/$defs/PositionView"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "step",
+    "clock_ns",
+    "visible_ns",
+    "time_local",
+    "done",
+    "book",
+    "trades",
+    "trades_since_last",
+    "session_trades",
+    "orders",
+    "n_orders",
+    "n_open",
+    "fills",
+    "markouts",
+    "position",
+    "warnings"
+  ],
+  "type": "object"
+}

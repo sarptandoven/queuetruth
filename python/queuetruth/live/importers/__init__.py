@@ -10,6 +10,8 @@ from queuetruth.live.importers.bybit import import_bybit
 from queuetruth.live.importers.coinbase import import_coinbase
 from queuetruth.live.importers.deribit import import_deribit
 from queuetruth.live.importers.fix44 import import_fix44
+from queuetruth.live.importers.freqtrade import import_freqtrade, import_freqtrade_sim
+from queuetruth.live.importers.hummingbot import import_hummingbot, import_hummingbot_sim
 from queuetruth.live.importers.hyperliquid import import_hyperliquid
 from queuetruth.live.importers.ibkr_flex import import_ibkr_flex
 from queuetruth.live.importers.kraken import import_kraken
@@ -29,6 +31,14 @@ VENUE_IMPORTERS: dict[str, Importer] = {
     "fix44": import_fix44,
 }
 #: Simulator-output importers (not `LiveImportSpec` venues; see `queuetruth.live.import_sim`).
-SIM_IMPORTERS: dict[str, Importer] = {"hftbacktest": import_hftbacktest, "nautilus": import_nautilus}
+SIM_IMPORTERS: dict[str, Importer] = {
+    "hftbacktest": import_hftbacktest,
+    "nautilus": import_nautilus,
+    "freqtrade": import_freqtrade_sim,
+    "hummingbot": import_hummingbot_sim,
+}
+#: Trading-bot importers of the live arm (Freqtrade trades database + bot log, Hummingbot database / trades CSV);
+#: not `LiveImportSpec` venues: `import_freqtrade_live` / `import_hummingbot_live` write their logs.
+BOT_IMPORTERS: dict[str, Importer] = {"freqtrade": import_freqtrade, "hummingbot": import_hummingbot}
 
-__all__ = ["SIM_IMPORTERS", "VENUE_IMPORTERS", "ImportOptions", "ImportResult", "Importer"]
+__all__ = ["BOT_IMPORTERS", "SIM_IMPORTERS", "VENUE_IMPORTERS", "ImportOptions", "ImportResult", "Importer"]

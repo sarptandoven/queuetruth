@@ -190,7 +190,11 @@ class StaleBookCheck(Check):
         if prints.size == 0:
             return
         k = np.searchsorted(upd_ts, prints, side="right") - 1
-        base = np.where(k >= 0, upd_ts[np.maximum(k, 0)], max(lo, int(ts[0])))
+        first = max(lo, int(ts[0]))
+        if upd_ts.size:
+            base = np.where(k >= 0, upd_ts[np.maximum(k, 0)], first)
+        else:  # prints but no book update at all in the partition: every print is quiet since the window opened
+            base = np.full(prints.size, first, dtype=prints.dtype)
         base = np.maximum(base, lo)
         quiet = prints - base
         stale = quiet > self.stale_ns

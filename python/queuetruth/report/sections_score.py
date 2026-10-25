@@ -30,10 +30,12 @@ from queuetruth.report.page import (
     Raw,
     badge,
     callout,
+    details,
     figure,
     kv,
     section,
     table,
+    theme_switch,
     ul,
 )
 from queuetruth.report.svg import Ref, Series, bar_chart, forest_chart, line_chart, time_ticks
@@ -55,7 +57,8 @@ def _run_label(run: RunDir, doc: Any) -> str:
     return f"{run.label} (run {rid})" if rid else run.label
 
 
-def _sim_label(s: ScorecardSummary) -> str:
+def sim_label(s: ScorecardSummary) -> str:
+    """The scorecard's simulated arm in words (zoo model, external log or the exact FIFO replay)."""
     k = s.sim_source.kind
     if k == "zoo":
         return f"zoo model {s.sim_source.model_id or '?'}"
@@ -65,6 +68,12 @@ def _sim_label(s: ScorecardSummary) -> str:
 
 
 # ---- header ------------------------------------------------------------------------------------------------------
+
+#: Element ids of the header's collapsed inputs table and scope-and-limits list (the answer block links to the limits).
+INPUTS_ID = "inputs"
+LIMITS_ID = "limits"
+#: Classes of those two blocks: `prov` makes the print stylesheet print them even when closed.
+PROV_CLS = "more prov"
 
 
 def _limits(ctx: Ctx) -> list[str]:
@@ -144,12 +153,14 @@ def header(ctx: Ctx) -> Raw:
             "inputs. Dataset paths in the spec echoes are resolved from the current directory; run the report where "
             "the analyses ran, or include the dataset's <code>manifest.json</code> in an input directory.</p>",
         )
+    n_files = len(inp.files)
     parts: list[str] = [
-        '<header id="header">',
-        f"<h1>{F.esc(ctx.spec.title)}</h1>",
+        '<header id="header" class="top">',
+        f'<div class="ttl"><h1>{F.esc(ctx.spec.title)}</h1>',
         f'<p class="sub">queuetruth {F.esc(__version__)} · {len(inp.given)} input(s) · {len(inp.runs)} output '
-        f"director{'y' if len(inp.runs) == 1 else 'ies'} · {len(inp.files)} files read</p>",
-        banner,
+        f"director{'y' if len(inp.runs) == 1 else 'ies'} · {n_files} files read</p></div>",
+        theme_switch(),
+        f'<div class="wide">{banner}',
     ]
     if inp.integrity:
         parts.append(
@@ -171,11 +182,36 @@ def header(ctx: Ctx) -> Raw:
         )
         for f in inp.files
     ]
-    parts.append("<h3>Inputs</h3>")
-    parts.append(table(["file", "role", "schema", "rows", "size", "sha256"], rows, numeric=(3, 4), cls="files"))
-    parts.append("<h3>Scope and limits</h3>")
-    parts.append(ul(_limits(ctx)))
-    parts.append("</header>")
+    # provenance and limits are one click away on screen, not the first screen (answer-first layout); print always
+    # carries them (class `prov`: the print stylesheet opens these blocks; `print-prov` is the fallback copy for
+    # browsers without `::details-content`, hidden everywhere else)
+    parts.append(
+        details(
+            "Inputs",
+            [table(["file", "role", "schema", "rows", "size", "sha256"], rows, numeric=(3, 4), cls="files")],
+            note=f"{n_files} file(s) with sha256",
+            summary_html="<h2>Inputs</h2>",
+            cls=PROV_CLS,
+            sid=INPUTS_ID,
+        )
+    )
+    limits = _limits(ctx)
+    parts.append(
+        details(
+            "Scope and limits",
+            [ul(limits)],
+            note=f"{len(limits)} statements",
+            summary_html="<h2>Scope and limits</h2>",
+            cls=PROV_CLS,
+            sid=LIMITS_ID,
+        )
+    )
+    fallback = [f"{f.path} · sha256 {f.sha256}" for f in inp.files]
+    parts.append(
+        '<div class="print-prov" hidden><p><strong>Inputs (sha256)</strong></p>'
+        f"{ul(fallback, cls='mono')}<p><strong>Scope and limits</strong></p>{ul(limits)}</div>"
+    )
+    parts.append("</div></header>")
     return Raw("".join(parts))
 
 
@@ -249,7 +285,7 @@ def verdict(ctx: Ctx) -> Raw | None:
         ]
         parts = [
             '<div class="verdict">',
-            f'<div class="kicker">Scorecard · {F.esc(_run_label(run, s))} · sim arm: {F.esc(_sim_label(s))}</div>',
+            f'<div class="kicker">Scorecard · {F.esc(_run_label(run, s))} · sim arm: {F.esc(sim_label(s))}</div>',
             f'<p class="headline">{F.esc(si.headline_text(s))}</p>',
             f"<p>{badge(st, gate_label)} " + ("" if fo else f"{badge(INFO, direction)}") + "</p>",
             f'<div class="tiles">{"".join(tiles)}</div>',
@@ -1334,6 +1370,7 @@ def position(ctx: Ctx) -> Raw | None:
             )
             counts = {i: int((inst == i).sum()) for i in insts}
             insts = sorted(sorted(insts, key=lambda i: (-counts[i], i))[:MAX_POSITION_INSTRUMENTS])
+        figs: list[str] = []
         for iid in insts:
             m = inst == iid
             t_all = tsv[m]
@@ -1370,7 +1407,7 @@ def position(ctx: Ctx) -> Raw | None:
             data = table(
                 ["time (UTC)", "arm", "position"], [(F.ts(a), b, F.num(c)) for a, b, c in table_pts], numeric=(2,)
             )
-            body.append(
+            figs.append(
                 figure(
                     svg,
                     f"Instrument {iid}: inventory path implied by each arm's fills (at most "
@@ -1379,6 +1416,13 @@ def position(ctx: Ctx) -> Raw | None:
                     data=data,
                     note=f"Table: last value per {MAX_POSITION_TABLE_ROWS} buckets.",
                 )
+            )
+        # the first instrument is shown; the others are one collapsed block (answer-first layout)
+        if figs:
+            body.append(figs[0])
+        if len(figs) > 1:
+            body.append(
+                details("Position over time for the other instruments", figs[1:], note=f"{len(figs) - 1} instrument(s)")
             )
     if not body:
         return None

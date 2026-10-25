@@ -21,7 +21,7 @@ from model.hazard_synth import NS, make_features
 from queuetruth.errors import QtError
 from queuetruth.model import HazardModel, fit_hazard
 from queuetruth.model.climatology import aj_cif_fill
-from queuetruth.model.hazard import pickle_sha256
+from queuetruth.model.hazard import model_sha256
 from queuetruth.schemas.arrow import SCHEMAS
 from queuetruth.schemas.io import sha256_file, write_table
 from queuetruth.schemas.models import HazardModelCard
@@ -114,7 +114,7 @@ def test_fit_hazard_end_to_end(monkeypatch: pytest.MonkeyPatch, features_path: P
     assert HazardModelCard.model_validate(doc) == card
     assert doc["schema"] == "qt.hazard_model_card" and doc["format_version"] == 1
     assert card.model_id.startswith("hazard_gbdt:") and len(card.model_id) == len("hazard_gbdt:") + 16
-    assert [f.name for f in card.files] == ["predictions.parquet", "model.pkl"]
+    assert [f.name for f in card.files] == ["predictions.parquet", "model.npz"]
     for f in card.files:
         assert f.sha256 == sha256_file(out / f.name)
     pred = pq.read_table(out / "predictions.parquet")
@@ -142,7 +142,7 @@ def test_fit_hazard_end_to_end(monkeypatch: pytest.MonkeyPatch, features_path: P
     assert any("planned life of qt.zoo_shadows" in w for w in card.warnings)  # the sibling zoo_shadows.parquet
     assert s.hl_p_et is not None and all(s.hl_p_et[h] is not None for h in (str(NS), str(10 * NS)))
     # The saved model reproduces the stored predictions.
-    m = HazardModel.load(str(out), sha256=pickle_sha256(card))  # the digest fit_hazard recorded
+    m = HazardModel.load(str(out), sha256=model_sha256(card))  # the digest fit_hazard recorded
     assert m.card == card
     assert m.predict(pq.read_table(features_path).slice(0, 5)).num_rows == 5 * len(card.grid_ns)
 
@@ -153,7 +153,7 @@ def test_fit_hazard_deterministic_outputs(monkeypatch: pytest.MonkeyPatch, featu
     b = fit_hazard(_spec(features_path, tmp_path / "b"))
     c = fit_hazard(_spec(features_path, None))
     assert a == b
-    for name in ("model.json", "model.pkl", "predictions.parquet"):
+    for name in ("model.json", "model.npz", "predictions.parquet"):
         assert (tmp_path / "a" / name).read_bytes() == (tmp_path / "b" / name).read_bytes()
     assert c.files == [] and c.scores_test == a.scores_test and c.model_id == a.model_id
 

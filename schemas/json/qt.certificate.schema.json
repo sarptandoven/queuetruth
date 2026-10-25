@@ -1,0 +1,757 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.certificate",
+  "$defs": {
+    "CertInput": {
+      "additionalProperties": false,
+      "description": "An input of one or more runs (or an attachment): every file it consists of, hashed.\n\n`identity` is the SPEC 7.3 reference identity that enters `run_id` (`dataset_id` for a dataset, the sha256 of\n`manifest.json` for a live-log directory, the file sha256 for a file). `files` lists every file (one entry,\nnamed after the file, for a file input). For a dataset, `dataset_consistent` says that the partition hashes of\nits `manifest.json` match the files and re-derive its `dataset_id`.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "dataset",
+            "directory",
+            "file"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "identity": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Identity",
+          "type": "string"
+        },
+        "bytes": {
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "files": {
+          "items": {
+            "$ref": "#/$defs/HashedFile"
+          },
+          "title": "Files",
+          "type": "array"
+        },
+        "dataset_id": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dataset Id"
+        },
+        "dataset_consistent": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dataset Consistent"
+        },
+        "data_ts_min": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Data Ts Min"
+        },
+        "data_ts_max": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Data Ts Max"
+        }
+      },
+      "required": [
+        "id",
+        "path",
+        "kind",
+        "identity",
+        "bytes",
+        "files"
+      ],
+      "title": "CertInput",
+      "type": "object"
+    },
+    "CertRun": {
+      "additionalProperties": false,
+      "description": "One certified run directory.",
+      "properties": {
+        "label": {
+          "pattern": "^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,63}$",
+          "title": "Label",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "replay",
+            "zoo",
+            "calibrate",
+            "calibrate_live",
+            "fit_hazard",
+            "score",
+            "referee",
+            "dq"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "document": {
+          "pattern": "^(?:[^/.][^/]*|\\.[^/.][^/]*|\\.\\.[^/]+)(?:/(?:[^/.][^/]*|\\.[^/.][^/]*|\\.\\.[^/]+))*$",
+          "title": "Document",
+          "type": "string"
+        },
+        "document_schema": {
+          "title": "Document Schema",
+          "type": "string"
+        },
+        "run_id": {
+          "pattern": "^[0-9a-f]{16}$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "binding": {
+          "enum": [
+            "verified",
+            "recomputed"
+          ],
+          "title": "Binding",
+          "type": "string"
+        },
+        "engine_version": {
+          "title": "Engine Version",
+          "type": "string"
+        },
+        "spec": {
+          "additionalProperties": true,
+          "title": "Spec",
+          "type": "object"
+        },
+        "inputs": {
+          "items": {
+            "$ref": "#/$defs/RunInput"
+          },
+          "title": "Inputs",
+          "type": "array"
+        },
+        "outputs": {
+          "items": {
+            "$ref": "#/$defs/OutputFile"
+          },
+          "title": "Outputs",
+          "type": "array"
+        },
+        "reproduce": {
+          "$ref": "#/$defs/Reproduce"
+        }
+      },
+      "required": [
+        "label",
+        "kind",
+        "path",
+        "document",
+        "document_schema",
+        "run_id",
+        "binding",
+        "engine_version",
+        "spec",
+        "inputs",
+        "outputs",
+        "reproduce"
+      ],
+      "title": "CertRun",
+      "type": "object"
+    },
+    "Claim": {
+      "additionalProperties": false,
+      "description": "A claim: the text as given (with `{run#/pointer}` references), the text with the values filled in, and the\nexact values.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "rendered": {
+          "title": "Rendered",
+          "type": "string"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "title": "Evidence",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "text",
+        "rendered",
+        "evidence"
+      ],
+      "title": "Claim",
+      "type": "object"
+    },
+    "CommitmentLink": {
+      "additionalProperties": false,
+      "description": "A `qt.commitment` linked to the certificate through an opening of some of its items.",
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "root": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Root",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Label"
+        },
+        "committed_at": {
+          "title": "Committed At",
+          "type": "integer"
+        },
+        "key_fingerprint": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Key Fingerprint"
+        },
+        "revealed": {
+          "items": {
+            "$ref": "#/$defs/RevealedItem"
+          },
+          "title": "Revealed",
+          "type": "array"
+        },
+        "earliest_data_ts": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Earliest Data Ts"
+        },
+        "precedes_data": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Precedes Data"
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "root",
+        "label",
+        "committed_at",
+        "key_fingerprint",
+        "revealed",
+        "earliest_data_ts",
+        "precedes_data"
+      ],
+      "title": "CommitmentLink",
+      "type": "object"
+    },
+    "Environment": {
+      "additionalProperties": false,
+      "description": "Software and platform of the certifying run (no hostname, user name or absolute path).",
+      "properties": {
+        "queuetruth": {
+          "title": "Queuetruth",
+          "type": "string"
+        },
+        "core": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Core"
+        },
+        "engine_version": {
+          "title": "Engine Version",
+          "type": "string"
+        },
+        "python": {
+          "title": "Python",
+          "type": "string"
+        },
+        "implementation": {
+          "title": "Implementation",
+          "type": "string"
+        },
+        "platform": {
+          "title": "Platform",
+          "type": "string"
+        },
+        "machine": {
+          "title": "Machine",
+          "type": "string"
+        },
+        "packages": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Packages",
+          "type": "object"
+        },
+        "env": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Env",
+          "type": "object"
+        }
+      },
+      "required": [
+        "queuetruth",
+        "core",
+        "engine_version",
+        "python",
+        "implementation",
+        "platform",
+        "machine",
+        "packages",
+        "env"
+      ],
+      "title": "Environment",
+      "type": "object"
+    },
+    "Evidence": {
+      "additionalProperties": false,
+      "description": "One result value a claim rests on: `{run}[:{file}]#{pointer}` resolved at certification time.",
+      "properties": {
+        "ref": {
+          "title": "Ref",
+          "type": "string"
+        },
+        "run": {
+          "pattern": "^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,63}$",
+          "title": "Run",
+          "type": "string"
+        },
+        "file": {
+          "pattern": "^(?:[^/.][^/]*|\\.[^/.][^/]*|\\.\\.[^/]+)(?:/(?:[^/.][^/]*|\\.[^/.][^/]*|\\.\\.[^/]+))*$",
+          "title": "File",
+          "type": "string"
+        },
+        "pointer": {
+          "title": "Pointer",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value"
+        }
+      },
+      "required": [
+        "ref",
+        "run",
+        "file",
+        "pointer",
+        "value"
+      ],
+      "title": "Evidence",
+      "type": "object"
+    },
+    "HashedFile": {
+      "additionalProperties": false,
+      "description": "One file: path relative to its input or run directory (POSIX separators), size and sha256 of the bytes.",
+      "properties": {
+        "path": {
+          "pattern": "^(?:[^/.][^/]*|\\.[^/.][^/]*|\\.\\.[^/]+)(?:/(?:[^/.][^/]*|\\.[^/.][^/]*|\\.\\.[^/]+))*$",
+          "title": "Path",
+          "type": "string"
+        },
+        "bytes": {
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "bytes",
+        "sha256"
+      ],
+      "title": "HashedFile",
+      "type": "object"
+    },
+    "Integrity": {
+      "additionalProperties": false,
+      "description": "`body_sha256` = sha256 of `canonical_json(body)`; `signature` signs `domain + \"\\n\" + body`.\n\n`rfc8785` names queuetruth's canonical JSON (SPEC 7.3): RFC 8785 except that integers are written exactly as\nintegers. `issued_at`, `committed_at` and `data_ts_*` are ns values above 2^53, which a JCS library that writes\nevery number as a double would round, so an independent verifier must keep integers exact.",
+      "properties": {
+        "canonicalization": {
+          "const": "rfc8785",
+          "default": "rfc8785",
+          "title": "Canonicalization",
+          "type": "string"
+        },
+        "domain": {
+          "const": "queuetruth.certificate.v1",
+          "default": "queuetruth.certificate.v1",
+          "title": "Domain",
+          "type": "string"
+        },
+        "body_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Body Sha256",
+          "type": "string"
+        },
+        "signature": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Signature"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "body_sha256"
+      ],
+      "title": "Integrity",
+      "type": "object"
+    },
+    "OutputFile": {
+      "additionalProperties": false,
+      "description": "An output file of a run. `normalized_sha256` is what `--rerun` compares (SPEC 7.2): JSON files canonicalised\n(RFC 8785) without `timings` at any depth and without the execution-only `out` / `threads` of the top-level\n`spec` echo; other files hashed as bytes.",
+      "properties": {
+        "path": {
+          "pattern": "^(?:[^/.][^/]*|\\.[^/.][^/]*|\\.\\.[^/]+)(?:/(?:[^/.][^/]*|\\.[^/.][^/]*|\\.\\.[^/]+))*$",
+          "title": "Path",
+          "type": "string"
+        },
+        "bytes": {
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "normalized_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Normalized Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "bytes",
+        "sha256",
+        "normalized_sha256"
+      ],
+      "title": "OutputFile",
+      "type": "object"
+    },
+    "Reproduce": {
+      "additionalProperties": false,
+      "description": "How to re-execute one run: the Python API call and the verification command.",
+      "properties": {
+        "api": {
+          "title": "Api",
+          "type": "string"
+        },
+        "python": {
+          "title": "Python",
+          "type": "string"
+        },
+        "verify": {
+          "title": "Verify",
+          "type": "string"
+        }
+      },
+      "required": [
+        "api",
+        "python",
+        "verify"
+      ],
+      "title": "Reproduce",
+      "type": "object"
+    },
+    "RevealedItem": {
+      "additionalProperties": false,
+      "description": "A committed file revealed by an opening and matched (by sha256) to certificate inputs.",
+      "properties": {
+        "index": {
+          "title": "Index",
+          "type": "integer"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "nonce": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Nonce",
+          "type": "string"
+        },
+        "inputs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Inputs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "index",
+        "name",
+        "sha256",
+        "nonce",
+        "inputs"
+      ],
+      "title": "RevealedItem",
+      "type": "object"
+    },
+    "RunInput": {
+      "additionalProperties": false,
+      "description": "A reference of a run's spec: JSON pointer into the spec echo and the certificate input it names.",
+      "properties": {
+        "pointer": {
+          "title": "Pointer",
+          "type": "string"
+        },
+        "input": {
+          "title": "Input",
+          "type": "string"
+        }
+      },
+      "required": [
+        "pointer",
+        "input"
+      ],
+      "title": "RunInput",
+      "type": "object"
+    },
+    "Signature": {
+      "additionalProperties": false,
+      "description": "An Ed25519 signature over `domain + \"\\n\" + canonical_json(body)` (RFC 8032, pure Ed25519).",
+      "properties": {
+        "algorithm": {
+          "const": "ed25519",
+          "default": "ed25519",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "public_key": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Public Key",
+          "type": "string"
+        },
+        "key_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Key Fingerprint",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "public_key",
+        "key_fingerprint",
+        "value"
+      ],
+      "title": "Signature",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`qt.certificate`: a rerunnable record of runs, inputs, outputs and claims (`queuetruth certify`).",
+  "properties": {
+    "schema": {
+      "const": "qt.certificate",
+      "default": "qt.certificate",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "certificate_id": {
+      "pattern": "^[0-9a-f]{16}$",
+      "title": "Certificate Id",
+      "type": "string"
+    },
+    "title": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Title"
+    },
+    "issuer": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Issuer"
+    },
+    "issued_at": {
+      "title": "Issued At",
+      "type": "integer"
+    },
+    "environment": {
+      "$ref": "#/$defs/Environment"
+    },
+    "runs": {
+      "items": {
+        "$ref": "#/$defs/CertRun"
+      },
+      "title": "Runs",
+      "type": "array"
+    },
+    "inputs": {
+      "items": {
+        "$ref": "#/$defs/CertInput"
+      },
+      "title": "Inputs",
+      "type": "array"
+    },
+    "claims": {
+      "items": {
+        "$ref": "#/$defs/Claim"
+      },
+      "title": "Claims",
+      "type": "array"
+    },
+    "attachments": {
+      "items": {
+        "$ref": "#/$defs/CertInput"
+      },
+      "title": "Attachments",
+      "type": "array"
+    },
+    "commitments": {
+      "items": {
+        "$ref": "#/$defs/CommitmentLink"
+      },
+      "title": "Commitments",
+      "type": "array"
+    },
+    "reproduce": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Reproduce",
+      "type": "array"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    },
+    "integrity": {
+      "$ref": "#/$defs/Integrity"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "certificate_id",
+    "issued_at",
+    "environment",
+    "runs",
+    "inputs",
+    "claims",
+    "reproduce",
+    "integrity"
+  ],
+  "type": "object"
+}

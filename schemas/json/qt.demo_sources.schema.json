@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.demo_sources",
+  "$defs": {
+    "DemoSourceRow": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "format": {
+          "enum": [
+            "itch",
+            "iex"
+          ],
+          "title": "Format",
+          "type": "string"
+        },
+        "session_date": {
+          "title": "Session Date",
+          "type": "string"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        },
+        "default_symbols": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Default Symbols",
+          "type": "array"
+        },
+        "attribution": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Attribution"
+        },
+        "terms_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Terms Url"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "format",
+        "session_date",
+        "url",
+        "default_symbols",
+        "attribution",
+        "terms_url"
+      ],
+      "title": "DemoSourceRow",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The public days `queuetruth demo --list-sources` knows.",
+  "properties": {
+    "schema": {
+      "const": "qt.demo_sources",
+      "default": "qt.demo_sources",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "default": {
+      "type": "string",
+      "title": "Default"
+    },
+    "aliases": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Aliases",
+      "type": "object"
+    },
+    "sources": {
+      "items": {
+        "$ref": "#/$defs/DemoSourceRow"
+      },
+      "title": "Sources",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "default",
+    "aliases",
+    "sources"
+  ],
+  "type": "object"
+}

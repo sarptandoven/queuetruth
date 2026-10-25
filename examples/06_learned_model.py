@@ -82,9 +82,9 @@ def show(card: HazardModelCard) -> None:
 
 
 def predict(out: Path, card: HazardModelCard) -> None:
-    """Loads the saved model and predicts the fill and cancel CIFs for the first feature row. Unpickling runs code, so
-    `load` needs the trusted sha256 of `model.pkl` that `fit_hazard` recorded in the card it returned."""
-    sha = next(f.sha256 for f in card.files if f.name == "model.pkl")
+    """Loads the saved model and predicts the fill and cancel CIFs for the first feature row. `load` checks `model.npz`
+    against the trusted sha256 `fit_hazard` recorded in the card it returned (no code runs when loading)."""
+    sha = qt.model.model_sha256(card)
     model = qt.HazardModel.load(str(out / "model"), sha256=sha)
     feats = qt.read_table(str(next((out / "features").glob("*.parquet"))), expect="qt.features")
     one = feats.filter(pc.equal(feats.column("order_ref"), feats.column("order_ref")[0])).slice(0, 1)

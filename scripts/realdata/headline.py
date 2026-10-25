@@ -4,7 +4,9 @@ faithful and corrected mode; the zoo's own exact arm is the truth.
 
 Writes `<out>/headline.json` with aggregates only: per day x mode x model, fill-rate bias (model mean p_fill minus
 exact fill rate, with the zoo's day-block bootstrap 95% CI) at 1 s, 10 s and 60 s overall, by queue-ahead decile and
-by liquidity bucket, plus the exact fill rate per horizon. Zoo output directories are deleted after reading unless
+by liquidity bucket, plus the exact fill rate per horizon over every sampled shadow and over the leaderboard's
+common population (0.1.1: shadows on which any faithful hftbacktest model hit its #312 abort are left out of every
+model), with the abort counts. Zoo output directories are deleted after reading unless
 `--keep`. Inputs are the datasets written by `validate_et.py` (`<ds-root>/nasdaq-<date>`)."""
 
 from __future__ import annotations
@@ -68,10 +70,22 @@ def run_day(ds: Path, out: Path, date: str, n: int, seed: int, threads: int, kee
                 continue
             cell = {"bias": r["value"], "ci_lo": r["ci_lo"], "ci_hi": r["ci_hi"], "n": r["n"]}
             models[r["model_id"]][r["stratum_kind"]].setdefault(r["stratum"], {})[HORIZONS[r["horizon_ns"]]] = cell
+        board = list(getattr(summ, "leaderboard", []) or [])
         res["modes"][mode] = {
             "wall_s": wall,
             "n_models": len(models),
             "exact_fill_rate": truth,
+            # 0.1.1: every model is scored on one common population (shadows on which any faithful hbt model hit
+            # #312 are left out of every model); the exact fill rate on that population is the leaderboard's
+            "population": {
+                "n_shadows": summ.n_shadows,
+                "n_excluded_hbt_312": getattr(summ, "n_excluded_hbt_312", None),
+                "n_leaderboard": getattr(summ, "n_leaderboard", None),
+                "hbt_312_aborts": dict(getattr(summ, "hbt_312_aborts", {}) or {}),
+                "exact_fill_rate": {
+                    lab: board[0].exact_fill_rate.get(str(h)) if board else None for h, lab in HORIZONS.items()
+                },
+            },
             "models": json.loads(json.dumps(models)),
             "zoo_warnings": list(getattr(summ, "warnings", []) or []),
         }

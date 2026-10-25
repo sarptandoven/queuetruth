@@ -1,0 +1,563 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.pm_calibration",
+  "$defs": {
+    "FileEntry": {
+      "additionalProperties": false,
+      "description": "One output file: name relative to the output directory, row count for tables, size and sha256.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "rows": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rows"
+        },
+        "bytes": {
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "bytes",
+        "sha256"
+      ],
+      "title": "FileEntry",
+      "type": "object"
+    },
+    "FillTruth": {
+      "additionalProperties": false,
+      "description": "Queue truth at the first maker fill of own orders (contracts / shares): the size that left the queue ahead by\ncancels between entry and that fill (mean per order), what each model implies, the share of all cancels at the\nlevel in that time that were ahead of the order, and orders whose true queue ahead fell outside the bounds.\n`n_chain` of the `n_orders` orders take their truth from the on-chain fill order (Polymarket).",
+      "properties": {
+        "n_orders": {
+          "minimum": 0,
+          "title": "N Orders",
+          "type": "integer"
+        },
+        "n_chain": {
+          "minimum": 0,
+          "title": "N Chain",
+          "type": "integer"
+        },
+        "cancel_ahead_true": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Cancel Ahead True"
+        },
+        "by_model": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "By Model",
+          "type": "object"
+        },
+        "fraction_ahead_true": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Fraction Ahead True"
+        },
+        "bound_violations": {
+          "minimum": 0,
+          "title": "Bound Violations",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "n_orders",
+        "n_chain",
+        "cancel_ahead_true",
+        "by_model",
+        "fraction_ahead_true",
+        "bound_violations"
+      ],
+      "title": "FillTruth",
+      "type": "object"
+    },
+    "ModelFit": {
+      "additionalProperties": false,
+      "description": "One queue model's errors (estimate minus truth) against the calibration target, in contracts (Kalshi) or\nshares (Polymarket). Losses are order-weighted: each order's errors are reduced first, then averaged over\norders.",
+      "properties": {
+        "model_id": {
+          "title": "Model Id",
+          "type": "string"
+        },
+        "family": {
+          "title": "Family",
+          "type": "string"
+        },
+        "n": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "N"
+        },
+        "atomic": {
+          "default": false,
+          "title": "Atomic",
+          "type": "boolean"
+        },
+        "zoo_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Zoo Id"
+        },
+        "train_loss": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Train Loss"
+        },
+        "test_loss": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Test Loss"
+        },
+        "test_loss_ci": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          ],
+          "title": "Test Loss Ci",
+          "type": "array"
+        },
+        "test_mae": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Test Mae"
+        },
+        "test_rmse": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Test Rmse"
+        },
+        "test_bias": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Test Bias"
+        },
+        "test_median_abs": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Test Median Abs"
+        },
+        "n_train_samples": {
+          "minimum": 0,
+          "title": "N Train Samples",
+          "type": "integer"
+        },
+        "n_test_samples": {
+          "minimum": 0,
+          "title": "N Test Samples",
+          "type": "integer"
+        },
+        "fill_truth_mae": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Fill Truth Mae"
+        },
+        "fill_truth_bias": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Fill Truth Bias"
+        },
+        "n_fill_truth": {
+          "minimum": 0,
+          "title": "N Fill Truth",
+          "type": "integer"
+        },
+        "unfilled_filled": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unfilled Filled"
+        }
+      },
+      "required": [
+        "model_id",
+        "family",
+        "n",
+        "train_loss",
+        "test_loss",
+        "test_loss_ci",
+        "test_mae",
+        "test_rmse",
+        "test_bias",
+        "test_median_abs",
+        "n_train_samples",
+        "n_test_samples",
+        "fill_truth_mae",
+        "fill_truth_bias",
+        "n_fill_truth"
+      ],
+      "title": "ModelFit",
+      "type": "object"
+    },
+    "PmCalibrationTrust": {
+      "additionalProperties": false,
+      "description": "Whether `pm score --calibration` should use the fitted model (`queuetruth.pm.calibrate.PM_REFUSING`), in the\nform of `calibrate-live`'s `trust`.",
+      "properties": {
+        "verdict": {
+          "enum": [
+            "usable",
+            "refused"
+          ],
+          "title": "Verdict",
+          "type": "string"
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        },
+        "flags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Flags",
+          "type": "array"
+        }
+      },
+      "required": [
+        "verdict",
+        "reasons",
+        "flags"
+      ],
+      "title": "PmCalibrationTrust",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Result of `pm calibrate` (`pm_calibration.json`).",
+  "properties": {
+    "schema": {
+      "const": "qt.pm_calibration",
+      "default": "qt.pm_calibration",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "run_id": {
+      "pattern": "^[0-9a-f]{16}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "spec": {
+      "additionalProperties": true,
+      "title": "Spec",
+      "type": "object"
+    },
+    "venue": {
+      "enum": [
+        "kalshi",
+        "polymarket"
+      ],
+      "title": "Venue",
+      "type": "string"
+    },
+    "terms": {
+      "title": "Terms",
+      "type": "string"
+    },
+    "pm_run_id": {
+      "pattern": "^[0-9a-f]{16}$",
+      "title": "Pm Run Id",
+      "type": "string"
+    },
+    "fit_on": {
+      "enum": [
+        "queue_samples",
+        "fill_truth"
+      ],
+      "title": "Fit On",
+      "type": "string"
+    },
+    "loss": {
+      "enum": [
+        "rmse",
+        "mae"
+      ],
+      "title": "Loss",
+      "type": "string"
+    },
+    "units": {
+      "enum": [
+        "contracts",
+        "shares"
+      ],
+      "title": "Units",
+      "type": "string"
+    },
+    "n_orders": {
+      "minimum": 0,
+      "title": "N Orders",
+      "type": "integer"
+    },
+    "n_samples": {
+      "minimum": 0,
+      "title": "N Samples",
+      "type": "integer"
+    },
+    "n_train_orders": {
+      "minimum": 0,
+      "title": "N Train Orders",
+      "type": "integer"
+    },
+    "n_test_orders": {
+      "minimum": 0,
+      "title": "N Test Orders",
+      "type": "integer"
+    },
+    "n_train_orders_with_truth": {
+      "minimum": 0,
+      "title": "N Train Orders With Truth",
+      "type": "integer"
+    },
+    "n_test_orders_with_truth": {
+      "minimum": 0,
+      "title": "N Test Orders With Truth",
+      "type": "integer"
+    },
+    "test_from": {
+      "anyOf": [
+        {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Test From"
+    },
+    "n_unfilled_test_orders": {
+      "minimum": 0,
+      "title": "N Unfilled Test Orders",
+      "type": "integer"
+    },
+    "bounds_coverage": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Bounds Coverage"
+    },
+    "best": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Best"
+    },
+    "best_beats_bounds_midpoint": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Best Beats Bounds Midpoint"
+    },
+    "trust": {
+      "$ref": "#/$defs/PmCalibrationTrust"
+    },
+    "models": {
+      "items": {
+        "$ref": "#/$defs/ModelFit"
+      },
+      "title": "Models",
+      "type": "array"
+    },
+    "fill_truth": {
+      "$ref": "#/$defs/FillTruth"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/FileEntry"
+      },
+      "title": "Files",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "run_id",
+    "spec",
+    "venue",
+    "terms",
+    "pm_run_id",
+    "fit_on",
+    "loss",
+    "units",
+    "n_orders",
+    "n_samples",
+    "n_train_orders",
+    "n_test_orders",
+    "n_train_orders_with_truth",
+    "n_test_orders_with_truth",
+    "test_from",
+    "n_unfilled_test_orders",
+    "bounds_coverage",
+    "best",
+    "best_beats_bounds_midpoint",
+    "trust",
+    "models",
+    "fill_truth",
+    "warnings",
+    "files"
+  ],
+  "type": "object"
+}

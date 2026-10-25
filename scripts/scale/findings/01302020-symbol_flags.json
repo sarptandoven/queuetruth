@@ -1,0 +1,236 @@
+{
+ "schema": "qt.scale.symbol_flags",
+ "schema_version": 1,
+ "run_id": "45c0dd05ddf70b67",
+ "date": "01302020",
+ "units": {
+  "01302020-b004-u0002": {
+   "shard_leaf_hash": "3cc45b39e65645202bc9c213fce1e6f684e42cf9cac06e4fcdb096ae6158b9ce",
+   "reproduced": true,
+   "exactness_by_symbol": {
+    "method": "per_partition_replay",
+    "complete": true,
+    "sum_mismatches": [],
+    "symbols": {
+     "ANPC": {
+      "crossed_books_after_last": 261,
+      "negative_spreads": 261,
+      "price_priority_violations": 39
+     }
+    }
+   }
+  },
+  "01302020-b006-u0001": {
+   "shard_leaf_hash": "830897a83d67530438742936a5ef169be54fae4e3d9b4a77dd8564ed5a3d1280",
+   "reproduced": true,
+   "exactness_by_symbol": {
+    "method": "per_partition_replay",
+    "complete": true,
+    "sum_mismatches": [],
+    "symbols": {
+     "RKDA": {
+      "crossed_books_after_last": 857,
+      "negative_spreads": 857,
+      "price_priority_violations": 50
+     }
+    }
+   }
+  },
+  "01302020-b011-u0003": {
+   "shard_leaf_hash": "97b4e3af736ae908f0b70d122ebdb29f750bdb77e7fa08a9903fcc4a2695dcaf",
+   "reproduced": true,
+   "exactness_by_symbol": {
+    "method": "per_partition_replay",
+    "complete": true,
+    "sum_mismatches": [],
+    "symbols": {
+     "PNRL": {
+      "crossed_books_after_last": 130,
+      "negative_spreads": 130
+     }
+    }
+   }
+  },
+  "01302020-b012-u0001": {
+   "shard_leaf_hash": "cd6c5232c68be119f6086230655f7ec3e4eb12b46f9fb7d9164cceb48fc33116",
+   "reproduced": true,
+   "exactness_by_symbol": {
+    "method": "per_partition_replay",
+    "complete": true,
+    "sum_mismatches": [],
+    "symbols": {
+     "BDTX": {
+      "crossed_books_after_last": 1363,
+      "negative_spreads": 1363,
+      "price_priority_violations": 141
+     },
+     "DTSS": {
+      "crossed_books_after_last": 2200,
+      "negative_spreads": 2181,
+      "price_priority_violations": 167
+     }
+    }
+   }
+  },
+  "01302020-b015-u0003": {
+   "shard_leaf_hash": "4af8ff23ad3b8aeeea8e79fbfc072fae75078f2f3070074d9181b878438005e9",
+   "reproduced": true,
+   "exactness_by_symbol": {
+    "method": "per_partition_replay",
+    "complete": true,
+    "sum_mismatches": [],
+    "symbols": {
+     "DNJR": {
+      "crossed_books_after_last": 9,
+      "negative_spreads": 9
+     }
+    }
+   }
+  },
+  "01302020-b026-u0003": {
+   "shard_leaf_hash": "37e8018521193412c4ac3bd9d08baadf21792a3840264d25adc1f9d713966dce",
+   "reproduced": true,
+   "exactness_by_symbol": {
+    "method": "per_partition_replay",
+    "complete": true,
+    "sum_mismatches": [],
+    "symbols": {
+     "BRQS": {
+      "crossed_books_after_last": 1,
+      "negative_spreads": 1
+     }
+    }
+   }
+  },
+  "01302020-b030-u0003": {
+   "shard_leaf_hash": "020d1c0266b5831628998a82dcc9dd199e778cc0ff4d34ba8ff2fbe9638470fe",
+   "reproduced": true,
+   "exactness_by_symbol": {
+    "method": "per_partition_replay",
+    "complete": true,
+    "sum_mismatches": [],
+    "symbols": {
+     "IPDN": {
+      "crossed_books_after_last": 24,
+      "negative_spreads": 24
+     }
+    }
+   }
+  }
+ },
+ "symbols": {
+  "ANPC": {
+   "unit_id": "01302020-b004-u0002",
+   "flags": {
+    "crossed_books_after_last": 261,
+    "negative_spreads": 261,
+    "price_priority_violations": 39
+   },
+   "causes": {
+    "cross_execution": 39,
+    "ipo_quoting_period": 261
+   },
+   "primary_cause": "ipo_quoting_period",
+   "engine_matches_reference": true
+  },
+  "BDTX": {
+   "unit_id": "01302020-b012-u0001",
+   "flags": {
+    "crossed_books_after_last": 1363,
+    "negative_spreads": 1363,
+    "price_priority_violations": 141
+   },
+   "causes": {
+    "cross_execution": 141,
+    "ipo_quoting_period": 1363
+   },
+   "primary_cause": "ipo_quoting_period",
+   "engine_matches_reference": true
+  },
+  "BRQS": {
+   "unit_id": "01302020-b026-u0003",
+   "flags": {
+    "crossed_books_after_last": 1,
+    "negative_spreads": 1
+   },
+   "causes": {
+    "halt_or_pause_quoting": 1
+   },
+   "primary_cause": "halt_or_pause_quoting",
+   "engine_matches_reference": true
+  },
+  "DNJR": {
+   "unit_id": "01302020-b015-u0003",
+   "flags": {
+    "crossed_books_after_last": 9,
+    "negative_spreads": 9
+   },
+   "causes": {
+    "halt_or_pause_quoting": 9
+   },
+   "primary_cause": "halt_or_pause_quoting",
+   "engine_matches_reference": true
+  },
+  "DTSS": {
+   "unit_id": "01302020-b012-u0001",
+   "flags": {
+    "crossed_books_after_last": 2200,
+    "negative_spreads": 2181,
+    "price_priority_violations": 167
+   },
+   "causes": {
+    "cross_execution": 167,
+    "halt_or_pause_quoting": 2200
+   },
+   "primary_cause": "halt_or_pause_quoting",
+   "engine_matches_reference": true
+  },
+  "IPDN": {
+   "unit_id": "01302020-b030-u0003",
+   "flags": {
+    "crossed_books_after_last": 24,
+    "negative_spreads": 24
+   },
+   "causes": {
+    "halt_or_pause_quoting": 24
+   },
+   "primary_cause": "halt_or_pause_quoting",
+   "engine_matches_reference": true
+  },
+  "PNRL": {
+   "unit_id": "01302020-b011-u0003",
+   "flags": {
+    "crossed_books_after_last": 130,
+    "negative_spreads": 130
+   },
+   "causes": {
+    "halt_or_pause_quoting": 130
+   },
+   "primary_cause": "halt_or_pause_quoting",
+   "engine_matches_reference": true
+  },
+  "RKDA": {
+   "unit_id": "01302020-b006-u0001",
+   "flags": {
+    "crossed_books_after_last": 857,
+    "negative_spreads": 857,
+    "price_priority_violations": 50
+   },
+   "causes": {
+    "cross_execution": 50,
+    "halt_or_pause_quoting": 857
+   },
+   "primary_cause": "halt_or_pause_quoting",
+   "engine_matches_reference": true
+  }
+ },
+ "causes": {
+  "test_symbol": "Stock Directory authenticity T (a Nasdaq test issue): never a real security",
+  "ipo_quoting_period": "IPO before its first trade (H state H/P/Q with an IPO reason, or an IPO flag Y or K message before the first T): orders are displayed but not matched until the IPO cross, whose executions are reported after the resumption",
+  "halt_or_pause_quoting": "trading halt or LULD pause (H state H/P/Q): orders are displayed but not matched until the halt cross, whose executions are reported after the resumption",
+  "cross_execution": "execution in a Nasdaq cross (non-printable C, the print is the Q message): every order executes at the cross price at once, ITCH lists the executions one by one in no price order",
+  "pre_open_continuous": "crossed display while trading (state T) before the 09:30 open",
+  "post_close_continuous": "crossed display while trading (state T) after the 16:00 close",
+  "regular_session": "crossed display or price-priority violation while trading (state T) in 09:30-16:00 with no cross: not explained by ITCH semantics"
+ }
+}

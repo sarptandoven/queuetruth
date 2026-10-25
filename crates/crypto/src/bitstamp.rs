@@ -1,22 +1,36 @@
 //! Bitstamp WebSocket v2 public capture (`live_orders_<market>`, `live_trades_<market>`,
 //! `detail_order_book_<market>` JSONL, one feed message per line plus `recv_ns`) -> MBO records, venue `generic`.
-//! Port of et `sources/bitstamp.py::orders_trades_to_mbo` (same counters, same record stream).
+//! Port of et `sources/bitstamp.py::orders_trades_to_mbo` (same counters and record stream, except where the
+//! same-millisecond priority, the maker exemption and the seed choice below depart from it).
 //!
 //! Mapping: `order_created` -> `A`; `order_changed` -> `M` (absolute remaining `amount_str`, `price_str`);
 //! `order_deleted` -> `C` with the tracked remaining; `trade` -> `T` (aggressor = `type`, 0 buy / 1 sell, assumed to
 //! be the taker side; order_id = that side's order id) then `F` for each of `buy_order_id` / `sell_order_id` resting
 //! on the book. Bitstamp has no sequence numbers: messages are merged by (`microtimestamp`, `recv_ns`), order events
 //! before trades on ties, and `sequence` is the 1-based position in that merged stream.
-//! Seeding: the first `detail_order_book` snapshot per market gives `R` + one `A` (`SNAPSHOT`, `LAST` on the last)
-//! per resting order at the snapshot's microtimestamp; older live events are skipped (`skipped_before_snapshot`).
+//! Same-millisecond priority (livefill-kit findings; `live_orders` stamps are whole milliseconds): within one
+//! microtimestamp, `order_created` messages at one (side, price) are ranked by order id, not arrival (the venue's ids
+//! increase with entry time and its snapshots queue such orders by id; on the RD-12 capture, arrival ranking put 133
+//! of 5,418 snapshots out of the venue's priority order inside the seed's known region, id ranking none), and a trade
+//! goes after the `order_created` of its maker (trades usually arrive before the order messages); every order's own
+//! messages keep their order (`id_ties_reranked`, `trades_after_maker_create`). Requeueing `order_changed` messages
+//! keep arrival order.
+//! Seeding: per market, the first *unambiguous* `detail_order_book` snapshot: one after which no order or trade
+//! message arrives (`recv_ns`) stamped before it. A message stamped before a snapshot but arriving after it may or
+//! may not be reflected in it, so such snapshots are passed over (`seed_snapshots_skipped`); when none is
+//! unambiguous the first one seeds and `seed_ambiguous` (a data-quality counter) is set; a snapshot without `recv_ns`
+//! is taken as is. The seed gives `R` + one `A` (`SNAPSHOT`, `LAST` on the last) per resting order at the snapshot's
+//! microtimestamp; older live events are skipped (`skipped_before_snapshot`).
 //! Takers (et measurement on a 10-minute BTC/USD capture): every taker appears as `order_created` + `order_deleted`
 //! within the same microsecond. With `taker_window_us` set (default 100): (1) a created->deleted pair within the
-//! window emits nothing (`taker_orders_suppressed`, `deleted_suppressed`); (2) a created / changed order whose
-//! price crosses our best opposite is held back (`created_crossing`, `changed_crossing`; a resting order re-priced
-//! across the book is pulled with a `C`, `resting_crossing`) and opened with an `A` inside the first later event
-//! that uncrosses it (`deferred_opened`; `LAST` moves to the `A`); (3) a changed message for a suppressed id that
-//! does not cross re-opens it (`suppressed_rested`). `deleted_unknown_outside_seed_range` counts unknown deletes
-//! priced beyond the seed snapshot's deepest level (the snapshot carries 100 levels per side).
+//! window emits nothing (`taker_orders_suppressed`, `deleted_suppressed`), unless a trade shows the order on the
+//! passive side: such a maker rested and was filled within the window and is kept (`maker_in_taker_window`); (2) a
+//! created / changed order whose price crosses our best opposite is held back (`created_crossing`,
+//! `changed_crossing`; a resting order re-priced across the book is pulled with a `C`, `resting_crossing`) and opened
+//! with an `A` inside the first later event that uncrosses it (`deferred_opened`; `LAST` moves to the `A`); (3) a
+//! changed message for a suppressed id that does not cross re-opens it (`suppressed_rested`).
+//! `deleted_unknown_outside_seed_range` counts unknown deletes priced beyond the seed snapshot's deepest level (the
+//! snapshot carries 100 levels per side).
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -54,8 +68,9 @@ impl Default for Config {
     }
 }
 
-/// Counter names reported even when zero (et `ANOMALIES`).
-pub const ANOMALIES: [&str; 17] = [
+/// Counter names reported even when zero (et `ANOMALIES`, plus the livefill-kit fixes: `id_ties_reranked`,
+/// `maker_in_taker_window`, `trades_after_maker_create`, `seed_snapshots_skipped`, `seed_ambiguous`).
+pub const ANOMALIES: [&str; 22] = [
     "changed_unknown",
     "deleted_unknown",
     "deleted_unknown_outside_seed_range",
@@ -73,10 +88,17 @@ pub const ANOMALIES: [&str; 17] = [
     "suppressed_rested",
     "deleted_suppressed",
     "pending_at_end",
+    "id_ties_reranked",
+    "maker_in_taker_window",
+    "trades_after_maker_create",
+    "seed_snapshots_skipped",
+    "seed_ambiguous",
 ];
 
-/// Anomaly / adjustment counters copied (when non-zero) into `qt.data_quality.source_specific` at ingest.
-pub const DQ_COUNTERS: [&str; 17] = [
+/// Anomaly / adjustment counters copied (when non-zero) into `qt.data_quality.source_specific` at ingest. The
+/// re-ranking and re-ordering counters (`id_ties_reranked`, `maker_in_taker_window`, `trades_after_maker_create`) and
+/// `seed_snapshots_skipped` follow documented feed behaviour and are not copied; `seed_ambiguous` is.
+pub const DQ_COUNTERS: [&str; 18] = [
     "changed_unknown",
     "deleted_unknown",
     "deleted_unknown_outside_seed_range",
@@ -94,6 +116,7 @@ pub const DQ_COUNTERS: [&str; 17] = [
     "pending_at_end",
     "event_id_gaps",
     "event_id_restarts",
+    "seed_ambiguous",
 ];
 
 /// Converts capture lines to MBO records, source trades and counters.
@@ -139,6 +162,16 @@ struct Seed {
     entries: Vec<(u64, u8, String, String)>,
 }
 
+/// A `detail_order_book` frame that can seed (ids on both sides, at least one order); the line is kept so that only
+/// the chosen seed is parsed again.
+struct SeedCandidate {
+    line: u64,
+    us: i64,
+    recv: Option<i64>,
+    text: String,
+}
+
+#[derive(Clone, Copy)]
 enum Item {
     Seed(u32),
     Msg(usize),
@@ -239,11 +272,134 @@ fn rec(
     }
 }
 
+/// The passive (maker) order id of a trade message: `sell_order_id` when the buyer was the taker (`type` 0), else
+/// `buy_order_id`; `None` when the fields are malformed (the conversion loop reports those).
+fn maker_of(m: &Msg) -> Option<u64> {
+    if m.ev != Ev::Trade {
+        return None;
+    }
+    let key = match m.data.get("type").and_then(J::as_i64) {
+        Some(0) => "sell_order_id",
+        Some(1) => "buy_order_id",
+        _ => return None,
+    };
+    m.data.get(key).and_then(J::as_u64)
+}
+
+/// Re-ranks each run of items with one microtimestamp (`live_orders` stamps are whole milliseconds) by the venue's
+/// priority instead of arrival: (1) `order_created` messages at one (instrument, side, price) in order id order (the
+/// venue's ids increase with entry time; messages of one millisecond can arrive out of that order), each taking the
+/// place of the first of them that arrived; (2) a trade after the `order_created` of its maker when both are in the
+/// run (trades often arrive before the order messages); (3) otherwise arrival order, and every order's own messages
+/// keep their relative order. Counts `id_ties_reranked` (creates placed ahead of an earlier-arriving create of the
+/// same level) and `trades_after_maker_create` (trades placed after a later-arriving maker create).
+fn rank_ties(items: &mut [(i64, i64, Item)], msgs: &[(u32, Msg)], pe: i8, st: &mut Counters) -> QtResult<()> {
+    let mut lo = 0;
+    while lo < items.len() {
+        let mut hi = lo + 1;
+        while hi < items.len() && items[hi].0 == items[lo].0 {
+            hi += 1;
+        }
+        if hi - lo > 1 {
+            rank_run(&mut items[lo..hi], msgs, pe, st)?;
+        }
+        lo = hi;
+    }
+    Ok(())
+}
+
+fn rank_run(run: &mut [(i64, i64, Item)], msgs: &[(u32, Msg)], pe: i8, st: &mut Counters) -> QtResult<()> {
+    use std::cmp::Reverse;
+    use std::collections::BinaryHeap;
+    let n = run.len();
+    let mut succ: Vec<Vec<usize>> = vec![Vec::new(); n];
+    let mut indeg = vec![0usize; n];
+    let mut slot: Vec<usize> = (0..n).collect();
+    let mut last_of: HashMap<(u32, u64), usize> = HashMap::new();
+    let mut created: HashMap<(u32, u64), usize> = HashMap::new();
+    let mut levels: HashMap<(u32, u8, i64), Vec<(u64, usize)>> = HashMap::new();
+    let mut trades: Vec<(usize, u32, u64)> = Vec::new();
+    let mut edge = |succ: &mut Vec<Vec<usize>>, a: usize, b: usize| {
+        succ[a].push(b);
+        indeg[b] += 1;
+    };
+    for (k, it) in run.iter().enumerate() {
+        let Item::Msg(j) = it.2 else { continue };
+        let (inst, m) = (msgs[j].0, &msgs[j].1);
+        if m.ev == Ev::Trade {
+            if let Some(maker) = maker_of(m) {
+                trades.push((k, inst, maker));
+            }
+            continue;
+        }
+        let oid = id_field(&m.data, "id", m.line)?;
+        if let Some(prev) = last_of.insert((inst, oid), k) {
+            edge(&mut succ, prev, k);
+        }
+        if m.ev == Ev::Created {
+            created.entry((inst, oid)).or_insert(k);
+            let side = side_of(m.data.get("order_type"), m.line, "order_type")?;
+            let px = units::price(str_field(&m.data, "price_str", m.line)?, pe)?;
+            levels.entry((inst, side, px)).or_default().push((oid, k));
+        }
+    }
+    let mut reranked = 0u64;
+    for lv in levels.values_mut().filter(|lv| lv.len() > 1) {
+        let mut max_before = 0u64;
+        for &(oid, _) in lv.iter() {
+            reranked += u64::from(max_before > oid);
+            max_before = max_before.max(oid);
+        }
+        lv.sort_unstable();
+        let mut first = usize::MAX;
+        for w in (0..lv.len()).rev() {
+            first = first.min(lv[w].1);
+            slot[lv[w].1] = first;
+        }
+        for w in lv.windows(2) {
+            edge(&mut succ, w[0].1, w[1].1);
+        }
+    }
+    let mut moved = 0u64;
+    for (k, inst, maker) in trades {
+        if let Some(&c) = created.get(&(inst, maker)) {
+            edge(&mut succ, c, k);
+            moved += u64::from(c > k);
+        }
+    }
+    let mut ready: BinaryHeap<Reverse<(usize, usize)>> = (0..n)
+        .filter(|&k| indeg[k] == 0)
+        .map(|k| Reverse((slot[k], k)))
+        .collect();
+    let mut order = Vec::with_capacity(n);
+    while let Some(Reverse((_, k))) = ready.pop() {
+        order.push(k);
+        for &b in &succ[k] {
+            indeg[b] -= 1;
+            if indeg[b] == 0 {
+                ready.push(Reverse((slot[b], b)));
+            }
+        }
+    }
+    if order.len() != n {
+        return Err(QtError::Engine("bitstamp: cyclic same-millisecond ordering".into()));
+    }
+    if order.iter().enumerate().any(|(a, &b)| a != b) {
+        let old: Vec<(i64, i64, Item)> = run.to_vec();
+        for (dst, src) in order.into_iter().enumerate() {
+            run[dst] = old[src];
+        }
+    }
+    *st.entry("id_ties_reranked".into()).or_insert(0) += reranked;
+    *st.entry("trades_after_maker_create".into()).or_insert(0) += moved;
+    Ok(())
+}
+
 /// Full conversion (records, trades, counters, resolved instruments, ingest-level quality numbers).
 pub(crate) fn convert_full(lines: impl Iterator<Item = QtResult<String>>, cfg: &Config) -> QtResult<L3Output> {
     let mut orders: Vec<Msg> = Vec::new();
     let mut trades_in: Vec<Msg> = Vec::new();
-    let mut first_detail: IndexMap<String, (u64, J, Option<i64>)> = IndexMap::new();
+    let mut detail: IndexMap<String, Vec<SeedCandidate>> = IndexMap::new();
     let mut st: Counters = Counters::new();
     let mut chain: Vec<(String, Option<String>, Option<String>, bool)> = Vec::new(); // market, event_id, pre, has_pre
     for (k, line) in lines.enumerate() {
@@ -303,20 +459,27 @@ pub(crate) fn convert_full(lines: impl Iterator<Item = QtResult<String>>, cfg: &
                 }
             }
             None if event == "data" && channel.starts_with("detail_order_book_") => {
-                if !first_detail.contains_key(&market) {
-                    let d = m.get("data").cloned().unwrap_or(J::Null);
-                    let usable = ["bids", "asks"].iter().all(|s| {
-                        d.get(s)
-                            .and_then(J::as_arr)
-                            .is_some_and(|a| a.iter().all(|e| e.as_arr().is_some_and(|x| x.len() == 3)))
+                let d = m.get("data").unwrap_or(&J::Null);
+                let usable = ["bids", "asks"].iter().all(|s| {
+                    d.get(s)
+                        .and_then(J::as_arr)
+                        .is_some_and(|a| a.iter().all(|e| e.as_arr().is_some_and(|x| x.len() == 3)))
+                });
+                let n = ["bids", "asks"]
+                    .iter()
+                    .map(|s| d.get(s).and_then(J::as_arr).map_or(0, <[J]>::len))
+                    .sum::<usize>();
+                if usable && n > 0 {
+                    let us: i64 = str_field(d, "microtimestamp", line_no)?
+                        .trim()
+                        .parse()
+                        .map_err(|_| fmt_err(line_no, "microtimestamp is not an integer"))?;
+                    detail.entry(market).or_default().push(SeedCandidate {
+                        line: line_no,
+                        us,
+                        recv,
+                        text,
                     });
-                    let n = ["bids", "asks"]
-                        .iter()
-                        .map(|s| d.get(s).and_then(J::as_arr).map_or(0, <[J]>::len))
-                        .sum::<usize>();
-                    if usable && n > 0 {
-                        first_detail.insert(market, (line_no, d, recv));
-                    }
                 }
                 *st.entry("book_snapshots".into()).or_insert(0) += 1;
             }
@@ -336,14 +499,40 @@ pub(crate) fn convert_full(lines: impl Iterator<Item = QtResult<String>>, cfg: &
         cfg.instruments.clone()
     };
 
-    // Seeds: first detail snapshot per instrument.
+    // Seeds: per instrument, the first unambiguous detail snapshot (see the module docs), else the first one.
     let mut seeds: IndexMap<u32, Seed> = IndexMap::new();
-    for (market, (line_no, d, recv)) in &first_detail {
+    let mut stamps: HashMap<&str, Vec<(i64, i64)>> = HashMap::new(); // market -> (recv_ns, microtimestamp)
+    for m in orders.iter().chain(&trades_in) {
+        if let Some(r) = m.recv {
+            stamps.entry(m.market.as_str()).or_default().push((r, m.us));
+        }
+    }
+    for (market, cands) in &detail {
         let Some(&inst) = instruments.get(market) else { continue };
-        let us: i64 = str_field(d, "microtimestamp", *line_no)?
-            .trim()
-            .parse()
-            .map_err(|_| fmt_err(*line_no, "microtimestamp is not an integer"))?;
+        let mut arrivals = stamps.remove(market.as_str()).unwrap_or_default();
+        arrivals.sort_unstable();
+        // min_after[k] = smallest microtimestamp among the messages arriving at or after arrivals[k]
+        let mut min_after = vec![i64::MAX; arrivals.len() + 1];
+        for k in (0..arrivals.len()).rev() {
+            min_after[k] = min_after[k + 1].min(arrivals[k].1);
+        }
+        let clean = |c: &SeedCandidate| match c.recv {
+            Some(r) => min_after[arrivals.partition_point(|a| a.0 <= r)] >= c.us,
+            None => true, // arrival unknown: taken as is
+        };
+        let chosen = match cands.iter().position(clean) {
+            Some(k) => {
+                *st.entry("seed_snapshots_skipped".into()).or_insert(0) += k as u64;
+                &cands[k]
+            }
+            None => {
+                *st.entry("seed_ambiguous".into()).or_insert(0) += 1;
+                &cands[0]
+            }
+        };
+        let (line_no, us, recv) = (&chosen.line, chosen.us, &chosen.recv);
+        let d = jsonx::parse(&chosen.text).map_err(|e| fmt_err(*line_no, e))?;
+        let d = d.get("data").unwrap_or(&J::Null);
         let mut entries = Vec::new();
         for (key, side) in [("bids", b'B'), ("asks", b'A')] {
             for e in d.get(key).and_then(J::as_arr).unwrap_or(&[]) {
@@ -394,6 +583,7 @@ pub(crate) fn convert_full(lines: impl Iterator<Item = QtResult<String>>, cfg: &
             .map(|(i, (_, m))| (m.us, m.recv.unwrap_or(0), Item::Msg(i))),
     );
     items.sort_by_key(|it| (it.0, it.1));
+    rank_ties(&mut items, &msgs, cfg.price_exp, &mut st)?;
 
     let handle = cfg.taker_window_us.is_some();
     let window = cfg.taker_window_us.unwrap_or(0);
@@ -412,6 +602,12 @@ pub(crate) fn convert_full(lines: impl Iterator<Item = QtResult<String>>, cfg: &
             last.insert(oid, (i, m.ev, m.us));
         }
     }
+
+    // orders a trade shows on the passive side: they rested, whatever their messages look like
+    let makers: HashSet<(u32, u64)> = msgs
+        .iter()
+        .filter_map(|(inst, m)| maker_of(m).map(|id| (*inst, id)))
+        .collect();
 
     let (pe, se) = (cfg.price_exp, cfg.size_exp);
     let mut book: HashMap<u64, (u8, i64, u64)> = HashMap::new();
@@ -504,8 +700,12 @@ pub(crate) fn convert_full(lines: impl Iterator<Item = QtResult<String>>, cfg: &
             let oid = id_field(d, "id", m.line)?;
             let side = side_of(d.get("order_type"), m.line, "order_type")?;
             if handle && m.ev != Ev::Deleted && !book.contains_key(&oid) {
-                let taker =
+                let quick =
                     m.ev == Ev::Created && nxt[i].is_some_and(|(_, e, nus)| e == Ev::Deleted && nus - m.us <= window);
+                let taker = quick && !makers.contains(&(inst, oid));
+                if quick && !taker {
+                    bump(&mut st, "maker_in_taker_window", 1);
+                }
                 if taker {
                     bump(&mut st, "taker_orders_suppressed", 1);
                     suppressed.insert(oid);

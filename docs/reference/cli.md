@@ -42,6 +42,7 @@ section below is the command's own `--help` text.
 | [`queuetruth shadows mirror-real`](#queuetruth-shadows-mirror-real) | shadows joining directly behind sampled real orders |
 | [`queuetruth shadows from-live`](#queuetruth-shadows-from-live) | shadow schedule from a canonical live log |
 | [`queuetruth zoo`](#queuetruth-zoo) | run queue models on the L2 view and compare with exact truth |
+| [`queuetruth zoo-toxicity`](#queuetruth-zoo-toxicity) | fill-type tags, markouts and adverse-selection ranking of a zoo run's models |
 | [`queuetruth calibrate`](#queuetruth-calibrate) | calibrate queue-model parameters against exact truth, or latency |
 | [`queuetruth calibrate alloc`](#queuetruth-calibrate-alloc) | fit n (power families) or k (databento) by allocation quasi-likelihood |
 | [`queuetruth calibrate survival`](#queuetruth-calibrate-survival) | fit databento_mc k by survival likelihood |
@@ -80,6 +81,34 @@ section below is the command's own `--help` text.
 | [`queuetruth doctor`](#queuetruth-doctor) | check the installation |
 | [`queuetruth mcp`](#queuetruth-mcp) | MCP server |
 | [`queuetruth mcp serve`](#queuetruth-mcp-serve) | MCP stdio server |
+| [`queuetruth demo`](#queuetruth-demo) | fetch a public order-level sample and compare a default fill model with exact replay |
+| [`queuetruth forecast`](#queuetruth-forecast) | forecast referee: hash-chained forecast ledger, proper scores, calibration and executable PnL |
+| [`queuetruth forecast commit`](#queuetruth-forecast-commit) | append forecasts to the ledger (hashed, chained, timestamped) |
+| [`queuetruth forecast resolve`](#queuetruth-forecast-resolve) | append question resolutions to the ledger |
+| [`queuetruth forecast verify`](#queuetruth-forecast-verify) | check the ledger chain (and optionally a commitment) |
+| [`queuetruth forecast score`](#queuetruth-forecast-score) | score the ledger: proper scores, calibration, skill, power, PnL |
+| [`queuetruth forecast power`](#queuetruth-forecast-power) | resolved questions needed to detect an edge |
+| [`queuetruth forecast simulate`](#queuetruth-forecast-simulate) | write example inputs from a world with a known edge |
+| [`queuetruth ledger`](#queuetruth-ledger) | trial ledger: every run and variant tried, hash-chained |
+| [`queuetruth ledger list`](#queuetruth-ledger-list) | list recorded trials |
+| [`queuetruth ledger stats`](#queuetruth-ledger-stats) | trial counts by kind and study |
+| [`queuetruth ledger export`](#queuetruth-ledger-export) | write the ledger as .jsonl, .json or .parquet |
+| [`queuetruth ledger verify`](#queuetruth-ledger-verify) | check the hash chain; exit 2 if it is broken |
+| [`queuetruth ledger add`](#queuetruth-ledger-add) | register a strategy variant you tried |
+| [`queuetruth pm`](#queuetruth-pm) | prediction-market kit (Kalshi, Polymarket) on your own captures |
+| [`queuetruth pm fixtures`](#queuetruth-pm-fixtures) | write the invented example captures of the walkthrough (no venue data) |
+| [`queuetruth pm ingest`](#queuetruth-pm-ingest) | captures -> L2 datasets, live log and tables |
+| [`queuetruth pm calibrate`](#queuetruth-pm-calibrate) | queue models against your queue positions and fills |
+| [`queuetruth pm score`](#queuetruth-pm-score) | reward-aware PnL band and sim versus live |
+| [`queuetruth certify`](#queuetruth-certify) | certify run directories and claims |
+| [`queuetruth verify-cert`](#queuetruth-verify-cert) | verify a certificate; --rerun re-executes every run |
+| [`queuetruth commit`](#queuetruth-commit) | commit to files now, reveal later |
+| [`queuetruth reveal`](#queuetruth-reveal) | check revealed files against a commitment |
+| [`queuetruth cert`](#queuetruth-cert) | signing keys and rendering |
+| [`queuetruth cert keygen`](#queuetruth-cert-keygen) | generate an Ed25519 signing key |
+| [`queuetruth cert pubkey`](#queuetruth-cert-pubkey) | show the public key and fingerprint of a key file |
+| [`queuetruth cert render`](#queuetruth-cert-render) | render a certificate as HTML |
+| [`queuetruth cert partial-opening`](#queuetruth-cert-partial-opening) | write an opening that opens only some committed items |
 
 ## queuetruth ingest
 
@@ -89,9 +118,9 @@ ingest source files into a normalized dataset
 Usage: queuetruth ingest [OPTIONS] --format <format> --in <PATH> --venue <VALUE> --out <VALUE>
 
 Options:
-      --format <format>             source format (also --input-format) [possible values: itch, dbn, etcsv, parquet, bitstamp, bitfinex, coinbase, coinbase-level3, kraken-l3, hyperliquid-node, tardis-l2, iex-deep-plus]
+      --format <format>             source format (also --input-format) [possible values: itch, dbn, etcsv, parquet, bitstamp, bitfinex, coinbase, coinbase-level3, kraken-l3, hyperliquid-node, tardis-l2, iex-deep-plus, nyse-ibf]
       --in <PATH>                   input file (repeatable)
-      --venue <VALUE>               venue rule set (nasdaq, cme, coinbase, crypto_l3, iex, generic; generic resolves to crypto_l3 for the crypto L3 formats: bitstamp, bitfinex, coinbase, coinbase-level3, kraken-l3, hyperliquid-node)
+      --venue <VALUE>               venue rule set (nasdaq, cme, coinbase, crypto_l3, iex, nyse, generic; generic resolves to crypto_l3 for the crypto L3 formats: bitstamp, bitfinex, coinbase, coinbase-level3, kraken-l3, hyperliquid-node)
       --out <VALUE>                 output dataset directory
       --symbols <A,...>             symbol filter
       --date <VALUE>                session date YYYY-MM-DD
@@ -226,7 +255,7 @@ Options:
       --latency-ns <DURATION>       shadow latency [default: 0]
       --window-open-s <N>           seconds after the open excluded [default: 300]
       --window-close-s <N>          seconds before the close excluded [default: 600]
-      --allocation <allocation>     allocation across instrument-days [default: equal] [possible values: equal, proportional, per_partition]
+      --allocation <allocation>     allocation across instrument-days [default: equal] [possible values: equal, proportional, per-partition]
       --sides <A,...>               sides to sample (B,A) [default: B,A]
   -h, --help                        Print help
       --log-level <log_level>       stderr log level (default warn) [possible values: error, warn, info, debug]
@@ -308,6 +337,33 @@ Options:
       --exclude-order-ids <PATH>    real orders removed from the tape and the L2 view (A1): .json list, or one id / instrument_id,order_id per line
       --sort-horizon <DURATION>     leaderboard sort horizon in the terminal output (default 60s)
       --list-models                 print the model ids --models accepts (the `all` set first) and exit
+  -h, --help                        Print help
+      --log-level <log_level>       stderr log level (default warn) [possible values: error, warn, info, debug]
+      --output-format <human|json>  output format (also --format human|json) [possible values: human, json]
+      --quiet                       no progress or warnings on stderr
+      --seed <seed>                 random seed (default 0)
+      --threads <threads>           worker threads (outputs do not depend on it; default 1)
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
+```
+
+## queuetruth zoo-toxicity
+
+```text
+fill-type tags, markouts and adverse-selection ranking of a zoo run's models
+
+Usage: queuetruth zoo-toxicity [OPTIONS] --zoo <PATH> --data <PATH> --out <VALUE>
+
+Options:
+      --zoo <PATH>                  zoo output directory (with zoo_fills.parquet)
+      --data <PATH>                 dataset directory
+      --out <VALUE>                 output directory
+      --shadows <PATH>              shadow spec file of the zoo run (default: the zoo summary's)
+      --amends <PATH>               shadow amend file of the zoo run (default: the zoo summary's)
+      --horizons <D,...>            markout horizons (durations; default 100ms,1s,10s,60s)
+      --window <DURATION>           fill window from ts_live, a zoo prediction horizon (default: the zoo's h_max)
+      --rank-horizon <DURATION>     markout horizon of the rankings (default 60s)
+      --bootstrap-b <N>             bootstrap resamples (default 1000)
+      --allow-truth-mismatch        evaluate the shadows whose replay reproduces the zoo's exact arm when some do not
   -h, --help                        Print help
       --log-level <log_level>       stderr log level (default warn) [possible values: error, warn, info, debug]
       --output-format <human|json>  output format (also --format human|json) [possible values: human, json]
@@ -643,6 +699,7 @@ Options:
       --bootstrap-b <N>                bootstrap resamples [default: 1000]
       --zoo-predictions <PATH>         qt.zoo_predictions for zoo_comparison
       --zoo-shadows <PATH>             qt.zoo_shadows of those predictions (default: zoo_shadows.parquet next to them)
+      --conformal-alpha <X>            also write conformal fill sets and coverage (conformal.json) at this miscoverage, e.g. 0.1
   -h, --help                           Print help
       --log-level <log_level>          stderr log level (default warn) [possible values: error, warn, info, debug]
       --output-format <human|json>     output format (also --format human|json) [possible values: human, json]
@@ -1380,6 +1437,968 @@ Usage: queuetruth mcp serve [OPTIONS]
 Options:
       --allow-submit                list the job-submitting tools
       --local                       only the local read tools
+      --allow-run                   list the local run tools (sandboxed; writes under the run root); default from QT_MCP_ALLOW_RUN
+  -h, --help                        Print help
+      --log-level <log_level>       stderr log level (default warn) [possible values: error, warn, info, debug]
+      --output-format <human|json>  output format (also --format human|json) [possible values: human, json]
+      --quiet                       no progress or warnings on stderr
+      --seed <seed>                 random seed (default 0)
+      --threads <threads>           worker threads (outputs do not depend on it; default 1)
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
+```
+
+## queuetruth demo
+
+```text
+Fetch a small public order-level subset (the first minutes of a Nasdaq TotalView-ITCH or IEX DEEP+ day), place simulated resting orders in the real queue, and show how often NautilusTrader's default fill model fills them compared with the exact replay, by horizon, with base rates. Writes <out>/demo.html and <out>/demo.json.
+
+Usage: queuetruth demo [OPTIONS]
+
+Options:
+      --source <SOURCE>
+          public day: nasdaq-2019-12-30, iex-2026-10-09 (aliases nasdaq, iex; default nasdaq-2019-12-30)
+
+      --symbols <SYMBOLS>
+          comma-separated symbols (default: the source's four liquid names)
+
+      --minutes <MINUTES>
+          placement window length after 09:35 ET, minutes (default 5)
+
+      --n <N>
+          simulated orders (default 3000)
+
+      --models <MODELS>
+          comma-separated zoo model ids, or all (default: nt_prob_touch[p=1], nt_queue_l2, hbt_power3[n=2], hbt_risk_adverse, databento_mc[k=-0.8;particles=100], front_of_queue, trade_through_only)
+
+      --url <URL>
+          stream this http(s) URL instead (a day file or a pre-cut subset)
+
+      --from-file <FROM_FILE>
+          read this local day file or subset instead (gzip or raw)
+
+      --input-format <input-format>
+          format of --url / --from-file (default: from the name)
+          
+          [possible values: itch, iex]
+
+      --date <DATE>
+          session date of --url / --from-file, YYYY-MM-DD (default: from the name)
+
+      --out <OUT>
+          output directory (default qt-demo)
+
+      --cache-dir <CACHE_DIR>
+          cache root (default: QT_CACHE_DIR or the user cache directory)
+
+      --refresh
+          ignore a cached subset and fetch again
+
+  -y, --yes
+          download without asking
+
+      --dry-run
+          show what would be downloaded and where, then stop
+
+      --max-download-mb <MAX_DOWNLOAD_MB>
+          stop if the cut is not reached after this many MB (default 4000)
+
+      --list-sources
+          list the known public days and exit
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+      --log-level <log_level>
+          stderr log level (default warn)
+          
+          [possible values: error, warn, info, debug]
+
+      --output-format <human|json>
+          output format (also --format human|json)
+          
+          [possible values: human, json]
+
+      --quiet
+          no progress or warnings on stderr
+
+      --seed <seed>
+          random seed (default 0)
+
+      --threads <threads>
+          worker threads (outputs do not depend on it; default 1)
+
+      --verbose
+          human output: every summary field after the answer; every warning and note on stderr
+```
+
+## queuetruth forecast
+
+```text
+Forecast referee: commit forecasts to a hash-chained ledger before their questions resolve, record resolutions, and score proper scores, calibration, skill and executable PnL.
+
+Usage: queuetruth forecast [OPTIONS] <COMMAND>
+
+Commands:
+  commit    append forecasts to the ledger (hashed, chained, timestamped)
+  resolve   append question resolutions to the ledger
+  verify    check the ledger chain (and optionally a commitment)
+  score     score the ledger: proper scores, calibration, skill, power, PnL
+  power     resolved questions needed to detect an edge
+  simulate  write example inputs from a world with a known edge
+  help      Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help
+          Print help (see a summary with '-h')
+
+      --log-level <log_level>
+          stderr log level (default warn)
+          
+          [possible values: error, warn, info, debug]
+
+      --output-format <human|json>
+          output format (also --format human|json)
+          
+          [possible values: human, json]
+
+      --quiet
+          no progress or warnings on stderr
+
+      --seed <seed>
+          random seed (default 0)
+
+      --threads <threads>
+          worker threads (outputs do not depend on it; default 1)
+
+      --verbose
+          human output: every summary field after the answer; every warning and note on stderr
+```
+
+## queuetruth forecast commit
+
+```text
+append forecasts to the ledger (hashed, chained, timestamped)
+
+Usage: queuetruth forecast commit [OPTIONS] --forecasts <FORECASTS> --ledger <LEDGER>
+
+Options:
+      --forecasts <FORECASTS>
+          forecasts file (.csv, .jsonl, .json, .parquet)
+      --ledger <LEDGER>
+          ledger file (created when missing)
+      --forecaster <FORECASTER>
+          forecaster name for rows without a forecaster column
+      --at <AT>
+          record this time instead of the system clock (clock: declared, not trusted)
+      --commitment-out <COMMITMENT_OUT>
+          also write the head commitment (qt.forecast_commitment) here
+      --allow-repeat
+          record a row without a nonce even when the same forecast is already in the ledger
+  -h, --help
+          Print help
+      --log-level <log_level>
+          stderr log level (default warn) [possible values: error, warn, info, debug]
+      --output-format <human|json>
+          output format (also --format human|json) [possible values: human, json]
+      --quiet
+          no progress or warnings on stderr
+      --seed <seed>
+          random seed (default 0)
+      --threads <threads>
+          worker threads (outputs do not depend on it; default 1)
+      --verbose
+          human output: every summary field after the answer; every warning and note on stderr
+```
+
+## queuetruth forecast resolve
+
+```text
+append question resolutions to the ledger
+
+Usage: queuetruth forecast resolve [OPTIONS] --resolutions <RESOLUTIONS> --ledger <LEDGER>
+
+Options:
+      --resolutions <RESOLUTIONS>
+          resolutions file (.csv, .jsonl, .json, .parquet)
+      --ledger <LEDGER>
+          ledger file
+      --at <AT>
+          record this time instead of the system clock (clock: declared)
+      --correct
+          allow a corrected second resolution of a question
+      --commitment-out <COMMITMENT_OUT>
+          also write the head commitment here
+  -h, --help
+          Print help
+      --log-level <log_level>
+          stderr log level (default warn) [possible values: error, warn, info, debug]
+      --output-format <human|json>
+          output format (also --format human|json) [possible values: human, json]
+      --quiet
+          no progress or warnings on stderr
+      --seed <seed>
+          random seed (default 0)
+      --threads <threads>
+          worker threads (outputs do not depend on it; default 1)
+      --verbose
+          human output: every summary field after the answer; every warning and note on stderr
+```
+
+## queuetruth forecast verify
+
+```text
+check the ledger chain (and optionally a commitment)
+
+Usage: queuetruth forecast verify [OPTIONS] --ledger <LEDGER>
+
+Options:
+      --ledger <LEDGER>             ledger file
+      --commitment <COMMITMENT>     a qt.forecast_commitment the ledger must still contain
+  -h, --help                        Print help
+      --log-level <log_level>       stderr log level (default warn) [possible values: error, warn, info, debug]
+      --output-format <human|json>  output format (also --format human|json) [possible values: human, json]
+      --quiet                       no progress or warnings on stderr
+      --seed <seed>                 random seed (default 0)
+      --threads <threads>           worker threads (outputs do not depend on it; default 1)
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
+```
+
+## queuetruth forecast score
+
+```text
+score the ledger: proper scores, calibration, skill, power, PnL
+
+Usage: queuetruth forecast score [OPTIONS] --ledger <LEDGER> --out <OUT>
+
+Options:
+      --ledger <LEDGER>
+          ledger file
+      --out <OUT>
+          output directory
+      --market <MARKET>
+          quote file: question_id, ts, best_bid, best_ask, bid_depth, ask_depth
+      --market-max-age <MARKET_MAX_AGE>
+          oldest quote the market baseline uses, e.g. 1h (--max-quote-age)
+      --commitment <COMMITMENT>
+          an anchored qt.forecast_commitment (repeatable; pair each with --anchored-at)
+      --anchored-at <ANCHORED_AT>
+          when a third party attested the matching --commitment (timestamp)
+      --require-anchor
+          score only forecasts covered by an anchored commitment attested before their cutoff
+      --unresolved <unresolved>
+          forecasts on unresolved questions (warn) [possible values: warn, fail]
+      --pairwise <PAIRWISE>
+          forecaster-pair comparisons: all, none or a top-k count (all)
+      --policy <policy>
+          forecasts scored per question (last) [possible values: last, first, mean]
+      --baselines <BASELINES>
+          comma-separated: market, climatology, uniform (all three)
+      --cluster <cluster>
+          bootstrap cluster (question) [possible values: question, group]
+      --bins <BINS>
+          reliability bins (10)
+      --bootstrap-b <BOOTSTRAP_B>
+          bootstrap resamples (1000)
+      --alpha <ALPHA>
+          test level (0.05)
+      --power <POWER>
+          target power of the power analysis (0.8)
+      --min-edge <MIN_EDGE>
+          edge to size the power analysis for (loss units)
+      --dm-lag <DM_LAG>
+          Diebold-Mariano HAC lags (Newey-West rule)
+      --min-lead <MIN_LEAD>
+          minimum time from commit to cutoff, e.g. 1h (0)
+      --allow-declared-clock
+          score entries with a declared time
+      --log-eps <LOG_EPS>
+          log score probability floor (1e-6)
+      --climatology-min-prior <CLIMATOLOGY_MIN_PRIOR>
+          resolved questions before climatology counts (5)
+      --no-pnl
+          skip executable PnL
+      --kelly-fraction <KELLY_FRACTION>
+          fraction of the Kelly stake (0.25)
+      --bankroll <BANKROLL>
+          starting bankroll (1000)
+      --latency <LATENCY>
+          decision-to-arrival latency, e.g. 250ms (0)
+      --max-participation <MAX_PARTICIPATION>
+          share of the displayed depth an order may take (1)
+      --max-quote-age <MAX_QUOTE_AGE>
+          oldest usable quote at the decision, e.g. 5m (no limit)
+      --price-at <price-at>
+          price orders from the quote at the decision (a limit filled at arrival) or at arrival (decision) [possible values: decision, arrival]
+      --pnl-min-edge <PNL_MIN_EDGE>
+          minimum edge per contract after costs (0)
+      --lot <LOT>
+          contract granularity, 0 = continuous (1)
+      --fee-per-contract <FEE_PER_CONTRACT>
+          fee per contract
+      --fee-notional-rate <FEE_NOTIONAL_RATE>
+          fee per contract per unit of price
+      --fee-quadratic <FEE_QUADRATIC>
+          fee per contract times P(1 - P), e.g. 0.07
+      --fee-round-up-to <FEE_ROUND_UP_TO>
+          round each order's fee up to this, e.g. 0.01
+  -h, --help
+          Print help
+      --log-level <log_level>
+          stderr log level (default warn) [possible values: error, warn, info, debug]
+      --output-format <human|json>
+          output format (also --format human|json) [possible values: human, json]
+      --quiet
+          no progress or warnings on stderr
+      --seed <seed>
+          random seed (default 0)
+      --threads <threads>
+          worker threads (outputs do not depend on it; default 1)
+      --verbose
+          human output: every summary field after the answer; every warning and note on stderr
+```
+
+## queuetruth forecast power
+
+```text
+resolved questions needed to detect an edge
+
+Usage: queuetruth forecast power [OPTIONS] --edge <EDGE> --sd <SD>
+
+Options:
+      --edge <EDGE>                    expected loss difference per question
+      --sd <SD>                        standard deviation of the per-question difference
+      --alpha <ALPHA>                  two-sided test level (0.05)
+      --power <POWER>                  target power (0.8)
+      --design-effect <DESIGN_EFFECT>  variance inflation from clustering (1)
+      --n <N>                          also report the power at this many questions
+  -h, --help                           Print help
+      --log-level <log_level>          stderr log level (default warn) [possible values: error, warn, info, debug]
+      --output-format <human|json>     output format (also --format human|json) [possible values: human, json]
+      --quiet                          no progress or warnings on stderr
+      --seed <seed>                    random seed (default 0)
+      --threads <threads>              worker threads (outputs do not depend on it; default 1)
+      --verbose                        human output: every summary field after the answer; every warning and note on stderr
+```
+
+## queuetruth forecast simulate
+
+```text
+write example inputs from a world with a known edge
+
+Usage: queuetruth forecast simulate [OPTIONS] --out <OUT>
+
+Options:
+      --out <OUT>                   output directory
+      --questions <QUESTIONS>       number of binary questions (400)
+      --edge-sd <EDGE_SD>           log-odds information the market misses (0.6)
+      --half-spread <HALF_SPREAD>   quoted half spread (0.01)
+      --depth <DEPTH>               contracts displayed per side (500)
+      --start <START>               time the questions open (default: now); they resolve a day later
+  -h, --help                        Print help
+      --log-level <log_level>       stderr log level (default warn) [possible values: error, warn, info, debug]
+      --output-format <human|json>  output format (also --format human|json) [possible values: human, json]
+      --quiet                       no progress or warnings on stderr
+      --seed <seed>                 random seed (default 0)
+      --threads <threads>           worker threads (outputs do not depend on it; default 1)
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
+```
+
+## queuetruth ledger
+
+```text
+trial ledger: every run and variant tried, hash-chained
+
+Usage: queuetruth ledger [OPTIONS] <COMMAND>
+
+Commands:
+  list    list recorded trials
+  stats   trial counts by kind and study
+  export  write the ledger as .jsonl, .json or .parquet
+  verify  check the hash chain; exit 2 if it is broken
+  add     register a strategy variant you tried
+  help    Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help                        Print help
+      --log-level <log_level>       stderr log level (default warn) [possible values: error, warn, info, debug]
+      --output-format <human|json>  output format (also --format human|json) [possible values: human, json]
+      --quiet                       no progress or warnings on stderr
+      --seed <seed>                 random seed (default 0)
+      --threads <threads>           worker threads (outputs do not depend on it; default 1)
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
+```
+
+## queuetruth ledger list
+
+```text
+list recorded trials
+
+Usage: queuetruth ledger list [OPTIONS]
+
+Options:
+      --ledger <PATH>               ledger directory or ledger.jsonl (default: $QT_LEDGER_DIR, else <project>/.queuetruth/ledger)
+      --kind <kind>                 record kind (repeatable) [possible values: zoo, calibrate, calibrate-live, fit-hazard, score, shadows-sample, variant]
+      --study <STUDY>               study name or glob
+      --name <NAME>                 variant or run name glob
+      --status <status>             run status (default all) [possible values: all, ok, error]
+      --since <SINCE>               recorded at or after (ISO 8601 date or time, UTC when no offset; or ns)
+      --until <UNTIL>               recorded before (same forms as --since)
+      --dataset <PREFIX>            prefix of dataset_hash or of any input identity
+      --run-id <PREFIX>             prefix of run_id (or of a variant's linked run ids)
+      --spec-hash <PREFIX>          prefix of spec_hash
+      --limit <LIMIT>               newest N (default 20; 0 = all)
+  -h, --help                        Print help
+      --log-level <log_level>       stderr log level (default warn) [possible values: error, warn, info, debug]
+      --output-format <human|json>  output format (also --format human|json) [possible values: human, json]
+      --quiet                       no progress or warnings on stderr
+      --seed <seed>                 random seed (default 0)
+      --threads <threads>           worker threads (outputs do not depend on it; default 1)
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
+```
+
+## queuetruth ledger stats
+
+```text
+trial counts by kind and study
+
+Usage: queuetruth ledger stats [OPTIONS]
+
+Options:
+      --ledger <PATH>               ledger directory or ledger.jsonl (default: $QT_LEDGER_DIR, else <project>/.queuetruth/ledger)
+      --kind <kind>                 record kind (repeatable) [possible values: zoo, calibrate, calibrate-live, fit-hazard, score, shadows-sample, variant]
+      --study <STUDY>               study name or glob
+      --name <NAME>                 variant or run name glob
+      --status <status>             run status (default all) [possible values: all, ok, error]
+      --since <SINCE>               recorded at or after (ISO 8601 date or time, UTC when no offset; or ns)
+      --until <UNTIL>               recorded before (same forms as --since)
+      --dataset <PREFIX>            prefix of dataset_hash or of any input identity
+      --run-id <PREFIX>             prefix of run_id (or of a variant's linked run ids)
+      --spec-hash <PREFIX>          prefix of spec_hash
+  -h, --help                        Print help
+      --log-level <log_level>       stderr log level (default warn) [possible values: error, warn, info, debug]
+      --output-format <human|json>  output format (also --format human|json) [possible values: human, json]
+      --quiet                       no progress or warnings on stderr
+      --seed <seed>                 random seed (default 0)
+      --threads <threads>           worker threads (outputs do not depend on it; default 1)
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
+```
+
+## queuetruth ledger export
+
+```text
+write the ledger as .jsonl, .json or .parquet
+
+Usage: queuetruth ledger export [OPTIONS] --out <PATH>
+
+Options:
+      --ledger <PATH>               ledger directory or ledger.jsonl (default: $QT_LEDGER_DIR, else <project>/.queuetruth/ledger)
+      --kind <kind>                 record kind (repeatable) [possible values: zoo, calibrate, calibrate-live, fit-hazard, score, shadows-sample, variant]
+      --study <STUDY>               study name or glob
+      --name <NAME>                 variant or run name glob
+      --status <status>             run status (default all) [possible values: all, ok, error]
+      --since <SINCE>               recorded at or after (ISO 8601 date or time, UTC when no offset; or ns)
+      --until <UNTIL>               recorded before (same forms as --since)
+      --dataset <PREFIX>            prefix of dataset_hash or of any input identity
+      --run-id <PREFIX>             prefix of run_id (or of a variant's linked run ids)
+      --spec-hash <PREFIX>          prefix of spec_hash
+      --out <PATH>                  .jsonl (whole chain), .json or .parquet
+      --selection                   write the selection inputs (.json) instead
+      --series <series>             series kind (--selection) [possible values: returns, scores]
+      --allow-mixed                 --selection: count trials across studies or kinds together
+  -h, --help                        Print help
+      --log-level <log_level>       stderr log level (default warn) [possible values: error, warn, info, debug]
+      --output-format <human|json>  output format (also --format human|json) [possible values: human, json]
+      --quiet                       no progress or warnings on stderr
+      --seed <seed>                 random seed (default 0)
+      --threads <threads>           worker threads (outputs do not depend on it; default 1)
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
+```
+
+## queuetruth ledger verify
+
+```text
+check the hash chain; exit 2 if it is broken
+
+Usage: queuetruth ledger verify [OPTIONS]
+
+Options:
+      --ledger <PATH>               ledger directory or ledger.jsonl (default: $QT_LEDGER_DIR, else <project>/.queuetruth/ledger)
+      --anchor <SEQ:HASH>           a head noted earlier: the history up to it must be intact
+  -h, --help                        Print help
+      --log-level <log_level>       stderr log level (default warn) [possible values: error, warn, info, debug]
+      --output-format <human|json>  output format (also --format human|json) [possible values: human, json]
+      --quiet                       no progress or warnings on stderr
+      --seed <seed>                 random seed (default 0)
+      --threads <threads>           worker threads (outputs do not depend on it; default 1)
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
+```
+
+## queuetruth ledger add
+
+```text
+register a strategy variant you tried
+
+Usage: queuetruth ledger add [OPTIONS] --name <NAME>
+
+Options:
+      --ledger <PATH>
+          ledger directory or ledger.jsonl (default: $QT_LEDGER_DIR, else <project>/.queuetruth/ledger)
+      --name <NAME>
+          variant name (letters, digits, _ . : -)
+      --params <JSON>
+          parameters as a JSON object, or @FILE
+      --returns <FILE>
+          per-period returns: .json, .csv/.txt or .parquet
+      --scores <FILE>
+          per-unit scores: .json, .csv/.txt or .parquet
+      --column <NAME|N>
+          value column of a multi-column file (default: the last)
+      --index-column <NAME|N>
+          period-end column (ISO 8601 dates or times, UTC; or ns)
+      --lower-is-better
+          scores: lower is better (loss, Brier)
+      --periods-per-year <PERIODS_PER_YEAR>
+          returns: periods per year (252 for daily)
+      --study <STUDY>
+          study (default $QT_LEDGER_STUDY or default)
+      --dataset <DATASET>
+          the data it was evaluated on: @PATH (identified by content) or a label
+      --code-version <CODE_VERSION>
+          your code version (commit, tag)
+      --run-id <RUN_ID>
+          linked queuetruth run_id
+      --note <NOTE>
+          free text
+  -h, --help
+          Print help
+      --log-level <log_level>
+          stderr log level (default warn) [possible values: error, warn, info, debug]
+      --output-format <human|json>
+          output format (also --format human|json) [possible values: human, json]
+      --quiet
+          no progress or warnings on stderr
+      --seed <seed>
+          random seed (default 0)
+      --threads <threads>
+          worker threads (outputs do not depend on it; default 1)
+      --verbose
+          human output: every summary field after the answer; every warning and note on stderr
+```
+
+## queuetruth pm
+
+```text
+Prediction-market kit (Kalshi, Polymarket): your own captures -> books, queue calibration and reward-aware market-making PnL. Self-hosted use on your own data only; see `queuetruth.pm.terms`.
+
+Usage: queuetruth pm [OPTIONS] <COMMAND>
+
+Commands:
+  fixtures   write the invented example captures of the walkthrough (no venue data)
+  ingest     captures -> L2 datasets, live log and tables
+  calibrate  queue models against your queue positions and fills
+  score      reward-aware PnL band and sim versus live
+  help       Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help
+          Print help (see a summary with '-h')
+
+      --log-level <log_level>
+          stderr log level (default warn)
+          
+          [possible values: error, warn, info, debug]
+
+      --output-format <human|json>
+          output format (also --format human|json)
+          
+          [possible values: human, json]
+
+      --quiet
+          no progress or warnings on stderr
+
+      --seed <seed>
+          random seed (default 0)
+
+      --threads <threads>
+          worker threads (outputs do not depend on it; default 1)
+
+      --verbose
+          human output: every summary field after the answer; every warning and note on stderr
+```
+
+## queuetruth pm fixtures
+
+```text
+write the invented example captures of the walkthrough (no venue data)
+
+Usage: queuetruth pm fixtures [OPTIONS] --out <DIR>
+
+Options:
+      --out <DIR>                   
+  -h, --help                        Print help
+      --log-level <log_level>       stderr log level (default warn) [possible values: error, warn, info, debug]
+      --output-format <human|json>  output format (also --format human|json) [possible values: human, json]
+      --quiet                       no progress or warnings on stderr
+      --seed <seed>                 random seed (default 0)
+      --threads <threads>           worker threads (outputs do not depend on it; default 1)
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
+```
+
+## queuetruth pm ingest
+
+```text
+captures -> L2 datasets, live log and tables
+
+Usage: queuetruth pm ingest [OPTIONS] --venue <venue> --in <PATH> --out <DIR>
+
+Options:
+      --venue <venue>
+          [possible values: kalshi, polymarket]
+      --in <PATH>
+          capture (repeat)
+      --chain <PATH>
+          Polymarket: Polygon log export (repeat)
+      --out <DIR>
+          
+      --account <ACCOUNT>
+          account name in order keys (default: default)
+      --kalshi-yes-price <kalshi-yes-price>
+          Kalshi NO-level pricing of the orderbook channel (default: auto, from the captured subscribe) [possible values: auto, true, false]
+      --market <COND=YES,NO>
+          Polymarket: YES and NO token of a market
+      --instrument-id <SYMBOL=ID>
+          instrument id of a symbol
+      --match-window <DURATION>
+          print-to-book-change window (default 1s / 2s)
+      --own-match-window <DURATION>
+          own-order-to-book-change window
+      --exchange <ADDRESS>
+          Polymarket: decode only this contract
+  -h, --help
+          Print help
+      --log-level <log_level>
+          stderr log level (default warn) [possible values: error, warn, info, debug]
+      --output-format <human|json>
+          output format (also --format human|json) [possible values: human, json]
+      --quiet
+          no progress or warnings on stderr
+      --seed <seed>
+          random seed (default 0)
+      --threads <threads>
+          worker threads (outputs do not depend on it; default 1)
+      --verbose
+          human output: every summary field after the answer; every warning and note on stderr
+```
+
+## queuetruth pm calibrate
+
+```text
+queue models against your queue positions and fills
+
+Usage: queuetruth pm calibrate [OPTIONS] --pm <DIR> --out <DIR>
+
+Options:
+      --pm <DIR>
+          `pm ingest` output
+      --out <DIR>
+          
+      --families <FAMILIES>
+          model families (comma separated)
+      --grid <LO:HI:N>
+          grid of ln n (default -4:4:33)
+      --train-fraction <TRAIN_FRACTION>
+          share of orders (by entry time) that trains
+      --loss <loss>
+          fit and rank by this loss (default rmse) [possible values: rmse, mae]
+      --sample-time <sample-time>
+          queue sample clock (default mid) [possible values: recv, mid]
+      --no-atomic
+          do not fit the one-order-per-change (atomic) variants of the families
+      --bootstrap <B>
+          bootstrap replicates (default 500)
+  -h, --help
+          Print help
+      --log-level <log_level>
+          stderr log level (default warn) [possible values: error, warn, info, debug]
+      --output-format <human|json>
+          output format (also --format human|json) [possible values: human, json]
+      --quiet
+          no progress or warnings on stderr
+      --seed <seed>
+          random seed (default 0)
+      --threads <threads>
+          worker threads (outputs do not depend on it; default 1)
+      --verbose
+          human output: every summary field after the answer; every warning and note on stderr
+```
+
+## queuetruth pm score
+
+```text
+reward-aware PnL band and sim versus live
+
+Usage: queuetruth pm score [OPTIONS] --pm <DIR> --out <DIR>
+
+Options:
+      --pm <DIR>
+          `pm ingest` output
+      --out <DIR>
+          
+      --quotes <PATH>
+          hypothetical quotes (CSV / Parquet); default: your live orders
+      --calibration <PATH>
+          `pm calibrate` output (its fitted model)
+      --model <ID>
+          queue model id, e.g. power3[n=1.5] or risk_adverse
+      --settle <SYMBOL=VALUE>
+          YES settlement value in dollars
+      --member <member>
+          Kalshi fee rounding [possible values: direct, non-direct]
+      --window <DURATION>
+          own orders without a cancel (default 60s)
+      --markout-horizons <D,...>
+          
+      --flat-taker <DOLLARS>
+          Kalshi flat series: taker fee per contract
+      --flat-maker <DOLLARS>
+          Kalshi flat series: maker fee per contract
+      --poly-multiplier <POLY_MULTIPLIER>
+          Polymarket in-game reward multiplier b
+      --poly-daily-reward <PUSD>
+          Polymarket daily liquidity reward of the market
+      --poly-category <NAME>
+          Polymarket fee category when metadata has no fees
+      --actual-rewards <DOLLARS>
+          your actual reward payout for the window
+      --bootstrap <B>
+          bootstrap replicates (default 500)
+  -h, --help
+          Print help
+      --log-level <log_level>
+          stderr log level (default warn) [possible values: error, warn, info, debug]
+      --output-format <human|json>
+          output format (also --format human|json) [possible values: human, json]
+      --quiet
+          no progress or warnings on stderr
+      --seed <seed>
+          random seed (default 0)
+      --threads <threads>
+          worker threads (outputs do not depend on it; default 1)
+      --verbose
+          human output: every summary field after the answer; every warning and note on stderr
+```
+
+## queuetruth certify
+
+```text
+certify run directories and claims
+
+Usage: queuetruth certify [OPTIONS] --out <OUT> <RUN_DIR>...
+
+Arguments:
+  <RUN_DIR>...  run directory, or LABEL=RUN_DIR
+
+Options:
+      --out <OUT>                   certificate JSON to write
+      --claim <CLAIM>               claim text with {RUN#/json/pointer} references
+      --key <KEY>                   Ed25519 private key PEM to sign with (passphrase from QT_CERT_KEY_PASSPHRASE)
+      --html <HTML>                 also write an HTML rendering
+      --title <TITLE>               
+      --issuer <ISSUER>             who issues the certificate (free text)
+      --attach <ATTACH>             extra file or directory to hash (no rerun)
+      --commitment <COMMITMENT>     qt.commitment to link (pair with --opening)
+      --opening <OPENING>           qt.commitment_opening of the matching --commitment
+      --base <BASE>                 directory the runs were launched from (default: current directory)
+  -h, --help                        Print help
+      --log-level <log_level>       stderr log level (default warn) [possible values: error, warn, info, debug]
+      --output-format <human|json>  output format (also --format human|json) [possible values: human, json]
+      --quiet                       no progress or warnings on stderr
+      --seed <seed>                 random seed (default 0)
+      --threads <threads>           worker threads (outputs do not depend on it; default 1)
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
+```
+
+## queuetruth verify-cert
+
+```text
+verify a certificate; --rerun re-executes every run
+
+Usage: queuetruth verify-cert [OPTIONS] <cert>
+
+Arguments:
+  <cert>  
+
+Options:
+      --rerun                       re-execute the runs and compare outputs bit for bit
+      --only <RUN>                  verify only these runs
+      --base <BASE>                 directory relative paths resolve against (default: current directory)
+      --map <OLD=NEW>               rewrite a path prefix
+      --trust <FINGERPRINT>         trusted key fingerprint
+      --pubkey <PEM>                trusted public key
+      --require-signature           an unsigned certificate fails
+      --work <WORK>                 keep re-executed outputs in this new or empty directory (default: a removed temporary one)
+      --force-rerun                 re-execute even when the integrity, signature or key-pin check failed
+      --timeout <S>                 limit of each re-execution in seconds (default 6 h)
+      --out <OUT>                   also write the qt.cert_verification document here
+      --html <HTML>                 also write the certificate page with the verification results
+  -h, --help                        Print help
+      --log-level <log_level>       stderr log level (default warn) [possible values: error, warn, info, debug]
+      --output-format <human|json>  output format (also --format human|json) [possible values: human, json]
+      --quiet                       no progress or warnings on stderr
+      --seed <seed>                 random seed (default 0)
+      --threads <threads>           worker threads (outputs do not depend on it; default 1)
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
+```
+
+## queuetruth commit
+
+```text
+commit to files now, reveal later
+
+Usage: queuetruth commit [OPTIONS] --out <OUT> <FILE>...
+
+Arguments:
+  <FILE>...  
+
+Options:
+      --out <OUT>                   public qt.commitment to write
+      --opening <OPENING>           private opening to write (default: <out>.opening.json, mode 0600)
+      --name <NAME>                 committed name per file (default: file name)
+      --label <LABEL>               public label (e.g. 'orders for 2026-10-26')
+      --key <KEY>                   Ed25519 private key PEM to sign with
+      --force                       replace an existing commitment or opening file
+  -h, --help                        Print help
+      --log-level <log_level>       stderr log level (default warn) [possible values: error, warn, info, debug]
+      --output-format <human|json>  output format (also --format human|json) [possible values: human, json]
+      --quiet                       no progress or warnings on stderr
+      --seed <seed>                 random seed (default 0)
+      --threads <threads>           worker threads (outputs do not depend on it; default 1)
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
+```
+
+## queuetruth reveal
+
+```text
+check revealed files against a commitment
+
+Usage: queuetruth reveal [OPTIONS] --opening <OPENING> <commitment> [FILE]...
+
+Arguments:
+  <commitment>  
+  [FILE]...     
+
+Options:
+      --opening <OPENING>           
+      --trust <FINGERPRINT>         
+      --pubkey <PEM>                
+  -h, --help                        Print help
+      --log-level <log_level>       stderr log level (default warn) [possible values: error, warn, info, debug]
+      --output-format <human|json>  output format (also --format human|json) [possible values: human, json]
+      --quiet                       no progress or warnings on stderr
+      --seed <seed>                 random seed (default 0)
+      --threads <threads>           worker threads (outputs do not depend on it; default 1)
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
+```
+
+## queuetruth cert
+
+```text
+signing keys and rendering
+
+Usage: queuetruth cert [OPTIONS] <COMMAND>
+
+Commands:
+  keygen           generate an Ed25519 signing key
+  pubkey           show the public key and fingerprint of a key file
+  render           render a certificate as HTML
+  partial-opening  write an opening that opens only some committed items
+  help             Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help                        Print help
+      --log-level <log_level>       stderr log level (default warn) [possible values: error, warn, info, debug]
+      --output-format <human|json>  output format (also --format human|json) [possible values: human, json]
+      --quiet                       no progress or warnings on stderr
+      --seed <seed>                 random seed (default 0)
+      --threads <threads>           worker threads (outputs do not depend on it; default 1)
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
+```
+
+## queuetruth cert keygen
+
+```text
+generate an Ed25519 signing key
+
+Usage: queuetruth cert keygen [OPTIONS] --out <OUT>
+
+Options:
+      --out <OUT>                   private key PEM (public key written next to it as .pub.pem)
+      --force                       replace existing key files
+  -h, --help                        Print help
+      --log-level <log_level>       stderr log level (default warn) [possible values: error, warn, info, debug]
+      --output-format <human|json>  output format (also --format human|json) [possible values: human, json]
+      --quiet                       no progress or warnings on stderr
+      --seed <seed>                 random seed (default 0)
+      --threads <threads>           worker threads (outputs do not depend on it; default 1)
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
+```
+
+## queuetruth cert pubkey
+
+```text
+show the public key and fingerprint of a key file
+
+Usage: queuetruth cert pubkey [OPTIONS] <key>
+
+Arguments:
+  <key>  
+
+Options:
+  -h, --help                        Print help
+      --log-level <log_level>       stderr log level (default warn) [possible values: error, warn, info, debug]
+      --output-format <human|json>  output format (also --format human|json) [possible values: human, json]
+      --quiet                       no progress or warnings on stderr
+      --seed <seed>                 random seed (default 0)
+      --threads <threads>           worker threads (outputs do not depend on it; default 1)
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
+```
+
+## queuetruth cert render
+
+```text
+render a certificate as HTML
+
+Usage: queuetruth cert render [OPTIONS] --out <OUT> <cert>
+
+Arguments:
+  <cert>  
+
+Options:
+      --out <OUT>                    
+      --verification <VERIFICATION>  qt.cert_verification document to include
+  -h, --help                         Print help
+      --log-level <log_level>        stderr log level (default warn) [possible values: error, warn, info, debug]
+      --output-format <human|json>   output format (also --format human|json) [possible values: human, json]
+      --quiet                        no progress or warnings on stderr
+      --seed <seed>                  random seed (default 0)
+      --threads <threads>            worker threads (outputs do not depend on it; default 1)
+      --verbose                      human output: every summary field after the answer; every warning and note on stderr
+```
+
+## queuetruth cert partial-opening
+
+```text
+write an opening that opens only some committed items
+
+Usage: queuetruth cert partial-opening [OPTIONS] --item <NAME> --out <OUT> <opening>
+
+Arguments:
+  <opening>  the private qt.commitment_opening
+
+Options:
+      --item <NAME>                 committed name to open
+      --out <OUT>                   partial qt.commitment_opening to write
+      --force                       replace an existing file
   -h, --help                        Print help
       --log-level <log_level>       stderr log level (default warn) [possible values: error, warn, info, debug]
       --output-format <human|json>  output format (also --format human|json) [possible values: human, json]

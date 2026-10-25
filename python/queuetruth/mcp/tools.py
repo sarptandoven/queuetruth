@@ -64,15 +64,15 @@ class DatasetArgs(Args):
 class EstimateArgs(Args):
     """`qt_estimate` (runtime: the spec is validated for `kind` by the client)."""
 
-    kind: Literal["replay", "calibration", "scorecard"]
+    kind: Literal["replay", "calibration", "scorecard", "zoo"]
     spec: dict[str, Any]
 
 
 class EstimateSchema(Args):
-    """`qt_estimate` as listed: the spec is a ReplaySpec, CalibrationSpec or ScorecardSpec matching `kind`."""
+    """`qt_estimate` as listed: the spec is a ReplaySpec, CalibrationSpec, ScorecardSpec or ZooSpec matching `kind`."""
 
-    kind: Literal["replay", "calibration", "scorecard"]
-    spec: sp.ReplaySpec | sp.CalibrationSpec | sp.ScorecardSpec
+    kind: Literal["replay", "calibration", "scorecard", "zoo"]
+    spec: sp.ReplaySpec | sp.CalibrationSpec | sp.ScorecardSpec | sp.ZooSpec
 
 
 class JobArgs(Args):
@@ -212,8 +212,8 @@ TOOLS: tuple[ToolDef, ...] = (
     ToolDef(
         "qt_estimate",
         "Estimate job cost",
-        "Records, shadows, CPU seconds, output bytes, cost units and ETA of a replay, calibration or scorecard spec "
-        "(HTTP specs reference datasets by dataset_id and leave out null).",
+        "Records, shadows, CPU seconds, output bytes, cost units and ETA of a replay, zoo, calibration or scorecard "
+        "spec (HTTP specs reference datasets by dataset_id and leave out null).",
         EstimateArgs,
         "qt.estimate",
         schema_args=EstimateSchema,

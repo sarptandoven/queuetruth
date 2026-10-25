@@ -1,0 +1,218 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.demo_plan",
+  "$defs": {
+    "SourceInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "format": {
+          "enum": [
+            "itch",
+            "iex"
+          ],
+          "title": "Format",
+          "type": "string"
+        },
+        "session_date": {
+          "title": "Session Date",
+          "type": "string"
+        },
+        "location": {
+          "title": "Location",
+          "type": "string"
+        },
+        "attribution": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Attribution"
+        },
+        "terms_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Terms Url"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Note"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "format",
+        "session_date",
+        "location",
+        "attribution",
+        "terms_url",
+        "note"
+      ],
+      "title": "SourceInfo",
+      "type": "object"
+    },
+    "WindowInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "timezone": {
+          "const": "America/New_York",
+          "default": "America/New_York",
+          "title": "Timezone",
+          "type": "string"
+        },
+        "placement_start": {
+          "title": "Placement Start",
+          "type": "string"
+        },
+        "placement_end": {
+          "title": "Placement End",
+          "type": "string"
+        },
+        "cut": {
+          "title": "Cut",
+          "type": "string"
+        },
+        "minutes": {
+          "title": "Minutes",
+          "type": "integer"
+        },
+        "h_max_s": {
+          "title": "H Max S",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "placement_start",
+        "placement_end",
+        "cut",
+        "minutes",
+        "h_max_s"
+      ],
+      "title": "WindowInfo",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "What `queuetruth demo --dry-run` would do.",
+  "properties": {
+    "schema": {
+      "const": "qt.demo_plan",
+      "default": "qt.demo_plan",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "source": {
+      "$ref": "#/$defs/SourceInfo"
+    },
+    "window": {
+      "$ref": "#/$defs/WindowInfo"
+    },
+    "symbols": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Symbols",
+      "type": "array"
+    },
+    "cache_dir": {
+      "title": "Cache Dir",
+      "type": "string"
+    },
+    "cache_hit": {
+      "title": "Cache Hit",
+      "type": "boolean"
+    },
+    "download_needed": {
+      "title": "Download Needed",
+      "type": "boolean"
+    },
+    "estimated_download_bytes": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Estimated Download Bytes"
+    },
+    "estimate_extrapolated": {
+      "title": "Estimate Extrapolated",
+      "type": "boolean"
+    },
+    "max_download_bytes": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Max Download Bytes"
+    },
+    "file_bytes": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "File Bytes"
+    },
+    "out": {
+      "title": "Out",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "source",
+    "window",
+    "symbols",
+    "cache_dir",
+    "cache_hit",
+    "download_needed",
+    "estimated_download_bytes",
+    "estimate_extrapolated",
+    "max_download_bytes",
+    "file_bytes",
+    "out"
+  ],
+  "type": "object"
+}

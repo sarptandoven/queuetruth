@@ -1,0 +1,65 @@
+{
+  "name": "qt.pm_own_entries",
+  "metadata": {
+    "qt.engine_version": "0.1.1",
+    "qt.schema": "qt.pm_own_entries",
+    "qt.schema_version": "1.1"
+  },
+  "fields": [
+    {
+      "name": "order_key",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "instrument_id",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "side",
+      "type": "uint8",
+      "nullable": false
+    },
+    {
+      "name": "price",
+      "type": "int64",
+      "nullable": false
+    },
+    {
+      "name": "seq",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "inside",
+      "type": "bool",
+      "nullable": false
+    },
+    {
+      "name": "ts_event",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": false
+    },
+    {
+      "name": "how",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "qty",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "end_seq",
+      "type": "uint64",
+      "nullable": true
+    },
+    {
+      "name": "end_inside",
+      "type": "bool",
+      "nullable": true
+    }
+  ]
+}

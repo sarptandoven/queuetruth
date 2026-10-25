@@ -6,7 +6,10 @@
         --one-symbol-per-unit --out plan.json                                  # the P0 breadth equivalence run
 
 Input: one or more `itch_split.py` output directories (one per day); each bucket lists its symbols with
-`[locate, messages, executions]`. Output: one `qt.scale.plan` document holding the run spec (populations, modes,
+`[locate, messages, executions]`. A universe entry carries `non_t_spans` (the split's `trading_state`: the spans in
+which the symbol's `H` state was not T) when it has any; a source records `trading_state_recorded` (false for a split
+made before the split recorded it) and `exclusions_sha256` (the day's exclusions, so a different universe of the same
+day gets a different `run_id`). Output: one `qt.scale.plan` document holding the run spec (populations, modes,
 horizons, models, seed, quota rule, cost constants), its `run_id` (first 16 hex of the sha256 of the canonical run
 spec plus the split sources), the universe and every exclusion with its reason, and the unit specs (`qt.scale.unit`)
 that `unit.py` runs.
@@ -53,6 +56,10 @@ COST = {
     "shadow_window_share": 300 / 23_400,
     "safety": 1.5,
 }
+#: Liquidity tiers of a symbol-day: rank by executions (E, C, P messages) among the day's universe.
+TIERS_BY_RANK = ((100, "T1_top100"), (500, "T2_101_500"), (1500, "T3_501_1500"), (4000, "T4_1501_4000"))
+TIER_REST = "T5_rest"
+DEFAULT_HOURS = (34_200, 57_600)
 MODAL_USD_PER_CORE_H = 0.063  # preemptible CPU incl. 2 GiB (modal.com/pricing, fetched 2026-10-21)
 OVERHEAD = 1.3
 
@@ -68,6 +75,21 @@ def symbol_cost(messages: int, shadows: dict[str, int], modes: int) -> float:
                 + COST["zoo_per_shadow_mode_s"] * n
             )
     return c * COST["safety"]
+
+
+def tier_of(rank: int) -> str:
+    """Liquidity tier of the symbol ranked `rank` (1 = most executions) on its day."""
+    return next((name for cut, name in TIERS_BY_RANK if rank <= cut), TIER_REST)
+
+
+def session_hours(sm: dict[str, Any]) -> dict[str, int]:
+    """`open_s` / `close_s` from the day's system events (`Q` start, `M` end of market hours) when they differ from
+    09:30-16:00 (half days); empty otherwise, so a regular day's ingest spec stays the default."""
+    ev = sm["stream"].get("system_events_ns_since_midnight") or {}
+    if "Q" not in ev or "M" not in ev:
+        return {}
+    hours = (ev["Q"] // 1_000_000_000, ev["M"] // 1_000_000_000)
+    return {} if hours == DEFAULT_HOURS else {"open_s": hours[0], "close_s": hours[1]}
 
 
 def is_test_symbol(sym: str) -> bool:
@@ -131,6 +153,28 @@ def make_plan(a: argparse.Namespace) -> dict[str, Any]:
     for split in a.split:
         sm = json.loads((split / "split_manifest.json").read_text())
         date = sm["date"]
+        hours = session_hours(sm)
+        trading = sm.get("trading_state")
+        spans = (trading or {}).get("non_t_spans") or {}
+        day, bucket_of, day_exclusions = [], {}, []
+        test_issues = set(sm.get("routing", {}).get("test_issues") or [])
+        for b in sm["buckets"]:
+            for sym, (loc, msgs, ex) in b["symbols"].items():
+                reason = None
+                if is_test_symbol(sym):
+                    reason = "Nasdaq test symbol"
+                elif sym in test_issues:
+                    reason = "test issue (Stock Directory authenticity T)"
+                elif sym in a.exclude:
+                    reason = "excluded by --exclude"
+                elif a.quota_rule == "breadth" and not any(sym in t for t in K.TIERS.values()):
+                    reason = "not in the breadth TIERS"
+                if reason:
+                    day_exclusions.append({"date": date, "symbol": sym, "reason": reason})
+                    continue
+                day.append({"symbol": sym, "locate": loc, "messages": msgs, "executions": ex})
+                bucket_of[sym] = b
+        exclusions += day_exclusions
         sources.append(
             {
                 "date": date,
@@ -138,26 +182,18 @@ def make_plan(a: argparse.Namespace) -> dict[str, Any]:
                 "url": sm["source"]["url"],
                 "split_ok": sm["ok"],
                 "buckets": len(sm["buckets"]),
+                "session_hours": hours or None,
+                # the universe depends on the exclusion rules (prefixes, test issues, --exclude), so they enter the
+                # run id: a different universe of the same day gets a different run id
+                "exclusions_sha256": K.sha256_hex(K.canonical_json(sorted(day_exclusions, key=lambda e: e["symbol"]))),
+                "trading_state_recorded": trading is not None,
             }
         )
-        day, bucket_of = [], {}
-        for b in sm["buckets"]:
-            for sym, (loc, msgs, ex) in b["symbols"].items():
-                reason = None
-                if is_test_symbol(sym):
-                    reason = "Nasdaq test symbol"
-                elif sym in a.exclude:
-                    reason = "excluded by --exclude"
-                elif a.quota_rule == "breadth" and not any(sym in t for t in K.TIERS.values()):
-                    reason = "not in the breadth TIERS"
-                if reason:
-                    exclusions.append({"date": date, "symbol": sym, "reason": reason})
-                    continue
-                day.append({"symbol": sym, "locate": loc, "messages": msgs, "executions": ex})
-                bucket_of[sym] = b
         quotas = quotas_for(a.quota_rule, pops, day)
         by_bucket: dict[int, list[tuple[str, float]]] = {}
         info = {d["symbol"]: d for d in day}
+        ranked = sorted(day, key=lambda d: (-d["executions"], d["symbol"]))
+        tier = {d["symbol"]: tier_of(i + 1) for i, d in enumerate(ranked)}
         for d in day:
             sq = {p: quotas[p].get(d["symbol"], 0) for p in pops}
             c = symbol_cost(d["messages"], sq, len(a.modes))
@@ -170,8 +206,10 @@ def make_plan(a: argparse.Namespace) -> dict[str, Any]:
                     "locate": d["locate"],
                     "messages": d["messages"],
                     "executions": d["executions"],
+                    "tier": tier[d["symbol"]],
                     "quotas": sq,
                     "cost_core_s": round(c, 3),
+                    **({"non_t_spans": spans[d["symbol"]]} if d["symbol"] in spans else {}),
                 }
             )
         for bk in sorted(by_bucket):
@@ -190,6 +228,7 @@ def make_plan(a: argparse.Namespace) -> dict[str, Any]:
                         "quotas": {p: {s: quotas[p].get(s, 0) for s in syms} for p in pops},
                         "predicted_core_s": round(sum(c for n, c in items if n in syms), 3),
                         **run_spec,
+                        "ingest": {**K.INGEST_DEFAULTS, **hours},
                     }
                 )
     run_id = K.sha256_hex(K.canonical_json({"run": run_spec, "sources": sources}))[:16]

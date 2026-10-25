@@ -1,0 +1,75 @@
+{
+  "name": "qt.pm_score_orders",
+  "metadata": {
+    "qt.engine_version": "0.1.1",
+    "qt.schema": "qt.pm_score_orders",
+    "qt.schema_version": "1.1"
+  },
+  "fields": [
+    {
+      "name": "scenario",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "order_key",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "instrument_id",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "side",
+      "type": "uint8",
+      "nullable": false
+    },
+    {
+      "name": "price",
+      "type": "int64",
+      "nullable": false
+    },
+    {
+      "name": "qty",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "ts_live",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": true
+    },
+    {
+      "name": "ts_end",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": true
+    },
+    {
+      "name": "end",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "filled_qty",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "ts_first_fill",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": true
+    },
+    {
+      "name": "trading_pnl",
+      "type": "float64",
+      "nullable": true
+    },
+    {
+      "name": "fees",
+      "type": "float64",
+      "nullable": false
+    }
+  ]
+}

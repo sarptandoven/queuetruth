@@ -1,0 +1,24 @@
+{
+  "sample": {
+    "schema": "qt.demo_sources",
+    "schema_version": 1,
+    "default": "x",
+    "aliases": {
+      "k": "x"
+    },
+    "sources": [
+      {
+        "id": "x",
+        "title": "x",
+        "format": "itch",
+        "session_date": "x",
+        "url": "x",
+        "default_symbols": [
+          "x"
+        ],
+        "attribution": "x",
+        "terms_url": "x"
+      }
+    ]
+  }
+}

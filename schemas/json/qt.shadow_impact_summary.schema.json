@@ -1,0 +1,505 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.shadow_impact_summary",
+  "$defs": {
+    "FileEntry": {
+      "additionalProperties": false,
+      "description": "One output file: name relative to the output directory, row count for tables, size and sha256.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "rows": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rows"
+        },
+        "bytes": {
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "bytes",
+        "sha256"
+      ],
+      "title": "FileEntry",
+      "type": "object"
+    },
+    "ImpactConfig": {
+      "additionalProperties": false,
+      "description": "Coefficients and thresholds of `queuetruth.eval.impact` (defaults and references:\ndocs/concepts/impact-warning.md). Flags are inclusive (`>=`).",
+      "properties": {
+        "coefficient": {
+          "default": 1.0,
+          "minimum": 0.0,
+          "title": "Coefficient",
+          "type": "number"
+        },
+        "linear_below": {
+          "default": 1e-05,
+          "exclusiveMaximum": 1.0,
+          "minimum": 0.0,
+          "title": "Linear Below",
+          "type": "number"
+        },
+        "rv_interval_ns": {
+          "default": 300000000000,
+          "exclusiveMinimum": 0,
+          "title": "Rv Interval Ns",
+          "type": "integer"
+        },
+        "min_returns": {
+          "default": 12,
+          "minimum": 1,
+          "title": "Min Returns",
+          "type": "integer"
+        },
+        "impact_ticks": {
+          "default": 1.0,
+          "exclusiveMinimum": 0.0,
+          "title": "Impact Ticks",
+          "type": "number"
+        },
+        "flag_venue_volume_impact": {
+          "default": false,
+          "title": "Flag Venue Volume Impact",
+          "type": "boolean"
+        },
+        "queue_share": {
+          "default": 0.1,
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "Queue Share",
+          "type": "number"
+        },
+        "queue_min_qty": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Queue Min Qty"
+        },
+        "volume_share": {
+          "default": 0.05,
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "Volume Share",
+          "type": "number"
+        },
+        "warn_fraction": {
+          "default": 0.01,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Warn Fraction",
+          "type": "number"
+        }
+      },
+      "title": "ImpactConfig",
+      "type": "object"
+    },
+    "ImpactDay": {
+      "additionalProperties": false,
+      "description": "Daily figures of one instrument-day and its shadows.",
+      "properties": {
+        "instrument_id": {
+          "title": "Instrument Id",
+          "type": "integer"
+        },
+        "session_date": {
+          "title": "Session Date",
+          "type": "string"
+        },
+        "daily_volume": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Daily Volume"
+        },
+        "sigma_daily": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sigma Daily"
+        },
+        "volume_source": {
+          "enum": [
+            "venue_session",
+            "user"
+          ],
+          "title": "Volume Source",
+          "type": "string"
+        },
+        "n_shadows": {
+          "title": "N Shadows",
+          "type": "integer"
+        },
+        "n_material": {
+          "title": "N Material",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "instrument_id",
+        "session_date",
+        "daily_volume",
+        "sigma_daily",
+        "volume_source",
+        "n_shadows",
+        "n_material"
+      ],
+      "title": "ImpactDay",
+      "type": "object"
+    },
+    "ImpactDistribution": {
+      "additionalProperties": false,
+      "description": "Quantiles (numpy linear) of one per-shadow figure over the assessed shadows where it is defined.",
+      "properties": {
+        "n": {
+          "title": "N",
+          "type": "integer"
+        },
+        "p50": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "P50"
+        },
+        "p90": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "P90"
+        },
+        "p99": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "P99"
+        },
+        "max": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Max"
+        }
+      },
+      "required": [
+        "n",
+        "p50",
+        "p90",
+        "p99",
+        "max"
+      ],
+      "title": "ImpactDistribution",
+      "type": "object"
+    },
+    "ImpactSensitivity": {
+      "additionalProperties": false,
+      "description": "Assessed shadows at or above one threshold of a figure.",
+      "properties": {
+        "threshold": {
+          "title": "Threshold",
+          "type": "number"
+        },
+        "n_flagged": {
+          "title": "N Flagged",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "threshold",
+        "n_flagged"
+      ],
+      "title": "ImpactSensitivity",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`qt.shadow_impact_summary`: counts, distributions and the warning line of one `qt.shadow_impact` table.",
+  "properties": {
+    "schema": {
+      "const": "qt.shadow_impact_summary",
+      "default": "qt.shadow_impact_summary",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "source": {
+      "enum": [
+        "replay",
+        "zoo"
+      ],
+      "title": "Source",
+      "type": "string"
+    },
+    "config": {
+      "$ref": "#/$defs/ImpactConfig"
+    },
+    "volume_source": {
+      "enum": [
+        "venue_session",
+        "user",
+        "mixed"
+      ],
+      "title": "Volume Source",
+      "type": "string"
+    },
+    "h_max_ns": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "H Max Ns"
+    },
+    "horizon_ns": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Horizon Ns"
+    },
+    "fills_in_tape": {
+      "title": "Fills In Tape",
+      "type": "boolean"
+    },
+    "dataset": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Dataset"
+    },
+    "inputs": {
+      "items": {
+        "$ref": "#/$defs/FileEntry"
+      },
+      "title": "Inputs",
+      "type": "array"
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/FileEntry"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "n_shadows": {
+      "title": "N Shadows",
+      "type": "integer"
+    },
+    "n_rejected": {
+      "title": "N Rejected",
+      "type": "integer"
+    },
+    "n_out_of_session": {
+      "title": "N Out Of Session",
+      "type": "integer"
+    },
+    "n_assessed": {
+      "title": "N Assessed",
+      "type": "integer"
+    },
+    "n_evaluable_impact": {
+      "title": "N Evaluable Impact",
+      "type": "integer"
+    },
+    "n_evaluable_queue": {
+      "title": "N Evaluable Queue",
+      "type": "integer"
+    },
+    "n_evaluable_volume": {
+      "title": "N Evaluable Volume",
+      "type": "integer"
+    },
+    "n_flag_impact": {
+      "title": "N Flag Impact",
+      "type": "integer"
+    },
+    "n_impact_venue_bound": {
+      "title": "N Impact Venue Bound",
+      "type": "integer"
+    },
+    "n_flag_queue": {
+      "title": "N Flag Queue",
+      "type": "integer"
+    },
+    "n_queue_below_min_qty": {
+      "title": "N Queue Below Min Qty",
+      "type": "integer"
+    },
+    "n_flag_volume": {
+      "title": "N Flag Volume",
+      "type": "integer"
+    },
+    "n_alone_at_level": {
+      "title": "N Alone At Level",
+      "type": "integer"
+    },
+    "n_material": {
+      "title": "N Material",
+      "type": "integer"
+    },
+    "material_share": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Material Share"
+    },
+    "material": {
+      "title": "Material",
+      "type": "boolean"
+    },
+    "distributions": {
+      "additionalProperties": {
+        "$ref": "#/$defs/ImpactDistribution"
+      },
+      "title": "Distributions",
+      "type": "object"
+    },
+    "sensitivity": {
+      "additionalProperties": {
+        "items": {
+          "$ref": "#/$defs/ImpactSensitivity"
+        },
+        "type": "array"
+      },
+      "title": "Sensitivity",
+      "type": "object"
+    },
+    "by_instrument": {
+      "patternProperties": {
+        "^-?[0-9]+$": {
+          "type": "integer"
+        }
+      },
+      "title": "By Instrument",
+      "type": "object"
+    },
+    "days": {
+      "items": {
+        "$ref": "#/$defs/ImpactDay"
+      },
+      "title": "Days",
+      "type": "array"
+    },
+    "warning": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Warning"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "source",
+    "config",
+    "volume_source",
+    "h_max_ns",
+    "horizon_ns",
+    "fills_in_tape",
+    "dataset",
+    "inputs",
+    "files",
+    "n_shadows",
+    "n_rejected",
+    "n_out_of_session",
+    "n_assessed",
+    "n_evaluable_impact",
+    "n_evaluable_queue",
+    "n_evaluable_volume",
+    "n_flag_impact",
+    "n_impact_venue_bound",
+    "n_flag_queue",
+    "n_queue_below_min_qty",
+    "n_flag_volume",
+    "n_alone_at_level",
+    "n_material",
+    "material_share",
+    "material",
+    "distributions",
+    "sensitivity",
+    "by_instrument",
+    "days",
+    "warning"
+  ],
+  "type": "object"
+}

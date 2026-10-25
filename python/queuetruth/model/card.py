@@ -25,6 +25,7 @@ from typing import Any
 
 import numpy as np
 import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
 from queuetruth.errors import QtError
@@ -38,7 +39,7 @@ from queuetruth.model._common import (
     require_columns,
 )
 from queuetruth.model.climatology import Climatology
-from queuetruth.model.hazard import CARD_NAME, PICKLE_NAME, PREDICTIONS_NAME, HazardModel
+from queuetruth.model.hazard import CARD_NAME, MODEL_NAME, PICKLE_NAME, PREDICTIONS_NAME, HazardModel
 from queuetruth.model.scoring import (
     auc_at,
     brier_terms,
@@ -184,7 +185,7 @@ def score_test(model: HazardModel, warnings: list[str]) -> tuple[dict[str, Any],
         return empty_scores(grid), {}
     t_tbl = tbl.filter(pa.array(test))
     e, c = outcome_arrays(t_tbl)
-    arr = model.predict_arrays(t_tbl)
+    arr = model.split_arrays(test)  # the hazards cached by fit (equal to predict_arrays(t_tbl))
     g = censoring_km(e, c)
     train = label == TRAIN
     tr_tbl = tbl.filter(pa.array(train))
@@ -231,13 +232,13 @@ def score_test(model: HazardModel, warnings: list[str]) -> tuple[dict[str, Any],
 ZOO_SHADOWS_NAME = "zoo_shadows.parquet"
 
 
-def _zoo_truth_rows(
-    zoo: pa.Table, planned_life: pa.Table | None
-) -> tuple[list[tuple[str, str, int, float, bool | None, bool]], str]:
-    """Per zoo prediction row: (model_id, shadow_id, horizon, p_fill, never-cancel truth or None, comparable) and the
-    eligibility rule used. Comparable = the shadow is never-cancel and its planned (administrative) life reaches
-    `ts_live + h` (audit ruling A2: outcome-independent). `planned_life` is required (`QT-INPUT-001`; E38 OC-7:
-    never a silent fallback to the `censored` flag); a shadow without a row is not comparable."""
+def _zoo_truth_rows(zoo: pa.Table, planned_life: pa.Table | None) -> tuple[dict[str, Any], str]:
+    """Columns per zoo prediction row: `model_id` (Arrow utf8), `shadow_id` (Arrow utf8), `horizon_ns`, `p_fill`,
+    never-cancel truth `truth` with its validity `has_truth`, and `comparable`; plus the eligibility rule used.
+    Comparable = the row has an exact truth, the shadow is never-cancel and its planned (administrative) life reaches
+    `ts_live + h` (audit ruling A2: outcome-independent). `planned_life` is required (`QT-INPUT-001`; E38 OC-7: never
+    a silent fallback to the `censored` flag); a shadow without a row is not comparable, and of repeated planned-life
+    rows of one shadow the first counts. Vectorised: the planned life is looked up once per distinct shadow id."""
     if planned_life is None:
         raise QtError(
             "QT-INPUT-001",
@@ -247,27 +248,70 @@ def _zoo_truth_rows(
         )
     need = ("model_id", "shadow_id", "horizon_ns", "p_fill", "truth_filled", "ts_live")
     require_columns(zoo, need, "zoo_predictions")
-    mid = zoo.column("model_id").combine_chunks().cast(pa.utf8()).to_pylist()
-    sid = zoo.column("shadow_id").combine_chunks().cast(pa.utf8()).to_pylist()
+    sid = zoo.column("shadow_id").combine_chunks().cast(pa.utf8())
     hz = int64_column(zoo, "horizon_ns")
     pf = zoo.column("p_fill").combine_chunks().cast(pa.float64()).to_numpy(zero_copy_only=False)
-    truth = zoo.column("truth_filled").combine_chunks().to_pylist()
+    truth_col = zoo.column("truth_filled").combine_chunks().cast(pa.bool_())
+    has_truth = np.asarray(truth_col.is_valid().to_numpy(zero_copy_only=False), dtype=bool)
+    truth = np.asarray(truth_col.fill_null(False).to_numpy(zero_copy_only=False), dtype=bool)
     live = int64_column(zoo, "ts_live")
     require_columns(planned_life, ("shadow_id", "ts_admin_end", "never_cancel"), "zoo_shadows")
     ps = planned_life.column("shadow_id").combine_chunks().cast(pa.utf8()).to_pylist()
     adm = planned_life.column("ts_admin_end").combine_chunks()
     adm_l = (adm.cast(pa.int64()) if pa.types.is_timestamp(adm.type) else adm).to_pylist()
     nc = planned_life.column("never_cancel").combine_chunks().to_pylist()
-    life: dict[str, tuple[bool, int | None]] = {}
+    life: dict[str | None, tuple[bool, int | None]] = {}
     for a, b, n in zip(ps, adm_l, nc, strict=True):
         life.setdefault(a, (bool(n), b))
+    codes, uniq = _encode(sid)
+    u_never = np.zeros(len(uniq), dtype=bool)  # known, never-cancel shadow
+    u_open = np.zeros(len(uniq), dtype=bool)  # no administrative end
+    u_end = [0] * len(uniq)
+    for k, s in enumerate(uniq):
+        got = life.get(s)
+        if got is not None and got[0]:
+            u_never[k] = True
+            u_open[k] = got[1] is None
+            u_end[k] = 0 if got[1] is None else int(got[1])
+    end = _int_or_object(u_end)[codes]
+    reach = _ge_sum(end, live, hz)
+    comparable = u_never[codes] & (u_open[codes] | reach) & has_truth
     rule = "planned life of qt.zoo_shadows (never-cancel shadows whose administrative end is >= ts_live + h)"
-    out = []
-    for m, s, h, p, y, t0 in zip(mid, sid, hz, pf, truth, live, strict=True):
-        nc_adm = life.get(s)
-        ok = nc_adm is not None and nc_adm[0] and (nc_adm[1] is None or int(nc_adm[1]) >= int(t0) + int(h))
-        out.append((m, s, int(h), float(p), None if y is None else bool(y), ok and y is not None))
-    return out, rule
+    cols = {
+        "model_id": zoo.column("model_id").combine_chunks().cast(pa.utf8()),
+        "shadow_id": sid,
+        "horizon_ns": hz,
+        "p_fill": pf,
+        "truth": truth,
+        "has_truth": has_truth,
+        "comparable": comparable,
+    }
+    return cols, rule
+
+
+def _encode(arr: pa.Array) -> tuple[np.ndarray, list[Any]]:
+    """`(codes, distinct values)` of a utf8 array, nulls included as a value (`None`)."""
+    enc = pc.dictionary_encode(arr, null_encoding="encode")
+    codes = np.asarray(enc.indices.to_numpy(zero_copy_only=False), dtype=np.int64)
+    return codes, enc.dictionary.to_pylist()
+
+
+_SAFE_INT = 1 << 62
+
+
+def _int_or_object(values: list[int]) -> np.ndarray:
+    """int64 when every value is inside +-2^62 (sums of two cannot overflow), else exact Python integers."""
+    if all(-_SAFE_INT < v < _SAFE_INT for v in values):
+        return np.asarray(values, dtype=np.int64)
+    return np.asarray(values, dtype=object)
+
+
+def _ge_sum(end: np.ndarray, a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """`end >= a + b` elementwise, exact (no int64 overflow)."""
+    wide = end.dtype == object or bool(np.any((a >= _SAFE_INT) | (a <= -_SAFE_INT)))
+    if wide or bool(np.any((b >= _SAFE_INT) | (b <= -_SAFE_INT))):
+        return np.array([int(x) >= int(y) + int(z) for x, y, z in zip(end, a, b, strict=True)], dtype=bool)
+    return end >= a + b
 
 
 def zoo_comparison(
@@ -290,59 +334,88 @@ def zoo_comparison(
     rows it predicts; this model on the rows that every zoo model predicts at that horizon. The hazard model's own
     labels still treat the policy cancel as competing: where compared shadows were policy-cancelled before h its
     `CIF_fill(h)` estimates "fill before the policy cancel" (at most the never-cancel probability), which a warning
-    counts."""
+    counts.
+
+    Duplicates: a test shadow's truth at h is that of the first eligible zoo row for it; a model's prediction is its
+    last eligible row; a test `order_ref` that repeats maps to its last landmark-0 shadow row. Vectorised over the
+    zoo rows (the per-model sums run over the shadows in test-row order, as the v0.1 loop did; tested equal)."""
     if not test:
         return {}
     note = warnings if warnings is not None else []
     from queuetruth.eval.zoo import without_aborted
 
-    rows, rule = _zoo_truth_rows(without_aborted(zoo), planned_life)
+    zoo = without_aborted(zoo)
+    cols, rule = _zoo_truth_rows(zoo, planned_life)
     t_tbl: pa.Table = test["table"]
     lm = int64_column(t_tbl, "landmark_ns")
     pop = t_tbl.column("population").combine_chunks().cast(pa.utf8()).to_pylist()
     refs = t_tbl.column("order_ref").combine_chunks().cast(pa.utf8()).to_pylist()
     row_of = {r: i for i, (r, l0, pp) in enumerate(zip(refs, lm, pop, strict=True)) if l0 == 0 and pp == "shadows"}
-    grid = [int(t) for t in model.grid_ns]
-    on_grid = set(grid)
-    preds: dict[str, dict[int, dict[int, float]]] = {}
-    truth: dict[tuple[int, int], bool] = {}
-    for mid, sid, h, p, y, ok in rows:
-        i = row_of.get(sid)
-        if i is None or h not in on_grid or not ok or not np.isfinite(p) or y is None:
-            continue
-        truth.setdefault((i, h), y)
-        preds.setdefault(mid, {}).setdefault(h, {})[i] = p
-    e, c, cif = test["e"], test["c"], test["cif_fill"]
+    grid_arr = np.asarray([int(t) for t in model.grid_ns], dtype=np.int64)
+    grid = [int(t) for t in grid_arr]
+    n_grid, n_test = len(grid), t_tbl.num_rows
+
+    s_codes, s_uniq = _encode(cols["shadow_id"])
+    row = np.array([row_of.get(s, -1) for s in s_uniq], dtype=np.int64)[s_codes] if s_uniq else s_codes
+    h, p = cols["horizon_ns"], cols["p_fill"]
+    j = np.searchsorted(grid_arr, h)
+    on_grid = (j < n_grid) & (grid_arr[np.minimum(j, n_grid - 1)] == h)
+    keep = np.flatnonzero((row >= 0) & on_grid & cols["comparable"] & np.isfinite(p))
+    m_codes, m_uniq = _encode(cols["model_id"])
+    i_v, j_v, p_v, y_v, m_v = row[keep], j[keep], p[keep], cols["truth"][keep], m_codes[keep]
+    # truth per (shadow row, horizon): the first eligible zoo row
+    tkey = i_v * n_grid + j_v
+    uk, first = np.unique(tkey, return_index=True)
+    truth_at = np.full(n_test * n_grid, np.nan)
+    truth_at[uk] = y_v[first].astype(np.float64)
+    # prediction per (model, horizon, shadow row): the last eligible zoo row; keys sort by model, horizon, row
+    pkey = (m_v * n_grid + j_v) * n_test + i_v
+    rev_keys, rev_first = np.unique(pkey[::-1], return_index=True)
+    p_last = p_v[::-1][rev_first]
+    k_model, rest = np.divmod(rev_keys, n_grid * n_test)
+    k_j, k_i = np.divmod(rest, n_test)
+    present = [int(m) for m in np.unique(k_model)]
+    by_name = {m_uniq[m]: m for m in present}
+
     out: dict[str, Any] = {}
-    common: dict[int, set[int]] = {}
-    for mid in sorted(preds):
+    common: dict[int, np.ndarray] = {}
+    n_models_at = np.zeros(n_grid, dtype=np.int64)
+    hits = np.zeros((n_grid, n_test), dtype=np.int32)
+    for name in sorted(by_name):
+        m = by_name[name]
         hm: dict[str, float | None] = {}
-        for tau in grid:
-            rows_p = preds[mid].get(tau)
-            if not rows_p:
+        in_m = np.flatnonzero(k_model == m)
+        lo_m, hi_m = (int(in_m[0]), int(in_m[-1]) + 1)
+        for jj, tau in enumerate(grid):
+            lo = lo_m + int(np.searchsorted(k_j[lo_m:hi_m], jj, side="left"))
+            hi = lo_m + int(np.searchsorted(k_j[lo_m:hi_m], jj, side="right"))
+            if lo == hi:
                 continue
-            idx = sorted(rows_p)
-            p = np.array([rows_p[i] for i in idx])
-            y = np.array([truth[(i, tau)] for i in idx], dtype=np.float64)
-            hm[str(tau)] = _num(np.mean((p - y) ** 2))
-            common[tau] = set(rows_p) if tau not in common else (common[tau] & set(rows_p))
-        out[mid] = {"brier": hm}
+            idx = k_i[lo:hi]
+            y = truth_at[idx * n_grid + jj]
+            hm[str(tau)] = _num(np.mean((p_last[lo:hi] - y) ** 2))
+            n_models_at[jj] += 1
+            hits[jj, idx] += 1
+        out[name] = {"brier": hm}
+    for jj, tau in enumerate(grid):
+        if n_models_at[jj]:
+            common[tau] = np.flatnonzero(hits[jj] == n_models_at[jj])
     if not out:
-        if rows:
+        if zoo.num_rows:
             note.append(
                 "zoo_comparison: no test shadow is comparable (never-cancel, planned life covering the horizon, exact "
                 f"truth, horizon on the grid); label rule: {rule}"
             )
         return out
+    e, c, cif = test["e"], test["c"], test["cif_fill"]
     own: dict[str, float | None] = {}
     sizes, cancelled = [], []
-    for tau, rows_c in sorted(common.items()):
-        if not rows_c:
+    for tau, idx in sorted(common.items()):
+        if not idx.size:
             continue
-        j = grid.index(tau)
-        idx = np.array(sorted(rows_c), dtype=np.int64)
-        y = np.array([truth[(int(i), tau)] for i in idx], dtype=np.float64)
-        own[str(tau)] = _num(np.mean((cif[idx, j] - y) ** 2))
+        jj = grid.index(tau)
+        y = truth_at[idx * n_grid + jj]
+        own[str(tau)] = _num(np.mean((cif[idx, jj] - y) ** 2))
         sizes.append(f"{tau}={idx.size}")
         k = int(np.sum((c[idx] == CANCEL) & (e[idx] <= tau)))
         if k:
@@ -405,13 +478,14 @@ def _card_json(card: HazardModelCard) -> str:
 
 
 def write_card(model: HazardModel, out: Path) -> HazardModelCard:
-    """Writes `model.json` for a model whose `model.pkl` exists in `out`: updates the card of `fit_hazard` with the
-    pickle's entry, or builds one with null scores for a model fitted directly."""
-    pkl = out / PICKLE_NAME
-    entry = {"name": PICKLE_NAME, "rows": None, "bytes": pkl.stat().st_size, "sha256": sha256_file(pkl)}
+    """Writes `model.json` for a model whose `model.npz` exists in `out`: updates the card of `fit_hazard` with the
+    model file's entry (replacing any `model.npz` / legacy `model.pkl` entry), or builds one with null scores for a
+    model fitted directly."""
+    path = out / MODEL_NAME
+    entry = {"name": MODEL_NAME, "rows": None, "bytes": path.stat().st_size, "sha256": sha256_file(path)}
     if model.card is not None:
         doc = model.card.model_dump(mode="json")
-        doc["files"] = [f for f in doc["files"] if f["name"] != PICKLE_NAME] + [entry]
+        doc["files"] = [f for f in doc["files"] if f["name"] not in (MODEL_NAME, PICKLE_NAME)] + [entry]
         card = HazardModelCard.model_validate(doc)
     else:
         card = assemble_card(
@@ -427,7 +501,7 @@ def write_card(model: HazardModel, out: Path) -> HazardModelCard:
 
 
 def fit_hazard(spec: HazardFitSpec | dict[str, Any]) -> HazardModelCard:
-    """`fit-hazard`: reads `qt.features`, fits, writes `predictions.parquet` (every split), `model.pkl` and
+    """`fit-hazard`: reads `qt.features`, fits, writes `predictions.parquet` (every split), `model.npz` and
     `model.json` under `out` (nothing is written when `out` is null) and returns the model card."""
     sp = spec if isinstance(spec, HazardFitSpec) else HazardFitSpec.model_validate(spec)
     features = read_qt_table(_path_of(sp.features, "features"), "qt.features")
@@ -461,7 +535,7 @@ def fit_hazard(spec: HazardFitSpec | dict[str, Any]) -> HazardModelCard:
     if sp.out is not None:
         out = Path(sp.out)
         out.mkdir(parents=True, exist_ok=True)
-        preds = model.predict(model.split_features)
+        preds = model.predict_split()
         files.append(write_table(preds, out / PREDICTIONS_NAME, SCHEMAS["qt.hazard_predictions"]))
     model.card = assemble_card(model, model_id=mid, scores=scores, files=files, warnings=warnings, zoo=zoo)
     if sp.out is not None:

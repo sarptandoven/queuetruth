@@ -1,0 +1,2 @@
+exchange,symbol,timestamp,local_timestamp,id,side,price,amount
+binance-futures,BTCUSDT,9223372036854775,9223372036854775,1,sell,100.0,0.5

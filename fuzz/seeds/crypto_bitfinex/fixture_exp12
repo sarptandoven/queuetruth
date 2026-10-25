@@ -1,0 +1,13 @@
+{"recv_ns":1,"chan":"book_R0","symbol":"tBTCUSD","msg":[1,[[101,61200.5,0.5],[102,61205,-0.8],[104,61190,50]],1,1712131200000]}
+{"recv_ns":3,"chan":"book_R0","symbol":"tBTCUSD","msg":[1,[103,61200.5,0.25],3,1712131200001]}
+{"recv_ns":9,"chan":"book_R0","symbol":"tBTCUSD","msg":[1,[101,61200.5,0.3],9,1712131200003]}
+{"recv_ns":10,"chan":"book_R0","symbol":"tBTCUSD","msg":[1,[102,61206,-0.8],10,1712131200004]}
+{"recv_ns":11,"chan":"book_R0","symbol":"tBTCUSD","msg":[1,[103,0,1],11,1712131200005]}
+{"recv_ns":12,"chan":"book_R0","symbol":"tBTCUSD","msg":[1,[999,0,-1],12,1712131200005]}
+{"recv_ns":2,"chan":"book_P0","symbol":"tBTCUSD","msg":[2,[[61200.5,1,0.5],[61205,1,-0.8]],2,1712131200000]}
+{"recv_ns":4,"chan":"book_P0","symbol":"tBTCUSD","msg":[2,[61200.5,2,0.75],4,1712131200001]}
+{"recv_ns":13,"chan":"book_P0","symbol":"tBTCUSD","msg":[2,[61205,0,-1],13,1712131200006]}
+{"recv_ns":6,"chan":"trades","symbol":"tBTCUSD","msg":[3,[[9,1712131199000,0.1,61200.5]],6,1712131200002]}
+{"recv_ns":7,"chan":"trades","symbol":"tBTCUSD","msg":[3,"te",[10,1712131200003,-0.2,61200.5],7,1712131200003]}
+{"recv_ns":8,"chan":"trades","symbol":"tBTCUSD","msg":[3,"tu",[10,1712131200003,-0.2,61200.5],8,1712131200003]}
+{"recv_ns":5,"chan":"hb","symbol":"tBTCUSD","msg":[1,"hb",5,1712131200002]}

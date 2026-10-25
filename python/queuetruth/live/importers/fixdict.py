@@ -14,7 +14,8 @@ Format (shared by every QuickFIX engine): a `<fix type="FIX|FIXT" major minor se
 - name message types and count the tags of imported messages that the dictionary does not define (they are kept
   verbatim in the canonical `raw` columns).
 
-Entity declarations are refused (no DTD processing of untrusted XML).
+Document type and entity declarations are refused in any encoding (no DTD processing of untrusted XML; see
+`queuetruth.live.importers._xml`).
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from queuetruth.errors import QtError
+from queuetruth.live.importers._xml import parse_xml
 
 #: Standard tag numbers of every concept the FIX importer reads (FIX 4.2 - 5.0SP2 names).
 STANDARD_TAGS: dict[str, str] = {
@@ -188,12 +190,7 @@ def load_dictionary(paths: list[str] | str | None) -> FixDictionary | None:
             data = path.read_bytes()
         except OSError as e:
             raise QtError("QT-INPUT-001", f"{p}: {e}") from e
-        if b"<!ENTITY" in data or b"<!DOCTYPE" in data:
-            raise QtError("QT-INPUT-002", f"{p}: DTD / entity declarations are not accepted in a data dictionary")
-        try:
-            root = ET.fromstring(data)
-        except ET.ParseError as e:
-            raise QtError("QT-INPUT-002", f"{p}: not a QuickFIX data dictionary: {e}") from e
+        root = parse_xml(data, str(p), "a QuickFIX data dictionary")
         if root.tag != "fix":
             raise QtError("QT-INPUT-002", f"{p}: root element is <{root.tag}>, expected <fix>")
         kind = _attr(root, "type") or "FIX"
@@ -206,7 +203,7 @@ def load_dictionary(paths: list[str] | str | None) -> FixDictionary | None:
         fields_el = root.find("fields")
         for f in fields_el.findall("field") if fields_el is not None else []:
             num, name = _attr(f, "number"), _attr(f, "name")
-            if not num.isdecimal() or not name:
+            if not (num.isascii() and num.isdecimal()) or not name:
                 raise QtError("QT-INPUT-002", f"{p}: <field> without a numeric number and a name")
             d.names[num] = name
             d.numbers[name] = num

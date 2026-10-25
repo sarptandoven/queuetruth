@@ -1,0 +1,16 @@
+{
+  "sample": {
+    "schema": "qt.forecast_commitment",
+    "schema_version": 1,
+    "ledger_id": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "head_seq": 1,
+    "head_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "head_recorded_at_ns": 1,
+    "n_entries": 1,
+    "n_forecasts": 1,
+    "n_resolutions": 1,
+    "hash_alg": "sha256",
+    "chain_rule": "x",
+    "engine_version": "x"
+  }
+}

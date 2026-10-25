@@ -1,0 +1,161 @@
+{
+  "name": "qt.score_shortfall",
+  "metadata": {
+    "qt.engine_version": "0.1.1",
+    "qt.schema": "qt.score_shortfall",
+    "qt.schema_version": "1.1"
+  },
+  "fields": [
+    {
+      "name": "scope",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "order",
+        "total"
+      ]
+    },
+    {
+      "name": "statistic",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "value",
+        "sum",
+        "mean",
+        "ci_lo",
+        "ci_hi"
+      ]
+    },
+    {
+      "name": "horizon_ns",
+      "type": "int64",
+      "nullable": false
+    },
+    {
+      "name": "order_key",
+      "type": "utf8",
+      "nullable": true
+    },
+    {
+      "name": "instrument_id",
+      "type": "uint32",
+      "nullable": true
+    },
+    {
+      "name": "session_date",
+      "type": "date32",
+      "nullable": true
+    },
+    {
+      "name": "side",
+      "type": "dictionary<int8, utf8>",
+      "nullable": true,
+      "values": [
+        "buy",
+        "sell"
+      ]
+    },
+    {
+      "name": "class",
+      "type": "dictionary<int8, utf8>",
+      "nullable": true,
+      "values": [
+        "both",
+        "neither",
+        "live_only",
+        "sim_only"
+      ]
+    },
+    {
+      "name": "currency",
+      "type": "utf8",
+      "nullable": true
+    },
+    {
+      "name": "qty",
+      "type": "uint64",
+      "nullable": true
+    },
+    {
+      "name": "live_qty",
+      "type": "uint64",
+      "nullable": true
+    },
+    {
+      "name": "sim_qty",
+      "type": "uint64",
+      "nullable": true
+    },
+    {
+      "name": "matched_qty",
+      "type": "uint64",
+      "nullable": true
+    },
+    {
+      "name": "valued",
+      "type": "bool",
+      "nullable": false
+    },
+    {
+      "name": "delay_ccy",
+      "type": "float64",
+      "nullable": true
+    },
+    {
+      "name": "spread_ccy",
+      "type": "float64",
+      "nullable": true
+    },
+    {
+      "name": "missed_fill_ccy",
+      "type": "float64",
+      "nullable": true
+    },
+    {
+      "name": "adverse_selection_ccy",
+      "type": "float64",
+      "nullable": true
+    },
+    {
+      "name": "partial_fill_ccy",
+      "type": "float64",
+      "nullable": true
+    },
+    {
+      "name": "fees_ccy",
+      "type": "float64",
+      "nullable": true
+    },
+    {
+      "name": "total_ccy",
+      "type": "float64",
+      "nullable": true
+    },
+    {
+      "name": "notional_ccy",
+      "type": "float64",
+      "nullable": true
+    },
+    {
+      "name": "live_notional_ccy",
+      "type": "float64",
+      "nullable": true
+    },
+    {
+      "name": "sim_notional_ccy",
+      "type": "float64",
+      "nullable": true
+    },
+    {
+      "name": "n",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "note",
+      "type": "utf8",
+      "nullable": true
+    }
+  ]
+}

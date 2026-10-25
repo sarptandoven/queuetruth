@@ -1,0 +1,190 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.pm_score_spec",
+  "$defs": {
+    "PathRef": {
+      "additionalProperties": false,
+      "description": "Local path reference (CLI, Python API, MCP local mode).",
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "PathRef",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`pm score`: reward-aware market-making PnL band and the sim-versus-live comparison.",
+  "properties": {
+    "pm": {
+      "$ref": "#/$defs/PathRef"
+    },
+    "out": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Out"
+    },
+    "quotes": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PathRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "calibration": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PathRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "model": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Model"
+    },
+    "settle": {
+      "additionalProperties": {
+        "pattern": "^[0-9]+(\\.[0-9]+)?$",
+        "type": "string"
+      },
+      "title": "Settle",
+      "type": "object"
+    },
+    "member": {
+      "default": "direct",
+      "enum": [
+        "direct",
+        "non_direct"
+      ],
+      "title": "Member",
+      "type": "string"
+    },
+    "window_ns": {
+      "default": 60000000000,
+      "minimum": 1,
+      "title": "Window Ns",
+      "type": "integer"
+    },
+    "markout_horizons_ns": {
+      "items": {
+        "minimum": 0,
+        "type": "integer"
+      },
+      "title": "Markout Horizons Ns",
+      "type": "array"
+    },
+    "flat_taker": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9]+(\\.[0-9]+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Flat Taker"
+    },
+    "flat_maker": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9]+(\\.[0-9]+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Flat Maker"
+    },
+    "poly_multiplier": {
+      "default": 1.0,
+      "title": "Poly Multiplier",
+      "type": "number"
+    },
+    "poly_daily_reward": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9]+(\\.[0-9]+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Poly Daily Reward"
+    },
+    "poly_category": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Poly Category"
+    },
+    "actual_rewards": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9]+(\\.[0-9]+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Actual Rewards"
+    },
+    "bootstrap_b": {
+      "default": 500,
+      "minimum": 0,
+      "title": "Bootstrap B",
+      "type": "integer"
+    },
+    "seed": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Seed",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "pm"
+  ],
+  "type": "object"
+}

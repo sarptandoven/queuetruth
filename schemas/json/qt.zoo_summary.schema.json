@@ -218,6 +218,86 @@
           },
           "title": "Model Fill Rate",
           "type": "object"
+        },
+        "first_fill_error": {
+          "patternProperties": {
+            "^[0-9]+$": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "title": "First Fill Error",
+          "type": "object"
+        },
+        "mcs_member": {
+          "patternProperties": {
+            "^[0-9]+$": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "title": "Mcs Member",
+          "type": "object"
+        },
+        "mcs_p": {
+          "patternProperties": {
+            "^[0-9]+$": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "title": "Mcs P",
+          "type": "object"
+        },
+        "mcs_brier_member": {
+          "patternProperties": {
+            "^[0-9]+$": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "title": "Mcs Brier Member",
+          "type": "object"
+        },
+        "mcs_brier_p": {
+          "patternProperties": {
+            "^[0-9]+$": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "title": "Mcs Brier P",
+          "type": "object"
         }
       },
       "required": [

@@ -122,6 +122,15 @@ class ReplayRecord(BaseModel):
     summary: m.ReplaySummary | None = None
 
 
+class ZooRecord(BaseModel):
+    """`GET /v1/zoos/{id}`."""
+
+    id: str
+    spec: dict[str, Any]
+    job_id: str
+    summary: m.ZooSummary | None = None
+
+
 class CalibrationRecord(BaseModel):
     """`GET /v1/calibrations/{id}`."""
 
@@ -176,6 +185,7 @@ KeyPage = _page("ApiKeyPage", m.ApiKey)
 DatasetPage = _page("DatasetPage", m.Dataset)
 JobPage = _page("JobPage", m.Job)
 ReplayPage = _page("ReplayRecordPage", ReplayRecord)
+ZooPage = _page("ZooRecordPage", ZooRecord)
 CalibrationPage = _page("CalibrationRecordPage", CalibrationRecord)
 ScorecardPage = _page("ScorecardRecordPage", ScorecardRecord)
 TombstonePage = _page("TombstonePage", Tombstone)

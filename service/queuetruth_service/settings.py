@@ -42,7 +42,7 @@ DEFAULT_COMPUTE_LIMITS: dict[str, int] = {
 }
 
 #: Job kinds that run in a child process and so take a timeout (`runners.TARGETS`).
-JOB_KINDS = ("replay", "calibration", "scorecard", "report", "dataset_validate", "ingest")
+JOB_KINDS = ("replay", "calibration", "scorecard", "report", "dataset_validate", "ingest", "zoo")
 
 #: Substrings that mark a value as a template placeholder rather than a generated secret.
 PLACEHOLDERS = (

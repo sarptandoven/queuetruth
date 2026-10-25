@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.ledger_export",
+  "$defs": {
+    "Head": {
+      "additionalProperties": false,
+      "description": "The last record of a ledger: anchor it outside the ledger (`seq:hash`) to detect a rewritten history.",
+      "properties": {
+        "seq": {
+          "title": "Seq",
+          "type": "integer"
+        },
+        "hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "seq",
+        "hash"
+      ],
+      "title": "Head",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`ledger export`: what was written.",
+  "properties": {
+    "schema": {
+      "const": "qt.ledger_export",
+      "default": "qt.ledger_export",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "ledger": {
+      "title": "Ledger",
+      "type": "string"
+    },
+    "ledger_id": {
+      "pattern": "^[0-9a-f]{32}$",
+      "title": "Ledger Id",
+      "type": "string"
+    },
+    "head": {
+      "$ref": "#/$defs/Head"
+    },
+    "out": {
+      "title": "Out",
+      "type": "string"
+    },
+    "format": {
+      "enum": [
+        "jsonl",
+        "json",
+        "parquet",
+        "selection"
+      ],
+      "title": "Format",
+      "type": "string"
+    },
+    "n_records": {
+      "title": "N Records",
+      "type": "integer"
+    },
+    "bytes": {
+      "title": "Bytes",
+      "type": "integer"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "ledger",
+    "ledger_id",
+    "head",
+    "out",
+    "format",
+    "n_records",
+    "bytes",
+    "sha256"
+  ],
+  "type": "object"
+}

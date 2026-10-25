@@ -1,0 +1,50 @@
+{
+  "name": "qt.conformal_calibrator",
+  "metadata": {
+    "qt.engine_version": "0.1.1",
+    "qt.schema": "qt.conformal_calibrator",
+    "qt.schema_version": "1"
+  },
+  "fields": [
+    {
+      "name": "part",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "horizon_ns",
+      "type": "int64",
+      "nullable": true
+    },
+    {
+      "name": "landmark_ns",
+      "type": "int64",
+      "nullable": false
+    },
+    {
+      "name": "category",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "label",
+      "type": "int8",
+      "nullable": false
+    },
+    {
+      "name": "value",
+      "type": "float64",
+      "nullable": false
+    },
+    {
+      "name": "weight",
+      "type": "float64",
+      "nullable": true
+    },
+    {
+      "name": "label_sum",
+      "type": "float64",
+      "nullable": true
+    }
+  ]
+}

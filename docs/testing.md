@@ -138,7 +138,7 @@ specification's own claims, and their results became tests or rulings:
   not shrink the queue, and the queue gate on trade-throughs come from that work. Fed `OrderBookDepth10` snapshots
   instead, 1.231.0 resets queue position at every snapshot and its queue model fills like the touch model; the zoo
   models describe the delta feed. The same harness runs on nautilus_trader 2.0.0rc7: the touch model fills the same
-  orders as 1.231.0, the queue model agrees with faithful `nt_queue_l2` on 99.60% to 99.97% of orders (2.0 caps queue
+  orders as 1.231.0, the queue model agrees with faithful `nt_queue_l2` on 99.60% to 100% of orders (2.0 caps queue
   ahead when a level shrinks), the depth feed no longer resets the queue (from rc5), and fed the MBO book as L3
   deltas, 2.0's queue model fills the same orders as the exact replay on all but 3 order-horizons
   (`scripts/nt_crosscheck/l3_mbo.py`).
@@ -148,12 +148,15 @@ specification's own claims, and their results became tests or rulings:
   separate scripts, including an independent Python port of the shadow rules that reproduces the predecessor's
   shadow fills on both days. Its README claims were checked against the recomputation.
 - **Independent matching-engine oracle.** `python/tests/oracle/qt_oracle` was written from the venue rules and the
-  audit rulings without reading the production book or replay code (O-SH-5). On the predecessor engine's CSV
-  conversion of the two real days, with the predecessor's mirror shadows, it agreed with the engine on 2,997 of 3,000
-  shadows per day, with equal filled quantities (the 3 + 3 disagreements: hidden prints on day one, oracle divergence
-  on day two). On the datasets ingested from the raw ITCH bytes, with queuetruth's own mirror sampler (about half of
-  the shadows fill), it agreed on 2,992 and 2,985 of 3,000, again with equal total filled quantities; every
-  disagreement is listed in [Results](RESULTS.md), section 3. Its stated limits:
+  audit rulings without reading the production book or replay code (O-SH-5). On the datasets ingested from the raw
+  ITCH bytes, with queuetruth's own mirror sampler (about half of the shadows fill), it agrees with the engine on
+  3,000 of 3,000 shadows on both days; on the predecessor engine's CSV conversion, with the predecessor's mirror
+  shadows, on 2,997 and 3,000 of 3,000 (the 3: the oracle's 1 s cross window on a CSV without cross flags), with
+  equal filled quantities in every run. The earlier disagreements (2,992 and 2,985 of 3,000 on the raw bytes) were
+  traced order by order to orders Nasdaq releases after the open with their receipt priority, which both engines had
+  queued at the tail, and to two hidden-print cases; the fixes and the evidence are in
+  [Oracle disagreements on real data](design/extensions/oracle-disagreements.md) and [Results](RESULTS.md),
+  section 3. Its stated limits:
   the taker flow is held fixed (nobody reacts to the shadow); IOC remainders that executed nothing leave no trace;
   hidden liquidity is known only when it prints; prints that could not have traded under display and price priority,
   and cross prints, are not used; auctions are not modelled; latency is `latency_ns` only, without jitter; shadows are
@@ -176,13 +179,13 @@ artifact is in [Results](RESULTS.md); the summary:
 | RD-4 | Rank-trace identity and the rank-0 shares | identical; rank 0 after sweep grouping 98.72% and 99.09% |
 | RD-5 | Shadow fills identical to the predecessor engine under the `et` rule | 3,000 of 3,000 mirror shadows per day, 0 mismatches, identical queue traces |
 | RD-7 | L2 aggregate identity | the visible top 3 (both days) and top 5 (day two) identical after every event |
-| RD-8 | Zoo leaderboard on real orders | 17 models in both modes on 3,000 never-cancel shadows per day; the count bracket (O-ZOO-6) holds; the faithful NautilusTrader touch model reaches `front_of_queue` in every day and horizon cell; `hbt_l3_fifo` corrected equals exact on every row. In the earlier run, 5 sampled shadows filled in the exact arm and not under `front_of_queue`; the bounds were then redefined so that the exact fills are a subset of `front_of_queue`'s by construction (SPEC 5.3.3 h/i), and on real day one the per-order violations went from 5 to 0 (3,000 sampled shadows, both modes) |
+| RD-8 | Zoo leaderboard on real orders | 17 models in both modes on 3,000 never-cancel shadows per day (the published leaderboard, [Results](RESULTS.md) section 4, is the later 16-model rerun under 0.1.1's common population); the count bracket (O-ZOO-6) holds; the faithful NautilusTrader touch model reaches `front_of_queue` in every day and horizon cell; `hbt_l3_fifo` corrected equals exact on every row. In the earlier run, 5 sampled shadows filled in the exact arm and not under `front_of_queue`; the bounds were then redefined so that the exact fills are a subset of `front_of_queue`'s by construction (SPEC 5.3.3 h/i), and on real day one the per-order violations went from 5 to 0 (3,000 sampled shadows, both modes) |
 | RD-8 breadth | Exactness and zoo on 36 more Nasdaq symbols in 5 liquidity tiers | raw ITCH bytes, both days: 0 invariant violations, 0 price-priority violations, 0 trade-parity mismatches in every tier; the leaderboard on standard, large and deep shadows per tier ([Results](RESULTS.md), section 4b) |
 | RD-8 NT | Faithful NautilusTrader models against nautilus_trader 1.231.0 | `BacktestEngine` fed the same L2 view as `OrderBookDelta`s with the same orders: `nt_prob_touch[p=1]` and `nt_queue_l2` fill the same orders at 0.1 s, 1 s, 10 s and 60 s on both days and on the synthetic fixture (100%); Nautilus's touch bias at 1 s is +3.13 pp [+2.53, +3.77] on day one and +2.80 pp on day two (`scripts/nt_crosscheck`, separate venv) |
 | RD-9 | Calibration fitted on day one, scored on day two | NautilusTrader `p = 0.287` cuts the 1 s overfill from +2.80 to +0.41 pp; power3 `n` and Databento `k` score about like their defaults, and the export refuses the fitted `n` |
 | RD-10 | Learned model skill on the held-out day | Brier skill over climatology 0.095 [0.072, 0.122] at 1 s and 0.115 [0.102, 0.128] at 10 s (L2-only features) |
 | RD-11 | Scorer on real orders used as "live" | the exact arm with self-exclusion reproduces all 3,000 orders per day (250 / 2,750 / 0 / 0 and 195 / 2,805 / 0 / 0), with the live filled quantity and first-fill time on every order |
-| RD-12 | Crypto capture replay counters | one 10-minute Bitstamp and Bitfinex capture: record counts equal, invariants 0 |
+| RD-12 | Crypto capture replay counters | one 10-minute Bitstamp and Bitfinex capture, invariants 0; Bitfinex record count equal to the predecessor's, Bitstamp 77,157 records since the reader's seed rule changed (77,272, equal, before) |
 | RD-13 | Performance | book-only replay of real day one from Parquet at 8.56M to 8.60M records/s against the 8M target (Low Power Mode on); see [Performance](#performance) |
 
 What to keep in mind when reading these:
@@ -202,6 +205,22 @@ What to keep in mind when reading these:
   the ITCH-ingested datasets. The CSV conversion merges hidden and cross prints, so the hidden-print rule
   ([A3](concepts/audit-rules.md#a3-hidden-prints)) is checked on real data only from the raw files.
 - With two days, every bootstrap uses 30-minute blocks, so the published intervals capture intraday variation only.
+
+## Fuzzing
+
+- **Rust parsers** (`fuzz/`, cargo-fuzz; a separate Cargo workspace): libFuzzer targets for ITCH 5.0, IEX DEEP+, DBN,
+  `qt_ingest::ingest` end to end, the etcsv and Parquet formats and the dataset reader, the seven crypto converters,
+  `qt_crypto::prepare`, and the exact-decimal JSON reader with the unit and time parsers. Beyond "no panic", every
+  target checks that an error caused by input bytes is `QT-INPUT-*`, `QT-CONFIG-*` or `QT-DATA-*`, that ITCH and
+  DEEP+ messages round-trip through `encode`, that mapped records carry `LAST` and their message sequence, and that a
+  dataset an ingest path wrote opens and reads back. Each target ran at least 600 s; the runs, the findings and their
+  fixes are in [the rust-fuzz design note](design/extensions/rust-fuzz.md). `make fuzz-rust` replays every seed,
+  every minimized regression and the known crashes on the stable toolchain.
+- **Python parsers** (`python/tests/fuzz`, Hypothesis, marker `fuzz`): the FIX wire, dictionary and store readers,
+  the IBKR Flex and simulator importers, the instrument map, every venue importer and the `dq` dataset loader. Each
+  property checks that a parser returns or raises `QtError` with a `QT-*` code, within bounded time and memory. The
+  default test run uses 40 examples per property; `make fuzz-py` runs the deep profile (400 by default) and writes
+  per-target statistics.
 
 ## Determinism
 
@@ -227,13 +246,20 @@ in [Results](RESULTS.md), section 7; a quiet-machine baseline for the regression
 - DBN and CME semantics on real data (synthetic only).
 - Importers on real account exports (fixtures only).
 - The ITCH reader on more than the two raw public days and four symbols above.
-- Fuzzing of the parsers (planned).
+- Three parser faults that fuzzing found are known and not fixed: the pinned `dbn` 0.71.0 decoder panics on a DBN
+  prelude announcing 100 to 103 metadata bytes and allocates the announced metadata length (up to 256 MiB) before
+  reading it, and the Parquet reader panics on some corrupt file metadata (five sites in `arrow-ipc` / `parquet`
+  59.3.0). A panic surfaces as a Python `PanicException` or a service job's `QT-ENGINE-001` instead of
+  `QT-INPUT-002`. The reproducers are in `fuzz/known-crashes/`.
+- The Rust fuzz harness tests (`make fuzz-rust`) run in the local gate (`make gate-3`), not in CI; the libFuzzer
+  campaigns themselves (`fuzz/run.sh`, nightly toolchain) are run by hand.
 - Docker Compose end to end in CI: `make compose-config` validates the file, and the compose smoke test runs only
   when a Docker daemon is available.
 - The optional hftbacktest cross-check (O-ZOO-3) runs only in its separate venv (`make hbt-crosscheck`); the
   NautilusTrader cross-check runs only in its own venv (`scripts/nt_crosscheck`) and is not part of `make test`.
-- The NautilusTrader snippets that `export nautilus` and `export replay-schedule --target nautilus` write are not run
-  against NautilusTrader in the tests (the replay strategy runs against a stub of its API).
+- The NautilusTrader snippet that `export nautilus` writes runs against stand-in 1.x and 2.x modules in every test
+  run, and against a real nautilus_trader only when `QT_NT_PYTHON` names an interpreter that has it (checked on
+  1.231.0 and 2.0.0rc7). The `export replay-schedule --target nautilus` strategy runs against a stub of its API.
 
 ## Run the tests yourself
 

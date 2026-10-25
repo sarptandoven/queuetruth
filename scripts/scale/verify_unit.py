@@ -8,7 +8,9 @@ Needs the unit's bucket file (re-create it with `itch_split.py` from the public 
 Checks, in order: the unit spec in the plan hashes to the leaf's `unit_spec_sha256`; the re-run's leaf hash equals
 the published leaf; the published leaf's Merkle proof reaches the published root. On a leaf mismatch it prints which
 leaf fields differ (e.g. a float content digest on another platform: SPEC 7.2 allows up to 4 ulp off macOS arm64,
-integers must match exactly). Exit 0 when everything matches, 1 otherwise.
+integers must match exactly). A flagged unit's leaf now carries `exactness_by_symbol` (`symbol_exactness.py`); a root
+published before that holds the leaf without it, so the re-run leaf is also compared in that form and reported as
+`pre-attribution`. Exit 0 when everything matches, 1 otherwise.
 """
 
 from __future__ import annotations
@@ -57,6 +59,10 @@ def main(argv: list[str] | None = None) -> int:
         m = run_unit(unit, a.split, Path(tmp) / a.unit_id, a.threads)
     same = m["leaf_hash"] == entry["leaf_hash"]
     print(f"re-run leaf {m['leaf_hash']} {'==' if same else '!='} published {entry['leaf_hash']}")
+    if not same and "exactness_by_symbol" in m["leaf"]:
+        old = K.leaf_hash({k: v for k, v in m["leaf"].items() if k != "exactness_by_symbol"})
+        same = old == entry["leaf_hash"]
+        print(f"pre-attribution leaf {old} {'==' if same else '!='} published {entry['leaf_hash']}")
     if not same and a.published_shard:
         pub = json.loads((a.published_shard / "shard_manifest.json").read_text())["leaf"]
         print("differing leaf fields:", ", ".join(_diff(pub, m["leaf"])) or "(none)")

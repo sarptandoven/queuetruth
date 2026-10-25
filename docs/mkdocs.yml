@@ -10,6 +10,7 @@ exclude_docs: |
   mkdocs.yml
   check_docs.py
   gen_reference.py
+  assets/*.py
 theme:
   name: material
   features: [navigation.sections, navigation.top, content.code.copy, search.highlight]
@@ -36,19 +37,36 @@ nav:
       - Calibration: concepts/calibration.md
       - The learned fill model: concepts/learned-model.md
       - Scorecard statistics: concepts/scorecard.md
+      - Fill toxicity: concepts/fill-toxicity.md
+      - The impact warning: concepts/impact-warning.md
+      - Conformal fill probabilities: concepts/conformal-fill-probability.md
+      - Selection bias: concepts/selection-bias.md
+      - Trial ledger: concepts/trial-ledger.md
+      - Glossary: concepts/glossary.md
   - How-to guides:
       - Calibrate my hftbacktest model: how-to/calibrate-hftbacktest.md
       - Calibrate on an L2-only venue against my fills: how-to/calibrate-live-l2-venue.md
       - Score my Nautilus backtest against my Binance fills: how-to/score-nautilus-vs-binance.md
       - Score my QuickFIX-driven strategy: how-to/score-quickfix-strategy.md
+      - Decompose the sim-live gap: how-to/decompose-the-sim-live-gap.md
+      - Reconcile Freqtrade and Hummingbot runs: how-to/reconcile-freqtrade-hummingbot.md
+      - Score my own live fills (Bitstamp, IBKR on IEX): how-to/own-account-live-fills.md
+      - Score market making on Kalshi or Polymarket: how-to/prediction-market-making.md
       - Referee my simulator: how-to/referee-your-simulator.md
+      - Score forecasts before you trust them: how-to/score-forecasts.md
+      - Certify a result: how-to/certify-a-result.md
       - Self-host the service: how-to/self-host-the-service.md
       - Import fills from my venue or broker: how-to/import-live-logs.md
       - Explain one fill: how-to/explain-one-fill.md
       - Use queuetruth from an agent (MCP): how-to/use-from-an-agent.md
+      - Give an agent a realistic exchange: how-to/agent-sandbox.md
+      - Use queuetruth from a notebook: how-to/notebooks.md
       - Check a feed before you trust it: how-to/check-a-feed.md
+      - Ingest Databento MBO for CME and Nasdaq: how-to/databento-mbo.md
+      - Read NYSE order-by-order data: how-to/nyse-order-level.md
       - Ingest order-level crypto feeds: how-to/crypto-l3-sources.md
       - Replay a public IEX DEEP+ day: how-to/iex-public-demo.md
+      - Run the nightly cross-checks: how-to/nightly-checks.md
   - Reference:
       - CLI: reference/cli.md
       - Python API: reference/python-api.md
@@ -63,3 +81,31 @@ nav:
   - Design:
       - How it was built and verified: design/build-plan.md
       - Design specification: design/spec.md
+      - Design extensions:
+          - Agent sandbox: design/extensions/agent-sandbox.md
+          - Atlas exactness and flag tracing: design/extensions/atlas-trace.md
+          - Certificates and commitments: design/extensions/certificates.md
+          - Conformal fill probabilities: design/extensions/conformal-fill.md
+          - Implementation-shortfall decomposition: design/extensions/cost-decomposition.md
+          - Databento DBN definitions and symbology: design/extensions/databento.md
+          - The demo command: design/extensions/demo-command.md
+          - Fill toxicity: design/extensions/fill-toxicity.md
+          - Forecast referee: design/extensions/forecast-referee.md
+          - Freqtrade and Hummingbot reconciliation: design/extensions/freqtrade-hummingbot.md
+          - Trading halts censor shadows: design/extensions/halt-censoring.md
+          - hftbacktest integration: design/extensions/hftbacktest-integration.md
+          - Impact and queue-share warnings: design/extensions/impact-flag.md
+          - Own-account live-fill kit: design/extensions/livefill-kit.md
+          - fit-hazard performance and safe model files: design/extensions/model-perf.md
+          - NautilusTrader plugin: design/extensions/nautilus-plugin.md
+          - Nightly cross-checks: design/extensions/nightly-checks.md
+          - queuetruth.frames and the notebooks: design/extensions/notebooks.md
+          - NYSE reader and the nyse rule set: design/extensions/nyse-reader.md
+          - Oracle disagreements on real data: design/extensions/oracle-disagreements.md
+          - Prediction-market kit: design/extensions/pm-kit.md
+          - Parser hardening and the Python fuzz suite: design/extensions/python-fuzz.md
+          - Answer-first HTML report: design/extensions/report-redesign.md
+          - Fuzzing the untrusted-input parsers: design/extensions/rust-fuzz.md
+          - Selection-aware statistics: design/extensions/selection-stats.md
+          - Zoo and calibration over HTTP and MCP: design/extensions/service-zoo-mcp.md
+          - Trial ledger: design/extensions/trial-ledger.md

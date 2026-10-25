@@ -40,6 +40,8 @@ use state::{LevelAcc, StepOut, bump};
 
 const K_GAP: u8 = 0;
 const K_ITEM: u8 = 1;
+/// A trading halt starts (SPEC 1.2; `add_halt`).
+const K_HALT: u8 = 2;
 
 type Agenda = BinaryHeap<Reverse<(Ts, u8, u32, u32)>>;
 
@@ -59,6 +61,50 @@ struct InstShadows {
     lvl: BTreeMap<(u8, Px), LevelAcc>,
     /// Events ended so far (crossed-run tracking).
     events: u64,
+    /// The instrument's order ids are ITCH order references (`order_ref_priority`): rules D1 to D3 apply under the
+    /// `Exact` rule. Set at construction from the instrument row.
+    itch: bool,
+    /// Largest order reference added so far in the partition (`itch` only).
+    max_ref: u64,
+    /// Open execution sweep per resting side (index `side_ix`), for the resting side of hidden prints.
+    sweep: [Sweep; 2],
+    /// Trading halts `[start, end)`, sorted and merged (`add_halt`).
+    halts: Vec<(Ts, Ts)>,
+}
+
+/// Executions on one resting side at one `ts_event` with no other change on that side since (oracle sweep rule,
+/// gap 0): one aggressor walking the side. A hidden (side-`N`) print at the same `ts_event` is that aggressor
+/// continuing into non-displayed interest on the same side.
+#[derive(Clone, Debug, Default)]
+struct Sweep {
+    open: bool,
+    ts: Ts,
+    /// (order id, sequence) of the executions in the sweep: their removals are not book changes.
+    execs: Vec<(u64, u64)>,
+}
+
+#[inline]
+fn side_ix(side: BookSide) -> usize {
+    match side {
+        BookSide::Bid => 0,
+        BookSide::Ask => 1,
+    }
+}
+
+/// Whether the instrument's order ids are Nasdaq TotalView-ITCH order reference numbers, which increase in receipt
+/// order within each instrument (they come from several counters, each shared by a group of symbols, not from one
+/// feed-wide counter, so references of different instruments are not compared): true for Nasdaq instruments ingested as
+/// `itch`, `etcsv` or `dbn` (a `dbn` file with the `nasdaq` rule set is taken to be XNAS.ITCH; other Databento MBO
+/// feeds must not be ingested with it). Nasdaq holds orders accepted before the open that are not eligible before it
+/// and releases them by `A` records with their original, smaller references during the first seconds of the session,
+/// and those released orders keep their receipt priority: the matching engine executes them ahead of orders at the same
+/// price that were displayed earlier but received later (on 2019-12-30, 608 of the 617 executions of a non-front order
+/// in the first minute of AAPL, MSFT, SPY and TSLA hit the front order in reference order). This is not a general
+/// reference-order rule: later in the day most out-of-order executions on SPY are not in reference order. Gates the
+/// `Exact` rule's D1 to D3 (oracle-disagreements extension); other sources (and synthetic data) assign ids freely and
+/// keep arrival order and the shadow-side inference of hidden prints.
+pub(crate) fn order_ref_priority(inst: &qt_types::Instrument) -> bool {
+    inst.venue == qt_types::Venue::Nasdaq && matches!(inst.source.as_str(), "itch" | "etcsv" | "dbn")
 }
 
 /// Live shadows at (side, price).
@@ -91,6 +137,12 @@ fn acc_of<'a>(
 }
 
 impl InstShadows {
+    /// Whether `ts` falls in a trading halt.
+    fn halted_at(&self, ts: Ts) -> bool {
+        let k = self.halts.partition_point(|&(start, _)| start <= ts);
+        k > 0 && ts < self.halts[k - 1].1
+    }
+
     fn insert(&mut self, idx: u32, side: BookSide, px: Px) {
         self.live.insert(idx);
         let m = match side {
@@ -169,7 +221,10 @@ impl ShadowEngine {
                 by_live.entry((s.instrument_id, s.ts_live)).or_default().push(i);
             }
             let k = *slots.entry(s.instrument_id).or_insert_with(|| {
-                inst.push(InstShadows::default());
+                inst.push(InstShadows {
+                    itch: instruments.any(s.instrument_id).is_some_and(order_ref_priority),
+                    ..InstShadows::default()
+                });
                 inst.len() - 1
             });
             let a = &mut inst[k].agenda;
@@ -269,6 +324,30 @@ impl ShadowEngine {
         if let Some(s) = self.slot(instrument_id).map(|k| &mut self.inst[k]) {
             s.agenda.push(Reverse((ts_start, K_GAP, 0, 0)));
         }
+    }
+
+    /// A trading halt `[start, end)` of `instrument_id` (SPEC 1.2; `Engine::set_trading_halts`): live shadows end
+    /// `censored_gap` at `start` (at the start of the first event after it), and no shadow goes live in the span.
+    pub(crate) fn add_halt(&mut self, instrument_id: u32, start: Ts, end: Ts) {
+        let Some(s) = self.slot(instrument_id).map(|k| &mut self.inst[k]) else {
+            return;
+        };
+        s.agenda.push(Reverse((start, K_HALT, 0, 0)));
+        s.halts.push((start, end));
+        s.halts.sort_unstable();
+        let mut merged: Vec<(Ts, Ts)> = Vec::with_capacity(s.halts.len());
+        for &(a, b) in &s.halts {
+            match merged.last_mut() {
+                Some(last) if a <= last.1 => last.1 = last.1.max(b),
+                _ => merged.push((a, b)),
+            }
+        }
+        s.halts = merged;
+    }
+
+    /// Whether `ts` falls in a trading halt of `instrument_id`.
+    fn halted_at(&self, instrument_id: u32, ts: Ts) -> bool {
+        self.slot(instrument_id).is_some_and(|k| self.inst[k].halted_at(ts))
     }
 
     pub(crate) fn state(&self, idx: u32) -> ShadowState {
@@ -400,10 +479,11 @@ impl ShadowEngine {
 
     fn activate(&mut self, idx: u32, ts_event: Ts, sequence: u64, book: &Book, sink: &mut dyn Sink) -> QtResult<()> {
         // Index of the event this activation starts.
-        let ev_now = self
-            .slot(self.st[idx as usize].instrument_id)
-            .map_or(0, |k| self.inst[k].events)
-            + 1;
+        let iid = self.st[idx as usize].instrument_id;
+        let (ev_now, itch, max_ref) = self.slot(iid).map_or((1, false, 0), |k| {
+            (self.inst[k].events + 1, self.inst[k].itch, self.inst[k].max_ref)
+        });
+        let ref_prio = self.rule == FillRule::Exact && itch;
         let s = &mut self.st[idx as usize];
         s.ts_activated_event = Some(ts_event);
         s.act_ev = ev_now;
@@ -452,6 +532,13 @@ impl ShadowEngine {
                 .map(|o| o.order_id)
                 .filter(|&id| Some(id) != skip),
         );
+        s.prio_ref = ref_prio.then_some(max_ref);
+        // A twin-linked shadow entering at its twin's `A` (not yet on the book) was received at the twin's reference.
+        if let Some(t) = s.twin.filter(|&t| ref_prio && book.order(t).is_none()) {
+            s.bind_ref(t, book);
+            s.qa_live = Some(s.qa);
+            s.rank_live = Some(s.rank);
+        }
         let ts_live = s.ts_live;
         let snap = (s.qa, s.rank, s.level_qty);
         self.traj(
@@ -536,12 +623,15 @@ impl ShadowEngine {
     }
 
     /// Event start for `instrument_id` (first record `ts_event` = `t`): feed gaps due before `t` censor the live
-    /// shadows; then every shadow with an agenda item due (`< t`) is processed in input order. A pending shadow with
-    /// `ts_live < t` first takes a cancel effective at or before `ts_live` (`cancelled`, never live), then its amends
-    /// effective at or before `ts_live` in row order (`new_qty = 0`: `cancelled`, never live; else the new qty), then
-    /// activates. A live shadow then applies its remaining amends effective before `t` in time order (`new_qty <=
-    /// filled`: `amended_to_filled`) and the cancel effective before `t` at its place in that order (a tie goes to
-    /// the cancel).
+    /// shadows; then, for each trading halt starting before `t` in time order, every shadow with an agenda item due
+    /// is brought to the halt start (its work effective before it, in input order) and the live shadows end
+    /// `censored_gap` there; then every shadow with an agenda item due (`< t`) is processed in input order. A
+    /// pending shadow with `ts_live < t` first takes a cancel effective at or before `ts_live` (`cancelled`, never
+    /// live), then its amends effective at or before `ts_live` in row order (`new_qty = 0`: `cancelled`, never live;
+    /// else the new qty), then ends `censored_gap` at `ts_live` if that falls in a trading halt, else activates. A
+    /// live shadow then applies its remaining amends effective before `t` in time order (`new_qty <= filled`:
+    /// `amended_to_filled`) and the cancel effective before `t` at its place in that order (a tie goes to the
+    /// cancel).
     #[inline]
     pub(crate) fn on_event_start(
         &mut self,
@@ -579,15 +669,16 @@ impl ShadowEngine {
         };
         let mut due: Vec<u32> = Vec::new();
         let mut gaps: Vec<Ts> = Vec::new();
+        let mut halts: Vec<Ts> = Vec::new();
         while let Some(&Reverse((t, kind, idx, _))) = st.agenda.peek() {
             if t >= ts_event {
                 break;
             }
             st.agenda.pop();
-            if kind == K_GAP {
-                gaps.push(t);
-            } else {
-                due.push(idx);
+            match kind {
+                K_GAP => gaps.push(t),
+                K_HALT => halts.push(t),
+                _ => due.push(idx),
             }
         }
         for g in gaps {
@@ -601,23 +692,44 @@ impl ShadowEngine {
         }
         due.sort_unstable();
         due.dedup();
+        // Trading halts (SPEC 1.2), in time order: the due work effective before the halt start, then the live
+        // shadows end there (no event of the instrument came between, so the book is the one they rested on).
+        halts.dedup();
+        for h in halts {
+            for &idx in &due {
+                self.start_one(idx, ts_event, h, sequence, epoch, book, sink)?;
+            }
+            let live: Vec<u32> = self
+                .slot(instrument_id)
+                .map(|k| &self.inst[k])
+                .map_or_else(Vec::new, |st| st.live.iter().copied().collect());
+            for i in live {
+                self.finish_one(i, EndState::CensoredGap, h, sequence, Some(book), sink)?;
+            }
+        }
         for idx in due {
-            self.start_one(idx, ts_event, sequence, epoch, book, sink)?;
+            self.start_one(idx, ts_event, ts_event, sequence, epoch, book, sink)?;
         }
         Ok(())
     }
 
+    /// A shadow's agenda work effective before `until` (`<= t`, the start of the event at `t`; `until < t` only to
+    /// bring it to a trading-halt start): a pending shadow with `ts_live < until` takes a cancel or amends effective
+    /// at or before `ts_live`, ends `censored_gap` at `ts_live` if that falls in a trading halt, else activates on
+    /// the event at `t`; a live shadow applies its amends and cancel effective before `until`.
+    #[allow(clippy::too_many_arguments)]
     fn start_one(
         &mut self,
         idx: u32,
         t: Ts,
+        until: Ts,
         sequence: u64,
         epoch: u64,
         book: &Book,
         sink: &mut dyn Sink,
     ) -> QtResult<()> {
         let s = &mut self.st[idx as usize];
-        if s.status == ShadowStatus::Pending && s.ts_live < t {
+        if s.status == ShadowStatus::Pending && s.ts_live < until {
             if let Some(c) = s.cancel_eff.filter(|&c| c <= s.ts_live) {
                 return self.finish_one(idx, EndState::Cancelled, c, sequence, Some(book), sink);
             }
@@ -629,14 +741,18 @@ impl ShadowEngine {
                 }
                 s.qty = q;
             }
-            s.epoch = epoch;
+            let (iid, ts_live) = (s.instrument_id, s.ts_live);
+            if self.halted_at(iid, ts_live) {
+                return self.finish_one(idx, EndState::CensoredGap, ts_live, sequence, Some(book), sink);
+            }
+            self.st[idx as usize].epoch = epoch;
             self.activate(idx, t, sequence, book, sink)?;
         }
         let s = &mut self.st[idx as usize];
         if s.status == ShadowStatus::Live {
             // Due amends and the cancel in time order; the cancel wins a tie (review m12).
-            let cancel = s.cancel_eff.filter(|&c| c < t);
-            while s.next_amend < s.amends.len() && s.amends[s.next_amend].0 < t {
+            let cancel = s.cancel_eff.filter(|&c| c < until);
+            while s.next_amend < s.amends.len() && s.amends[s.next_amend].0 < until {
                 let (a, q) = s.amends[s.next_amend];
                 if cancel.is_some_and(|c| c <= a) {
                     break;
@@ -712,6 +828,9 @@ impl ShadowEngine {
             s.ahead = s.ahead.saturating_sub(q);
             s.qa = s.qa.saturating_sub(q);
             s.rank = s.ahead_set.len() as u32;
+        } else if s.prio_ref.is_some() && book.order(order_id).is_none() {
+            // Went live at this event's start; the twin enters now by its `A`, at its own reference (D1).
+            s.bind_ref(order_id, book);
         }
         Ok(true)
     }
@@ -741,7 +860,12 @@ impl ShadowEngine {
             }
             s.qty = q;
         }
-        s.epoch = epoch;
+        let (iid, ts_live) = (s.instrument_id, s.ts_live);
+        if self.halted_at(iid, ts_live) {
+            // SPEC 1.2: never live in a halt; the twin stays on the tape, linked to its ended shadow.
+            return self.finish_one(idx, EndState::CensoredGap, ts_live, sequence, Some(book), sink);
+        }
+        self.st[idx as usize].epoch = epoch;
         self.activate(idx, t, sequence, book, sink)?;
         let by_seq = self.by_sequence;
         let s = &self.st[idx as usize];
@@ -848,13 +972,19 @@ impl ShadowEngine {
     }
 
     /// Volume added at (side, price) by `order_id`: behind every shadow there (level-wide), except the shadow it is
-    /// the twin of (A1: its own volume).
-    fn add_behind(&mut self, inst: u32, order_id: u64, side: BookSide, price: Px, qty: Qty, epoch: u64) {
+    /// the twin of (A1: its own volume) and, for a new order (`fresh`: an `A`, not a re-add or a priority-losing
+    /// modify) on an `order_ref_priority` instrument, the shadows whose `prio_ref` is above its reference: it was
+    /// received before them, so it joins their queue ahead (`exact_qa`, `ahead_set`).
+    #[allow(clippy::too_many_arguments)]
+    fn add_behind(&mut self, inst: u32, order_id: u64, side: BookSide, price: Px, qty: Qty, fresh: bool, epoch: u64) {
         let full = self.full_rows();
         let twins = self.has_twins;
+        let ref_prio = fresh && self.rule == FillRule::Exact;
         let Some(st) = self.slot(inst).map(|k| &mut self.inst[k]) else {
             return;
         };
+        // Released out of reference order (rare: normally every `A` carries the largest reference so far).
+        let late = ref_prio && st.itch && order_id < st.max_ref;
         let by_seq = self.by_sequence;
         let InstShadows {
             bids, asks, dirty, lvl, ..
@@ -866,14 +996,19 @@ impl ShadowEngine {
         if let Some(a) = lvl.get_mut(&(side.as_byte(), price)) {
             a.add = a.add.saturating_add(qty);
         }
-        if full || twins {
+        if full || twins || late {
             for &i in list {
                 let s = &mut self.st[i as usize];
                 let own = s.twin == Some(order_id);
-                if own {
+                let ahead = !own && late && s.prio_ref.is_some_and(|b| order_id < b);
+                if own || ahead {
                     s.ev_add_ahead = s.ev_add_ahead.saturating_add(qty);
                 }
-                if full || own {
+                if ahead {
+                    s.ahead_set.insert(order_id);
+                    s.exact_qa = s.exact_qa.saturating_add(qty);
+                }
+                if full || own || ahead {
                     Self::touch(s, i, dirty, epoch, by_seq);
                 }
             }
@@ -919,7 +1054,7 @@ impl ShadowEngine {
     }
 
     /// Whether a record matters to the traced shadow (before the record's accounting).
-    fn trace_record(&mut self, e: &MboEvent, effect: &Effect) {
+    fn trace_record(&mut self, e: &MboEvent, effect: &Effect, fresh: bool) {
         let Some(t) = self.why.as_mut() else {
             return;
         };
@@ -934,7 +1069,21 @@ impl ShadowEngine {
         let Some(px) = s.price else {
             return;
         };
-        let is_ahead = e.order_id != 0 && s.ahead_set.contains(&e.order_id);
+        // An `A` released with a reference older than the shadow joins its queue ahead (D1, `add_behind`), although
+        // it is added to `ahead_set` only after this trace.
+        let joins = match *effect {
+            Effect::Add {
+                order_id, side, price, ..
+            } => {
+                fresh
+                    && self.rule == FillRule::Exact
+                    && side == s.side
+                    && price == px
+                    && s.prio_ref.is_some_and(|b| order_id < b)
+            }
+            _ => false,
+        };
+        let is_ahead = joins || (e.order_id != 0 && s.ahead_set.contains(&e.order_id));
         let level_touched = match *effect {
             Effect::Add { side, price, .. }
             | Effect::Remove { side, price, .. }
@@ -966,11 +1115,65 @@ impl ShadowEngine {
         book: &Book,
         epoch: u64,
     ) {
-        let Some(st) = self.slot(e.instrument_id).map(|k| &self.inst[k]) else {
+        let Some(k) = self.slot(e.instrument_id) else {
             return;
         };
+        let st = &self.inst[k];
         if !st.live.is_empty() && (self.why.is_some() || self.relevant(st, e, effect, dup, book)) {
             self.record_work(e, effect, dup, book, epoch);
+        }
+        if self.rule == FillRule::Exact {
+            self.track(k, e, effect, book);
+        }
+    }
+
+    /// Per-record instrument state of the `Exact` rule on `itch` instruments, kept whether or not a shadow is live:
+    /// the largest order reference added (D1) and the open execution sweep of each resting side (hidden prints, D2
+    /// and D3). Elsewhere no sweep is ever open, so a hidden print's side is always inferred from the shadow.
+    #[inline]
+    fn track(&mut self, k: usize, e: &MboEvent, effect: &Effect, book: &Book) {
+        let st = &mut self.inst[k];
+        if !st.itch {
+            return;
+        }
+        if let Effect::Add { order_id, .. } = *effect {
+            st.max_ref = st.max_ref.max(order_id);
+        }
+        if !self.hidden || self.hidden_policy == HiddenPrintPolicy::Ignore {
+            return;
+        }
+        let close = |sw: &mut Sweep| {
+            sw.open = false;
+            sw.execs.clear();
+        };
+        match *effect {
+            Effect::Add { side, .. } | Effect::Replace { side, .. } => close(&mut st.sweep[side_ix(side)]),
+            Effect::Remove { order_id, side, .. } | Effect::Reduce { order_id, side, .. } => {
+                let sw = &mut st.sweep[side_ix(side)];
+                let by_seq = self.by_sequence;
+                if sw.open
+                    && !sw
+                        .execs
+                        .iter()
+                        .any(|&(id, q)| id == order_id && (!by_seq || q == e.sequence))
+                {
+                    close(sw);
+                }
+            }
+            Effect::Clear => st.sweep.iter_mut().for_each(close),
+            Effect::None => {
+                if e.action == Action::Fill.as_byte() {
+                    if let Some((side, _, _)) = book.order(e.order_id) {
+                        let sw = &mut st.sweep[side_ix(side)];
+                        if !(sw.open && sw.ts == e.ts_event) {
+                            sw.execs.clear();
+                        }
+                        sw.open = true;
+                        sw.ts = e.ts_event;
+                        sw.execs.push((e.order_id, e.sequence));
+                    }
+                }
+            }
         }
     }
 
@@ -1035,7 +1238,7 @@ impl ShadowEngine {
     ) {
         let inst = e.instrument_id;
         if self.why.is_some() {
-            self.trace_record(e, effect);
+            self.trace_record(e, effect, dup.is_none());
         }
         self.prepare_levels(inst, effect, dup, book);
         if let Some((side, price, old)) = dup {
@@ -1056,7 +1259,7 @@ impl ShadowEngine {
                 side,
                 price,
                 size,
-            } => self.add_behind(inst, order_id, side, price, size, epoch),
+            } => self.add_behind(inst, order_id, side, price, size, dup.is_none(), epoch),
             Effect::Remove {
                 order_id,
                 side,
@@ -1078,7 +1281,7 @@ impl ShadowEngine {
                 new_size,
             } => {
                 self.removal(inst, order_id, side, old_price, old_size, true, epoch);
-                self.add_behind(inst, order_id, side, new_price, new_size, epoch);
+                self.add_behind(inst, order_id, side, new_price, new_size, false, epoch);
             }
             Effect::None | Effect::Clear => {}
         }
@@ -1092,7 +1295,7 @@ impl ShadowEngine {
                 let aggr = e.side();
                 if aggr == Side::None && self.hidden {
                     if self.rule == FillRule::Exact && self.hidden_policy != HiddenPrintPolicy::Ignore {
-                        self.hidden_print(inst, e.price, e.size, book, epoch);
+                        self.hidden_print(inst, e.price, e.size, e.ts_event, book, epoch);
                     }
                     return;
                 }
@@ -1207,16 +1410,30 @@ impl ShadowEngine {
     /// A hidden (side-`N`) print at `p` (A3 as amended by the oracle ruling A3d). It is usable only when the book
     /// at the print shows no displayed interest at or through `p` on either side (no bid `>= p`, no ask `<= p`: a
     /// non-displayed order there ranks behind any displayed one, and a locked or crossed price is not continuous
-    /// matching) and `p` is on the tick grid. A usable print reaches every shadow priced at or better than `p` on
-    /// either side (its resting side is inferred from the shadow): at `p` it is volume behind the displayed queue
-    /// (used once the queue ahead is exhausted, `queue_depleted`); strictly through `p` it is a trade-through
-    /// (`BehindAndThrough`). Declined prints at a shadow's price count `hidden_at_px_with_display_ahead`.
-    fn hidden_print(&mut self, inst: u32, p: Px, size: Qty, book: &Book, epoch: u64) {
+    /// matching). A usable print reaches the shadows priced at or better than `p` on its resting side: at `p` it is
+    /// volume behind the displayed queue (used once the queue ahead is exhausted, `queue_depleted`); strictly through
+    /// `p` it is a trade-through (`BehindAndThrough`). The resting side is the side of the open execution sweep at
+    /// the print's `ts_event` (the aggressor that just executed displayed orders on that side and continued into
+    /// hidden interest there; `Sweep`), and then `p` may be off the tick grid (a midpoint execution the aggressor
+    /// reached). Without exactly one such sweep (always, on instruments that are not `itch`: D2 and D3 are validated
+    /// on Nasdaq ITCH data only) the side is inferred from the shadow (either side) and `p` must be on the tick
+    /// grid. Declined prints at a shadow's price count `hidden_at_px_with_display_ahead`.
+    fn hidden_print(&mut self, inst: u32, p: Px, size: Qty, ts: Ts, book: &Book, epoch: u64) {
         let through = self.hidden_policy == HiddenPrintPolicy::BehindAndThrough;
         let Some(k) = self.slot(inst) else {
             return;
         };
         let st = &mut self.inst[k];
+        let open = |i: usize| st.sweep[i].open && st.sweep[i].ts == ts;
+        let (bid_ok, ask_ok) = match (open(0), open(1)) {
+            (true, false) => (true, false),
+            (false, true) => (false, true),
+            _ => (true, true),
+        };
+        // A print continuing a sweep is that aggressor's volume (its limit is at or beyond `p`), so an off-grid `p`
+        // (a midpoint execution) still trades through a shadow it passes; with no sweep an off-grid print may be two
+        // non-displayed orders meeting at the midpoint and is never used.
+        let swept = bid_ok != ask_ok;
         let by_seq = self.by_sequence;
         let usable = book.best_price(BookSide::Bid).is_none_or(|b| b < p)
             && book.best_price(BookSide::Ask).is_none_or(|a| a > p);
@@ -1228,14 +1445,15 @@ impl ShadowEngine {
         }
         let mut at: Vec<u32> = Vec::new();
         let mut thr: Vec<u32> = Vec::new();
-        for (&px, l) in bids.range(p..) {
+        let empty = BTreeMap::new();
+        for (&px, l) in (if bid_ok { &*bids } else { &empty }).range(p..) {
             if px == p {
                 at.extend_from_slice(l);
             } else if through {
                 thr.extend_from_slice(l);
             }
         }
-        for (&px, l) in asks.range(..=p) {
+        for (&px, l) in (if ask_ok { &*asks } else { &empty }).range(..=p) {
             if px == p {
                 at.extend_from_slice(l);
             } else if through {
@@ -1245,7 +1463,7 @@ impl ShadowEngine {
         for (list, is_at) in [(at, true), (thr, false)] {
             for i in list {
                 let s = &mut self.st[i as usize];
-                if p.rem_euclid(s.tick.max(1)) != 0 {
+                if !swept && p.rem_euclid(s.tick.max(1)) != 0 {
                     continue;
                 }
                 Self::touch(s, i, dirty, epoch, by_seq);
@@ -1483,7 +1701,8 @@ impl ShadowEngine {
     }
 
     /// End of input: remaining live and pending shadows end `censored_session_end` when the instrument's last
-    /// event is at or after its session close, else `open_at_end`. `last(id)` = (last ts_event, last sequence).
+    /// event is at or after its session close, else `open_at_end`; a pending shadow whose `ts_live` falls in a
+    /// trading halt ends `censored_gap` at its `ts_live` (SPEC 1.2). `last(id)` = (last ts_event, last sequence).
     pub(crate) fn finish<'b>(
         &mut self,
         last: &dyn Fn(u32) -> Option<(Ts, u64, &'b Book)>,
@@ -1496,6 +1715,11 @@ impl ShadowEngine {
             }
             let inst = s.instrument_id;
             let found = last(inst);
+            if s.status == ShadowStatus::Pending && self.halted_at(inst, s.ts_live) {
+                let (ts, seq) = (s.ts_live, found.map_or(0, |l| l.1));
+                self.finish_one(idx, EndState::CensoredGap, ts, seq, found.map(|l| l.2), sink)?;
+                continue;
+            }
             let (ts, seq) = found.map_or((s.ts_live, 0), |l| (l.0, l.1));
             let close = self.instruments.at(inst, ts).map(|i| {
                 i.midnight_utc_ns

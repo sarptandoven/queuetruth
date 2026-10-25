@@ -1,0 +1,27 @@
+{
+  "sample": {
+    "schema": "qt.sandbox_order_log",
+    "schema_version": 1,
+    "engine_version": "x",
+    "dataset_id": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "spec_id": "0123456789abcdef",
+    "spec": {
+      "k": 1
+    },
+    "entries": [
+      {
+        "seq": 1,
+        "kind": "open",
+        "clock_ns": 1,
+        "visible_ns": 1,
+        "rows_seen": 1,
+        "data": {
+          "k": 1
+        },
+        "prev": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "hash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      }
+    ],
+    "root": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  }
+}

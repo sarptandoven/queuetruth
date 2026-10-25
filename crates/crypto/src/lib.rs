@@ -128,6 +128,9 @@ const OPTION_KEYS: [&str; 9] = [
 /// Largest `close_s` (two days, as `qt_ingest`).
 const MAX_CLOSE_S: u32 = 172_800;
 
+/// The UTC instants `i64` nanoseconds since the epoch can hold (`i64::MIN` and `i64::MAX`, to the second).
+const I64_NS_RANGE: &str = "1677-09-21T00:12:43Z..2262-04-11T23:47:16Z";
+
 fn cfg_err(msg: impl Into<String>) -> QtError {
     QtError::Config(msg.into())
 }
@@ -546,10 +549,31 @@ pub fn prepare(spec: &specs::IngestSpec) -> QtResult<Prepared> {
         Some(SessionTz::AmericaNewYork) => SessionClock::Eastern,
         _ => SessionClock::Utc,
     };
+    // A fixed session day must start and end inside the i64 ns range; the error names the field the user set.
+    let unrepresentable = |what: String| {
+        let field = if spec.midnight_utc_ns.is_some() {
+            "midnight_utc_ns"
+        } else {
+            "session_date"
+        };
+        cfg_err(format!(
+            "{field}: {what} does not fit in i64 nanoseconds (UTC instants {I64_NS_RANGE}): the day must start and \
+             end inside that range"
+        ))
+    };
+    let clock_name = match clock {
+        SessionClock::Eastern => "America/New_York",
+        SessionClock::Utc => "UTC",
+    };
     let fixed: Option<(i32, i64)> = match (&spec.session_date, spec.midnight_utc_ns) {
         (Some(d), m) => {
             let date = units::parse_date(d)?;
-            Some((date, m.unwrap_or_else(|| units::midnight_ns(clock, date))))
+            let m = match m {
+                Some(m) => m,
+                None => units::checked_midnight_ns(clock, date)
+                    .ok_or_else(|| unrepresentable(format!("the {clock_name} session day {d}")))?,
+            };
+            Some((date, m))
         }
         // as qt_ingest (3.3): the date is derived from the midnight (the local date whose midnight it is, else the
         // UTC date of midnight + 12 h), never a rejection
@@ -565,6 +589,17 @@ pub fn prepare(spec: &specs::IngestSpec) -> QtResult<Prepared> {
         }
         (None, None) => None,
     };
+    if let Some((d, m)) = fixed {
+        if m.checked_add(86_400_000_000_000).is_none() {
+            return Err(unrepresentable(match &spec.session_date {
+                Some(sd) if spec.midnight_utc_ns.is_none() => format!("the {clock_name} session day {sd}"),
+                _ => format!("the session day {} starting at {m} ns", qt_ingest::time::format_date(d)),
+            }));
+        }
+    }
+    // Without a fixed session, a record's local day must end at a representable instant (instrument rows carry the
+    // day's length): reject records on or after the midnight starting the last local day that `i64` ns can start.
+    let last_day_start = units::midnight_ns(clock, units::session_date_of(clock, i64::MAX));
     let ts_all = events
         .iter()
         .map(|e| e.ts_event)
@@ -578,13 +613,23 @@ pub fn prepare(spec: &specs::IngestSpec) -> QtResult<Prepared> {
             });
         }
         if let Some((_, m)) = fixed {
-            if ts < m || ts >= m + 86_400_000_000_000 {
+            if ts < m || m.checked_add(86_400_000_000_000).is_some_and(|end| ts >= end) {
                 return Err(cfg_err(format!(
                     "session_date: record at {ts} ns is outside {} (local day from {m} ns); omit session_date and \
                      midnight_utc_ns to cut days at local midnight",
                     fixed.map_or_else(String::new, |(d, _)| qt_ingest::time::format_date(d))
                 )));
             }
+        } else if ts >= last_day_start {
+            return Err(QtError::InputFormat {
+                location: format.into(),
+                msg: format!(
+                    "timestamp {ts} ns is in the {clock_name} session day {}, which ends after the last i64 \
+                     nanosecond ({})",
+                    qt_ingest::time::format_date(units::session_date_of(clock, ts)),
+                    I64_NS_RANGE.rsplit("..").next().unwrap_or_default()
+                ),
+            });
         }
     }
     let date_of = |ts: i64| fixed.map_or_else(|| units::session_date_of(clock, ts), |(d, _)| d);
@@ -634,7 +679,10 @@ pub fn prepare(spec: &specs::IngestSpec) -> QtResult<Prepared> {
     for &(date, inst) in present.keys() {
         let symbol = id_to_sym.get(&inst).map(|s| (*s).clone()).unwrap_or_default();
         let midnight = fixed.map_or_else(|| units::midnight_ns(clock, date), |(_, m)| m);
-        let next = fixed.map_or_else(|| units::midnight_ns(clock, date + 1), |(_, m)| m + 86_400_000_000_000);
+        let next = fixed.map_or_else(
+            || units::midnight_ns(clock, date + 1),
+            |(_, m)| m.saturating_add(86_400_000_000_000),
+        );
         let open_s = spec.open_s.unwrap_or(0);
         let close_s = spec
             .close_s

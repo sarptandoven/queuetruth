@@ -5,6 +5,11 @@
 //! their own kinds). Flags are parsed by clap as strings and converted here, so the same table yields the help
 //! text, the validation and the JSON. Options that are not spec fields (the scorer's evaluation window, job
 //! polling, ...) go under the reserved key `_cli` of the arguments.
+//!
+//! The Python-only groups (`demo`, `forecast`, `ledger`, `pm` and the certificate commands), which
+//! `queuetruth.cli.main` runs with their own argparse parsers before this grammar, are the rows of
+//! `python_commands::PYTHON_COMMANDS`, generated from those parsers by `crates/cli/gen_python_commands.py`; they
+//! are here so that `--help`, the command table and the reference docs list them.
 
 use clap::builder::PossibleValuesParser;
 use clap::parser::ValueSource;
@@ -12,6 +17,7 @@ use clap::{Arg, ArgAction, ArgMatches, Command};
 use serde_json::{Map, Value, json};
 
 use crate::Implementation;
+use crate::python_commands::{PYTHON_COMMANDS, PYTHON_GROUPS, PYTHON_LONG_ABOUT, PYTHON_POSITIONAL_HELP};
 
 /// How a flag's string value(s) become JSON.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -42,6 +48,8 @@ pub(crate) enum Kind {
     StrAppend,
     /// Enumerated value (CLI spelling with hyphens, stored with underscores).
     Enum(&'static [&'static str]),
+    /// Repeatable enumerated value -> `[...]` (each as `Enum`).
+    EnumAppend(&'static [&'static str]),
     /// `F,D,G` -> `{feed_ns, decision_ns, gateway_ns}` (merged into the target object).
     Latency,
     /// `o:w,...` -> `[{offset_ticks, weight}]`.
@@ -73,6 +81,10 @@ pub(crate) struct Flag {
     pub required: bool,
     /// Help text.
     pub help: &'static str,
+    /// Short name (`-y`).
+    pub short: Option<char>,
+    /// Value name in the help, instead of the one the kind implies.
+    pub value_name: Option<&'static str>,
 }
 
 const fn f(long: &'static str, kind: Kind, to: &'static str, help: &'static str) -> Flag {
@@ -82,6 +94,8 @@ const fn f(long: &'static str, kind: Kind, to: &'static str, help: &'static str)
         to,
         required: false,
         help,
+        short: None,
+        value_name: None,
     }
 }
 
@@ -92,6 +106,8 @@ const fn r(long: &'static str, kind: Kind, to: &'static str, help: &'static str)
         to,
         required: true,
         help,
+        short: None,
+        value_name: None,
     }
 }
 
@@ -119,7 +135,8 @@ pub(crate) struct Cmd {
     pub about: &'static str,
     /// Flags.
     pub flags: &'static [Flag],
-    /// Positional arguments: (name, target, required).
+    /// Positional arguments: (name, target, required); a name ending in `...` takes one or more values (zero or more
+    /// when not required) and becomes a JSON list.
     pub positional: &'static [(&'static str, &'static str, bool)],
     /// Global flags accepted by the spec.
     pub globals: Globals,
@@ -140,6 +157,7 @@ const DATA_FORMATS: &[&str] = &[
     "hyperliquid-node",
     "tardis-l2",
     "iex-deep-plus",
+    "nyse-ibf",
 ];
 const BBO: &[&str] = &["none", "change", "full"];
 const DQ_FAIL_ON: &[&str] = &["warn", "fail", "never"];
@@ -147,7 +165,7 @@ const TRAJ: &[&str] = &["none", "ahead", "full"];
 const TRADES: &[&str] = &["before", "after"];
 const MODE: &[&str] = &["faithful", "corrected"];
 const EXCH: &[&str] = &["partial", "no-partial"];
-const ALLOCATION: &[&str] = &["equal", "proportional", "per_partition"];
+const ALLOCATION: &[&str] = &["equal", "proportional", "per-partition"];
 const ENTRY: &[&str] = &["exchange-ack", "send-plus-latency"];
 const POPULATION: &[&str] = &["shadows", "real-orders"];
 const SPLIT: &[&str] = &["auto", "days", "blocks"];
@@ -295,8 +313,9 @@ pub(crate) const COMMANDS: &[Cmd] = &[
                 "venue",
                 Kind::Str,
                 "venue",
-                "venue rule set (nasdaq, cme, coinbase, crypto_l3, iex, generic; generic resolves to crypto_l3 for the \
-                 crypto L3 formats: bitstamp, bitfinex, coinbase, coinbase-level3, kraken-l3, hyperliquid-node)",
+                "venue rule set (nasdaq, cme, coinbase, crypto_l3, iex, nyse, generic; generic resolves to crypto_l3 \
+                 for the crypto L3 formats: bitstamp, bitfinex, coinbase, coinbase-level3, kraken-l3, \
+                 hyperliquid-node)",
             ),
             r("out", Kind::Str, "out", "output dataset directory"),
             f("symbols", Kind::StrList, "symbols", "symbol filter"),
@@ -538,6 +557,66 @@ pub(crate) const COMMANDS: &[Cmd] = &[
         hidden: false,
     },
     Cmd {
+        path: &["zoo-toxicity"],
+        imp: Implementation::Python,
+        about: "fill-type tags, markouts and adverse-selection ranking of a zoo run's models",
+        flags: &[
+            r(
+                "zoo",
+                Kind::Path,
+                "zoo",
+                "zoo output directory (with zoo_fills.parquet)",
+            ),
+            DATA,
+            r("out", Kind::Str, "out", "output directory"),
+            f(
+                "shadows",
+                Kind::Path,
+                "shadows",
+                "shadow spec file of the zoo run (default: the zoo summary's)",
+            ),
+            f(
+                "amends",
+                Kind::Path,
+                "amends",
+                "shadow amend file of the zoo run (default: the zoo summary's)",
+            ),
+            f(
+                "horizons",
+                Kind::DurList,
+                "horizons_ns",
+                "markout horizons (durations; default 100ms,1s,10s,60s)",
+            ),
+            f(
+                "window",
+                Kind::Dur,
+                "window_ns",
+                "fill window from ts_live, a zoo prediction horizon (default: the zoo's h_max)",
+            ),
+            f(
+                "rank-horizon",
+                Kind::Dur,
+                "rank_horizon_ns",
+                "markout horizon of the rankings (default 60s)",
+            ),
+            f(
+                "bootstrap-b",
+                Kind::Int,
+                "bootstrap_b",
+                "bootstrap resamples (default 1000)",
+            ),
+            f(
+                "allow-truth-mismatch",
+                Kind::Flag,
+                "allow_truth_mismatch",
+                "evaluate the shadows whose replay reproduces the zoo's exact arm when some do not",
+            ),
+        ],
+        positional: &[],
+        globals: Globals::SeedThreads,
+        hidden: false,
+    },
+    Cmd {
         path: &["calibrate", "alloc"],
         imp: Implementation::Hybrid,
         about: "fit n (power families) or k (databento) by allocation quasi-likelihood",
@@ -680,6 +759,12 @@ pub(crate) const COMMANDS: &[Cmd] = &[
                 Kind::Path,
                 "zoo_shadows",
                 "qt.zoo_shadows of those predictions (default: zoo_shadows.parquet next to them)",
+            ),
+            f(
+                "conformal-alpha",
+                Kind::Num,
+                "_cli.conformal_alpha",
+                "also write conformal fill sets and coverage (conformal.json) at this miscoverage, e.g. 0.1",
             ),
         ],
         positional: &[],
@@ -1239,6 +1324,12 @@ pub(crate) const COMMANDS: &[Cmd] = &[
                 "list the job-submitting tools",
             ),
             f("local", Kind::Flag, "local", "only the local read tools"),
+            f(
+                "allow-run",
+                Kind::Flag,
+                "allow_run",
+                "list the local run tools (sandboxed; writes under the run root); default from QT_MCP_ALLOW_RUN",
+            ),
         ],
         positional: &[],
         globals: Globals::None,
@@ -1375,9 +1466,14 @@ fn flag_arg(fl: &Flag) -> Arg {
     let mut a = Arg::new(fl.long).long(fl.long).help(fl.help).required(fl.required);
     a = match fl.kind {
         Kind::Flag | Kind::NoFlag | Kind::EmptyObject => a.action(ArgAction::SetTrue),
-        Kind::PathAppend | Kind::StrAppend | Kind::KeyValue => a.action(ArgAction::Append).allow_hyphen_values(true),
+        Kind::PathAppend | Kind::StrAppend | Kind::KeyValue | Kind::EnumAppend(_) => {
+            a.action(ArgAction::Append).allow_hyphen_values(true)
+        }
         _ => a.action(ArgAction::Set).allow_hyphen_values(true),
     };
+    if let Some(c) = fl.short {
+        a = a.short(c);
+    }
     let name = match fl.kind {
         Kind::Path | Kind::PathAppend => Some("PATH"),
         Kind::Dur => Some("DURATION"),
@@ -1393,13 +1489,13 @@ fn flag_arg(fl: &Flag) -> Arg {
         Kind::Simulator => Some("NAME[@VER]"),
         Kind::Tz => Some("TZ"),
         Kind::KeyValue => Some("KEY=VALUE"),
-        Kind::Enum(vals) => {
+        Kind::Enum(vals) | Kind::EnumAppend(vals) => {
             a = a.value_parser(PossibleValuesParser::new(vals.iter().copied()));
             None
         }
         Kind::Flag | Kind::NoFlag | Kind::EmptyObject => None,
     };
-    if let Some(n) = name {
+    if let Some(n) = fl.value_name.or(name) {
         a = a.value_name(n);
     }
     if fl.long == "format" {
@@ -1549,8 +1645,16 @@ pub(crate) fn lists_models(cmd: &Cmd, m: &ArgMatches) -> bool {
     cmd.flags.iter().any(|fl| fl.to == LIST_MODELS && m.get_flag(fl.long))
 }
 
+/// The long `--help` description of a command path, when it has one.
+fn long_about(path: &[&str]) -> Option<&'static str> {
+    PYTHON_LONG_ABOUT.iter().find(|(p, _)| *p == path).map(|(_, d)| *d)
+}
+
 fn leaf(cmd: &Cmd, name: &'static str) -> Command {
-    let mut c = Command::new(name).about(cmd.about).hide(cmd.hidden);
+    let mut c = Command::new(name)
+        .about(cmd.about)
+        .long_about(long_about(cmd.path))
+        .hide(cmd.hidden);
     let lister = cmd.flags.iter().find(|fl| fl.to == LIST_MODELS).map(|fl| fl.long);
     let schema: Option<Value> = spec_schema(cmd.path).and_then(|n| {
         crate::schemas::JSON_SCHEMAS
@@ -1572,9 +1676,28 @@ fn leaf(cmd: &Cmd, name: &'static str) -> Command {
         c = c.arg(a);
     }
     for (pname, _, req) in cmd.positional {
-        c = c.arg(Arg::new(*pname).required(*req).action(ArgAction::Set));
+        let help = PYTHON_POSITIONAL_HELP
+            .iter()
+            .find(|(p, n, _)| *p == cmd.path && n == pname)
+            .map(|(_, _, h)| *h);
+        c = c.arg(
+            match pname.strip_suffix("...") {
+                Some(shown) => Arg::new(*pname)
+                    .value_name(shown)
+                    .required(*req)
+                    .num_args(if *req { 1.. } else { 0.. })
+                    .action(ArgAction::Append),
+                None => Arg::new(*pname).required(*req).action(ArgAction::Set),
+            }
+            .help(help),
+        );
     }
     c
+}
+
+/// Every row of the command table: the clap-dispatched commands, then the Python-only groups.
+pub(crate) fn all_commands() -> impl Iterator<Item = &'static Cmd> {
+    COMMANDS.iter().chain(PYTHON_COMMANDS)
 }
 
 /// The clap command tree (program name `bin`).
@@ -1634,7 +1757,7 @@ pub(crate) fn command(bin: &'static str) -> Command {
                 .help("human output: every summary field after the answer; every warning and note on stderr"),
         );
     let mut seen: Vec<&str> = Vec::new();
-    for cmd in COMMANDS {
+    for cmd in all_commands() {
         let top = cmd.path[0];
         if seen.contains(&top) {
             continue;
@@ -1643,13 +1766,18 @@ pub(crate) fn command(bin: &'static str) -> Command {
         if cmd.path.len() == 1 {
             root = root.subcommand(leaf(cmd, top));
         } else {
-            let about = GROUPS.iter().find(|(g, _)| *g == top).map_or("", |(_, a)| *a);
+            let about = GROUPS
+                .iter()
+                .chain(PYTHON_GROUPS)
+                .find(|(g, _)| *g == top)
+                .map_or("", |(_, a)| *a);
             let mut g = Command::new(top)
                 .about(about)
+                .long_about(long_about(&[top]))
                 .subcommand_required(true)
                 .arg_required_else_help(true);
             let mut hidden = true;
-            for c in COMMANDS.iter().filter(|c| c.path.len() == 2 && c.path[0] == top) {
+            for c in all_commands().filter(|c| c.path.len() == 2 && c.path[0] == top) {
                 hidden &= c.hidden;
                 g = g.subcommand(leaf(c, c.path[1]));
             }
@@ -1661,9 +1789,7 @@ pub(crate) fn command(bin: &'static str) -> Command {
 
 /// The table row of a command path.
 pub(crate) fn find(path: &[String]) -> Option<&'static Cmd> {
-    COMMANDS
-        .iter()
-        .find(|c| c.path.len() == path.len() && c.path.iter().zip(path).all(|(a, b)| a == b))
+    all_commands().find(|c| c.path.len() == path.len() && c.path.iter().zip(path).all(|(a, b)| a == b))
 }
 
 /// Walks the matches to the leaf: (path, leaf matches).
@@ -1912,7 +2038,7 @@ fn flag_value(m: &ArgMatches, fl: &Flag) -> Result<Option<Value>, String> {
                 _ => Value::Object(Map::new()),
             }))
         }
-        Kind::PathAppend | Kind::StrAppend | Kind::KeyValue => {
+        Kind::PathAppend | Kind::StrAppend | Kind::KeyValue | Kind::EnumAppend(_) => {
             let Some(vals) = m.get_many::<String>(id) else {
                 return Ok(None);
             };
@@ -1920,6 +2046,11 @@ fn flag_value(m: &ArgMatches, fl: &Flag) -> Result<Option<Value>, String> {
             Ok(Some(match fl.kind {
                 Kind::PathAppend => Value::Array(vals.iter().map(|v| json!({ "path": v })).collect()),
                 Kind::StrAppend => Value::Array(vals.iter().map(|v| json!(v)).collect()),
+                Kind::EnumAppend(allowed) => Value::Array(
+                    vals.iter()
+                        .map(|v| parse_enum(flag, allowed, v))
+                        .collect::<Result<_, _>>()?,
+                ),
                 _ => {
                     let mut o = Map::new();
                     for v in vals {
@@ -1987,7 +2118,13 @@ fn flag_value(m: &ArgMatches, fl: &Flag) -> Result<Option<Value>, String> {
                 Kind::Window => parse_window(flag, s)?,
                 Kind::Simulator => parse_simulator(s),
                 Kind::Tz => parse_tz(flag, s)?,
-                Kind::Flag | Kind::NoFlag | Kind::EmptyObject | Kind::PathAppend | Kind::StrAppend | Kind::KeyValue => {
+                Kind::Flag
+                | Kind::NoFlag
+                | Kind::EmptyObject
+                | Kind::PathAppend
+                | Kind::StrAppend
+                | Kind::KeyValue
+                | Kind::EnumAppend(_) => {
                     return Ok(None);
                 }
             };
@@ -2028,7 +2165,11 @@ pub(crate) fn build_args(
         }
     }
     for (pname, to, _) in cmd.positional {
-        if let Some(v) = m.get_one::<String>(pname) {
+        if pname.ends_with("...") {
+            if let Some(vs) = m.get_many::<String>(pname) {
+                args.insert((*to).to_owned(), json!(vs.collect::<Vec<_>>()));
+            }
+        } else if let Some(v) = m.get_one::<String>(pname) {
             args.insert((*to).to_owned(), json!(v));
         }
     }

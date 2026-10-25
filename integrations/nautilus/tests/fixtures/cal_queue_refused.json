@@ -1,0 +1,212 @@
+{
+ "schema": "qt.calibration_result",
+ "schema_version": 1,
+ "run_id": "4291537475bc10f3",
+ "spec": {
+  "kind": "nt_touch",
+  "family": "nt_queue_l2_prob_touch",
+  "dataset": {
+   "path": "nasdaq-2d"
+  },
+  "shadows": {
+   "path": "2d-sampled-6000.parquet"
+  },
+  "live": null,
+  "train": {
+   "dates": [
+    "2019-12-30"
+   ],
+   "blocks": {
+    "index": [
+     0,
+     1,
+     2,
+     3
+    ],
+    "n_blocks": 5
+   }
+  },
+  "test": {
+   "dates": [
+    "2020-01-30"
+   ],
+   "blocks": null
+  },
+  "mode": "faithful",
+  "exchange": "partial",
+  "l2": {
+   "depth_levels": 10,
+   "cadence_ns": 0,
+   "trade_position": "before",
+   "include_counts": true,
+   "emit_hidden_trades": true
+  },
+  "horizons_ns": [
+   100000000,
+   1000000000,
+   10000000000,
+   60000000000
+  ],
+  "h_max_ns": 300000000000,
+  "grid": {
+   "alloc": {
+    "lo": -3.0,
+    "hi": 4.0,
+    "n": 141
+   },
+   "databento": {
+    "lo": -0.99,
+    "hi": 0.99,
+    "n": 199
+   },
+   "survival": {
+    "lo": -0.98,
+    "hi": 0.9,
+    "n": 25
+   }
+  },
+  "bootstrap": {
+   "b": 200,
+   "block": "auto",
+   "seed": 0
+  },
+  "particles": 100,
+  "seed": 0
+ },
+ "kind": "nt_touch",
+ "family": "nt_queue_l2_prob_touch",
+ "mode": "faithful",
+ "param_name": "p",
+ "estimate": 0.8711256117455138,
+ "ci_profile": null,
+ "ci_bootstrap": [
+  0.8158210640560423,
+  0.9187078977932637
+ ],
+ "loglik": null,
+ "n_events": 613,
+ "n_shadows": 1536,
+ "train": {
+  "dates": [
+   "2019-12-30"
+  ],
+  "blocks": {
+   "index": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "n_blocks": 5
+  }
+ },
+ "test": {
+  "dates": [
+   "2020-01-30"
+  ],
+  "blocks": null
+ },
+ "held_out": {
+  "nt_queue_l2_prob_touch[mode=faithful;p=0.8711256117455138]": {
+   "brier": {
+    "100000000": 0.0006779244967637828,
+    "1000000000": 0.001177901760581302,
+    "10000000000": 0.003836718435222157,
+    "60000000000": 0.0024506158156414864,
+    "300000000000": 0.0013031531059046456
+   },
+   "logloss": {
+    "100000000": 0.009315208578068682,
+    "1000000000": 0.015336593629051803,
+    "10000000000": 0.04702886434563891,
+    "60000000000": 0.033269749356582695,
+    "300000000000": 0.014938950160220104
+   },
+   "fill_rate_bias": {
+    "100000000": -9.771398868677755e-05,
+    "1000000000": -0.002422714410422633,
+    "10000000000": -0.003739046708357008,
+    "60000000000": -0.0033017293527006775,
+    "300000000000": -0.0011216278924972567
+   }
+  }
+ },
+ "baseline_held_out": {
+  "nt_queue_l2_prob_touch[mode=faithful;p=1]": {
+   "brier": {
+    "100000000": 0.0006666666666666666,
+    "1000000000": 0.001,
+    "10000000000": 0.0036666666666666666,
+    "60000000000": 0.0023333333333333335,
+    "300000000000": 0.0013333333333333333
+   },
+   "logloss": {
+    "100000000": 0.009211339705799636,
+    "1000000000": 0.013816509558463762,
+    "10000000000": 0.05065786837967179,
+    "60000000000": 0.032237188969082044,
+    "300000000000": 0.018421679411108723
+   },
+   "fill_rate_bias": {
+    "100000000": -5.898059818321144e-17,
+    "1000000000": -0.0009999999999991682,
+    "10000000000": -0.0016666666666690366,
+    "60000000000": -0.002333333333310872,
+    "300000000000": -0.0006666666666343968
+   }
+  }
+ },
+ "stratified": [],
+ "latency": null,
+ "exports": {
+  "hftbacktest": {
+   "python": "# queuetruth 0.1.0 | calibration 4291537475bc10f3 | nt_queue_l2_prob_touch fitted on 2019-12-30; held-out 2020-01-30\n# data: nasdaq (real_data, dataset 1a00f70976b6)\n# fit: p = 0.871126 (nt_touch); 613 events from 1536 shadows; bootstrap CI [0.815821, 0.918708]; profile CI [-, -]\n# held-out: DOES NOT BEAT the default nt_queue_l2_prob_touch[mode=faithful;p=1] out of sample: WORSE at 100ms, 1s, 60s; MIXED (better on one score, worse on the other) at 10s; better at 5m (log loss at 100ms: fitted 0.00931521 vs default 0.00921134; Brier 0.000677924 vs 0.000666667)\n# !! NOT VALIDATED: `queuetruth export` refuses this calibration (`--force` writes it anyway). Reasons:\n# !!   - not_beating_default: DOES NOT BEAT the default nt_queue_l2_prob_touch[mode=faithful;p=1] out of sample: WORSE at 100ms, 1s, 60s; MIXED (better on one score, worse on the other) at 10s; better at 5m (log loss at 100ms: fitted 0.00931521 vs default 0.00921134; Brier 0.000677924 vs 0.000666667)\n# !! Do not paste these values into a production config without your own out-of-sample check.\n# Paste into your existing BacktestAsset chain (keep your data/tick/lot/fee settings).\nfrom hftbacktest import BacktestAsset\nasset = (\n    BacktestAsset()\n    # ... your existing .data(...), .tick_size(...), .lot_size(...), fee model ...\n    .partial_fill_exchange()\n)\n",
+   "notes": [
+    "family nt_queue_l2_prob_touch has no hftbacktest queue model: queue-model line omitted",
+    "no latency calibration: keep your existing latency model (intp_order_latency line omitted).",
+    "NOT VALIDATED: `queuetruth export` refuses this calibration (not_beating_default); see the snippet header.",
+    "hftbacktest #316/#312: released versions apply partial fills of resting orders to position only when the order completes, and a fill exactly equal to leaves can raise InvalidOrderStatus; check partial-fill accounting in your version before comparing fill quantities.",
+    "The fit used this L2 view of its data source: top 10 levels, unconflated (every book event). The parameter is specific to that feed, depth and conflation: if your backtest runs on conflated L2 or another depth, refit on that view."
+   ]
+  },
+  "nautilus": {
+   "python": "# queuetruth 0.1.0 | calibration 4291537475bc10f3 | NautilusTrader API as documented at develop 5247ad5 (verify names\n# for your version; newer builds expose FillModel under nautilus_trader.execution)\n# nt_queue_l2_prob_touch fitted on 2019-12-30; held-out 2020-01-30; data: nasdaq (real_data, dataset 1a00f70976b6)\n# fit: p = 0.871126 (nt_touch); 613 events from 1536 shadows; bootstrap CI [0.815821, 0.918708]; profile CI [-, -]\n# held-out: DOES NOT BEAT the default nt_queue_l2_prob_touch[mode=faithful;p=1] out of sample: WORSE at 100ms, 1s, 60s; MIXED (better on one score, worse on the other) at 10s; better at 5m (log loss at 100ms: fitted 0.00931521 vs default 0.00921134; Brier 0.000677924 vs 0.000666667)\n# !! NOT VALIDATED: `queuetruth export` refuses this calibration (`--force` writes it anyway). Reasons:\n# !!   - not_beating_default: DOES NOT BEAT the default nt_queue_l2_prob_touch[mode=faithful;p=1] out of sample: WORSE at 100ms, 1s, 60s; MIXED (better on one score, worse on the other) at 10s; better at 5m (log loss at 100ms: fitted 0.00931521 vs default 0.00921134; Brier 0.000677924 vs 0.000666667)\n# !! Do not paste these values into a production config without your own out-of-sample check.\nfrom nautilus_trader.backtest.models import FillModel\nfill_model = FillModel(prob_fill_on_limit=0.871126)\n# not fitted: prob_slippage, random_seed (set them as in your current FillModel)\n# latency_model: not fitted (no latency calibration in this result); keep your own LatencyModel\n# queue_position=True and trade_execution=True on the venue config when the fit was queue-gated (yes)\n",
+   "notes": [
+    "prob_fill_on_limit is a per-touch Bernoulli probability: it is not portable across feeds with different trade-print or quote-update rates; refit per data source.",
+    "latency not fitted (no latency calibration in this result): no LatencyModel line is emitted; set it from your own measurements.",
+    "NOT VALIDATED: `queuetruth export` refuses this calibration (not_beating_default); see the snippet header.",
+    "High-level BacktestVenueConfig accepts built-in fill/latency models only; pass these objects to BacktestEngine.add_venue(...) when your version requires it."
+   ]
+  },
+  "latency_npz": null
+ },
+ "data_sources": [
+  {
+   "dataset_id": "1a00f70976b648282e2680b23f5239ef4cf04eb91d6227fb113543cf52eacd37",
+   "venue": "nasdaq",
+   "source_venue": "nasdaq",
+   "validation_status": "real_data"
+  }
+ ],
+ "warnings": [
+  "info: p is per touch and not portable across feeds with different print rates",
+  "held_out: fitted nt_queue_l2_prob_touch[mode=faithful;p=0.8711256117455138] vs default nt_queue_l2_prob_touch[mode=faithful;p=1] on 30000 test prediction rows",
+  "trust: beats_default: 100000000=worse,1000000000=worse,10000000000=mixed,60000000000=worse,300000000000=better (DOES NOT BEAT the default nt_queue_l2_prob_touch[mode=faithful;p=1] out of sample: WORSE at 100ms, 1s, 60s; MIXED (better on one score, worse on the other) at 10s; better at 5m (log loss at 100ms: fitted 0.00931521 vs default 0.00921134; Brier 0.000677924 vs 0.000666667))",
+  "trust: verdict: refused (not_beating_default)"
+ ],
+ "held_out_discordance": null,
+ "trust": {
+  "verdict": "refused",
+  "reasons": [
+   "not_beating_default"
+  ],
+  "flags": [],
+  "beats_default": {
+   "100000000": "worse",
+   "1000000000": "worse",
+   "10000000000": "mixed",
+   "60000000000": "worse",
+   "300000000000": "better"
+  }
+ }
+}

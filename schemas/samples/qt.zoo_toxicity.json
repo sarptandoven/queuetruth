@@ -1,0 +1,263 @@
+{
+  "sample": {
+    "schema": "qt.zoo_toxicity",
+    "schema_version": 1,
+    "run_id": "0123456789abcdef",
+    "engine_version": "x",
+    "spec": {
+      "k": 1
+    },
+    "zoo_run_id": "x",
+    "zoo_mode": "x",
+    "n_shadows": 1,
+    "n_excluded": {
+      "k": 1
+    },
+    "truth_mismatch_rate": 0.5,
+    "window_ns": 1,
+    "horizons_ns": [
+      1
+    ],
+    "ci_block": "day",
+    "n_blocks": 1,
+    "bootstrap_b": 1,
+    "exact": {
+      "n_filled": 1,
+      "n_fills": 1,
+      "fills_by_mechanism": {
+        "k": 1
+      }
+    },
+    "models": [
+      {
+        "model_id": "x",
+        "family": "x",
+        "n_shadows": 1,
+        "n_model_filled": 1,
+        "n_exact_filled": 1,
+        "n_confirmed": 1,
+        "n_phantom": 1,
+        "n_missed": 1,
+        "n_inconsistent": 1,
+        "phantom_rate": 0.5,
+        "missed_rate": 0.5,
+        "horizons": {
+          "1000000000": {
+            "n": 1,
+            "model_pnl_ticks": {
+              "value": 0.5,
+              "ci_lo": 0.5,
+              "ci_hi": 0.5,
+              "n": 1
+            },
+            "exact_pnl_ticks": {
+              "value": 0.5,
+              "ci_lo": 0.5,
+              "ci_hi": 0.5,
+              "n": 1
+            },
+            "grant_ticks": {
+              "value": 0.5,
+              "ci_lo": 0.5,
+              "ci_hi": 0.5,
+              "n": 1
+            },
+            "deny_ticks": {
+              "value": 0.5,
+              "ci_lo": 0.5,
+              "ci_hi": 0.5,
+              "n": 1
+            },
+            "timing_ticks": {
+              "value": 0.5,
+              "ci_lo": 0.5,
+              "ci_hi": 0.5,
+              "n": 1
+            },
+            "bias_ticks": {
+              "value": 0.5,
+              "ci_lo": 0.5,
+              "ci_hi": 0.5,
+              "n": 1
+            },
+            "grant_bps": {
+              "value": 0.5,
+              "ci_lo": 0.5,
+              "ci_hi": 0.5,
+              "n": 1
+            },
+            "deny_bps": {
+              "value": 0.5,
+              "ci_lo": 0.5,
+              "ci_hi": 0.5,
+              "n": 1
+            },
+            "timing_bps": {
+              "value": 0.5,
+              "ci_lo": 0.5,
+              "ci_hi": 0.5,
+              "n": 1
+            },
+            "bias_bps": {
+              "value": 0.5,
+              "ci_lo": 0.5,
+              "ci_hi": 0.5,
+              "n": 1
+            },
+            "phantom_mo_ticks": {
+              "value": 0.5,
+              "ci_lo": 0.5,
+              "ci_hi": 0.5,
+              "n": 1
+            },
+            "missed_mo_ticks": {
+              "value": 0.5,
+              "ci_lo": 0.5,
+              "ci_hi": 0.5,
+              "n": 1
+            },
+            "confirmed_mo_ticks": {
+              "value": 0.5,
+              "ci_lo": 0.5,
+              "ci_hi": 0.5,
+              "n": 1
+            },
+            "confirmed_exact_mo_ticks": {
+              "value": 0.5,
+              "ci_lo": 0.5,
+              "ci_hi": 0.5,
+              "n": 1
+            },
+            "phantom_mm_ticks": {
+              "value": 0.5,
+              "ci_lo": 0.5,
+              "ci_hi": 0.5,
+              "n": 1
+            },
+            "missed_mm_ticks": {
+              "value": 0.5,
+              "ci_lo": 0.5,
+              "ci_hi": 0.5,
+              "n": 1
+            },
+            "confirmed_mm_ticks": {
+              "value": 0.5,
+              "ci_lo": 0.5,
+              "ci_hi": 0.5,
+              "n": 1
+            },
+            "confirmed_exact_mm_ticks": {
+              "value": 0.5,
+              "ci_lo": 0.5,
+              "ci_hi": 0.5,
+              "n": 1
+            }
+          }
+        }
+      }
+    ],
+    "by_type": [
+      {
+        "arm": "x",
+        "status": "confirmed",
+        "mechanism": "queue",
+        "n_fills": 1,
+        "n_shadows": 1,
+        "qty": 0.5,
+        "markouts": {
+          "1000000000": {
+            "mo_ticks": {
+              "value": 0.5,
+              "ci_lo": 0.5,
+              "ci_hi": 0.5,
+              "n": 1
+            },
+            "mo_bps": {
+              "value": 0.5,
+              "ci_lo": 0.5,
+              "ci_hi": 0.5,
+              "n": 1
+            },
+            "mm_ticks": {
+              "value": 0.5,
+              "ci_lo": 0.5,
+              "ci_hi": 0.5,
+              "n": 1
+            },
+            "mm_bps": {
+              "value": 0.5,
+              "ci_lo": 0.5,
+              "ci_hi": 0.5,
+              "n": 1
+            }
+          }
+        }
+      }
+    ],
+    "rankings": {
+      "horizon_ns": 1,
+      "grant": [
+        {
+          "rank": 1,
+          "model_id": "x",
+          "value": 0.5,
+          "ci_lo": 0.5,
+          "ci_hi": 0.5,
+          "rank_lo": 1,
+          "rank_hi": 1,
+          "gap_to_next": {
+            "value": 0.5,
+            "ci_lo": 0.5,
+            "ci_hi": 0.5
+          },
+          "separated_from_next": true
+        }
+      ],
+      "deny": [
+        {
+          "rank": 1,
+          "model_id": "x",
+          "value": 0.5,
+          "ci_lo": 0.5,
+          "ci_hi": 0.5,
+          "rank_lo": 1,
+          "rank_hi": 1,
+          "gap_to_next": {
+            "value": 0.5,
+            "ci_lo": 0.5,
+            "ci_hi": 0.5
+          },
+          "separated_from_next": true
+        }
+      ],
+      "bias": [
+        {
+          "rank": 1,
+          "model_id": "x",
+          "value": 0.5,
+          "ci_lo": 0.5,
+          "ci_hi": 0.5,
+          "rank_lo": 1,
+          "rank_hi": 1,
+          "gap_to_next": {
+            "value": 0.5,
+            "ci_lo": 0.5,
+            "ci_hi": 0.5
+          },
+          "separated_from_next": true
+        }
+      ]
+    },
+    "files": [
+      {
+        "name": "x",
+        "rows": 1,
+        "bytes": 1,
+        "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      }
+    ],
+    "warnings": [
+      "x"
+    ]
+  }
+}

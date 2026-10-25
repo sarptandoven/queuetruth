@@ -1,0 +1,79 @@
+{
+  "sample": {
+    "schema": "qt.ledger_list",
+    "schema_version": 1,
+    "ledger": "x",
+    "ledger_id": "0123456789abcdef0123456789abcdef",
+    "head": {
+      "seq": 1,
+      "hash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    },
+    "filter": {
+      "kinds": [
+        "genesis"
+      ],
+      "study": "x",
+      "name": "x",
+      "status": "ok",
+      "since_ns": 1,
+      "until_ns": 1,
+      "dataset": "x",
+      "run_id": "x",
+      "spec_hash": "x"
+    },
+    "n_matching": 1,
+    "n_conflicts": 1,
+    "records": [
+      {
+        "schema": "qt.ledger_record",
+        "schema_version": 1,
+        "ledger_id": "0123456789abcdef0123456789abcdef",
+        "seq": 1,
+        "prev": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "kind": "genesis",
+        "status": "ok",
+        "study": "study_1",
+        "trial_id": "0123456789abcdef",
+        "run_id": "0123456789abcdef",
+        "spec_hash": "0123456789abcdef",
+        "dataset_hash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "inputs": {
+          "k": "x"
+        },
+        "name": "study_1",
+        "params": {
+          "k": 1
+        },
+        "metrics": {
+          "k": 0.5
+        },
+        "series": {
+          "kind": "returns",
+          "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+          "n_obs": 1,
+          "indexed": true,
+          "periods_per_year": 0.5,
+          "higher_is_better": true
+        },
+        "run_ids": [
+          "0123456789abcdef"
+        ],
+        "code": {
+          "queuetruth": "x",
+          "engine": "x",
+          "core": "x",
+          "git": "x",
+          "project_git": "x",
+          "user": "x"
+        },
+        "error": {
+          "code": "QT-INPUT-002",
+          "message": "x"
+        },
+        "note": "x",
+        "started_at_ns": 1,
+        "recorded_at_ns": 1
+      }
+    ]
+  }
+}

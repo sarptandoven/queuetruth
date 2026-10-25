@@ -1,0 +1,618 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.conformal_report",
+  "$defs": {
+    "CoverageCell": {
+      "additionalProperties": false,
+      "description": "Prediction-set coverage of one horizon x landmark x stratum (`all` = pooled) on the test rows.\n\n`n_calib` is the calibration size of the category (with `label_conditional`, the smaller of the two per-label\nsizes); `informative` = it reaches `queuetruth.model.conformal.min_informative_n(alpha)`. Below that size\nconservative sets always hold both labels, and smoothed sets are randomized (a label is dropped at random, with\nprobability up to `alpha`) and carry no information about the row. `coverage_fill` / `coverage_nofill` are the\ncoverage among the `n_test_fill` test rows that filled / the others (guaranteed only with `label_conditional`).\n`va_p0_mean`, `va_p1_mean` average the Venn-Abers interval; `va_true_label_mean` averages the probability\ncomputed with the observed label, which equals the fill rate in expectation under exchangeability.",
+      "properties": {
+        "horizon_ns": {
+          "title": "Horizon Ns",
+          "type": "integer"
+        },
+        "landmark_ns": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Landmark Ns"
+        },
+        "stratum": {
+          "title": "Stratum",
+          "type": "string"
+        },
+        "n_calib": {
+          "title": "N Calib",
+          "type": "integer"
+        },
+        "n_test": {
+          "title": "N Test",
+          "type": "integer"
+        },
+        "n_test_fill": {
+          "title": "N Test Fill",
+          "type": "integer"
+        },
+        "coverage": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Coverage"
+        },
+        "coverage_ci_lo": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Coverage Ci Lo"
+        },
+        "coverage_ci_hi": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Coverage Ci Hi"
+        },
+        "frac_empty": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Frac Empty"
+        },
+        "frac_singleton": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Frac Singleton"
+        },
+        "frac_both": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Frac Both"
+        },
+        "fill_rate_calib": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Fill Rate Calib"
+        },
+        "fill_rate_test": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Fill Rate Test"
+        },
+        "mean_p_test": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Mean P Test"
+        },
+        "va_p0_mean": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Va P0 Mean"
+        },
+        "va_p1_mean": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Va P1 Mean"
+        },
+        "va_true_label_mean": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Va True Label Mean"
+        },
+        "coverage_fill": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Coverage Fill"
+        },
+        "coverage_nofill": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Coverage Nofill"
+        },
+        "informative": {
+          "title": "Informative",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "horizon_ns",
+        "landmark_ns",
+        "stratum",
+        "n_calib",
+        "n_test",
+        "n_test_fill",
+        "coverage",
+        "coverage_ci_lo",
+        "coverage_ci_hi",
+        "frac_empty",
+        "frac_singleton",
+        "frac_both",
+        "fill_rate_calib",
+        "fill_rate_test",
+        "mean_p_test",
+        "va_p0_mean",
+        "va_p1_mean",
+        "va_true_label_mean",
+        "coverage_fill",
+        "coverage_nofill",
+        "informative"
+      ],
+      "title": "CoverageCell",
+      "type": "object"
+    },
+    "DriftCell": {
+      "additionalProperties": false,
+      "description": "Exchangeability martingale of the calibration rows, then the test rows, of one horizon x landmark. `alarm` is\nat the per-cell level `1 / alarm_threshold`.",
+      "properties": {
+        "horizon_ns": {
+          "title": "Horizon Ns",
+          "type": "integer"
+        },
+        "landmark_ns": {
+          "title": "Landmark Ns",
+          "type": "integer"
+        },
+        "method": {
+          "title": "Method",
+          "type": "string"
+        },
+        "n": {
+          "title": "N",
+          "type": "integer"
+        },
+        "log10_final": {
+          "title": "Log10 Final",
+          "type": "number"
+        },
+        "log10_max": {
+          "title": "Log10 Max",
+          "type": "number"
+        },
+        "alarm": {
+          "title": "Alarm",
+          "type": "boolean"
+        },
+        "alarm_group": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Alarm Group"
+        },
+        "groups": {
+          "items": {
+            "$ref": "#/$defs/DriftGroup"
+          },
+          "title": "Groups",
+          "type": "array"
+        }
+      },
+      "required": [
+        "horizon_ns",
+        "landmark_ns",
+        "method",
+        "n",
+        "log10_final",
+        "log10_max",
+        "alarm",
+        "alarm_group",
+        "groups"
+      ],
+      "title": "DriftCell",
+      "type": "object"
+    },
+    "DriftGroup": {
+      "additionalProperties": false,
+      "description": "Martingale statistics of one (role, session date) group, in processing order (`group` = `<role>:<date>`, or\n`<role>` when the dates are unknown).",
+      "properties": {
+        "group": {
+          "title": "Group",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "calib",
+            "test"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Date"
+        },
+        "n": {
+          "title": "N",
+          "type": "integer"
+        },
+        "log10_end": {
+          "title": "Log10 End",
+          "type": "number"
+        },
+        "log10_max": {
+          "title": "Log10 Max",
+          "type": "number"
+        },
+        "mean_pvalue": {
+          "title": "Mean Pvalue",
+          "type": "number"
+        },
+        "ks_uniform": {
+          "title": "Ks Uniform",
+          "type": "number"
+        }
+      },
+      "required": [
+        "group",
+        "role",
+        "date",
+        "n",
+        "log10_end",
+        "log10_max",
+        "mean_pvalue",
+        "ks_uniform"
+      ],
+      "title": "DriftGroup",
+      "type": "object"
+    },
+    "FillTimeCell": {
+      "additionalProperties": false,
+      "description": "Coverage of the conformal fill-time bounds of one landmark x stratum (`all` = pooled) on the test rows.",
+      "properties": {
+        "landmark_ns": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Landmark Ns"
+        },
+        "stratum": {
+          "title": "Stratum",
+          "type": "string"
+        },
+        "n_calib": {
+          "title": "N Calib",
+          "type": "integer"
+        },
+        "n_test": {
+          "title": "N Test",
+          "type": "integer"
+        },
+        "lower_coverage": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Lower Coverage"
+        },
+        "upper_coverage": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Upper Coverage"
+        },
+        "interval_coverage": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Interval Coverage"
+        },
+        "frac_lower_claim": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Frac Lower Claim"
+        },
+        "frac_upper_claim": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Frac Upper Claim"
+        },
+        "median_lower_ns": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Median Lower Ns"
+        },
+        "median_upper_ns": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Median Upper Ns"
+        }
+      },
+      "required": [
+        "landmark_ns",
+        "stratum",
+        "n_calib",
+        "n_test",
+        "lower_coverage",
+        "upper_coverage",
+        "interval_coverage",
+        "frac_lower_claim",
+        "frac_upper_claim",
+        "median_lower_ns",
+        "median_upper_ns"
+      ],
+      "title": "FillTimeCell",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`conformal.json`: coverage of conformal fill sets, Venn-Abers intervals and fill-time bounds on the test rows\nand the exchangeability martingale (extension `conformal-fill`). `drift_familywise_alarm` = some drift cell\nreached `drift_familywise_threshold` = `alarm_threshold x len(drift)` (Bonferroni: family-wise false-alarm\nprobability at most `1 / alarm_threshold` under exchangeability).",
+  "properties": {
+    "schema": {
+      "const": "qt.conformal_report",
+      "default": "qt.conformal_report",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "run_id": {
+      "pattern": "^[0-9a-f]{16}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "spec": {
+      "additionalProperties": true,
+      "title": "Spec",
+      "type": "object"
+    },
+    "source": {
+      "enum": [
+        "hazard",
+        "zoo"
+      ],
+      "title": "Source",
+      "type": "string"
+    },
+    "model_id": {
+      "title": "Model Id",
+      "type": "string"
+    },
+    "score": {
+      "title": "Score",
+      "type": "string"
+    },
+    "alpha": {
+      "title": "Alpha",
+      "type": "number"
+    },
+    "grid_ns": {
+      "items": {
+        "type": "integer"
+      },
+      "title": "Grid Ns",
+      "type": "array"
+    },
+    "n_calib_rows": {
+      "title": "N Calib Rows",
+      "type": "integer"
+    },
+    "n_test_rows": {
+      "title": "N Test Rows",
+      "type": "integer"
+    },
+    "calib_dates": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Calib Dates",
+      "type": "array"
+    },
+    "test_dates": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Test Dates",
+      "type": "array"
+    },
+    "guarantee": {
+      "title": "Guarantee",
+      "type": "string"
+    },
+    "cells": {
+      "items": {
+        "$ref": "#/$defs/CoverageCell"
+      },
+      "title": "Cells",
+      "type": "array"
+    },
+    "fill_time": {
+      "items": {
+        "$ref": "#/$defs/FillTimeCell"
+      },
+      "title": "Fill Time",
+      "type": "array"
+    },
+    "drift": {
+      "items": {
+        "$ref": "#/$defs/DriftCell"
+      },
+      "title": "Drift",
+      "type": "array"
+    },
+    "drift_familywise_threshold": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Drift Familywise Threshold"
+    },
+    "drift_familywise_alarm": {
+      "title": "Drift Familywise Alarm",
+      "type": "boolean"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "run_id",
+    "spec",
+    "source",
+    "model_id",
+    "score",
+    "alpha",
+    "grid_ns",
+    "n_calib_rows",
+    "n_test_rows",
+    "calib_dates",
+    "test_dates",
+    "guarantee",
+    "cells",
+    "fill_time",
+    "drift",
+    "drift_familywise_threshold",
+    "drift_familywise_alarm",
+    "warnings"
+  ],
+  "type": "object"
+}

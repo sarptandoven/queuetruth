@@ -1,0 +1,9 @@
+2024-03-01 10:00:01,005 - freqtrade.worker - INFO - Bot heartbeat. PID=7, version='2026.10-dev', state='RUNNING'
+2024-03-01 10:05:02,398 - freqtrade.freqtradebot - INFO - Long signal found: about create a new trade for BTC/USDT with stake_amount: 97.6 and price: 61000.0 ...
+2024-03-01 10:05:02,640 - freqtrade.freqtradebot - INFO - Fill Buy order for Trade(id=1, pair=BTC/USDT, amount=0.0016, is_short=False, leverage=1, open_rate=61000, open_since=2024-03-01 10:05:02)
+2024-03-01 10:15:03,402 - freqtrade.freqtradebot - INFO - Long signal found: about create a new trade for ETH/USDT with stake_amount: 102.0 and price: 3400.0 ...
+2024-03-01 10:25:04,101 - freqtrade.freqtradebot - INFO - Buy order cancelled due to timeout for Trade(id=2, pair=ETH/USDT, amount=0.03, is_short=False, leverage=1, open_rate=3400, open_since=2024-03-01 10:15:03).
+2024-03-01 10:25:04,117 - freqtrade.freqtradebot - INFO - Buy order fully cancelled. Removing Trade(id=2, pair=ETH/USDT, amount=0.03, is_short=False, leverage=1, open_rate=3400, open_since=2024-03-01 10:15:03) from database.
+2024-03-01 10:41:07,231 - freqtrade.freqtradebot - INFO - Exit for BTC/USDT detected. Reason: roi
+2024-03-01 11:30:02,880 - freqtrade.freqtradebot - INFO - Long signal found: about create a new trade for BTC/USDT with stake_amount: 97.92 and price: 61200.0 ...
+2024-03-01 13:06:12,901 - freqtrade.freqtradebot - INFO - Fill Buy order for Trade(id=4, pair=BTC/USDT, amount=0.0016, is_short=False, leverage=1, open_rate=61500, open_since=2024-03-01 13:00:03)

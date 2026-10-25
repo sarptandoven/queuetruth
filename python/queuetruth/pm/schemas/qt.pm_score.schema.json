@@ -1,0 +1,573 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.pm_score",
+  "$defs": {
+    "Band": {
+      "additionalProperties": false,
+      "description": "A quantity under the pessimistic and optimistic fill bounds and the calibrated model (dollars).",
+      "properties": {
+        "lower": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Lower"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Model"
+        },
+        "upper": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Upper"
+        }
+      },
+      "required": [
+        "lower",
+        "model",
+        "upper"
+      ],
+      "title": "Band",
+      "type": "object"
+    },
+    "FileEntry": {
+      "additionalProperties": false,
+      "description": "One output file: name relative to the output directory, row count for tables, size and sha256.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "rows": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rows"
+        },
+        "bytes": {
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "bytes",
+        "sha256"
+      ],
+      "title": "FileEntry",
+      "type": "object"
+    },
+    "PmCalibrationTrust": {
+      "additionalProperties": false,
+      "description": "Whether `pm score --calibration` should use the fitted model (`queuetruth.pm.calibrate.PM_REFUSING`), in the\nform of `calibrate-live`'s `trust`.",
+      "properties": {
+        "verdict": {
+          "enum": [
+            "usable",
+            "refused"
+          ],
+          "title": "Verdict",
+          "type": "string"
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        },
+        "flags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Flags",
+          "type": "array"
+        }
+      },
+      "required": [
+        "verdict",
+        "reasons",
+        "flags"
+      ],
+      "title": "PmCalibrationTrust",
+      "type": "object"
+    },
+    "PnlParts": {
+      "additionalProperties": false,
+      "description": "PnL decomposition of one fill scenario (dollars): `trading = spread_capture - adverse_selection` (fills\nmarked to the settlement or the last mid), `total = trading - fees + rewards + rebates`; `position` is the\nending YES position in contracts / shares.",
+      "properties": {
+        "fills": {
+          "minimum": 0,
+          "title": "Fills",
+          "type": "integer"
+        },
+        "filled_qty": {
+          "title": "Filled Qty",
+          "type": "number"
+        },
+        "spread_capture": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Spread Capture"
+        },
+        "adverse_selection": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Adverse Selection"
+        },
+        "trading": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Trading"
+        },
+        "fees": {
+          "title": "Fees",
+          "type": "number"
+        },
+        "rewards": {
+          "title": "Rewards",
+          "type": "number"
+        },
+        "rewards_lower": {
+          "title": "Rewards Lower",
+          "type": "number"
+        },
+        "rewards_upper": {
+          "title": "Rewards Upper",
+          "type": "number"
+        },
+        "rebates": {
+          "title": "Rebates",
+          "type": "number"
+        },
+        "total": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Total"
+        },
+        "position": {
+          "title": "Position",
+          "type": "number"
+        }
+      },
+      "required": [
+        "fills",
+        "filled_qty",
+        "spread_capture",
+        "adverse_selection",
+        "trading",
+        "fees",
+        "rewards",
+        "rewards_lower",
+        "rewards_upper",
+        "rebates",
+        "total",
+        "position"
+      ],
+      "title": "PnlParts",
+      "type": "object"
+    },
+    "SimVsLive": {
+      "additionalProperties": false,
+      "description": "The user's own orders replayed under a fill model versus what happened live.",
+      "properties": {
+        "model_id": {
+          "title": "Model Id",
+          "type": "string"
+        },
+        "orders": {
+          "default": "all",
+          "enum": [
+            "all",
+            "train",
+            "test"
+          ],
+          "title": "Orders",
+          "type": "string"
+        },
+        "n_orders": {
+          "minimum": 0,
+          "title": "N Orders",
+          "type": "integer"
+        },
+        "both": {
+          "minimum": 0,
+          "title": "Both",
+          "type": "integer"
+        },
+        "neither": {
+          "minimum": 0,
+          "title": "Neither",
+          "type": "integer"
+        },
+        "live_only": {
+          "minimum": 0,
+          "title": "Live Only",
+          "type": "integer"
+        },
+        "sim_only": {
+          "minimum": 0,
+          "title": "Sim Only",
+          "type": "integer"
+        },
+        "fill_rate_live": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Fill Rate Live"
+        },
+        "fill_rate_sim": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Fill Rate Sim"
+        },
+        "fill_rate_bias": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Fill Rate Bias"
+        },
+        "fill_rate_bias_ci": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          ],
+          "title": "Fill Rate Bias Ci",
+          "type": "array"
+        },
+        "mcnemar_p": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Mcnemar P"
+        },
+        "qty_live": {
+          "title": "Qty Live",
+          "type": "number"
+        },
+        "qty_sim": {
+          "title": "Qty Sim",
+          "type": "number"
+        },
+        "ttf_log_ratio_median": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ttf Log Ratio Median"
+        },
+        "bracket_violations": {
+          "minimum": 0,
+          "title": "Bracket Violations",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "model_id",
+        "n_orders",
+        "both",
+        "neither",
+        "live_only",
+        "sim_only",
+        "fill_rate_live",
+        "fill_rate_sim",
+        "fill_rate_bias",
+        "fill_rate_bias_ci",
+        "mcnemar_p",
+        "qty_live",
+        "qty_sim",
+        "ttf_log_ratio_median",
+        "bracket_violations"
+      ],
+      "title": "SimVsLive",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Result of `pm score` (`pm_score.json`).",
+  "properties": {
+    "schema": {
+      "const": "qt.pm_score",
+      "default": "qt.pm_score",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "run_id": {
+      "pattern": "^[0-9a-f]{16}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "spec": {
+      "additionalProperties": true,
+      "title": "Spec",
+      "type": "object"
+    },
+    "venue": {
+      "enum": [
+        "kalshi",
+        "polymarket"
+      ],
+      "title": "Venue",
+      "type": "string"
+    },
+    "terms": {
+      "title": "Terms",
+      "type": "string"
+    },
+    "source": {
+      "enum": [
+        "quotes",
+        "live"
+      ],
+      "title": "Source",
+      "type": "string"
+    },
+    "model_id": {
+      "title": "Model Id",
+      "type": "string"
+    },
+    "model_source": {
+      "enum": [
+        "calibration",
+        "given",
+        "default"
+      ],
+      "title": "Model Source",
+      "type": "string"
+    },
+    "calibration_trust": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PmCalibrationTrust"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "n_orders": {
+      "minimum": 0,
+      "title": "N Orders",
+      "type": "integer"
+    },
+    "mark": {
+      "additionalProperties": true,
+      "title": "Mark",
+      "type": "object"
+    },
+    "scenarios": {
+      "additionalProperties": {
+        "$ref": "#/$defs/PnlParts"
+      },
+      "title": "Scenarios",
+      "type": "object"
+    },
+    "band": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Band"
+      },
+      "title": "Band",
+      "type": "object"
+    },
+    "markouts": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Markouts",
+      "type": "array"
+    },
+    "rewards": {
+      "additionalProperties": true,
+      "title": "Rewards",
+      "type": "object"
+    },
+    "live": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PnlParts"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sim_vs_live": {
+      "items": {
+        "$ref": "#/$defs/SimVsLive"
+      },
+      "title": "Sim Vs Live",
+      "type": "array"
+    },
+    "trading_pnl_ci": {
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+        {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      ],
+      "title": "Trading Pnl Ci",
+      "type": "array"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/FileEntry"
+      },
+      "title": "Files",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "run_id",
+    "spec",
+    "venue",
+    "terms",
+    "source",
+    "model_id",
+    "model_source",
+    "calibration_trust",
+    "n_orders",
+    "mark",
+    "scenarios",
+    "band",
+    "markouts",
+    "rewards",
+    "live",
+    "sim_vs_live",
+    "trading_pnl_ci",
+    "warnings",
+    "files"
+  ],
+  "type": "object"
+}

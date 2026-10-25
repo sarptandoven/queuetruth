@@ -1,0 +1,528 @@
+From: queuetruth contributors
+Subject: [PATCH] PartialFillExchange: remove orders that a maker fill completes (#312)
+
+A queue-position fill that leaves less than half a lot makes `fill()` mark the order
+`Filled`, but `check_if_buy_filled` / `check_if_sell_filled` registered the order for
+removal only when the fill was strictly larger than the leaves. The completed order
+stayed in the book, and the next trade at or through its price called `fill()` on it
+again: `BacktestError::InvalidOrderStatus`, `elapse` returns 14 and the backtest stops.
+
+Register the order for removal whenever the leaves left after the execution round to
+zero lots, the same rule `fill()` uses for the status. This covers
+`filled_qty == leaves_qty` and a sub-lot floating-point residual (lot 0.01, qty 0.1:
+leaves 0.09000000000000001 after a one-lot fill, queue fill 0.09), which a `>`
+-> `>=` change alone does not. Executed quantities are unchanged.
+
+Tests: 7 Rust unit tests in partialfillexchange.rs (5 fail before the fix, 2 guard
+existing behaviour) and 5 Python tests in py-hftbacktest/tests (4 fail on 2.4.4).
+
+Fixes #312.
+---
+diff --git a/hftbacktest/src/backtest/proc/partialfillexchange.rs b/hftbacktest/src/backtest/proc/partialfillexchange.rs
+--- a/hftbacktest/src/backtest/proc/partialfillexchange.rs
++++ b/hftbacktest/src/backtest/proc/partialfillexchange.rs
+@@ -152,12 +152,7 @@ where
+                     // q_ahead is negative since is_filled is true and its value represents the
+                     // executable quantity of this order after execution in the queue ahead of this
+                     // order.
+-                    let exec_qty = if filled_qty > order.leaves_qty {
+-                        self.filled_orders.push(order.order_id);
+-                        order.leaves_qty
+-                    } else {
+-                        filled_qty
+-                    };
++                    let exec_qty = self.maker_exec_qty(order, filled_qty);
+                     return self.fill::<true>(order, timestamp, true, order.price_tick, exec_qty);
+                 }
+             }
+@@ -192,12 +187,7 @@ where
+                     // q_ahead is negative since is_filled is true and its value represents the
+                     // executable quantity of this order after execution in the queue ahead of this
+                     // order.
+-                    let exec_qty = if filled_qty > order.leaves_qty {
+-                        self.filled_orders.push(order.order_id);
+-                        order.leaves_qty
+-                    } else {
+-                        filled_qty
+-                    };
++                    let exec_qty = self.maker_exec_qty(order, filled_qty);
+                     return self.fill::<true>(order, timestamp, true, order.price_tick, exec_qty);
+                 }
+             }
+@@ -205,6 +195,27 @@ where
+         Ok(())
+     }
+ 
++    /// Returns the quantity to execute against a resting order whose queue position allows
++    /// `filled_qty` to be filled, and registers the order for removal from the book when that
++    /// execution completes it.
++    ///
++    /// [`fill`](Self::fill) marks an order `Filled` once its leaves quantity rounds to zero lots.
++    /// Such an order must also leave the book; otherwise the next fill attempt on it fails with
++    /// `BacktestError::InvalidOrderStatus` and stops the backtest (#312). Besides
++    /// `filled_qty == leaves_qty`, this covers a sub-lot floating-point residual, such as
++    /// `leaves_qty = 0.09000000000000001` with a queue-model fill of `0.09` (`lot_size = 0.01`).
++    /// The executed quantity itself is unchanged.
++    fn maker_exec_qty(&mut self, order: &Order, filled_qty: f64) -> f64 {
++        if filled_qty > order.leaves_qty {
++            self.filled_orders.push(order.order_id);
++            return order.leaves_qty;
++        }
++        if ((order.leaves_qty - filled_qty) / self.depth.lot_size()).round() <= 0.0 {
++            self.filled_orders.push(order.order_id);
++        }
++        filled_qty
++    }
++
+     fn fill<const MAKE_RESPONSE: bool>(
+         &mut self,
+         order: &mut Order,
+@@ -865,3 +876,305 @@ where
+             .unwrap_or(i64::MAX)
+     }
+ }
++
++#[cfg(test)]
++mod tests {
++    use std::error::Error;
++
++    use crate::{
++        backtest::{
++            Backtest,
++            BacktestError,
++            DataSource,
++            ExchangeKind,
++            L2AssetBuilder,
++            assettype::LinearAsset,
++            data::Data,
++            models::{CommonFees, ConstantLatency, RiskAdverseQueueModel, TradingValueFeeModel},
++        },
++        depth::HashMapMarketDepth,
++        prelude::{Bot, ElapseResult, Event, OrdType, Side, Status, TimeInForce},
++        types::{BUY_EVENT, DEPTH_EVENT, EXCH_EVENT, LOCAL_EVENT, SELL_EVENT, TRADE_EVENT},
++    };
++
++    const ORDER_ID: u64 = 1;
++
++    fn event(ev: u64, ts: i64, px: f64, qty: f64) -> Event {
++        Event {
++            ev: EXCH_EVENT | LOCAL_EVENT | ev,
++            exch_ts: ts,
++            local_ts: ts,
++            px,
++            qty,
++            order_id: 0,
++            ival: 0,
++            fval: 0.0,
++        }
++    }
++
++    fn bid_depth(ts: i64, px: f64, qty: f64) -> Event {
++        event(DEPTH_EVENT | BUY_EVENT, ts, px, qty)
++    }
++
++    fn ask_depth(ts: i64, px: f64, qty: f64) -> Event {
++        event(DEPTH_EVENT | SELL_EVENT, ts, px, qty)
++    }
++
++    /// A trade whose aggressor sells, which executes against resting buy orders.
++    fn sell_trade(ts: i64, px: f64, qty: f64) -> Event {
++        event(TRADE_EVENT | SELL_EVENT, ts, px, qty)
++    }
++
++    /// A trade whose aggressor buys, which executes against resting sell orders.
++    fn buy_trade(ts: i64, px: f64, qty: f64) -> Event {
++        event(TRADE_EVENT | BUY_EVENT, ts, px, qty)
++    }
++
++    /// The local state of the order after each elapse step that changed it.
++    #[derive(Debug, PartialEq)]
++    struct Snapshot {
++        status: Status,
++        exec_qty: f64,
++        leaves_qty: f64,
++    }
++
++    /// How the replay ended (`Err` is the error `elapse` returned) and the order's snapshots.
++    struct Replay {
++        outcome: Result<(), BacktestError>,
++        snapshots: Vec<Snapshot>,
++    }
++
++    /// Submits one GTX limit order right after the first event and replays the rest of the
++    /// data with zero latency, as a market-making backtest does.
++    fn run(
++        events: &[Event],
++        lot_size: f64,
++        side: Side,
++        price: f64,
++        qty: f64,
++    ) -> Result<Replay, Box<dyn Error>> {
++        let mut hbt = Backtest::builder()
++            .add_asset(
++                L2AssetBuilder::default()
++                    .data(vec![DataSource::Data(Data::from_data(events))])
++                    .latency_model(ConstantLatency::new(0, 0))
++                    .asset_type(LinearAsset::new(1.0))
++                    .fee_model(TradingValueFeeModel::new(CommonFees::new(0.0, 0.0)))
++                    .queue_model(RiskAdverseQueueModel::new())
++                    .exchange(ExchangeKind::PartialFillExchange)
++                    .depth(move || HashMapMarketDepth::new(0.01, lot_size))
++                    .build()?,
++            )
++            .build()?;
++
++        hbt.elapse(0)?;
++        match side {
++            Side::Buy => hbt.submit_buy_order(
++                0,
++                ORDER_ID,
++                price,
++                qty,
++                TimeInForce::GTX,
++                OrdType::Limit,
++                false,
++            )?,
++            _ => hbt.submit_sell_order(
++                0,
++                ORDER_ID,
++                price,
++                qty,
++                TimeInForce::GTX,
++                OrdType::Limit,
++                false,
++            )?,
++        };
++
++        let mut snapshots: Vec<Snapshot> = Vec::new();
++        let outcome = loop {
++            match hbt.elapse(1) {
++                Ok(ElapseResult::EndOfData) => break Ok(()),
++                Ok(_) => {}
++                Err(err) => break Err(err),
++            }
++            let order = &hbt.orders(0)[&ORDER_ID];
++            let snapshot = Snapshot {
++                status: order.status,
++                exec_qty: order.exec_qty,
++                leaves_qty: order.leaves_qty,
++            };
++            if snapshots.last() != Some(&snapshot) {
++                snapshots.push(snapshot);
++            }
++        };
++        Ok(Replay { outcome, snapshots })
++    }
++
++    fn snapshot(status: Status, exec_qty: f64, leaves_qty: f64) -> Snapshot {
++        Snapshot {
++            status,
++            exec_qty,
++            leaves_qty,
++        }
++    }
++
++    #[test]
++    fn fill_equal_to_leaves_completes_and_removes_the_buy_order() -> Result<(), Box<dyn Error>> {
++        // One lot ahead. The first trade fills one of two lots; the second fills exactly the
++        // leaves. Before the fix the order stayed in the book as `Filled` and the third trade
++        // failed with InvalidOrderStatus.
++        let events = [
++            bid_depth(1, 100.0, 1.0),
++            ask_depth(1, 100.01, 5.0),
++            sell_trade(3, 100.0, 2.0),
++            sell_trade(4, 100.0, 1.0),
++            sell_trade(5, 100.0, 1.0),
++            sell_trade(6, 100.0, 3.0),
++        ];
++        let Replay { outcome, snapshots } = run(&events, 1.0, Side::Buy, 100.0, 2.0)?;
++        assert!(outcome.is_ok(), "{outcome:?}");
++        assert_eq!(
++            snapshots,
++            vec![
++                snapshot(Status::New, 0.0, 2.0),
++                snapshot(Status::PartiallyFilled, 1.0, 1.0),
++                snapshot(Status::Filled, 1.0, 0.0),
++            ]
++        );
++        Ok(())
++    }
++
++    #[test]
++    fn fill_equal_to_leaves_completes_and_removes_the_sell_order() -> Result<(), Box<dyn Error>> {
++        let events = [
++            bid_depth(1, 99.99, 5.0),
++            ask_depth(1, 100.0, 1.0),
++            buy_trade(3, 100.0, 2.0),
++            buy_trade(4, 100.0, 1.0),
++            buy_trade(5, 100.0, 1.0),
++        ];
++        let Replay { outcome, snapshots } = run(&events, 1.0, Side::Sell, 100.0, 2.0)?;
++        assert!(outcome.is_ok(), "{outcome:?}");
++        assert_eq!(
++            snapshots,
++            vec![
++                snapshot(Status::New, 0.0, 2.0),
++                snapshot(Status::PartiallyFilled, 1.0, 1.0),
++                snapshot(Status::Filled, 1.0, 0.0),
++            ]
++        );
++        Ok(())
++    }
++
++    #[test]
++    fn trade_through_after_completion_does_not_refill() -> Result<(), Box<dyn Error>> {
++        // A trade through the order's price after it completed must not touch it again.
++        let events = [
++            bid_depth(1, 99.99, 5.0),
++            ask_depth(1, 100.0, 1.0),
++            buy_trade(3, 100.0, 2.0),
++            buy_trade(4, 100.0, 1.0),
++            buy_trade(5, 100.02, 4.0),
++        ];
++        let Replay { outcome, snapshots } = run(&events, 1.0, Side::Sell, 100.0, 2.0)?;
++        assert!(outcome.is_ok(), "{outcome:?}");
++        assert_eq!(snapshots.last(), Some(&snapshot(Status::Filled, 1.0, 0.0)));
++        Ok(())
++    }
++
++    #[test]
++    fn sub_lot_residual_completes_the_order() -> Result<(), Box<dyn Error>> {
++        // lot_size = 0.01 and qty = 0.1, as in the #312 report. After a one-lot fill the leaves
++        // are 0.1 - 0.01 = 0.09000000000000001 while the queue model then fills
++        // 9 * 0.01 = 0.09, which is less than the leaves: `filled_qty >= leaves_qty` alone
++        // does not catch this, yet the residual rounds to zero lots and `fill` marks the order
++        // `Filled`, so it must leave the book.
++        let first_leaves = 0.1 - 0.01;
++        assert!(first_leaves > 9.0 * 0.01);
++        let events = [
++            bid_depth(1, 100.0, 0.01),
++            ask_depth(1, 100.01, 5.0),
++            sell_trade(3, 100.0, 0.02),
++            sell_trade(4, 100.0, 0.09),
++            sell_trade(5, 100.0, 0.01),
++        ];
++        let Replay { outcome, snapshots } = run(&events, 0.01, Side::Buy, 100.0, 0.1)?;
++        assert!(outcome.is_ok(), "{outcome:?}");
++        assert_eq!(
++            snapshots,
++            vec![
++                snapshot(Status::New, 0.0, 0.1),
++                snapshot(Status::PartiallyFilled, 0.01, first_leaves),
++                snapshot(Status::Filled, 0.09, first_leaves - 0.09),
++            ]
++        );
++        Ok(())
++    }
++
++    #[test]
++    fn sub_lot_leaves_of_a_non_lot_quantity_complete_the_order() -> Result<(), Box<dyn Error>> {
++        // qty 1.4 with lot 1: after a one-lot fill the 0.4 left rounds to zero lots, so `fill`
++        // marks the order `Filled`; it must leave the book without executing more than the
++        // queue model allowed.
++        let events = [
++            bid_depth(1, 100.0, 1.0),
++            ask_depth(1, 100.01, 5.0),
++            sell_trade(3, 100.0, 2.0),
++            sell_trade(4, 100.0, 2.0),
++        ];
++        let Replay { outcome, snapshots } = run(&events, 1.0, Side::Buy, 100.0, 1.4)?;
++        assert!(outcome.is_ok(), "{outcome:?}");
++        assert_eq!(
++            snapshots,
++            vec![
++                snapshot(Status::New, 0.0, 1.4),
++                snapshot(Status::Filled, 1.0, 1.4 - 1.0),
++            ]
++        );
++        Ok(())
++    }
++
++    #[test]
++    fn genuine_partial_fill_keeps_the_order_resting() -> Result<(), Box<dyn Error>> {
++        // Two lots of three fill; the order must stay in the book and fill again later.
++        let events = [
++            bid_depth(1, 100.0, 1.0),
++            ask_depth(1, 100.01, 5.0),
++            sell_trade(3, 100.0, 2.0),
++            sell_trade(4, 100.0, 1.0),
++            sell_trade(5, 100.0, 4.0),
++            sell_trade(6, 100.0, 4.0),
++        ];
++        let Replay { outcome, snapshots } = run(&events, 1.0, Side::Buy, 100.0, 3.0)?;
++        assert!(outcome.is_ok(), "{outcome:?}");
++        assert_eq!(
++            snapshots,
++            vec![
++                snapshot(Status::New, 0.0, 3.0),
++                snapshot(Status::PartiallyFilled, 1.0, 2.0),
++                snapshot(Status::PartiallyFilled, 1.0, 1.0),
++                snapshot(Status::Filled, 1.0, 0.0),
++            ]
++        );
++        Ok(())
++    }
++
++    #[test]
++    fn fill_larger_than_leaves_still_completes() -> Result<(), Box<dyn Error>> {
++        let events = [
++            bid_depth(1, 100.0, 1.0),
++            ask_depth(1, 100.01, 5.0),
++            sell_trade(3, 100.0, 5.0),
++            sell_trade(4, 100.0, 5.0),
++        ];
++        let Replay { outcome, snapshots } = run(&events, 1.0, Side::Buy, 100.0, 2.0)?;
++        assert!(outcome.is_ok(), "{outcome:?}");
++        assert_eq!(
++            snapshots,
++            vec![
++                snapshot(Status::New, 0.0, 2.0),
++                snapshot(Status::Filled, 2.0, 0.0),
++            ]
++        );
++        Ok(())
++    }
++}
+diff --git a/py-hftbacktest/tests/test_partial_fill_312.py b/py-hftbacktest/tests/test_partial_fill_312.py
+new file mode 100644
+--- /dev/null
++++ b/py-hftbacktest/tests/test_partial_fill_312.py
+@@ -0,0 +1,138 @@
++"""Regression tests for #312: PartialFillExchange must remove an order that a maker fill completes.
++
++Before the fix, a queue-position fill equal to the order's leaves quantity (or leaving a sub-lot floating-point
++residual) marked the order as filled but left it in the book; the next trade at or through its price made
++`elapse` return 14 (InvalidOrderStatus) and stopped the backtest.
++"""
++
++import unittest
++
++import numpy as np
++
++from hftbacktest import BacktestAsset, HashMapMarketDepthBacktest
++from hftbacktest.order import FILLED, GTX, LIMIT, PARTIALLY_FILLED
++from hftbacktest.types import (
++    BUY_EVENT,
++    DEPTH_EVENT,
++    EXCH_EVENT,
++    LOCAL_EVENT,
++    SELL_EVENT,
++    TRADE_EVENT,
++    event_dtype,
++)
++
++ORDER_ID = 1
++
++
++def _events(rows):
++    data = np.zeros(len(rows), event_dtype)
++    for i, (ev, ts, px, qty) in enumerate(rows):
++        data[i]["ev"] = EXCH_EVENT | LOCAL_EVENT | ev
++        data[i]["exch_ts"] = ts
++        data[i]["local_ts"] = ts
++        data[i]["px"] = px
++        data[i]["qty"] = qty
++    return data
++
++
++def _run(rows, lot_size, buy, price, qty):
++    """Submits one GTX order after the first row; returns (elapse codes, [(status, exec_qty, leaves_qty)])."""
++    asset = (
++        BacktestAsset()
++        .data(_events(rows))
++        .linear_asset(1.0)
++        .constant_order_latency(0, 0)
++        .risk_adverse_queue_model()
++        .partial_fill_exchange()
++        .trading_value_fee_model(0.0, 0.0)
++        .tick_size(0.01)
++        .lot_size(lot_size)
++    )
++    hbt = HashMapMarketDepthBacktest([asset])
++    codes = [hbt.elapse(0)]
++    submit = hbt.submit_buy_order if buy else hbt.submit_sell_order
++    codes.append(submit(0, ORDER_ID, price, qty, GTX, LIMIT, False))
++    states = []
++    while True:
++        rc = hbt.elapse(1)
++        codes.append(rc)
++        if rc not in (0, 1):
++            break
++        o = hbt.orders(0).get(ORDER_ID)
++        state = (int(o.status), float(o.exec_qty), float(o.leaves_qty))
++        if not states or states[-1] != state:
++            states.append(state)
++        if rc == 1:
++            break
++    hbt.close()
++    return codes, states
++
++
++class TestPartialFill312(unittest.TestCase):
++    def test_fill_equal_to_leaves_removes_buy_order(self):
++        rows = [
++            (DEPTH_EVENT | BUY_EVENT, 1, 100.0, 1.0),
++            (DEPTH_EVENT | SELL_EVENT, 1, 100.01, 5.0),
++            (TRADE_EVENT | SELL_EVENT, 3, 100.0, 2.0),
++            (TRADE_EVENT | SELL_EVENT, 4, 100.0, 1.0),
++            (TRADE_EVENT | SELL_EVENT, 5, 100.0, 1.0),
++        ]
++        codes, states = _run(rows, 1.0, True, 100.0, 2.0)
++        self.assertEqual(codes[-1], 1)  # end of data, not 14
++        self.assertEqual(states[-2:], [(PARTIALLY_FILLED, 1.0, 1.0), (FILLED, 1.0, 0.0)])
++
++    def test_fill_equal_to_leaves_removes_sell_order(self):
++        rows = [
++            (DEPTH_EVENT | BUY_EVENT, 1, 99.99, 5.0),
++            (DEPTH_EVENT | SELL_EVENT, 1, 100.0, 1.0),
++            (TRADE_EVENT | BUY_EVENT, 3, 100.0, 2.0),
++            (TRADE_EVENT | BUY_EVENT, 4, 100.0, 1.0),
++            (TRADE_EVENT | BUY_EVENT, 5, 100.02, 3.0),
++        ]
++        codes, states = _run(rows, 1.0, False, 100.0, 2.0)
++        self.assertEqual(codes[-1], 1)
++        self.assertEqual(states[-1], (FILLED, 1.0, 0.0))
++
++    def test_sub_lot_residual_completes_the_order(self):
++        # lot 0.01, qty 0.1 as in the report: leaves 0.1 - 0.01 = 0.09000000000000001 > 9 * 0.01.
++        rows = [
++            (DEPTH_EVENT | BUY_EVENT, 1, 100.0, 0.01),
++            (DEPTH_EVENT | SELL_EVENT, 1, 100.01, 5.0),
++            (TRADE_EVENT | SELL_EVENT, 3, 100.0, 0.02),
++            (TRADE_EVENT | SELL_EVENT, 4, 100.0, 0.09),
++            (TRADE_EVENT | SELL_EVENT, 5, 100.0, 0.01),
++        ]
++        codes, states = _run(rows, 0.01, True, 100.0, 0.1)
++        self.assertEqual(codes[-1], 1)
++        self.assertEqual(states[-1], (FILLED, 0.09, (0.1 - 0.01) - 0.09))
++
++    def test_sub_lot_leaves_of_non_lot_quantity_complete_the_order(self):
++        # qty 1.4 with lot 1: the 0.4 left after a one-lot fill rounds to zero lots.
++        rows = [
++            (DEPTH_EVENT | BUY_EVENT, 1, 100.0, 1.0),
++            (DEPTH_EVENT | SELL_EVENT, 1, 100.01, 5.0),
++            (TRADE_EVENT | SELL_EVENT, 3, 100.0, 2.0),
++            (TRADE_EVENT | SELL_EVENT, 4, 100.0, 2.0),
++        ]
++        codes, states = _run(rows, 1.0, True, 100.0, 1.4)
++        self.assertEqual(codes[-1], 1)
++        self.assertEqual(states[-1], (FILLED, 1.0, 1.4 - 1.0))
++
++    def test_genuine_partial_fill_keeps_resting(self):
++        rows = [
++            (DEPTH_EVENT | BUY_EVENT, 1, 100.0, 1.0),
++            (DEPTH_EVENT | SELL_EVENT, 1, 100.01, 5.0),
++            (TRADE_EVENT | SELL_EVENT, 3, 100.0, 2.0),
++            (TRADE_EVENT | SELL_EVENT, 4, 100.0, 1.0),
++            (TRADE_EVENT | SELL_EVENT, 5, 100.0, 4.0),
++        ]
++        codes, states = _run(rows, 1.0, True, 100.0, 3.0)
++        self.assertEqual(codes[-1], 1)
++        self.assertEqual(
++            states[1:],
++            [(PARTIALLY_FILLED, 1.0, 2.0), (PARTIALLY_FILLED, 1.0, 1.0), (FILLED, 1.0, 0.0)],
++        )
++
++
++if __name__ == "__main__":
++    unittest.main()

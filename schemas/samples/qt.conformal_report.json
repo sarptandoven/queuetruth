@@ -1,0 +1,95 @@
+{
+  "sample": {
+    "schema": "qt.conformal_report",
+    "schema_version": 1,
+    "run_id": "0123456789abcdef",
+    "spec": {
+      "k": 1
+    },
+    "source": "hazard",
+    "model_id": "x",
+    "score": "x",
+    "alpha": 0.5,
+    "grid_ns": [
+      1
+    ],
+    "n_calib_rows": 1,
+    "n_test_rows": 1,
+    "calib_dates": [
+      "x"
+    ],
+    "test_dates": [
+      "x"
+    ],
+    "guarantee": "x",
+    "cells": [
+      {
+        "horizon_ns": 1,
+        "landmark_ns": 1,
+        "stratum": "x",
+        "n_calib": 1,
+        "n_test": 1,
+        "n_test_fill": 1,
+        "coverage": 0.5,
+        "coverage_ci_lo": 0.5,
+        "coverage_ci_hi": 0.5,
+        "frac_empty": 0.5,
+        "frac_singleton": 0.5,
+        "frac_both": 0.5,
+        "fill_rate_calib": 0.5,
+        "fill_rate_test": 0.5,
+        "mean_p_test": 0.5,
+        "va_p0_mean": 0.5,
+        "va_p1_mean": 0.5,
+        "va_true_label_mean": 0.5,
+        "coverage_fill": 0.5,
+        "coverage_nofill": 0.5,
+        "informative": true
+      }
+    ],
+    "fill_time": [
+      {
+        "landmark_ns": 1,
+        "stratum": "x",
+        "n_calib": 1,
+        "n_test": 1,
+        "lower_coverage": 0.5,
+        "upper_coverage": 0.5,
+        "interval_coverage": 0.5,
+        "frac_lower_claim": 0.5,
+        "frac_upper_claim": 0.5,
+        "median_lower_ns": 1,
+        "median_upper_ns": 1
+      }
+    ],
+    "drift": [
+      {
+        "horizon_ns": 1,
+        "landmark_ns": 1,
+        "method": "x",
+        "n": 1,
+        "log10_final": 0.5,
+        "log10_max": 0.5,
+        "alarm": true,
+        "alarm_group": "x",
+        "groups": [
+          {
+            "group": "x",
+            "role": "calib",
+            "date": "x",
+            "n": 1,
+            "log10_end": 0.5,
+            "log10_max": 0.5,
+            "mean_pvalue": 0.5,
+            "ks_uniform": 0.5
+          }
+        ]
+      }
+    ],
+    "drift_familywise_threshold": 0.5,
+    "drift_familywise_alarm": true,
+    "warnings": [
+      "x"
+    ]
+  }
+}

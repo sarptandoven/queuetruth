@@ -347,7 +347,7 @@ def test_spec_validated_locally(fake: FakeService, client: Client) -> None:
         client.submit("replay", {"dataset": {"dataset_id": "ds_x"}, "bogus": 1})
     assert ei.value.code == "QT-CONFIG-001" and "bogus" in ei.value.message
     with pytest.raises(QtError) as ei:
-        client.submit("zoo", {})
+        client.submit("features", {})  # not a job kind of the API
     assert ei.value.code == "QT-USAGE-001"
     assert fake.calls("POST", "/v1/replays") == []
 

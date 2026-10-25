@@ -274,7 +274,7 @@ def test_degenerate_zoo_directories(tmp_path: Path) -> None:
     )
     rc.write_table(zs.cast(rc.SCHEMAS["qt.zoo_shadows"]), d / "zoo_shadows.parquet", rc.SCHEMAS["qt.zoo_shadows"])
     html = _render(d, [d])
-    assert '<section id="zoo">' in html
+    assert '<section id="zoo" ' in html
 
 
 def test_degenerate_position_and_scorecard(tmp_path: Path) -> None:
@@ -286,7 +286,7 @@ def test_degenerate_position_and_scorecard(tmp_path: Path) -> None:
         "qt.score_position",
         {"arm": ["live"], "instrument_id": [1], "ts": [rc.OPEN], "position": [0]},
     )
-    assert '<section id="position">' in _render(d, [d])
+    assert '<section id="position" ' in _render(d, [d])
     s = tmp_path / "score"
     rc.make_score_dir(s, n=3, with_why=False)
     _render(s, [s])
@@ -339,6 +339,6 @@ def test_scorecard_legs_matched_by_order_key(tmp_path: Path, monkeypatch: Any) -
             tr[k].append(v)
     rc.write(tmp_path / "score", "queue_trajectory.parquet", "qt.queue_trajectory", tr)
     html = _render(tmp_path, [tmp_path / "score"], max_why=1)
-    sec = re.search(r'<section id="why">(.*?)</section>', html, re.S).group(1)
+    sec = re.search(r'<section id="why"[^>]*>(.*?)</section>', html, re.S).group(1)
     assert "Exact queue trajectory (2 events" in sec
     assert rc.esc(legs[0]) in sec and rc.esc(legs[1]) in sec and "other.leg1" not in sec

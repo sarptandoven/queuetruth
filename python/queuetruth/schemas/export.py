@@ -31,6 +31,15 @@ _PATTERN_SAMPLES = {
     r"^[0-9]+$": "1000000000",
     r"^-?[0-9]+$": "7",
     r"^[0-9]{2}:[0-9]{2}$": "09:30",
+    # queuetruth.cert.models: run label and relative path inside a run or input directory
+    r"^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,63}$": "replay",
+    r"^(?:[^/.][^/]*|\.[^/.][^/]*|\.\.[^/]+)(?:/(?:[^/.][^/]*|\.[^/.][^/]*|\.\.[^/]+))*$": "summary.json",
+    # queuetruth.ledger.models: HEX32 ids and `study` / `name` labels
+    r"^[0-9a-f]{32}$": "0123456789abcdef" * 2,
+    r"^[A-Za-z0-9_.:\-]{1,128}$": "study_1",
+    # queuetruth.sandbox.models: order ids and client order ids
+    r"^o[1-9][0-9]*$": "o1",
+    r"^[A-Za-z0-9_.:\-]+$": "c1",
 }
 
 
@@ -119,10 +128,17 @@ class _Sampler:
         return {key: self.sample(addl if isinstance(addl, dict) else {})}
 
 
+#: Top-level sample values that a model validator needs beyond the JSON Schema (the derived sample gives every integer
+#: the same value): `qt.sandbox_spec` requires `end_ns > start_ns`.
+_SAMPLE_OVERRIDES: dict[str, dict[str, Any]] = {"qt.sandbox_spec": {"end_ns": 2}}
+
+
 def sample(name: str, model: type[BaseModel], required_only: bool = False) -> dict[str, Any]:
     """A sample instance of the model derived from its JSON Schema (every optional field populated)."""
     sch = model.model_json_schema(mode="validation")
-    return _Sampler(sch, required_only).sample(sch)
+    out = _Sampler(sch, required_only).sample(sch)
+    out.update({k: v for k, v in _SAMPLE_OVERRIDES.get(name, {}).items() if k in out})
+    return out
 
 
 #: Number formatting cases shared by the Rust and Python canonical JSON tests: (JSON text, canonical text).

@@ -1,0 +1,372 @@
+{
+ "nautilus_trader": "1.231.0",
+ "calibration_run_id": "8fd2495564b974f8",
+ "family": "nt_prob_touch",
+ "p": 0.28662597114317423,
+ "train": {
+  "dates": [
+   "2019-12-30"
+  ],
+  "blocks": {
+   "index": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "n_blocks": 5
+  }
+ },
+ "test": {
+  "dates": [
+   "2020-01-30"
+  ],
+  "blocks": null
+ },
+ "n_shadows": 3000,
+ "n_submitted": 2916,
+ "seeds": 8,
+ "bootstrap": {
+  "replicates": 2000,
+  "unit": "order",
+  "seed": 0
+ },
+ "zoo_default_model": "nt_prob_touch[mode=faithful;p=1]",
+ "zoo_fitted_model": "nt_prob_touch[mode=faithful;p=0.28662597114317423]",
+ "fills_after_cancel_time": {
+  "nt_default": 0,
+  "qt_calibrated": 0
+ },
+ "horizons": {
+  "0.1s": {
+   "exact_rate": 0.030666666666666665,
+   "default": {
+    "fill_rate": 0.03866666666666667,
+    "bias_pp": 0.8,
+    "bias_ci_pp": [
+     0.5,
+     1.1333333333333333
+    ],
+    "brier": 0.008,
+    "agree_with_zoo_p1": 1.0
+   },
+   "calibrated": {
+    "fill_rate": 0.033166666666666664,
+    "bias_pp": 0.25,
+    "bias_ci_pp": [
+     0.0665625,
+     0.4416666666666667
+    ],
+    "bias_pp_per_seed": {
+     "min": 0.13333333333333333,
+     "max": 0.33333333333333337,
+     "sd": 0.07766431633476234
+    },
+    "abs_bias_pp_single_run_mean": 0.25000000000000006,
+    "brier_seed_mean": 0.0028541666666666667,
+    "brier_single_seed_mean": 0.004666666666666667
+   },
+   "paired": {
+    "abs_bias_reduction_pp": {
+     "value": 0.5499999999999999,
+     "ci": [
+      0.3416666666666667,
+      0.775
+     ]
+    },
+    "abs_bias_reduction_single_run_pp": {
+     "value": 0.5499999999999999,
+     "ci": [
+      0.33333333333333337,
+      0.7709374999999996
+     ]
+    },
+    "brier_gain_seed_mean": {
+     "value": 0.005145833333333333,
+     "ci": [
+      0.0027235677083333335,
+      0.007766536458333328
+     ]
+    },
+    "brier_gain_single_run": {
+     "value": 0.0033333333333333335,
+     "ci": [
+      0.0012916666666666667,
+      0.005541666666666667
+     ]
+    }
+   },
+   "reproduction": {
+    "zoo_fitted_rate": 0.033446316376232924,
+    "nt_minus_zoo_pp": {
+     "value": -0.027964970956625805,
+     "ci": [
+      -0.08787666619168763,
+      0.02447490827346737
+     ]
+    },
+    "deterministic_orders": 2970,
+    "deterministic_mismatches": 0,
+    "random_orders": 30,
+    "dispersion_ratio": 0.8826224115844342
+   },
+   "zoo_held_out": {
+    "calibrated_bias_pp": 0.27796497095662,
+    "default_bias_pp": 0.7999999999999945,
+    "calibrated_brier": 0.0024920356221807076,
+    "default_brier": 0.008
+   }
+  },
+  "1s": {
+   "exact_rate": 0.185,
+   "default": {
+    "fill_rate": 0.213,
+    "bias_pp": 2.8000000000000003,
+    "bias_ci_pp": [
+     2.2658333333333336,
+     3.3674999999999953
+    ],
+    "brier": 0.028,
+    "agree_with_zoo_p1": 1.0
+   },
+   "calibrated": {
+    "fill_rate": 0.18829166666666666,
+    "bias_pp": 0.32916666666666666,
+    "bias_ci_pp": [
+     -0.07083333333333333,
+     0.7292708333333329
+    ],
+    "bias_pp_per_seed": {
+     "min": 0.03333333333333333,
+     "max": 0.6666666666666667,
+     "sd": 0.2141335438533034
+    },
+    "abs_bias_pp_single_run_mean": 0.32916666666666666,
+    "brier_seed_mean": 0.012953125,
+    "brier_single_seed_mean": 0.021375
+   },
+   "paired": {
+    "abs_bias_reduction_pp": {
+     "value": 2.470833333333333,
+     "ci": [
+      2.0165625,
+      2.925104166666666
+     ]
+    },
+    "abs_bias_reduction_single_run_pp": {
+     "value": 2.470833333333333,
+     "ci": [
+      1.9790625,
+      2.8751041666666657
+     ]
+    },
+    "brier_gain_seed_mean": {
+     "value": 0.015046875,
+     "ci": [
+      0.0101921875,
+      0.019959244791666664
+     ]
+    },
+    "brier_gain_single_run": {
+     "value": 0.006625,
+     "ci": [
+      0.0023333333333333335,
+      0.011041666666666667
+     ]
+    }
+   },
+   "reproduction": {
+    "zoo_fitted_rate": 0.18911219266556964,
+    "nt_minus_zoo_pp": {
+     "value": -0.082052599890294,
+     "ci": [
+      -0.20222104540663158,
+      0.03128322192089922
+     ]
+    },
+    "deterministic_orders": 2864,
+    "deterministic_mismatches": 0,
+    "random_orders": 136,
+    "dispersion_ratio": 0.9727803089637513
+   },
+   "zoo_held_out": {
+    "calibrated_bias_pp": 0.41121926655704744,
+    "default_bias_pp": 2.800000000000083,
+    "calibrated_brier": 0.01144928964111831,
+    "default_brier": 0.028
+   }
+  },
+  "10s": {
+   "exact_rate": 0.582,
+   "default": {
+    "fill_rate": 0.6023333333333334,
+    "bias_pp": 2.033333333333333,
+    "bias_ci_pp": [
+     1.5666666666666667,
+     2.533333333333333
+    ],
+    "brier": 0.02033333333333333,
+    "agree_with_zoo_p1": 1.0
+   },
+   "calibrated": {
+    "fill_rate": 0.578125,
+    "bias_pp": -0.3875,
+    "bias_ci_pp": [
+     -0.8335416666666666,
+     0.020833333333333336
+    ],
+    "bias_pp_per_seed": {
+     "min": -0.7000000000000001,
+     "max": -0.1,
+     "sd": 0.23633276244138182
+    },
+    "abs_bias_pp_single_run_mean": 0.3875,
+    "brier_seed_mean": 0.014546875,
+    "brier_single_seed_mean": 0.023208333333333334
+   },
+   "paired": {
+    "abs_bias_reduction_pp": {
+     "value": 1.6458333333333333,
+     "ci": [
+      0.8458333333333332,
+      2.412604166666666
+     ]
+    },
+    "abs_bias_reduction_single_run_pp": {
+     "value": 1.6458333333333333,
+     "ci": [
+      0.8458333333333332,
+      2.2666666666666666
+     ]
+    },
+    "brier_gain_seed_mean": {
+     "value": 0.0057864583333333336,
+     "ci": [
+      0.0013119791666666668,
+      0.010552994791666662
+     ]
+    },
+    "brier_gain_single_run": {
+     "value": -0.002875,
+     "ci": [
+      -0.007208333333333333,
+      0.0015843749999999942
+     ]
+    }
+   },
+   "reproduction": {
+    "zoo_fitted_rate": 0.5783746486953298,
+    "nt_minus_zoo_pp": {
+     "value": -0.02496486953298161,
+     "ci": [
+      -0.15369642939183104,
+      0.10544462227267026
+     ]
+    },
+    "deterministic_orders": 2842,
+    "deterministic_mismatches": 0,
+    "random_orders": 158,
+    "dispersion_ratio": 1.028319281926421
+   },
+   "zoo_held_out": {
+    "calibrated_bias_pp": -0.3625351304672564,
+    "default_bias_pp": 2.0333333333330983,
+    "calibrated_brier": 0.013857997604103596,
+    "default_brier": 0.02033333333333333
+   }
+  },
+  "60s": {
+   "exact_rate": 0.8073333333333333,
+   "default": {
+    "fill_rate": 0.8166666666666667,
+    "bias_pp": 0.9333333333333335,
+    "bias_ci_pp": [
+     0.6,
+     1.3
+    ],
+    "brier": 0.009333333333333334,
+    "agree_with_zoo_p1": 1.0
+   },
+   "calibrated": {
+    "fill_rate": 0.8042083333333333,
+    "bias_pp": -0.3125,
+    "bias_ci_pp": [
+     -0.6042708333333333,
+     -0.025
+    ],
+    "bias_pp_per_seed": {
+     "min": -0.46666666666666673,
+     "max": -0.16666666666666669,
+     "sd": 0.12206880703436751
+    },
+    "abs_bias_pp_single_run_mean": 0.3125,
+    "brier_seed_mean": 0.006703125,
+    "brier_single_seed_mean": 0.011458333333333333
+   },
+   "paired": {
+    "abs_bias_reduction_pp": {
+     "value": 0.6208333333333333,
+     "ci": [
+      0.09583333333333335,
+      1.1708333333333332
+     ]
+    },
+    "abs_bias_reduction_single_run_pp": {
+     "value": 0.6208333333333333,
+     "ci": [
+      0.09583333333333335,
+      1.0960416666666657
+     ]
+    },
+    "brier_gain_seed_mean": {
+     "value": 0.0026302083333333334,
+     "ci": [
+      -0.0003442708333333333,
+      0.0057348958333333306
+     ]
+    },
+    "brier_gain_single_run": {
+     "value": -0.002125,
+     "ci": [
+      -0.005166666666666667,
+      0.000875
+     ]
+    }
+   },
+   "reproduction": {
+    "zoo_fitted_rate": 0.8035580644041939,
+    "nt_minus_zoo_pp": {
+     "value": 0.0650268929139456,
+     "ci": [
+      -0.0243481101846458,
+      0.1597059048774146
+     ]
+    },
+    "deterministic_orders": 2914,
+    "deterministic_mismatches": 0,
+    "random_orders": 86,
+    "dispersion_ratio": 0.9399601677597674
+   },
+   "zoo_held_out": {
+    "calibrated_bias_pp": -0.37752689291170594,
+    "default_bias_pp": 0.9333333333355731,
+    "calibrated_brier": 0.0071554663958924795,
+    "default_brier": 0.009333333333333334
+   }
+  }
+ },
+ "queuetruth_nautilus": "0.1.0",
+ "fill_models": {
+  "nt_default": {
+   "class": "FillModel",
+   "prob_fill_on_limit": 1.0,
+   "prob_slippage": 0.0
+  },
+  "qt_calibrated": {
+   "class": "FillModel",
+   "prob_fill_on_limit": 0.28662597114317423,
+   "prob_slippage": 0.0
+  }
+ },
+ "generated": "2026-10-24"
+}

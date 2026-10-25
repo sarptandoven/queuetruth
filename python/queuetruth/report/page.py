@@ -1,7 +1,8 @@
-"""HTML building blocks and the page shell: stylesheet (light and dark tokens via `prefers-color-scheme`,
-Okabe-Ito-derived color-blind-safe series slots, status colors always paired with an icon and a label), tables,
-figures with legends and `<details>` data-table fallbacks, callouts, code blocks and the optional copy-button script
-(the page is complete without it).
+"""HTML building blocks and the page shell: stylesheet (light and dark tokens via `prefers-color-scheme`, a theme
+switch that needs no JavaScript, print rules that always use the light tokens and always print the header's
+provenance, Okabe-Ito-derived color-blind-safe series slots, status colors always paired with an icon and a label),
+tables (optionally with row headers), collapsible `<details>` blocks, figures with legends and `<details>` data-table
+fallbacks, callouts, code blocks and the optional copy-button script (the page is complete without it).
 """
 
 from __future__ import annotations
@@ -29,8 +30,10 @@ def table(
     cls: str = "",
     row_cls: Sequence[str] | None = None,
     caption: str = "",
+    row_header: bool = False,
 ) -> Raw:
-    """A data table; columns listed in `numeric` are right-aligned with tabular figures."""
+    """A data table; columns listed in `numeric` are right-aligned with tabular figures. With `row_header` the first
+    cell of each body row is a `<th scope="row">` (screen readers announce it with every cell of the row)."""
     num_cols = set(numeric)
     out = [f'<div class="tw"><table class="{esc(cls)}">' if cls else '<div class="tw"><table>']
     if caption:
@@ -43,7 +46,10 @@ def table(
         rc = row_cls[ri] if row_cls and ri < len(row_cls) and row_cls[ri] else ""
         out.append(f'<tr class="{rc}">' if rc else "<tr>")
         for i, v in enumerate(r):
-            out.append(f'<td class="n">{cell(v)}</td>' if i in num_cols else f"<td>{cell(v)}</td>")
+            if i == 0 and row_header:
+                out.append(f'<th scope="row">{cell(v)}</th>')
+            else:
+                out.append(f'<td class="n">{cell(v)}</td>' if i in num_cols else f"<td>{cell(v)}</td>")
         out.append("</tr>")
     out.append("</tbody></table></div>")
     return Raw("".join(out))
@@ -128,64 +134,140 @@ def ul(items: Iterable[object], cls: str = "") -> Raw:
     return Raw(f'<ul class="{cls}">{li}</ul>' if cls else f"<ul>{li}</ul>")
 
 
-def section(sid: str, title: str, body: Sequence[str], lead: str = "") -> Raw:
-    """A top-level report section with an anchor id."""
+def section(sid: str, title: str, body: Sequence[str], lead: str = "", cls: str = "") -> Raw:
+    """A top-level report section with an anchor id; the heading labels the region for assistive technology."""
     lead_html = f'<p class="lead">{lead}</p>' if lead else ""
-    return Raw(f'<section id="{esc(sid)}"><h2>{esc(title)}</h2>{lead_html}{"".join(body)}</section>')
+    c = f' class="{esc(cls)}"' if cls else ""
+    return Raw(
+        f'<section id="{esc(sid)}"{c} aria-labelledby="{esc(sid)}-h"><h2 id="{esc(sid)}-h">{esc(title)}</h2>'
+        f"{lead_html}{''.join(body)}</section>"
+    )
 
 
-CSS = """
-:root{color-scheme:light dark;
---bg:#f7f6f3;--surface:#ffffff;--surface-2:#f1f0ec;--border:#e1dfd9;--text:#0b0b0b;--text-2:#52514e;--muted:#6f6d68;
---grid:#e7e5e0;--axis:#8a8883;--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s4:#4a3aa7;--div-neg:#2a78d6;--div-pos:#e34948;
---div-mid:#f0efec;--good:#0c7a0c;--good-bg:#e8f5e8;--warn:#8a5a00;--warn-bg:#fdf3dc;--crit:#b42c2c;--crit-bg:#fbe9e9;
---info:#1c5cab;--info-bg:#e9f1fc;--code-bg:#f4f3ef;--band:#2a78d6}
-@media (prefers-color-scheme: dark){:root:where(:not([data-theme="light"])){
---bg:#121211;--surface:#1a1a19;--surface-2:#222220;--border:#34332f;--text:#f4f3ef;--text-2:#c3c2b7;--muted:#9a988f;
---grid:#2c2b28;--axis:#6f6d68;--s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#9085e9;--div-neg:#3987e5;--div-pos:#e66767;
---div-mid:#383835;--good:#5fd35f;--good-bg:#173017;--warn:#fab219;--warn-bg:#33270c;--crit:#ff8585;--crit-bg:#3a1a1a;
---info:#86b6ef;--info-bg:#16263d;--code-bg:#161615}}
-:root[data-theme="dark"]{
---bg:#121211;--surface:#1a1a19;--surface-2:#222220;--border:#34332f;--text:#f4f3ef;--text-2:#c3c2b7;--muted:#9a988f;
---grid:#2c2b28;--axis:#6f6d68;--s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#9085e9;--div-neg:#3987e5;--div-pos:#e66767;
---div-mid:#383835;--good:#5fd35f;--good-bg:#173017;--warn:#fab219;--warn-bg:#33270c;--crit:#ff8585;--crit-bg:#3a1a1a;
---info:#86b6ef;--info-bg:#16263d;--code-bg:#161615}
-*{box-sizing:border-box}
+def details(
+    summary: str,
+    body: Sequence[str] | str,
+    *,
+    note: str = "",
+    cls: str = "more",
+    sid: str = "",
+    is_open: bool = False,
+    summary_html: str = "",
+) -> Raw:
+    """A collapsible block, closed unless `is_open` (so the page stays short and prints only what the reader opened,
+    except blocks with class `prov`, which always print):
+    `summary` is plain text (or `summary_html`, pre-rendered), `note` a muted plain-text suffix, `body` pre-rendered
+    HTML."""
+    inner = body if isinstance(body, str) else "".join(body)
+    n = f' <span class="note">{esc(note)}</span>' if note else ""
+    i = f' id="{esc(sid)}"' if sid else ""
+    c = f' class="{esc(cls)}"' if cls else ""
+    o = " open" if is_open else ""
+    head = summary_html or esc(summary)
+    return Raw(f"<details{c}{i}{o}><summary>{head}{n}</summary>{inner}</details>")
+
+
+def theme_switch() -> Raw:
+    """Auto / light / dark switch: radio inputs the stylesheet reads with `:has()`; no script, nothing persisted.
+    Auto follows `prefers-color-scheme`; print always uses the light theme."""
+    parts = ['<fieldset class="theme"><legend>Color theme</legend>']
+    for key, label in (("auto", "Auto"), ("light", "Light"), ("dark", "Dark")):
+        rid = THEME_IDS[key]
+        checked = " checked" if key == "auto" else ""
+        parts.append(
+            f'<input type="radio" name="qt-theme" id="{rid}" value="{key}"{checked}><label for="{rid}">{label}</label>'
+        )
+    parts.append("</fieldset>")
+    return Raw("".join(parts))
+
+
+#: Color tokens. Light is the base; dark applies under `prefers-color-scheme: dark` on screen, and either can be
+#: forced with the header's theme switch (radio inputs read by `:has()`, no JavaScript) or `data-theme` on <html>.
+#: Print always uses the light tokens.
+LIGHT_TOKENS = (
+    "--bg:#f7f6f3;--surface:#ffffff;--surface-2:#f1f0ec;--border:#e1dfd9;--text:#0b0b0b;--text-2:#52514e;"
+    "--muted:#6a6863;--grid:#e7e5e0;--axis:#8a8883;--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s4:#4a3aa7;"
+    "--div-neg:#2a78d6;--div-pos:#e34948;--div-mid:#f0efec;--good:#0c7a0c;--good-bg:#e8f5e8;--warn:#8a5a00;"
+    "--warn-bg:#fdf3dc;--crit:#b42c2c;--crit-bg:#fbe9e9;--info:#1c5cab;--info-bg:#e9f1fc;--code-bg:#f4f3ef;"
+    "--band:#2a78d6;--focus:#1c5cab"
+)
+DARK_TOKENS = (
+    "--bg:#121211;--surface:#1a1a19;--surface-2:#222220;--border:#34332f;--text:#f4f3ef;--text-2:#c3c2b7;"
+    "--muted:#9a988f;--grid:#2c2b28;--axis:#6f6d68;--s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#9085e9;"
+    "--div-neg:#3987e5;--div-pos:#e66767;--div-mid:#383835;--good:#5fd35f;--good-bg:#173017;--warn:#fab219;"
+    "--warn-bg:#33270c;--crit:#ff8585;--crit-bg:#3a1a1a;--info:#86b6ef;--info-bg:#16263d;--code-bg:#161615;"
+    "--band:#3987e5;--focus:#86b6ef"
+)
+
+#: Ids of the theme switch radios (`theme_switch`); the stylesheet keys the forced themes on them.
+THEME_IDS = {"auto": "qt-theme-auto", "light": "qt-theme-light", "dark": "qt-theme-dark"}
+
+# Each forced theme is its own rule: a browser without `:has()` drops only that rule and keeps the automatic theme.
+CSS = (
+    f":root{{color-scheme:light dark;{LIGHT_TOKENS}}}\n"
+    f"@media screen and (prefers-color-scheme: dark){{:root{{color-scheme:dark;{DARK_TOKENS}}}}}\n"
+    "@media screen{"
+    f':root[data-theme="light"]{{color-scheme:light;{LIGHT_TOKENS}}}'
+    f':root[data-theme="dark"]{{color-scheme:dark;{DARK_TOKENS}}}'
+    f":root:has(#{THEME_IDS['light']}:checked){{color-scheme:light;{LIGHT_TOKENS}}}"
+    f":root:has(#{THEME_IDS['dark']}:checked){{color-scheme:dark;{DARK_TOKENS}}}"
+    "}\n"
+    + """*{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--text);
 font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}
-main{max-width:1180px;margin:0 auto;padding:24px 16px 64px}
-h1{font-size:26px;line-height:1.2;margin:0 0 4px;letter-spacing:-.01em}
-h2{font-size:20px;margin:0 0 12px;padding-top:4px}
-h3{font-size:16px;margin:22px 0 8px}
+main{max-width:1180px;margin:0 auto;padding:16px 16px 48px}
+h1{font-size:24px;line-height:1.2;margin:0 0 2px;letter-spacing:-.01em}
+h2{font-size:20px;margin:0 0 10px;padding-top:2px}
+h3{font-size:16px;margin:20px 0 8px}
 h4{font-size:14px;margin:16px 0 6px;color:var(--text-2)}
 p{margin:6px 0 10px}
 a{color:var(--info)}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 code,pre,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px}
-.sub{color:var(--text-2);margin:0 0 16px}
-section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;margin:18px 0}
+.skip{position:absolute;left:-9999px;top:0}
+.skip:focus{left:16px;top:8px;z-index:20;background:var(--surface);padding:6px 10px;border:1px solid var(--border);
+border-radius:6px}
+header.top{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:8px 16px}
+header.top>.ttl{min-width:0;flex:1 1 420px}
+header.top>.wide{flex:1 1 100%;min-width:0}
+.sub{color:var(--text-2);margin:0 0 10px}
+section,header#header,details[id]{scroll-margin-top:52px}
+section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin:16px 0}
+section.answer{border-width:2px;border-color:var(--text-2)}
 .lead{color:var(--text-2);max-width:900px}
-nav.toc{display:flex;flex-wrap:wrap;gap:6px 14px;margin:12px 0 0;font-size:13px}
+nav.toc{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:4px 14px;margin:8px -16px 0;
+padding:8px 16px;font-size:13px;background:var(--bg);border-bottom:1px solid var(--border)}
 nav.toc a{text-decoration:none}
+nav.toc a:hover{text-decoration:underline}
+fieldset.theme{display:inline-flex;align-items:center;gap:2px;border:1px solid var(--border);border-radius:999px;
+padding:2px;margin:4px 0 0;font-size:12px}
+fieldset.theme legend{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+fieldset.theme input{position:absolute;opacity:0;width:1px;height:1px;margin:0}
+fieldset.theme label{padding:2px 10px;border-radius:999px;cursor:pointer;color:var(--text-2)}
+fieldset.theme input:checked+label{background:var(--text);color:var(--bg);font-weight:600}
+fieldset.theme input:focus-visible+label{outline:2px solid var(--focus);outline-offset:1px}
 .tw{overflow-x:auto;margin:8px 0 12px}
 table{border-collapse:collapse;font-size:13px;min-width:50%}
-caption{text-align:left;color:var(--text-2);padding:0 0 4px;font-size:12.5px}
+caption{text-align:left;color:var(--text-2);padding:0 0 4px;font-size:12.5px;caption-side:top}
 th,td{padding:4px 10px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}
-th{font-weight:600;color:var(--text-2);background:var(--surface-2);white-space:nowrap}
+thead th{font-weight:600;color:var(--text-2);background:var(--surface-2);white-space:nowrap}
+tbody th{font-weight:500;text-align:left}
 td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
-tr.hl td{background:var(--warn-bg)}
+tr.hl td,tr.hl th{background:var(--warn-bg)}
 tr.fill td{background:var(--good-bg)}
+tr.base td,tr.base th{background:var(--surface-2);font-weight:600}
 tr.gap td{color:var(--muted);text-align:center}
 table.why td{white-space:nowrap}
+table.lb tbody th{min-width:18ch}
 table.files td:first-child{min-width:22ch;overflow-wrap:anywhere}
 table.files .mono{font-size:11px;word-break:break-all;display:inline-block;min-width:24ch}
 h2,h3,h4,p,li,figcaption,summary{overflow-wrap:anywhere}
 td.hash{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;word-break:break-all}
 dl.kv{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px 18px;margin:8px 0 12px}
 dl.kv div{border-bottom:1px solid var(--border);padding:3px 0}
-dl.kv dt{color:var(--text-2);font-size:12px}
+dl.kv dt{color:var(--text-2);font-size:12px;overflow-wrap:anywhere}
 dl.kv dd{margin:0;font-variant-numeric:tabular-nums;font-weight:500;overflow-wrap:anywhere}
-dl.kv dt{overflow-wrap:anywhere}
 .fig{margin:12px 0 18px}
 .svgw{overflow-x:auto}
 .svgw svg{max-width:100%;height:auto;display:block}
@@ -193,6 +275,24 @@ figcaption{color:var(--text-2);font-size:12.5px;margin-top:4px;max-width:900px}
 .note{color:var(--muted)}
 details{margin:6px 0}
 details>summary{cursor:pointer;color:var(--text-2);font-size:13px}
+details>summary:hover{color:var(--text)}
+details.more{border:1px solid var(--border);border-radius:8px;padding:6px 12px;margin:10px 0;background:var(--surface)}
+details.more[open]{padding-bottom:10px}
+details.more>summary{font-weight:600;color:var(--text);font-size:13.5px;padding:2px 0}
+details.more>summary .note{font-weight:400}
+summary>h2,summary>h3,summary>h4{display:inline;font-size:inherit;margin:0;padding:0;color:inherit}
+details.item{border-top:1px solid var(--border);margin:0;padding:4px 0}
+details.item>summary{color:var(--text);font-size:13.5px;padding:2px 0}
+details.item>summary h3,details.item>summary h4{display:inline;font-size:14px;margin:0;color:var(--text)}
+details.item[open]>summary{margin-bottom:6px}
+details.item+:not(details.item){margin-top:12px}
+ol.answers{list-style:none;margin:6px 0 4px;padding:0;display:grid;gap:10px}
+ol.answers>li{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;align-items:start;border:1px solid var(--border);
+border-radius:8px;padding:10px 12px;background:var(--surface-2)}
+ol.answers h3{margin:0;font-size:14.5px}
+ol.answers p{margin:2px 0 0;font-size:15px;line-height:1.45}
+ol.answers .go{font-size:12.5px}
+ol.answers>li>.badge{margin-top:1px}
 ul.legend{list-style:none;display:flex;flex-wrap:wrap;gap:4px 16px;padding:0;margin:0 0 4px;font-size:12.5px;
 color:var(--text-2)}
 .sw{display:inline-block;width:16px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
@@ -206,6 +306,7 @@ justify-content:center;font-weight:700;font-size:13px;color:var(--surface)}
 .callout.crit{background:var(--crit-bg)}.callout.crit .ico{background:var(--crit)}
 .callout.info{background:var(--info-bg)}.callout.info .ico{background:var(--info)}
 .callout ul{margin:4px 0 0;padding-left:18px}
+.callout p{margin:2px 0 4px}
 .callout>div{min-width:0;flex:1}
 .grid2>div{min-width:0}
 .badge{display:inline-block;white-space:nowrap;border-radius:999px;padding:1px 9px;font-size:12px;font-weight:600;
@@ -230,7 +331,6 @@ pre.code{background:var(--code-bg);border:1px solid var(--border);border-radius:
 margin:0;white-space:pre}
 button.copy{position:absolute;top:22px;right:8px;font:12px system-ui,sans-serif;padding:2px 8px;border-radius:6px;
 border:1px solid var(--border);background:var(--surface);color:var(--text-2);cursor:pointer}
-.why{border-top:1px solid var(--border);padding-top:10px;margin-top:14px}
 footer{color:var(--muted);font-size:12px;margin-top:24px}
 svg .grid{stroke:var(--grid);stroke-width:1}
 svg .axis{stroke:var(--axis);stroke-width:1}
@@ -259,8 +359,25 @@ svg .cnt{fill:var(--axis);fill-opacity:.45}
 svg .hm0{fill:var(--div-mid)}
 svg .hmp{fill:var(--div-pos)}
 svg .hmn{fill:var(--div-neg)}
-@media print{body{background:#fff}section{break-inside:avoid-page}button.copy{display:none}}
+@media (max-width:640px){section{padding:14px 12px}ol.answers>li{grid-template-columns:1fr}}
+@media (max-width:760px){nav.toc{flex-wrap:nowrap;overflow-x:auto;white-space:nowrap;gap:4px 12px;
+scrollbar-width:thin}}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+@page{margin:12mm}
+@media print{body{background:#fff;font-size:10.5pt}main{max-width:none;padding:0}
+nav.toc,fieldset.theme,button.copy,.skip{display:none}
+section{border:0;border-top:1px solid #999;border-radius:0;padding:10px 0;margin:10px 0;break-inside:auto}
+section.answer{border-top:2px solid #000}
+h2,h3,h4,summary{break-after:avoid}
+figure,.callout,.tile,ol.answers>li,tr,dl.kv div{break-inside:avoid}
+.tw,.svgw{overflow:visible}table{width:100%;font-size:8.5pt}thead th{white-space:normal}
+details.more,details.item{border:0;padding:0}
+details.prov::details-content{content-visibility:visible;display:contents}
+@supports not selector(::details-content){.print-prov[hidden]{display:block}}
+*{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+a{color:inherit;text-decoration:none}}
 """
+)
 
 SCRIPT = (
     "(function(){if(!navigator.clipboard)return;document.querySelectorAll('pre.code').forEach(function(p){"
@@ -270,8 +387,9 @@ SCRIPT = (
 )
 
 
-def shell(title: str, body: str, description: str) -> str:
-    """The complete HTML document."""
+def shell(title: str, body: str, description: str, *, skip_to: str = "") -> str:
+    """The complete HTML document; `skip_to` (an element id) adds a "skip to" link as the first focusable element."""
+    skip = f'<a class="skip" href="#{esc(skip_to)}">Skip to the answer</a>\n' if skip_to else ""
     return (
         "<!doctype html>\n"
         '<html lang="en">\n<head>\n<meta charset="utf-8">\n'
@@ -279,6 +397,6 @@ def shell(title: str, body: str, description: str) -> str:
         '<meta name="color-scheme" content="light dark">\n'
         f'<meta name="description" content="{esc(description)}">\n'
         '<meta name="generator" content="queuetruth">\n'
-        f"<title>{esc(title)}</title>\n<style>{CSS}</style>\n</head>\n<body>\n<main>\n"
+        f"<title>{esc(title)}</title>\n<style>{CSS}</style>\n</head>\n<body>\n{skip}<main>\n"
         f"{body}\n</main>\n<script>{SCRIPT}</script>\n</body>\n</html>\n"
     )

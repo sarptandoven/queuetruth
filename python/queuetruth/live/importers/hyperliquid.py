@@ -26,7 +26,7 @@ from typing import Any
 
 from queuetruth.live._common import Record, as_bool, dec, dec_text, dsub, epoch_ns, text_or_none
 from queuetruth.live.builder import ImportResult, LogBuilder
-from queuetruth.live.importers._base import ImportOptions, json_records, new_builder, side_of, sub_records
+from queuetruth.live.importers._base import ImportOptions, json_records, new_builder, obj_field, side_of, sub_records
 
 VENUE = "hyperliquid"
 FILLS_CAP = 2000
@@ -79,7 +79,7 @@ def _register(
     """Finds or creates the order of an order-status record (merging its static fields); returns the handle, the
     order size (`origSz`), the remaining size (`sz`) and the limit price."""
     loc = rec.location
-    o = u.get("order") or {}
+    o = obj_field(u.get("order"), "order", loc)
     status = str(u.get("status", ""))
     oid = text_or_none(o.get("oid"))
     tif_raw = text_or_none(o.get("tif"))
@@ -120,7 +120,7 @@ def _order_update(
     new_oids: frozenset[str] = frozenset(),
 ) -> None:
     loc = rec.location
-    o = u.get("order") or {}
+    o = obj_field(u.get("order"), "order", loc)
     status = str(u.get("status", ""))
     oid = text_or_none(o.get("oid"))
     h, size, remaining, px = _register(b, u, rec)
@@ -186,7 +186,10 @@ def import_hyperliquid(paths: list[str], opts: ImportOptions) -> ImportResult:
                 for sub in sub_records(
                     Record(data, rec.raw, rec.location, rec.file_idx, rec.line_idx, recv_ns=rec.recv_ns), "fills"
                 ):
-                    _fill(b, sub.obj, sub, "ws")
+                    if isinstance(sub.obj, dict):
+                        _fill(b, sub.obj, sub, "ws")
+                    else:
+                        b.skip("non-object record")
             elif ch == "orderUpdates" and isinstance(data, list):
                 modified = _modifies(data)
                 subs = [
@@ -195,7 +198,10 @@ def import_hyperliquid(paths: list[str], opts: ImportOptions) -> ImportResult:
                 ]
                 new_oids = _prealias(b, data, subs, modified)
                 for u, sub in zip(data, subs, strict=True):
-                    _order_update(b, u, sub, "ws", acked, modified, new_oids)
+                    if isinstance(u, dict):
+                        _order_update(b, u, sub, "ws", acked, modified, new_oids)
+                    else:
+                        b.skip("non-object record")
             else:
                 b.skip(f"channel {ch}")
             continue
@@ -219,17 +225,24 @@ def _modifies(updates: list[Any]) -> dict[str, dict[str, Any]]:
     """Canceled oid -> the new order of a cancel/open pair sharing a cloid within one orderUpdates message."""
     opened: dict[str, dict[str, Any]] = {}
     for u in updates:
-        o = (u.get("order") or {}) if isinstance(u, dict) else {}
+        o = _order_obj(u)
         if isinstance(u, dict) and u.get("status") == "open" and o.get("cloid") is not None:
             opened[str(o["cloid"])] = o
     out: dict[str, dict[str, Any]] = {}
     for u in updates:
-        o = (u.get("order") or {}) if isinstance(u, dict) else {}
+        o = _order_obj(u)
         if isinstance(u, dict) and u.get("status") == "canceled" and o.get("cloid") is not None:
             new = opened.get(str(o["cloid"]))
             if new is not None and str(new.get("oid")) != str(o.get("oid")):
                 out[str(o.get("oid"))] = new
     return out
+
+
+def _order_obj(u: Any) -> dict[str, Any]:
+    """The `order` object of an update (`{}` when the update or its order is not an object: the update itself is
+    rejected or skipped when it is processed)."""
+    o = u.get("order") if isinstance(u, dict) else None
+    return o if isinstance(o, dict) else {}
 
 
 def _prealias(
@@ -243,7 +256,7 @@ def _prealias(
     for u, sub in zip(updates, subs, strict=True):
         if not isinstance(u, dict) or u.get("status") != "canceled":
             continue
-        old = text_or_none((u.get("order") or {}).get("oid"))
+        old = text_or_none(_order_obj(u).get("oid"))
         if old is None or old not in modified:
             continue
         h, _, _, _ = _register(b, u, sub)

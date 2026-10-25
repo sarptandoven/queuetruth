@@ -1,0 +1,77 @@
+{
+  "sample": {
+    "schema": "qt.bot_reconcile",
+    "schema_version": 1,
+    "kind": "freqtrade",
+    "run_id": "x",
+    "live_log": "x",
+    "sim_log": "x",
+    "n_live_orders": 1,
+    "n_sim_orders": 1,
+    "n_paired": 1,
+    "pairing_coverage": 0.5,
+    "counts": {
+      "k": 1
+    },
+    "sim_price_advantage_quote": {
+      "k": "x"
+    },
+    "missed_fill_notional": {
+      "k": "x"
+    },
+    "score": {
+      "path": "x",
+      "run_id": "x",
+      "headline": "x",
+      "n_orders": 1,
+      "n_matched": 1,
+      "n_unmatched_live": 1,
+      "n_unmatched_sim": 1,
+      "two_by_two": {
+        "k": 1
+      },
+      "fill_rate_bias": 0.5,
+      "n_clusters": 1,
+      "interpretable": true
+    },
+    "score_error": "x",
+    "options": {
+      "k": 1
+    },
+    "warnings": [
+      "x"
+    ],
+    "orders": [
+      {
+        "live_key": "x",
+        "sim_key": "x",
+        "instrument": "x",
+        "side": "buy",
+        "role": "x",
+        "category": "match",
+        "issues": [
+          "x"
+        ],
+        "score_class": "x",
+        "live_status": "x",
+        "sim_status": "x",
+        "qty": "x",
+        "live_limit_px": "x",
+        "sim_limit_px": "x",
+        "live_filled_qty": "x",
+        "sim_filled_qty": "x",
+        "live_avg_px": "x",
+        "sim_avg_px": "x",
+        "live_placed": "x",
+        "live_first_fill": "x",
+        "sim_first_fill": "x",
+        "fill_delay_ns": 1,
+        "sim_price_advantage_bps": 0.5,
+        "sim_price_advantage_quote": "x",
+        "live_note": "x",
+        "sim_note": "x",
+        "explanation": "x"
+      }
+    ]
+  }
+}

@@ -307,10 +307,16 @@ pub enum RuleSet {
     /// IEX DEEP+ (schema 1.2): US equities price-display-time priority with Nasdaq-style records (no `M`; the DEEP+
     /// Order Modify priority bit becomes a partial `C` or a `C` + `A`), so it runs on `Venue::Nasdaq` records.
     Iex,
+    /// NYSE Group Pillar equities markets read from the TAQ Integrated Feed (`qt_ingest::nyse`): Nasdaq-style
+    /// records (no `M`), `sequence` not gap-checked (the TAQ files omit sequenced control messages; the reader
+    /// checks Symbol Sequence Numbers itself). Allocation is per market: parity (setter priority, then round lots
+    /// per Participant) on NYSE, price-time on NYSE American, Arca, National and Texas; FIFO queue ranks of a parity
+    /// market are approximate and its datasets say so (`nyse_parity_ranks_approximate`).
+    Nyse,
 }
 
 impl RuleSet {
-    /// Canonical lower-case name (`generic`, `nasdaq`, `cme`, `coinbase`, `crypto_l3`, `iex`).
+    /// Canonical lower-case name (`generic`, `nasdaq`, `cme`, `coinbase`, `crypto_l3`, `iex`, `nyse`).
     pub const fn name(self) -> &'static str {
         match self {
             Self::Generic => "generic",
@@ -319,14 +325,15 @@ impl RuleSet {
             Self::Coinbase => "coinbase",
             Self::CryptoL3 => "crypto_l3",
             Self::Iex => "iex",
+            Self::Nyse => "nyse",
         }
     }
 
-    /// The record-semantics venue this rule set runs on (`crypto_l3` -> `Generic`, `iex` -> `Nasdaq`).
+    /// The record-semantics venue this rule set runs on (`crypto_l3` -> `Generic`, `iex` and `nyse` -> `Nasdaq`).
     pub const fn venue(self) -> Venue {
         match self {
             Self::Generic | Self::CryptoL3 => Venue::Generic,
-            Self::Nasdaq | Self::Iex => Venue::Nasdaq,
+            Self::Nasdaq | Self::Iex | Self::Nyse => Venue::Nasdaq,
             Self::Cme => Venue::Cme,
             Self::Coinbase => Venue::Coinbase,
         }
@@ -353,16 +360,18 @@ impl std::fmt::Display for RuleSet {
 impl std::str::FromStr for RuleSet {
     type Err = QtError;
 
-    /// Every `Venue` alias plus `crypto_l3` / `crypto-l3` and `iex` / `iexg` (case-insensitive); anything else is
-    /// `QT-CONFIG-001`. `bitstamp` and `bitfinex` keep mapping to `generic` (as `Venue::from_str`); pick `crypto_l3`
-    /// explicitly.
+    /// Every `Venue` alias plus `crypto_l3` / `crypto-l3`, `iex` / `iexg` and `nyse` / `xnys` (case-insensitive);
+    /// anything else is `QT-CONFIG-001`. `bitstamp` and `bitfinex` keep mapping to `generic` (as `Venue::from_str`);
+    /// pick `crypto_l3` explicitly. Databento's `xnys.pillar` is not an alias: DBN files are read by `--format dbn`,
+    /// which resolves a `Venue`, not this rule set.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.trim().to_ascii_lowercase().as_str() {
             "crypto_l3" | "crypto-l3" => Ok(Self::CryptoL3),
             "iex" | "iexg" => Ok(Self::Iex),
+            "nyse" | "xnys" => Ok(Self::Nyse),
             other => other.parse::<Venue>().map(Self::from).map_err(|_| {
                 QtError::Config(format!(
-                    "venue: unknown rule set {other:?} (use nasdaq|cme|coinbase|generic|crypto_l3|iex)"
+                    "venue: unknown rule set {other:?} (use nasdaq|cme|coinbase|generic|crypto_l3|iex|nyse)"
                 ))
             }),
         }
@@ -522,6 +531,18 @@ pub const fn rules_for(rs: RuleSet) -> VenueRules {
             r
         }
         RuleSet::Iex => IEX_RULES,
+        RuleSet::Nyse => {
+            // The `nasdaq` record semantics (the TAQ Integrated Feed reader writes no `M`: a Modify becomes a partial
+            // `C` or a `C` + `A`, NYSE Rule 7.36(f)) with two differences, cited in `qt_ingest::nyse::rules`: the
+            // TAQ files omit the sequenced Source Time Reference messages (one a second per channel), so record
+            // `sequence` holes are not losses (the reader checks Symbol Sequence Numbers instead), and the rules are
+            // validated on hand-written and generated files only (no real NYSE file has been replayed).
+            let mut r = rules(Venue::Nasdaq);
+            r.rule_set = RuleSet::Nyse;
+            r.sequence_meaningful = false;
+            r.validation = ValidationStatus::SyntheticOnly;
+            r
+        }
     }
 }
 

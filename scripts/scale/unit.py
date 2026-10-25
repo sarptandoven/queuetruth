@@ -10,7 +10,10 @@ and seed. The unit:
 1. checks the bucket's sha256 and ingests the unit's symbols from it (`qt.ingest`, format itch);
 2. runs the replay exactness checks (`qt.replay` with the rank oracle and trade parity) and keeps the summable
    counts (records, events, trades, the invariants, executions checked, price-priority violations, FIFO rank
-   histograms, parity counts) and the data-quality verdict;
+   histograms, parity counts) and the data-quality verdict; when any flag is non-zero, replays each symbol on its
+   own and records which symbols raised which flags (`symbol_exactness.py`, leaf `exactness_by_symbol`; absent
+   from exact units, whose leaves are unchanged; a one-symbol unit reuses its own counts; an attribution that
+   raises is recorded as incomplete, with the exception type, and the unit still completes);
 3. per population draws the shadows with `allocation: per_partition` and the unit's `partition_quotas` (keyed by
    locate), so the shadows of a symbol-day are the same in whichever unit it runs (`crates/replay/src/sample.rs`);
 4. per population and mode runs the native zoo (no per-unit bootstrap: the evaluation happens once, in the
@@ -43,19 +46,11 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import common as K  # noqa: E402
+import symbol_exactness as SE  # noqa: E402
 
 UNIT_SCHEMA = "qt.scale.unit"
 SHARD_SCHEMA = "qt.scale.shard_manifest"
-INV8 = (
-    "cancels_exceeding_resting",
-    "fills_exceeding_resting",
-    "fills_unknown_order",
-    "unknown_order_refs",
-    "duplicate_adds",
-    "unexpected_modifies",
-    "crossed_books_after_last",
-    "negative_spreads",
-)
+INV8 = SE.INV8
 SAMPLE_COLS = [
     "model_id",
     "shadow_id",
@@ -207,6 +202,7 @@ def run_unit(unit: dict[str, Any], split: Path, out: Path, threads: int = 1, wor
         records = sum(p["rows"] for p in partitions)
 
         exactness: dict[str, Any] | None = None
+        by_symbol: dict[str, Any] | None = None
         if unit.get("replay_checks", True) and partitions:
             t0, c0 = time.perf_counter(), time.process_time()
             rs = qt.replay(
@@ -224,9 +220,18 @@ def run_unit(unit: dict[str, Any], split: Path, out: Path, threads: int = 1, wor
             exactness["dq_verdict"] = dq.get("verdict")
             exactness["dq_reasons"] = dq.get("reasons")
             shutil.rmtree(wd / "replay", ignore_errors=True)
+            if SE.is_flagged(exactness):
+                t0, c0 = time.perf_counter(), time.process_time()
+                try:
+                    by_symbol = SE.attribute(ds, exactness, loc2sym, threads, wd)
+                except Exception as e:  # the unit's results stand; reduce-day labels all its symbols instead
+                    print(f"{unit['unit_id']}: per-symbol attribution failed: {e!r}", file=sys.stderr)
+                    by_symbol = SE.failed_attribution(e)
+                tel.step("attribute", t0, c0)
 
         stats, shadows, exact, sample = [], [], [], []
         shadow_files: dict[str, str] = {}
+        samples: dict[str, dict[str, int]] = {}
         zoo_ids: dict[str, str] = {}
         zoo_flags: dict[str, Any] = {}
         n_shadows = 0
@@ -255,6 +260,7 @@ def run_unit(unit: dict[str, Any], split: Path, out: Path, threads: int = 1, wor
             )
             tel.step("sample", t0, c0)
             n_shadows += samp.n
+            samples[pop] = {loc2sym.get(int(k), k): int(v) for k, v in samp.by_instrument.items()}
             shadow_files[pop] = K.sha256_file(sh)
             for mode in unit["modes"]:
                 zout = wd / f"zoo-{pop}-{mode}"
@@ -322,7 +328,10 @@ def run_unit(unit: dict[str, Any], split: Path, out: Path, threads: int = 1, wor
             "outputs": outputs,
             "exactness": exactness,
             "zoo": zoo_flags,
+            "samples": samples,
         }
+        if by_symbol is not None:  # only flagged units carry it, so an exact unit's leaf is unchanged
+            leaf["exactness_by_symbol"] = by_symbol
         manifest = {
             "schema": SHARD_SCHEMA,
             "schema_version": 1,

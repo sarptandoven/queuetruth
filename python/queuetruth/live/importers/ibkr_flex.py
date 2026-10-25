@@ -30,7 +30,6 @@ from __future__ import annotations
 
 import datetime as dt
 import re
-import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from queuetruth.errors import QtError
@@ -45,6 +44,7 @@ from queuetruth.live._common import (
 )
 from queuetruth.live.builder import ImportResult, LogBuilder
 from queuetruth.live.importers._base import ImportOptions, new_builder
+from queuetruth.live.importers._xml import parse_xml, to_text
 
 VENUE = "ibkr_flex"
 DEFAULT_TZ = "UTC"
@@ -72,9 +72,9 @@ _ALT: dict[str, tuple[str, ...]] = {
     "time": ("tradeTime", "TradeTime"),
     "txn": ("transactionType", "TransactionType"),
 }
-_DT = re.compile(r"^(\d{4})-?(\d{2})-?(\d{2})[;, T]+(\d{2}):?(\d{2}):?(\d{2})\s*(?:([+-]\d{2}):?(\d{2}))?$")
-_SLASH = re.compile(r"^(\d{2})/(\d{2})/(\d{4})[;, T]+(\d{2}):?(\d{2}):?(\d{2})$")
-_SLASH_DATE = re.compile(r"^\s*(\d{2})/(\d{2})/(\d{4})(?![\d/])")
+_DT = re.compile(r"^(\d{4})-?(\d{2})-?(\d{2})[;, T]+(\d{2}):?(\d{2}):?(\d{2})\s*(?:([+-]\d{2}):?(\d{2}))?$", re.ASCII)
+_SLASH = re.compile(r"^(\d{2})/(\d{2})/(\d{4})[;, T]+(\d{2}):?(\d{2}):?(\d{2})$", re.ASCII)
+_SLASH_DATE = re.compile(r"^\s*(\d{2})/(\d{2})/(\d{4})(?![\d/])", re.ASCII)
 
 
 def _get(row: dict[str, str], key: str) -> str | None:
@@ -101,7 +101,10 @@ def _flex_ts(text: str, tz: str, loc: str, date_order: str = "mdy") -> int:
         _check_wall(y, mo, d, h, mi, s, text, "yyyyMMdd", loc)
         if m.group(7) is not None:
             sign = -1 if m.group(7).startswith("-") else 1
-            off = sign * (abs(int(m.group(7))) * 3600 + int(m.group(8)) * 60)
+            oh, om = abs(int(m.group(7))), int(m.group(8))
+            if oh > 23 or om > 59:
+                raise input_error(loc, f"invalid Flex date-time {text!r}: UTC offset out of range")
+            off = sign * (oh * 3600 + om * 60)
             return (local_to_utc_s(y, mo, d, h, mi, s, "UTC", "dateTime", loc) - off) * 10**9
         return local_to_utc_s(y, mo, d, h, mi, s, tz, "dateTime", loc) * 10**9
     m = _SLASH.match(t)
@@ -162,20 +165,18 @@ def _rows(path: Path, file_idx: int) -> list[tuple[dict[str, str], str, int]]:
     text = read_text(path)
     out: list[tuple[dict[str, str], str, int]] = []
     if text.lstrip().startswith("<"):
-        try:
-            root = ET.fromstring(text)
-        except ET.ParseError as e:
-            raise input_error(str(path), f"invalid Flex XML: {e}") from e
+        # `text` is already decoded (UTF-8): the declaration's encoding must not be applied a second time
+        root = parse_xml(text.encode("utf-8"), str(path), "a Flex XML statement", encoding="utf-8")
         n = 0
         for el in root.iter():
             if el.tag in ("Trade", "Order"):
                 attrs = dict(el.attrib)
                 if el.tag == "Order" and "levelOfDetail" not in attrs:
                     attrs["levelOfDetail"] = "ORDER"
-                out.append((attrs, ET.tostring(el, encoding="unicode").strip(), n))
+                out.append((attrs, to_text(el, f"{path}#{n + 1}"), n))
                 n += 1
         return out
-    header, rows = read_csv_rows(text)
+    header, rows = read_csv_rows(text, str(path))
     if header and header[0] == "BOF":
         hdr = next((r[1:] for r in rows if r and r[0].strip() == "HEADER"), None)
         if hdr is None:

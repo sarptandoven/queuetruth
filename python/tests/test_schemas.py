@@ -88,12 +88,20 @@ def test_o_schema_2_make_schemas_leaves_no_diff() -> None:
 
 
 def test_schema_table_conventions() -> None:
-    assert len(SCHEMAS) == 29
+    # 31 engine tables (SPEC 3.4, 3.8 and the impact, shortfall and hazard tables) and 6 written by Python only
+    # (qt.zoo_toxicity_fills / _markouts / _shadows, qt.conformal_sets / _calibrator, qt.ledger).
+    assert len(SCHEMAS) == 37
+    assert arrow.TABLE_VERSIONS == {"qt.conformal_sets": "1", "qt.conformal_calibrator": "1", "qt.ledger": "1"}
     for name, schema in [*SCHEMAS.items(), *FULL_SCHEMAS.items()]:
         meta = {k.decode(): v.decode() for k, v in schema.metadata.items()}
-        assert meta == {"qt.schema": name, "qt.schema_version": "1.1", "qt.engine_version": qt.__version__}
+        version = arrow.TABLE_VERSIONS.get(name, "1.1")
+        assert meta == {"qt.schema": name, "qt.schema_version": version, "qt.engine_version": qt.__version__}
+        assert arrow.table_version(name) == version
         for f in schema:
-            if pa.types.is_dictionary(f.type):
+            if (name, f.name) == ("qt.conformal_sets", "stratum"):
+                # open dictionary: the stratum labels of the run
+                assert f.type == pa.dictionary(pa.int16(), pa.utf8()) and f.name not in DICT_VALUES[name]
+            elif pa.types.is_dictionary(f.type):
                 assert f.type == pa.dictionary(pa.int8(), pa.utf8()), (name, f.name)
                 assert DICT_VALUES[name][f.name], (name, f.name)
             if pa.types.is_timestamp(f.type):
@@ -101,6 +109,64 @@ def test_schema_table_conventions() -> None:
     assert SCHEMAS["qt.shadow_results"].field("end_state").nullable is False
     assert SCHEMAS["qt.bbo"].field("bid_px").nullable is True
     assert DICT_VALUES["qt.instruments"]["venue"] == ("nasdaq", "cme", "coinbase", "generic")
+
+
+def test_python_table_writers_use_the_registered_layouts() -> None:
+    """The tables written by Python only equal their registered schemas (metadata included), so the dumps in
+    `schemas/arrow` and the Rust mirror describe the files as written."""
+    from queuetruth.eval import toxicity
+    from queuetruth.ledger import _query as ledger_query
+    from queuetruth.model import conformal
+
+    for name in toxicity.TABLES:
+        assert toxicity.table_schema(name).equals(SCHEMAS[name], check_metadata=True), name
+        for col, _, _, values in toxicity.TABLES[name]:
+            assert DICT_VALUES[name].get(col) == values, (name, col)
+    assert DICT_VALUES["qt.zoo_toxicity_fills"]["mechanism"] == toxicity.MECHANISMS
+    assert DICT_VALUES["qt.zoo_toxicity_shadows"]["status"] == toxicity.STATUSES
+    assert conformal.sets_schema().equals(SCHEMAS[conformal.SETS_SCHEMA_NAME], check_metadata=True)
+    calibrator = SCHEMAS[conformal.CALIBRATOR_SCHEMA_NAME]
+    assert conformal._calibrator_schema().equals(calibrator, check_metadata=True)
+    assert ledger_query._table_schema().equals(SCHEMAS["qt.ledger"], check_metadata=True)
+    assert ledger_query.LEDGER_TABLE.equals(SCHEMAS["qt.ledger"], check_metadata=False)
+
+
+def test_extension_documents_are_registered() -> None:
+    """The documents of the extension packages are in `DOC_MODELS` / `SPEC_MODELS` with their package models, and the
+    models moved into `queuetruth.schemas` (conformal, demo, bot reconciliation) stay importable from their old
+    modules."""
+    from queuetruth.demo import summary as demo
+    from queuetruth.ledger import models as ledger
+    from queuetruth.live.importers import freqtrade, hummingbot
+    from queuetruth.model import conformal
+    from queuetruth.sandbox import models as sandbox
+    from queuetruth.schemas import conformal as sch_conformal
+    from queuetruth.schemas import demo as sch_demo
+    from queuetruth.schemas import reconcile as sch_reconcile
+
+    expected = {
+        "qt.demo_summary": demo.DemoSummary,
+        "qt.demo_plan": demo.DemoPlan,
+        "qt.demo_sources": demo.DemoSources,
+        "qt.conformal_report": sch_conformal.ConformalReport,
+        "qt.bot_reconcile": sch_reconcile.ReconcileReport,
+        **ledger.DOCUMENTS,
+        **sandbox.SANDBOX_DOC_MODELS,
+    }
+    assert len(expected) == 20
+    for name, model in expected.items():
+        assert DOC_MODELS[name] is model, name
+        assert model.SCHEMA == name
+    assert SPEC_MODELS["qt.sandbox_spec"] is sandbox.SandboxSpec
+    for name in ("ConformalReport", "ConformalSpec", "CoverageCell", "DriftCell", "DriftGroup", "FillTimeCell"):
+        assert getattr(conformal, name) is getattr(sch_conformal, name), name
+    assert conformal.REPORT_SCHEMA == "qt.conformal_report"
+    for name in demo.__all__:
+        assert getattr(demo, name) is getattr(sch_demo, name), name
+    for name in ("ReconcileOrder", "ReconcileReport", "ReconcileScore"):
+        assert getattr(freqtrade, name) is getattr(sch_reconcile, name), name
+    assert hummingbot.ReconcileReport is sch_reconcile.ReconcileReport
+    assert freqtrade.CATEGORIES == sch_reconcile.Category.__args__  # type: ignore[attr-defined]
 
 
 def test_features_schema_dynamic_columns() -> None:

@@ -282,6 +282,7 @@ def main() -> int:
                 super().__init__(StrategyConfig(strategy_id=sid, order_id_tag="001"))
                 self.items = items
                 self.orders, self.coid, self.fills, self.events = {}, {}, {}, {}
+                self.cancels_sent: set[int] = set()
 
             def on_start(self):
                 for k in self.items:
@@ -305,8 +306,12 @@ def main() -> int:
             def _cancel(self, ev):
                 k = int(ev.name[1:])
                 o = self.orders.get(k)
-                if o is not None and o.is_open:
-                    self.cancel_order(o)
+                # 2.x: the object order_factory returned stays INITIALIZED, so read the cache's order; and 2.x
+                # cancel_order takes the ClientOrderId (an exception in a timer callback is swallowed)
+                c = None if o is None else self.cache.order(o.client_order_id)
+                if c is not None and c.is_open:
+                    self.cancel_order(c.client_order_id if nt2 else c)
+                    self.cancels_sent.add(k)
 
             def on_order_filled(self, e):
                 k = self.coid[e.client_order_id.value]
@@ -380,6 +385,7 @@ def main() -> int:
                         "first_fill_ts": fl[0][0] if fl else None,
                         "n_fills": len(fl),
                         "events": ";".join(strat.events.get(k, [])),
+                        "cancel_sent": k in strat.cancels_sent,
                         "q_l3": sum(
                             sz
                             for s_, px_, sz, _ in snaps[k]

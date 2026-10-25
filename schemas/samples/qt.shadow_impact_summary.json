@@ -1,0 +1,88 @@
+{
+  "sample": {
+    "schema": "qt.shadow_impact_summary",
+    "schema_version": 1,
+    "source": "replay",
+    "config": {
+      "coefficient": 0.5,
+      "linear_below": 0.5,
+      "rv_interval_ns": 1,
+      "min_returns": 1,
+      "impact_ticks": 0.5,
+      "flag_venue_volume_impact": true,
+      "queue_share": 0.5,
+      "queue_min_qty": 1,
+      "volume_share": 0.5,
+      "warn_fraction": 0.5
+    },
+    "volume_source": "venue_session",
+    "h_max_ns": 1,
+    "horizon_ns": 1,
+    "fills_in_tape": true,
+    "dataset": "x",
+    "inputs": [
+      {
+        "name": "x",
+        "rows": 1,
+        "bytes": 1,
+        "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      }
+    ],
+    "files": [
+      {
+        "name": "x",
+        "rows": 1,
+        "bytes": 1,
+        "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      }
+    ],
+    "n_shadows": 1,
+    "n_rejected": 1,
+    "n_out_of_session": 1,
+    "n_assessed": 1,
+    "n_evaluable_impact": 1,
+    "n_evaluable_queue": 1,
+    "n_evaluable_volume": 1,
+    "n_flag_impact": 1,
+    "n_impact_venue_bound": 1,
+    "n_flag_queue": 1,
+    "n_queue_below_min_qty": 1,
+    "n_flag_volume": 1,
+    "n_alone_at_level": 1,
+    "n_material": 1,
+    "material_share": 0.5,
+    "material": true,
+    "distributions": {
+      "k": {
+        "n": 1,
+        "p50": 0.5,
+        "p90": 0.5,
+        "p99": 0.5,
+        "max": 0.5
+      }
+    },
+    "sensitivity": {
+      "k": [
+        {
+          "threshold": 0.5,
+          "n_flagged": 1
+        }
+      ]
+    },
+    "by_instrument": {
+      "7": 1
+    },
+    "days": [
+      {
+        "instrument_id": 1,
+        "session_date": "x",
+        "daily_volume": 1,
+        "sigma_daily": 0.5,
+        "volume_source": "venue_session",
+        "n_shadows": 1,
+        "n_material": 1
+      }
+    ],
+    "warning": "x"
+  }
+}

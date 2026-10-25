@@ -1,8 +1,10 @@
-//! Arrow table schemas of SPEC 3.4 and 3.8 (column order normative) and their JSON dumps (`schemas/arrow/*.json`).
+//! Arrow table schemas of SPEC 3.4 and 3.8 and of the extension tables written by Python (`qt.zoo_toxicity_*`,
+//! `qt.conformal_*`, `qt.ledger`), column order normative, and their JSON dumps (`schemas/arrow/*.json`).
 //!
-//! Schema 1.1 (SPEC 3.11) is additive: every table carries `qt.schema_version = "1.1"`; columns added in 1.1 follow
-//! the v0.1 columns and are optional per file. `schema(name)` is the v0.1 column set (what unchanged writers
-//! produce), `full_schema(name)` every column, `added_columns(name)` the 1.1 ones; readers accept both layouts.
+//! Schema 1.1 (SPEC 3.11) is additive: every table carries `qt.schema_version = "1.1"` (except the version-1
+//! extension tables of `TABLE_VERSIONS`); columns added in 1.1 follow the v0.1 columns and are optional per file.
+//! `schema(name)` is the v0.1 column set (what unchanged writers produce), `full_schema(name)` every column,
+//! `added_columns(name)` the 1.1 ones; readers accept both layouts.
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, OnceLock};
@@ -28,7 +30,11 @@ pub(crate) enum Ty {
     Ts,
     Date,
     Dict,
+    /// `dictionary<int16, utf8>` with open values (`qt.conformal_sets.stratum`).
+    Dict16,
     ListStr,
+    ListF64,
+    ListI64,
 }
 
 /// One column: name, type, nullability, the allowed dictionary values and the release that added it.
@@ -601,6 +607,81 @@ const SCORE_TESTS: &[Col] = &[
     c("note", Ty::Str, true),
 ];
 
+const SHADOW_IMPACT: &[Col] = &[
+    c("shadow_id", Ty::Str, false),
+    c("instrument_id", Ty::U32, false),
+    c("session_date", Ty::Date, false),
+    d("status", false, &["live", "rejected", "out_of_session"]),
+    c("qty", Ty::U64, false),
+    c("filled_qty", Ty::U64, true),
+    c("fills_in_tape", Ty::Bool, false),
+    c("ts_live", Ty::Ts, false),
+    c("ts_end", Ty::Ts, false),
+    d(
+        "end_source",
+        false,
+        &[
+            "full_fill",
+            "trajectory_end",
+            "cancel",
+            "planned_end",
+            "admin_end",
+            "horizon",
+            "session_close",
+            "rejected",
+        ],
+    ),
+    c("ref_price", Ty::I64, true),
+    d("ref_price_source", false, &["order", "last_trade", "none"]),
+    c("tick_size", Ty::I64, true),
+    c("daily_volume", Ty::U64, true),
+    d("volume_source", false, &["venue_session", "user"]),
+    c("sigma_daily", Ty::F64, true),
+    c("daily_participation", Ty::F64, true),
+    c("impact_frac", Ty::F64, true),
+    c("impact_bps", Ty::F64, true),
+    c("impact_ticks", Ty::F64, true),
+    c("level_qty_at_live", Ty::U64, true),
+    c("queue_share_at_live", Ty::F64, true),
+    c("queue_share_max", Ty::F64, true),
+    c("queue_min_qty", Ty::U64, false),
+    c("life_volume", Ty::U64, true),
+    c("volume_share", Ty::F64, true),
+    c("flag_impact", Ty::Bool, false),
+    c("flag_queue", Ty::Bool, false),
+    c("flag_volume", Ty::Bool, false),
+    c("material", Ty::Bool, false),
+];
+
+const SCORE_SHORTFALL: &[Col] = &[
+    d("scope", false, &["order", "total"]),
+    d("statistic", false, &["value", "sum", "mean", "ci_lo", "ci_hi"]),
+    c("horizon_ns", Ty::I64, false),
+    c("order_key", Ty::Str, true),
+    c("instrument_id", Ty::U32, true),
+    c("session_date", Ty::Date, true),
+    d("side", true, &["buy", "sell"]),
+    d("class", true, &["both", "neither", "live_only", "sim_only"]),
+    c("currency", Ty::Str, true),
+    c("qty", Ty::U64, true),
+    c("live_qty", Ty::U64, true),
+    c("sim_qty", Ty::U64, true),
+    c("matched_qty", Ty::U64, true),
+    c("valued", Ty::Bool, false),
+    c("delay_ccy", Ty::F64, true),
+    c("spread_ccy", Ty::F64, true),
+    c("missed_fill_ccy", Ty::F64, true),
+    c("adverse_selection_ccy", Ty::F64, true),
+    c("partial_fill_ccy", Ty::F64, true),
+    c("fees_ccy", Ty::F64, true),
+    c("total_ccy", Ty::F64, true),
+    c("notional_ccy", Ty::F64, true),
+    c("live_notional_ccy", Ty::F64, true),
+    c("sim_notional_ccy", Ty::F64, true),
+    c("n", Ty::U64, false),
+    c("note", Ty::Str, true),
+];
+
 const HAZARD_PREDICTIONS: &[Col] = &[
     c("order_ref", Ty::Str, false),
     c("landmark_ns", Ty::I64, false),
@@ -612,6 +693,124 @@ const HAZARD_PREDICTIONS: &[Col] = &[
     c("y_fill", Ty::Bool, true),
     c("censored", Ty::Bool, false),
     d("split", false, &["train", "calib", "test"]),
+];
+
+/// `qt.zoo_toxicity_*` fill mechanisms (`queuetruth.eval.toxicity.MECHANISMS`).
+const TOX_MECHANISMS: &[&str] = &[
+    "queue",
+    "swept",
+    "cross_on_arrival",
+    "crossed_resting",
+    "hidden_print",
+    "touch",
+    "particle",
+];
+
+// `zoo-toxicity` (queuetruth.eval.toxicity, docs/design/extensions/fill-toxicity.md); written by Python only.
+const ZOO_TOXICITY_FILLS: &[Col] = &[
+    c("arm", Ty::Str, false),
+    c("shadow_id", Ty::Str, false),
+    c("fill_seq", Ty::U32, false),
+    c("instrument_id", Ty::U32, false),
+    c("side", Ty::U8, false),
+    c("ts_event", Ty::Ts, false),
+    c("px", Ty::I64, true),
+    c("fill_qty", Ty::F64, false),
+    d("liquidity", false, &["maker", "taker"]),
+    d("mechanism", false, TOX_MECHANISMS),
+    d("status", true, &["confirmed", "phantom"]),
+    c("reason", Ty::Str, false),
+];
+
+const ZOO_TOXICITY_MARKOUTS: &[Col] = &[
+    c("arm", Ty::Str, false),
+    c("shadow_id", Ty::Str, false),
+    c("fill_seq", Ty::U32, false),
+    c("horizon_ns", Ty::I64, false),
+    c("mo_ticks", Ty::F64, true),
+    c("mo_bps", Ty::F64, true),
+    c("mm_ticks", Ty::F64, true),
+    c("mm_bps", Ty::F64, true),
+];
+
+const ZOO_TOXICITY_SHADOWS: &[Col] = &[
+    c("model_id", Ty::Str, false),
+    c("shadow_id", Ty::Str, false),
+    c("instrument_id", Ty::U32, false),
+    c("session_date", Ty::Date, false),
+    c("ts_live", Ty::Ts, false),
+    d("status", false, &["confirmed", "phantom", "missed", "neither"]),
+    c("model_ts_first_fill", Ty::Ts, true),
+    c("exact_ts_first_fill", Ty::Ts, true),
+    d("model_mechanism", true, TOX_MECHANISMS),
+    d("exact_mechanism", true, TOX_MECHANISMS),
+];
+
+// Conformal fill probabilities (queuetruth.model.conformal, docs/design/extensions/conformal-fill.md); written by
+// Python only. `stratum` is an open dictionary (the stratum labels of the run).
+const CONFORMAL_SETS: &[Col] = &[
+    c("order_ref", Ty::Str, false),
+    c("landmark_ns", Ty::I64, false),
+    c("horizon_ns", Ty::I64, false),
+    c("stratum", Ty::Dict16, false),
+    c("p", Ty::F64, false),
+    c("y_fill", Ty::Bool, true),
+    c("pvalue_nofill", Ty::F64, false),
+    c("pvalue_fill", Ty::F64, false),
+    c("set_nofill", Ty::Bool, false),
+    c("set_fill", Ty::Bool, false),
+    c("va_p0", Ty::F64, false),
+    c("va_p1", Ty::F64, false),
+    c("no_fill_within_ns", Ty::I64, true),
+    c("fill_within_ns", Ty::I64, true),
+    c("interval_no_fill_within_ns", Ty::I64, true),
+    c("interval_fill_within_ns", Ty::I64, true),
+];
+
+const CONFORMAL_CALIBRATOR: &[Col] = &[
+    c("part", Ty::Str, false),
+    c("horizon_ns", Ty::I64, true),
+    c("landmark_ns", Ty::I64, false),
+    c("category", Ty::Str, false),
+    c("label", Ty::I8, false),
+    c("value", Ty::F64, false),
+    c("weight", Ty::F64, true),
+    c("label_sum", Ty::F64, true),
+];
+
+// `ledger export --format parquet` (queuetruth.ledger, docs/concepts/trial-ledger.md); written by Python only.
+const LEDGER: &[Col] = &[
+    c("seq", Ty::I64, false),
+    c("hash", Ty::Str, false),
+    c("prev", Ty::Str, false),
+    c("recorded_at", Ty::Ts, false),
+    c("started_at", Ty::Ts, true),
+    c("kind", Ty::Str, false),
+    c("status", Ty::Str, false),
+    c("study", Ty::Str, true),
+    c("trial_id", Ty::Str, true),
+    c("run_id", Ty::Str, true),
+    c("spec_hash", Ty::Str, true),
+    c("dataset_hash", Ty::Str, true),
+    c("name", Ty::Str, true),
+    c("params_json", Ty::Str, true),
+    c("inputs_json", Ty::Str, false),
+    c("metrics_json", Ty::Str, false),
+    c("series_kind", Ty::Str, true),
+    c("series_sha256", Ty::Str, true),
+    c("series", Ty::ListF64, true),
+    c("series_index", Ty::ListI64, true),
+    c("periods_per_year", Ty::F64, true),
+    c("higher_is_better", Ty::Bool, true),
+    c("run_ids", Ty::ListStr, false),
+    c("code_queuetruth", Ty::Str, true),
+    c("code_engine", Ty::Str, true),
+    c("code_core", Ty::Str, true),
+    c("code_git", Ty::Str, true),
+    c("code_user", Ty::Str, true),
+    c("error_code", Ty::Str, true),
+    c("error_message", Ty::Str, true),
+    c("note", Ty::Str, true),
 ];
 
 /// Every table in definition order.
@@ -644,8 +843,32 @@ const TABLES: &[(&str, &[Col])] = &[
     ("qt.score_markouts", SCORE_MARKOUTS),
     ("qt.score_position", SCORE_POSITION),
     ("qt.score_tests", SCORE_TESTS),
+    ("qt.shadow_impact", SHADOW_IMPACT),
+    ("qt.score_shortfall", SCORE_SHORTFALL),
     ("qt.hazard_predictions", HAZARD_PREDICTIONS),
+    ("qt.zoo_toxicity_fills", ZOO_TOXICITY_FILLS),
+    ("qt.zoo_toxicity_markouts", ZOO_TOXICITY_MARKOUTS),
+    ("qt.zoo_toxicity_shadows", ZOO_TOXICITY_SHADOWS),
+    ("qt.conformal_sets", CONFORMAL_SETS),
+    ("qt.conformal_calibrator", CONFORMAL_CALIBRATOR),
+    ("qt.ledger", LEDGER),
 ];
+
+/// Tables whose writers declare their own `qt.schema_version` (new tables of version 1, without 1.1 columns); every
+/// other table carries `ARROW_SCHEMA_VERSION` (`queuetruth.schemas.arrow.TABLE_VERSIONS`).
+pub const TABLE_VERSIONS: &[(&str, &str)] = &[
+    ("qt.conformal_sets", "1"),
+    ("qt.conformal_calibrator", "1"),
+    ("qt.ledger", "1"),
+];
+
+/// `qt.schema_version` of a table's files: its `TABLE_VERSIONS` entry, else `ARROW_SCHEMA_VERSION`.
+pub fn table_version(name: &str) -> &'static str {
+    TABLE_VERSIONS
+        .iter()
+        .find(|(n, _)| *n == name)
+        .map_or(ARROW_SCHEMA_VERSION, |(_, v)| *v)
+}
 
 /// Index in `qt.features` before which the dynamic float64 feature columns are inserted (after `side_sign`).
 pub const FEATURES_INSERT_AT: usize = 7;
@@ -676,15 +899,18 @@ fn data_type(t: Ty) -> DataType {
         Ty::Ts => ts_type(),
         Ty::Date => DataType::Date32,
         Ty::Dict => dict_type(),
+        Ty::Dict16 => DataType::Dictionary(Box::new(DataType::Int16), Box::new(DataType::Utf8)),
         Ty::ListStr => DataType::List(Arc::new(Field::new_list_field(DataType::Utf8, true))),
+        Ty::ListF64 => DataType::List(Arc::new(Field::new_list_field(DataType::Float64, true))),
+        Ty::ListI64 => DataType::List(Arc::new(Field::new_list_field(DataType::Int64, true))),
     }
 }
 
-/// Schema-level metadata of every table (SPEC 0.1).
+/// Schema-level metadata of every table (SPEC 0.1); `qt.schema_version` is `table_version(name)`.
 pub fn table_metadata(name: &str) -> std::collections::HashMap<String, String> {
     [
         ("qt.schema".to_owned(), name.to_owned()),
-        ("qt.schema_version".to_owned(), ARROW_SCHEMA_VERSION.to_owned()),
+        ("qt.schema_version".to_owned(), table_version(name).to_owned()),
         ("qt.engine_version".to_owned(), ENGINE_VERSION.to_owned()),
     ]
     .into_iter()

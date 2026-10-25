@@ -1,0 +1,520 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.bot_reconcile",
+  "$defs": {
+    "ReconcileOrder": {
+      "additionalProperties": false,
+      "description": "One row of the reconciliation: a live order, a simulator order, or a paired pair of them.",
+      "properties": {
+        "live_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Live Key"
+        },
+        "sim_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sim Key"
+        },
+        "instrument": {
+          "title": "Instrument",
+          "type": "string"
+        },
+        "side": {
+          "enum": [
+            "buy",
+            "sell"
+          ],
+          "title": "Side",
+          "type": "string"
+        },
+        "role": {
+          "title": "Role",
+          "type": "string"
+        },
+        "category": {
+          "enum": [
+            "match",
+            "missed_fill",
+            "extra_live_fill",
+            "partial_fill",
+            "price",
+            "timing",
+            "both_unfilled",
+            "stop_not_triggered",
+            "no_sim_twin",
+            "no_live_twin"
+          ],
+          "title": "Category",
+          "type": "string"
+        },
+        "issues": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Issues",
+          "type": "array"
+        },
+        "score_class": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Score Class"
+        },
+        "live_status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Live Status"
+        },
+        "sim_status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sim Status"
+        },
+        "qty": {
+          "title": "Qty",
+          "type": "string"
+        },
+        "live_limit_px": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Live Limit Px"
+        },
+        "sim_limit_px": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sim Limit Px"
+        },
+        "live_filled_qty": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Live Filled Qty"
+        },
+        "sim_filled_qty": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sim Filled Qty"
+        },
+        "live_avg_px": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Live Avg Px"
+        },
+        "sim_avg_px": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sim Avg Px"
+        },
+        "live_placed": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Live Placed"
+        },
+        "live_first_fill": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Live First Fill"
+        },
+        "sim_first_fill": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sim First Fill"
+        },
+        "fill_delay_ns": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fill Delay Ns"
+        },
+        "sim_price_advantage_bps": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sim Price Advantage Bps"
+        },
+        "sim_price_advantage_quote": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sim Price Advantage Quote"
+        },
+        "live_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Live Note"
+        },
+        "sim_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sim Note"
+        },
+        "explanation": {
+          "title": "Explanation",
+          "type": "string"
+        }
+      },
+      "required": [
+        "live_key",
+        "sim_key",
+        "instrument",
+        "side",
+        "role",
+        "category",
+        "issues",
+        "qty",
+        "explanation"
+      ],
+      "title": "ReconcileOrder",
+      "type": "object"
+    },
+    "ReconcileScore": {
+      "additionalProperties": false,
+      "description": "The `score` result the reconciliation ran (sim arm = the simulator log); `path` is relative to the\nreconciliation's output directory.",
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "headline": {
+          "title": "Headline",
+          "type": "string"
+        },
+        "n_orders": {
+          "title": "N Orders",
+          "type": "integer"
+        },
+        "n_matched": {
+          "title": "N Matched",
+          "type": "integer"
+        },
+        "n_unmatched_live": {
+          "title": "N Unmatched Live",
+          "type": "integer"
+        },
+        "n_unmatched_sim": {
+          "title": "N Unmatched Sim",
+          "type": "integer"
+        },
+        "two_by_two": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Two By Two",
+          "type": "object"
+        },
+        "fill_rate_bias": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Fill Rate Bias"
+        },
+        "n_clusters": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N Clusters"
+        },
+        "interpretable": {
+          "default": true,
+          "title": "Interpretable",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "path",
+        "run_id",
+        "headline",
+        "n_orders",
+        "n_matched",
+        "n_unmatched_live",
+        "n_unmatched_sim",
+        "two_by_two",
+        "fill_rate_bias"
+      ],
+      "title": "ReconcileScore",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`reconcile.json` (`qt.bot_reconcile`): counts, price advantage, the score result and every order row (sorted).\n`run_id` hashes the spec (`options`: every input as a sha256, every option) with the engine version (SPEC 7.3);\nthe log paths are relative to the output directory, so the document does not depend on where it was written.",
+  "properties": {
+    "schema": {
+      "const": "qt.bot_reconcile",
+      "default": "qt.bot_reconcile",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "kind": {
+      "enum": [
+        "freqtrade",
+        "hummingbot"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "run_id": {
+      "title": "Run Id",
+      "type": "string"
+    },
+    "live_log": {
+      "title": "Live Log",
+      "type": "string"
+    },
+    "sim_log": {
+      "title": "Sim Log",
+      "type": "string"
+    },
+    "n_live_orders": {
+      "title": "N Live Orders",
+      "type": "integer"
+    },
+    "n_sim_orders": {
+      "title": "N Sim Orders",
+      "type": "integer"
+    },
+    "n_paired": {
+      "title": "N Paired",
+      "type": "integer"
+    },
+    "pairing_coverage": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Pairing Coverage"
+    },
+    "counts": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "title": "Counts",
+      "type": "object"
+    },
+    "sim_price_advantage_quote": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Sim Price Advantage Quote",
+      "type": "object"
+    },
+    "missed_fill_notional": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Missed Fill Notional",
+      "type": "object"
+    },
+    "score": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ReconcileScore"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "score_error": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Score Error"
+    },
+    "options": {
+      "additionalProperties": true,
+      "title": "Options",
+      "type": "object"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    },
+    "orders": {
+      "items": {
+        "$ref": "#/$defs/ReconcileOrder"
+      },
+      "title": "Orders",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "kind",
+    "run_id",
+    "live_log",
+    "sim_log",
+    "n_live_orders",
+    "n_sim_orders",
+    "n_paired",
+    "counts",
+    "sim_price_advantage_quote",
+    "missed_fill_notional",
+    "warnings",
+    "orders"
+  ],
+  "type": "object"
+}

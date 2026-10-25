@@ -18,6 +18,7 @@ import pyarrow.compute as pc
 from queuetruth.dq.data import F_SNAPSHOT, UNDEF_PRICE, Dataset, PartRef
 from queuetruth.dq.framework import Check, chr_or, level, ratio
 from queuetruth.dq.model import DqCheck
+from queuetruth.errors import QtError
 
 STRICT = ("ts_event", "action", "side", "price", "size", "order_id")
 LOOSE = STRICT[1:]
@@ -36,9 +37,7 @@ def _table(ds: Dataset, ref: PartRef, exp: int, common: int) -> pa.Table:
     keep = (p["flags"] & F_SNAPSHOT) == 0
     px = p["price"][keep].astype(np.int64)
     if exp != common:
-        scale = 10 ** (exp - common)
-        undef = px == UNDEF_PRICE
-        px = np.where(undef, UNDEF_PRICE, px * scale)
+        px = _rescale(px, exp, common, ref)
     return pa.table(
         {
             "ts_event": p["ts_event"][keep].astype(np.int64),
@@ -49,6 +48,24 @@ def _table(ds: Dataset, ref: PartRef, exp: int, common: int) -> pa.Table:
             "order_id": p["order_id"][keep].astype(np.uint64),
         }
     )
+
+
+def _rescale(px: np.ndarray, exp: int, common: int, ref: PartRef) -> np.ndarray:
+    """Prices at `exp` -> prices at the finer `common` exponent; `QT-INPUT-004` when a defined price would leave
+    int64 (numpy multiplication wraps around silently; a factor past int64 does not even convert)."""
+    scale = 10 ** (exp - common)
+    undef = px == UNDEF_PRICE
+    lim = np.iinfo(np.int64).max // scale  # 0 when the factor itself is past int64
+    over = ~undef & ((px > lim) | (px < -lim))
+    if over.any():
+        raise QtError(
+            "QT-INPUT-004",
+            f"{ref.date} {ref.symbol}: price {int(px[over][0])} at price_exp {exp} does not fit int64 at the "
+            f"comparison's price_exp {common}",
+        )
+    if lim == 0:  # only zero (and undefined) prices remain
+        return np.where(undef, UNDEF_PRICE, 0).astype(np.int64)
+    return np.where(undef, UNDEF_PRICE, px * np.int64(scale))
 
 
 def _diff(a: pa.Table, b: pa.Table, keys: tuple[str, ...]) -> pa.Table:

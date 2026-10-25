@@ -1,0 +1,13 @@
+# queuetruth 0.1.0 | calibration 4291537475bc10f3 | NautilusTrader API as documented at develop 5247ad5 (verify names
+# for your version; newer builds expose FillModel under nautilus_trader.execution)
+# nt_queue_l2_prob_touch fitted on 2019-12-30; held-out 2020-01-30; data: nasdaq (real_data, dataset 1a00f70976b6)
+# fit: p = 0.871126 (nt_touch); 613 events from 1536 shadows; bootstrap CI [0.815821, 0.918708]; profile CI [-, -]
+# held-out: DOES NOT BEAT the default nt_queue_l2_prob_touch[mode=faithful;p=1] out of sample: WORSE at 100ms, 1s, 60s; MIXED (better on one score, worse on the other) at 10s; better at 5m (log loss at 100ms: fitted 0.00931521 vs default 0.00921134; Brier 0.000677924 vs 0.000666667)
+# !! NOT VALIDATED: `queuetruth export` refuses this calibration (`--force` writes it anyway). Reasons:
+# !!   - not_beating_default: DOES NOT BEAT the default nt_queue_l2_prob_touch[mode=faithful;p=1] out of sample: WORSE at 100ms, 1s, 60s; MIXED (better on one score, worse on the other) at 10s; better at 5m (log loss at 100ms: fitted 0.00931521 vs default 0.00921134; Brier 0.000677924 vs 0.000666667)
+# !! Do not paste these values into a production config without your own out-of-sample check.
+from nautilus_trader.backtest.models import FillModel
+fill_model = FillModel(prob_fill_on_limit=0.871126)
+# not fitted: prob_slippage, random_seed (set them as in your current FillModel)
+# latency_model: not fitted (no latency calibration in this result); keep your own LatencyModel
+# queue_position=True and trade_execution=True on the venue config when the fit was queue-gated (yes)

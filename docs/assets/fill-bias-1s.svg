@@ -1,0 +1,174 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 604" width="760" height="604" role="img" aria-labelledby="qt-title qt-desc">
+<title id="qt-title">Queue models against the exact replay: fill-rate bias at 1 s</title>
+<desc id="qt-desc">nt_prob_touch[p=1]: +3.08 pp on 2019-12-30, +2.50 pp on 2020-01-30; hbt_power2[n=2]: +0.04 pp on 2019-12-30, -0.60 pp on 2020-01-30; hbt_power3[n=1]: +0.04 pp on 2019-12-30, -0.68 pp on 2020-01-30; nt_queue_l2: +0.00 pp on 2019-12-30, -0.04 pp on 2020-01-30; databento_mc[k=-0.8]: -0.07 pp on 2019-12-30, -0.49 pp on 2020-01-30; databento_mc[k=-0.95]: -0.08 pp on 2019-12-30, -0.50 pp on 2020-01-30; hbt_power[n=2]: -0.08 pp on 2019-12-30, -0.68 pp on 2020-01-30; hbt_power[n=3]: -0.08 pp on 2019-12-30, -0.68 pp on 2020-01-30; hbt_log: -0.12 pp on 2019-12-30, -0.64 pp on 2020-01-30; hbt_power3[n=2]: -0.16 pp on 2019-12-30, -0.68 pp on 2020-01-30; hbt_log2: -0.28 pp on 2019-12-30, -0.71 pp on 2020-01-30; hbt_power3[n=3]: -0.28 pp on 2019-12-30, -0.71 pp on 2020-01-30; hbt_risk_adverse: -0.32 pp on 2019-12-30, -0.87 pp on 2020-01-30; hbt_l3_fifo (L3 input): -1.46 pp on 2019-12-30, -2.54 pp on 2020-01-30. Source: docs/RESULTS.md section 4, faithful table, 1 s columns. Not shown: the bounds front_of_queue and trade_through_only. Rendered by docs/assets/readme_chart.py.</desc>
+<style>.bg{fill:#fcfcfb}.t1{fill:#0b0b0b}.t2{fill:#52514e}.mu{fill:#6b6a65}
+.grid{stroke:#e1e0d9;stroke-width:1}.zero{stroke:#52514e;stroke-width:1.5}
+.d1{fill:#2a78d6}.d2{fill:#d0571f}.c1{stroke:#2a78d6}.c2{stroke:#d0571f}
+.ring{stroke:#fcfcfb;stroke-width:2}.ci{stroke-width:2;stroke-linecap:round}
+text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+@media (prefers-color-scheme:dark){
+.bg{fill:#1a1a19}.t1{fill:#f0efec}.t2{fill:#c3c2b7}.mu{fill:#a3a29b}
+.grid{stroke:#2c2c2a}.zero{stroke:#c3c2b7}
+.d1{fill:#3987e5}.d2{fill:#e06a37}.c1{stroke:#3987e5}.c2{stroke:#e06a37}.ring{stroke:#1a1a19}}</style>
+<rect class="bg" x="0" y="0" width="760" height="604" rx="8"/>
+<text class="t1" x="24" y="34" font-size="17" font-weight="600">How far queue models are from the exact replay</text>
+<text class="t2" x="24" y="56" font-size="13">Fill-rate bias at 1 s, model minus exact, in percentage points with day-block bootstrap 95% CI. Small</text>
+<text class="t2" x="24" y="74" font-size="13">orders at or near the touch of AAPL, MSFT, SPY and TSLA on two public Nasdaq TotalView-ITCH days,</text>
+<text class="t2" x="24" y="92" font-size="13">faithful mode.</text>
+<circle class="d1" cx="225" cy="113" r="5"/>
+<text class="t2" x="235" y="117.5" font-size="12.5">2019-12-30</text>
+<circle class="d2" cx="329" cy="113" r="5"/>
+<text class="t2" x="339" y="117.5" font-size="12.5">2020-01-30</text>
+<line class="grid" x1="220" y1="130" x2="220" y2="498"/>
+<text class="mu" x="220" y="515" font-size="12" text-anchor="middle">-4</text>
+<line class="grid" x1="277.5" y1="130" x2="277.5" y2="498"/>
+<text class="mu" x="277.5" y="515" font-size="12" text-anchor="middle">-3</text>
+<line class="grid" x1="335" y1="130" x2="335" y2="498"/>
+<text class="mu" x="335" y="515" font-size="12" text-anchor="middle">-2</text>
+<line class="grid" x1="392.5" y1="130" x2="392.5" y2="498"/>
+<text class="mu" x="392.5" y="515" font-size="12" text-anchor="middle">-1</text>
+<text class="mu" x="450" y="515" font-size="12" text-anchor="middle">0</text>
+<line class="grid" x1="507.5" y1="130" x2="507.5" y2="498"/>
+<text class="mu" x="507.5" y="515" font-size="12" text-anchor="middle">+1</text>
+<line class="grid" x1="565" y1="130" x2="565" y2="498"/>
+<text class="mu" x="565" y="515" font-size="12" text-anchor="middle">+2</text>
+<line class="grid" x1="622.5" y1="130" x2="622.5" y2="498"/>
+<text class="mu" x="622.5" y="515" font-size="12" text-anchor="middle">+3</text>
+<line class="grid" x1="680" y1="130" x2="680" y2="498"/>
+<text class="mu" x="680" y="515" font-size="12" text-anchor="middle">+4</text>
+<line class="zero" x1="450" y1="130" x2="450" y2="498"/>
+<text class="mu" x="220" y="533" font-size="12">underfills (pessimistic)</text>
+<text class="mu" x="680" y="533" font-size="12" text-anchor="end">overfills (optimistic)</text>
+<text class="t2" x="450" y="533" font-size="12" text-anchor="middle" font-weight="600">exact = 0</text>
+<text class="t1 mono" x="208" y="151" font-size="12.5" text-anchor="end">nt_prob_touch[p=1]</text>
+<g><title>nt_prob_touch[p=1], 2019-12-30: +3.08 pp [+2.39, +3.77]</title>
+<line class="ci c1" x1="587.4" y1="143" x2="666.8" y2="143"/>
+<circle class="d1 ring" cx="627.1" cy="143" r="4.5"/>
+</g>
+<g><title>nt_prob_touch[p=1], 2020-01-30: +2.50 pp [+1.81, +3.21]</title>
+<line class="ci c2" x1="554.1" y1="151" x2="634.6" y2="151"/>
+<circle class="d2 ring" cx="593.8" cy="151" r="4.5"/>
+</g>
+<text class="t1" x="546.1" y="151" font-size="12.5" font-weight="600" text-anchor="end">+3.08 / +2.50 pp</text>
+<text class="t1 mono" x="208" y="177" font-size="12.5" text-anchor="end">hbt_power2[n=2]</text>
+<g><title>hbt_power2[n=2], 2019-12-30: +0.04 pp [-0.31, +0.40]</title>
+<line class="ci c1" x1="432.2" y1="169" x2="473" y2="169"/>
+<circle class="d1 ring" cx="452.3" cy="169" r="4.5"/>
+</g>
+<g><title>hbt_power2[n=2], 2020-01-30: -0.60 pp [-1.06, -0.17]</title>
+<line class="ci c2" x1="389" y1="177" x2="440.2" y2="177"/>
+<circle class="d2 ring" cx="415.5" cy="177" r="4.5"/>
+</g>
+<text class="t1 mono" x="208" y="203" font-size="12.5" text-anchor="end">hbt_power3[n=1]</text>
+<g><title>hbt_power3[n=1], 2019-12-30: +0.04 pp [-0.31, +0.40]</title>
+<line class="ci c1" x1="432.2" y1="195" x2="473" y2="195"/>
+<circle class="d1 ring" cx="452.3" cy="195" r="4.5"/>
+</g>
+<g><title>hbt_power3[n=1], 2020-01-30: -0.68 pp [-1.10, -0.28]</title>
+<line class="ci c2" x1="386.8" y1="203" x2="433.9" y2="203"/>
+<circle class="d2 ring" cx="410.9" cy="203" r="4.5"/>
+</g>
+<text class="t1 mono" x="208" y="229" font-size="12.5" text-anchor="end">nt_queue_l2</text>
+<g><title>nt_queue_l2, 2019-12-30: +0.00 pp [+0.00, +0.00]</title>
+<line class="ci c1" x1="450" y1="221" x2="450" y2="221"/>
+<circle class="d1 ring" cx="450" cy="221" r="4.5"/>
+</g>
+<g><title>nt_queue_l2, 2020-01-30: -0.04 pp [-0.12, +0.00]</title>
+<line class="ci c2" x1="443.1" y1="229" x2="450" y2="229"/>
+<circle class="d2 ring" cx="447.7" cy="229" r="4.5"/>
+</g>
+<text class="t1 mono" x="208" y="255" font-size="12.5" text-anchor="end">databento_mc[k=-0.8]</text>
+<g><title>databento_mc[k=-0.8], 2019-12-30: -0.07 pp [-0.35, +0.22]</title>
+<line class="ci c1" x1="429.9" y1="247" x2="462.6" y2="247"/>
+<circle class="d1 ring" cx="446" cy="247" r="4.5"/>
+</g>
+<g><title>databento_mc[k=-0.8], 2020-01-30: -0.49 pp [-0.96, -0.06]</title>
+<line class="ci c2" x1="394.8" y1="255" x2="446.5" y2="255"/>
+<circle class="d2 ring" cx="421.8" cy="255" r="4.5"/>
+</g>
+<text class="t1 mono" x="208" y="281" font-size="12.5" text-anchor="end">databento_mc[k=-0.95]</text>
+<g><title>databento_mc[k=-0.95], 2019-12-30: -0.08 pp [-0.35, +0.20]</title>
+<line class="ci c1" x1="429.9" y1="273" x2="461.5" y2="273"/>
+<circle class="d1 ring" cx="445.4" cy="273" r="4.5"/>
+</g>
+<g><title>databento_mc[k=-0.95], 2020-01-30: -0.50 pp [-0.98, -0.08]</title>
+<line class="ci c2" x1="393.6" y1="281" x2="445.4" y2="281"/>
+<circle class="d2 ring" cx="421.2" cy="281" r="4.5"/>
+</g>
+<text class="t1 mono" x="208" y="307" font-size="12.5" text-anchor="end">hbt_power[n=2]</text>
+<g><title>hbt_power[n=2], 2019-12-30: -0.08 pp [-0.36, +0.20]</title>
+<line class="ci c1" x1="429.3" y1="299" x2="461.5" y2="299"/>
+<circle class="d1 ring" cx="445.4" cy="299" r="4.5"/>
+</g>
+<g><title>hbt_power[n=2], 2020-01-30: -0.68 pp [-1.10, -0.28]</title>
+<line class="ci c2" x1="386.8" y1="307" x2="433.9" y2="307"/>
+<circle class="d2 ring" cx="410.9" cy="307" r="4.5"/>
+</g>
+<text class="t1 mono" x="208" y="333" font-size="12.5" text-anchor="end">hbt_power[n=3]</text>
+<g><title>hbt_power[n=3], 2019-12-30: -0.08 pp [-0.36, +0.20]</title>
+<line class="ci c1" x1="429.3" y1="325" x2="461.5" y2="325"/>
+<circle class="d1 ring" cx="445.4" cy="325" r="4.5"/>
+</g>
+<g><title>hbt_power[n=3], 2020-01-30: -0.68 pp [-1.10, -0.28]</title>
+<line class="ci c2" x1="386.8" y1="333" x2="433.9" y2="333"/>
+<circle class="d2 ring" cx="410.9" cy="333" r="4.5"/>
+</g>
+<text class="t1 mono" x="208" y="359" font-size="12.5" text-anchor="end">hbt_log</text>
+<g><title>hbt_log, 2019-12-30: -0.12 pp [-0.38, +0.16]</title>
+<line class="ci c1" x1="428.1" y1="351" x2="459.2" y2="351"/>
+<circle class="d1 ring" cx="443.1" cy="351" r="4.5"/>
+</g>
+<g><title>hbt_log, 2020-01-30: -0.64 pp [-1.09, -0.23]</title>
+<line class="ci c2" x1="387.3" y1="359" x2="436.8" y2="359"/>
+<circle class="d2 ring" cx="413.2" cy="359" r="4.5"/>
+</g>
+<text class="t1 mono" x="208" y="385" font-size="12.5" text-anchor="end">hbt_power3[n=2]</text>
+<g><title>hbt_power3[n=2], 2019-12-30: -0.16 pp [-0.39, +0.08]</title>
+<line class="ci c1" x1="427.6" y1="377" x2="454.6" y2="377"/>
+<circle class="d1 ring" cx="440.8" cy="377" r="4.5"/>
+</g>
+<g><title>hbt_power3[n=2], 2020-01-30: -0.68 pp [-1.10, -0.28]</title>
+<line class="ci c2" x1="386.8" y1="385" x2="433.9" y2="385"/>
+<circle class="d2 ring" cx="410.9" cy="385" r="4.5"/>
+</g>
+<text class="t1 mono" x="208" y="411" font-size="12.5" text-anchor="end">hbt_log2</text>
+<g><title>hbt_log2, 2019-12-30: -0.28 pp [-0.49, -0.08]</title>
+<line class="ci c1" x1="421.8" y1="403" x2="445.4" y2="403"/>
+<circle class="d1 ring" cx="433.9" cy="403" r="4.5"/>
+</g>
+<g><title>hbt_log2, 2020-01-30: -0.71 pp [-1.13, -0.34]</title>
+<line class="ci c2" x1="385" y1="411" x2="430.5" y2="411"/>
+<circle class="d2 ring" cx="409.2" cy="411" r="4.5"/>
+</g>
+<text class="t1 mono" x="208" y="437" font-size="12.5" text-anchor="end">hbt_power3[n=3]</text>
+<g><title>hbt_power3[n=3], 2019-12-30: -0.28 pp [-0.49, -0.08]</title>
+<line class="ci c1" x1="421.8" y1="429" x2="445.4" y2="429"/>
+<circle class="d1 ring" cx="433.9" cy="429" r="4.5"/>
+</g>
+<g><title>hbt_power3[n=3], 2020-01-30: -0.71 pp [-1.13, -0.34]</title>
+<line class="ci c2" x1="385" y1="437" x2="430.5" y2="437"/>
+<circle class="d2 ring" cx="409.2" cy="437" r="4.5"/>
+</g>
+<text class="t1 mono" x="208" y="463" font-size="12.5" text-anchor="end">hbt_risk_adverse</text>
+<g><title>hbt_risk_adverse, 2019-12-30: -0.32 pp [-0.52, -0.12]</title>
+<line class="ci c1" x1="420.1" y1="455" x2="443.1" y2="455"/>
+<circle class="d1 ring" cx="431.6" cy="455" r="4.5"/>
+</g>
+<g><title>hbt_risk_adverse, 2020-01-30: -0.87 pp [-1.26, -0.51]</title>
+<line class="ci c2" x1="377.6" y1="463" x2="420.7" y2="463"/>
+<circle class="d2 ring" cx="400" cy="463" r="4.5"/>
+</g>
+<text class="t1 mono" x="208" y="489" font-size="12.5" text-anchor="end">hbt_l3_fifo (L3 input)</text>
+<g><title>hbt_l3_fifo, 2019-12-30: -1.46 pp [-1.96, -0.91]</title>
+<line class="ci c1" x1="337.3" y1="481" x2="397.7" y2="481"/>
+<circle class="d1 ring" cx="366.1" cy="481" r="4.5"/>
+</g>
+<g><title>hbt_l3_fifo, 2020-01-30: -2.54 pp [-3.33, -1.84]</title>
+<line class="ci c2" x1="258.5" y1="489" x2="344.2" y2="489"/>
+<circle class="d2 ring" cx="303.9" cy="489" r="4.5"/>
+</g>
+<text class="mu" x="24" y="558" font-size="11.5">Source: docs/RESULTS.md section 4, faithful table, 1 s columns. Not shown: the bounds front_of_queue and</text>
+<text class="mu" x="24" y="574" font-size="11.5">trade_through_only.</text>
+<text class="mu" x="24" y="590" font-size="11.5">Rendered by docs/assets/readme_chart.py.</text>
+</svg>

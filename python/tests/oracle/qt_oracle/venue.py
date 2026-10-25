@@ -47,12 +47,17 @@ _ALIASES = {
 }
 
 
+def venue_key(name: str) -> str:
+    """The canonical venue name of an alias (SPEC 3.1), lower case; unknown names are returned lower-cased."""
+    return _ALIASES.get(name.lower(), name.lower())
+
+
 def venue_facts(
     name: str, *, open_s: int | None = None, close_s: int | None = None, cross_window_s: float = 1.0
 ) -> VenueFacts:
     """Facts for a venue name (SPEC 3.1 aliases). Nasdaq gets cross windows `[open, open + w)` and
     `[close, close + w)` when the session times are known."""
-    key = _ALIASES.get(name.lower(), name.lower())
+    key = venue_key(name)
     if key not in _FACTS:
         raise ValueError(f"unknown venue {name!r}")
     f = _FACTS[key]

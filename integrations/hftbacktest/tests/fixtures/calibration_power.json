@@ -1,0 +1,253 @@
+{
+  "schema": "qt.calibration_result",
+  "schema_version": 1,
+  "run_id": "51ddb045010023a4",
+  "spec": {
+    "kind": "alloc",
+    "family": "power",
+    "dataset": {
+      "path": ".realdata/ds/nasdaq-2d"
+    },
+    "shadows": {
+      "path": ".realdata/shadows/2d-sampled-6000.parquet"
+    },
+    "live": null,
+    "train": {
+      "dates": [
+        "2019-12-30"
+      ],
+      "blocks": null
+    },
+    "test": {
+      "dates": [
+        "2020-01-30"
+      ],
+      "blocks": null
+    },
+    "mode": "faithful",
+    "exchange": "partial",
+    "l2": {
+      "depth_levels": 10,
+      "cadence_ns": 0,
+      "trade_position": "before",
+      "include_counts": true,
+      "emit_hidden_trades": true
+    },
+    "horizons_ns": [
+      100000000,
+      1000000000,
+      10000000000,
+      60000000000
+    ],
+    "h_max_ns": 300000000000,
+    "grid": {
+      "alloc": {
+        "lo": -3.0,
+        "hi": 4.0,
+        "n": 141
+      },
+      "databento": {
+        "lo": -0.99,
+        "hi": 0.99,
+        "n": 199
+      },
+      "survival": {
+        "lo": -0.98,
+        "hi": 0.9,
+        "n": 25
+      }
+    },
+    "bootstrap": {
+      "b": 200,
+      "block": "auto",
+      "seed": 0
+    },
+    "particles": 100,
+    "seed": 0
+  },
+  "kind": "alloc",
+  "family": "power",
+  "mode": "faithful",
+  "param_name": "n",
+  "estimate": 1.1669972121485657,
+  "ci_profile": [
+    1.1655333101828156,
+    1.1684624416056324
+  ],
+  "ci_bootstrap": [
+    1.0649216590264912,
+    1.260020392137276
+  ],
+  "loglik": -4156096.599934056,
+  "n_events": 58620,
+  "n_shadows": 2398,
+  "train": {
+    "dates": [
+      "2019-12-30"
+    ],
+    "blocks": null
+  },
+  "test": {
+    "dates": [
+      "2020-01-30"
+    ],
+    "blocks": null
+  },
+  "held_out": {
+    "hbt_power[exch=partial;mode=faithful;n=1.1669972121485657]": {
+      "brier": {
+        "100000000": 0.001334668001334668,
+        "1000000000": 0.009424436216762033,
+        "10000000000": 0.01633078526754691,
+        "60000000000": 0.007165890361877463,
+        "300000000000": 0.003294289897510981
+      },
+      "logloss": {
+        "100000000": 0.018440118529647546,
+        "1000000000": 0.13020438863152792,
+        "10000000000": 0.22561911995319778,
+        "60000000000": 0.09900142678626646,
+        "300000000000": 0.04551329356622444
+      },
+      "fill_rate_bias": {
+        "100000000": -0.0013346680013346345,
+        "1000000000": -0.004712218108381017,
+        "10000000000": -0.00590687977762705,
+        "60000000000": -0.0021497671085797254,
+        "300000000000": -0.00036603221081144
+      }
+    }
+  },
+  "baseline_held_out": {
+    "hbt_power[exch=partial;mode=faithful;n=2]": {
+      "brier": {
+        "100000000": 0.001334668001334668,
+        "1000000000": 0.009761023224503534,
+        "10000000000": 0.015635858234885336,
+        "60000000000": 0.007524184879971337,
+        "300000000000": 0.003294289897510981
+      },
+      "logloss": {
+        "100000000": 0.018440118529647546,
+        "1000000000": 0.1348545096540574,
+        "10000000000": 0.21601834889139435,
+        "60000000000": 0.10395144812555843,
+        "300000000000": 0.04551329356622441
+      },
+      "fill_rate_bias": {
+        "100000000": -0.0013346680013346345,
+        "1000000000": -0.0043756311006395154,
+        "10000000000": -0.006601806810288657,
+        "60000000000": -0.0025080616266736078,
+        "300000000000": -0.00036603221081144
+      }
+    }
+  },
+  "stratified": [
+    {
+      "stratum_kind": "instrument",
+      "stratum": "13",
+      "estimate": 1.0329726555128664,
+      "ci_lo": 1.0251475240785075,
+      "ci_hi": 1.0408301103394246,
+      "n": 3767
+    },
+    {
+      "stratum_kind": "instrument",
+      "stratum": "5291",
+      "estimate": 1.0192640282653953,
+      "ci_lo": 1.0168353940906076,
+      "ci_hi": 1.0216956270745203,
+      "n": 25174
+    },
+    {
+      "stratum_kind": "instrument",
+      "stratum": "7451",
+      "estimate": 1.2580170124214745,
+      "ci_lo": 1.256085057744576,
+      "ci_hi": 1.2599514676068502,
+      "n": 29118
+    },
+    {
+      "stratum_kind": "distance_ticks",
+      "stratum": "0",
+      "estimate": 1.07892357985256,
+      "ci_lo": 1.0766228038848704,
+      "ci_hi": 1.0812271304856613,
+      "n": 22081
+    },
+    {
+      "stratum_kind": "distance_ticks",
+      "stratum": "1",
+      "estimate": 1.0737029879142792,
+      "ci_lo": 1.0708410775177035,
+      "ci_hi": 1.0765690579139033,
+      "n": 11685
+    },
+    {
+      "stratum_kind": "distance_ticks",
+      "stratum": "2+",
+      "estimate": 1.3177745872743307,
+      "ci_lo": 1.3152285746694259,
+      "ci_hi": 1.320323920086615,
+      "n": 24854
+    }
+  ],
+  "latency": null,
+  "exports": {
+    "hftbacktest": {
+      "python": "# queuetruth 0.1.1 | calibration 51ddb045010023a4 | power fitted on 2019-12-30; held-out 2020-01-30\n# data: nasdaq (real_data, dataset 68913f7d28f1)\n# fit: n = 1.167 (alloc); 58620 events from 2398 shadows; bootstrap CI [1.06492, 1.26002]; profile CI [1.16553, 1.16846]\n# held-out: DOES NOT BEAT the default hbt_power[exch=partial;mode=faithful;n=2] out of sample: WORSE at 10s; better at 1s, 60s; tie at 100ms, 5m (log loss at 10s: fitted 0.225619 vs default 0.216018; Brier 0.0163308 vs 0.0156359)\n# note (heterogeneous_strata): instrument 13 has n in [1.02515, 1.04083] and instrument 5291 in [1.01684, 1.0217] (disjoint): one pooled n does not describe both; see `stratified`\n# !! NOT VALIDATED: `queuetruth export` refuses this calibration (`--force` writes it anyway). Reasons:\n# !!   - not_beating_default: DOES NOT BEAT the default hbt_power[exch=partial;mode=faithful;n=2] out of sample: WORSE at 10s; better at 1s, 60s; tie at 100ms, 5m (log loss at 10s: fitted 0.225619 vs default 0.216018; Brier 0.0163308 vs 0.0156359)\n# !! Do not paste these values into a production config without your own out-of-sample check.\n# Paste into your existing BacktestAsset chain (keep your data/tick/lot/fee settings).\nfrom hftbacktest import BacktestAsset\nasset = (\n    BacktestAsset()\n    # ... your existing .data(...), .tick_size(...), .lot_size(...), fee model ...\n    .power_prob_queue_model(1.167)\n    .partial_fill_exchange()\n)\n",
+      "notes": [
+        "no latency calibration: keep your existing latency model (intp_order_latency line omitted).",
+        "NOT VALIDATED: `queuetruth export` refuses this calibration (not_beating_default); see the snippet header.",
+        "hftbacktest #316/#312: released versions apply partial fills of resting orders to position only when the order completes, and a fill exactly equal to leaves can raise InvalidOrderStatus; check partial-fill accounting in your version before comparing fill quantities.",
+        "The fit used this L2 view of its data source: top 10 levels, unconflated (every book event). The parameter is specific to that feed, depth and conflation: if your backtest runs on conflated L2 or another depth, refit on that view."
+      ]
+    },
+    "nautilus": {
+      "python": "# queuetruth 0.1.1 | calibration 51ddb045010023a4 | NautilusTrader API as documented at develop 5247ad5 (verify names\n# for your version; newer builds expose FillModel under nautilus_trader.execution)\n# power fitted on 2019-12-30; held-out 2020-01-30; data: nasdaq (real_data, dataset 68913f7d28f1)\n# fit: n = 1.167 (alloc); 58620 events from 2398 shadows; bootstrap CI [1.06492, 1.26002]; profile CI [1.16553, 1.16846]\n# held-out: DOES NOT BEAT the default hbt_power[exch=partial;mode=faithful;n=2] out of sample: WORSE at 10s; better at 1s, 60s; tie at 100ms, 5m (log loss at 10s: fitted 0.225619 vs default 0.216018; Brier 0.0163308 vs 0.0156359)\n# note (heterogeneous_strata): instrument 13 has n in [1.02515, 1.04083] and instrument 5291 in [1.01684, 1.0217] (disjoint): one pooled n does not describe both; see `stratified`\n# !! NOT VALIDATED: `queuetruth export` refuses this calibration (`--force` writes it anyway). Reasons:\n# !!   - not_beating_default: DOES NOT BEAT the default hbt_power[exch=partial;mode=faithful;n=2] out of sample: WORSE at 10s; better at 1s, 60s; tie at 100ms, 5m (log loss at 10s: fitted 0.225619 vs default 0.216018; Brier 0.0163308 vs 0.0156359)\n# !! Do not paste these values into a production config without your own out-of-sample check.\n# nothing fitted for NautilusTrader in this calibration: no import or constructor is emitted\n# fill_model: prob_fill_on_limit not fitted (power has no NautilusTrader fill-probability equivalent); keep your own FillModel\n# fill_model = FillModel(prob_fill_on_limit=1)  # NautilusTrader default, NOT fitted\n# latency_model: not fitted (no latency calibration in this result); keep your own LatencyModel\n# queue_position=True and trade_execution=True on the venue config when the fit was queue-gated (no)\n",
+      "notes": [
+        "prob_fill_on_limit not fitted (power has no NautilusTrader fill-probability equivalent): no FillModel line is emitted, keep your own; use queue_position=True for an L2 queue tracker.",
+        "latency not fitted (no latency calibration in this result): no LatencyModel line is emitted; set it from your own measurements.",
+        "NOT VALIDATED: `queuetruth export` refuses this calibration (not_beating_default); see the snippet header.",
+        "High-level BacktestVenueConfig accepts built-in fill/latency models only; pass these objects to BacktestEngine.add_venue(...) when your version requires it."
+      ]
+    },
+    "latency_npz": null
+  },
+  "data_sources": [
+    {
+      "dataset_id": "68913f7d28f1f74ed0f55728e6ebe0c008b7d40b50db11a7de6ec31cb87e22ef",
+      "venue": "nasdaq",
+      "source_venue": "nasdaq",
+      "validation_status": "real_data"
+    }
+  ],
+  "warnings": [
+    "trust: heterogeneous_strata: instrument 13 has n in [1.02515, 1.04083] and instrument 5291 in [1.01684, 1.0217] (disjoint): one pooled n does not describe both; see `stratified`",
+    "info: comparison quasi log likelihood hbt_log = -5790712.581696745 (58620 events)",
+    "info: comparison quasi log likelihood hbt_log2 = -1919225.1289633897 (58620 events)",
+    "held_out: fitted hbt_power[exch=partial;mode=faithful;n=1.1669972121485657] vs default hbt_power[exch=partial;mode=faithful;n=2] on 30000 test prediction rows",
+    "held_out: hbt_312_abort: hbt_power[exch=partial;mode=faithful;n=1.1669972121485657]: 457 of 6000 shadow pair(s) aborted at the #312 InvalidOrderStatus event (faithful hftbacktest stops there), first at shadow s13_20191230_000044 ts 1577717568473268770; their predictions from the abort on carry status hbt_312_abort and are left out of the metrics",
+    "held_out: hbt_312_abort: hbt_power[exch=partial;mode=faithful;n=2]: 403 of 6000 shadow pair(s) aborted at the #312 InvalidOrderStatus event (faithful hftbacktest stops there), first at shadow s13_20191230_000044 ts 1577717568473268770; their predictions from the abort on carry status hbt_312_abort and are left out of the metrics",
+    "trust: beats_default: 100000000=tie,1000000000=better,10000000000=worse,60000000000=better,300000000000=tie (DOES NOT BEAT the default hbt_power[exch=partial;mode=faithful;n=2] out of sample: WORSE at 10s; better at 1s, 60s; tie at 100ms, 5m (log loss at 10s: fitted 0.225619 vs default 0.216018; Brier 0.0163308 vs 0.0156359))",
+    "trust: verdict: refused (not_beating_default)"
+  ],
+  "held_out_discordance": null,
+  "trust": {
+    "verdict": "refused",
+    "reasons": [
+      "not_beating_default"
+    ],
+    "flags": [
+      "heterogeneous_strata"
+    ],
+    "beats_default": {
+      "100000000": "tie",
+      "1000000000": "better",
+      "10000000000": "worse",
+      "60000000000": "better",
+      "300000000000": "tie"
+    }
+  }
+}

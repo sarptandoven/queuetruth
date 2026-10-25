@@ -1,0 +1,33 @@
+{
+ "id": "123456",
+ "question": "Will the demo event happen?",
+ "conditionId": "0x5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e",
+ "slug": "will-the-demo-event-happen",
+ "version": "v1",
+ "outcomes": "[\"Yes\", \"No\"]",
+ "outcomePrices": "[\"0.45\", \"0.55\"]",
+ "clobTokenIds": "[\"48230119864057241947752938604731125541089712355090447216983571920448812350017\", \"91326675520183942265113350876220495101937735418702334465180987442155209960443\"]",
+ "orderPriceMinTickSize": 0.01,
+ "orderMinSize": 5,
+ "negRisk": false,
+ "feesEnabled": true,
+ "feeSchedule": {
+  "rate": 0.04,
+  "exponent": 1,
+  "takerOnly": true,
+  "rebateRate": 0.25
+ },
+ "rewardsMinSize": 20,
+ "rewardsMaxSpread": 3,
+ "clobRewards": [
+  {
+   "id": "77",
+   "conditionId": "0x5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e",
+   "assetAddress": "0x9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c9c",
+   "rewardsAmount": 1550,
+   "rewardsDailyRate": 50,
+   "startDate": "2026-10-01",
+   "endDate": "2026-10-31"
+  }
+ ]
+}

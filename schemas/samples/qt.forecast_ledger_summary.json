@@ -1,0 +1,45 @@
+{
+  "sample": {
+    "schema": "qt.forecast_ledger_summary",
+    "schema_version": 1,
+    "action": "commit",
+    "ledger": "x",
+    "engine_version": "x",
+    "appended": 1,
+    "entries": [
+      {
+        "seq": 1,
+        "type": "forecast",
+        "question_id": "x",
+        "forecaster": "x",
+        "entry_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      }
+    ],
+    "entries_truncated": true,
+    "commitment": {
+      "schema": "qt.forecast_commitment",
+      "schema_version": 1,
+      "ledger_id": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "head_seq": 1,
+      "head_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "head_recorded_at_ns": 1,
+      "n_entries": 1,
+      "n_forecasts": 1,
+      "n_resolutions": 1,
+      "hash_alg": "sha256",
+      "chain_rule": "x",
+      "engine_version": "x"
+    },
+    "verified": true,
+    "problems": [
+      {
+        "seq": 1,
+        "line": 1,
+        "problem": "x"
+      }
+    ],
+    "warnings": [
+      "x"
+    ]
+  }
+}

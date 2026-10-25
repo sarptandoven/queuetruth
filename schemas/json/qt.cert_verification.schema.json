@@ -1,0 +1,297 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.cert_verification",
+  "$defs": {
+    "Check": {
+      "additionalProperties": false,
+      "description": "One verification check: `fail` makes the verdict fail; `warn` does not.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "pass",
+            "warn",
+            "fail",
+            "skip"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "details": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Details",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "status",
+        "summary"
+      ],
+      "title": "Check",
+      "type": "object"
+    },
+    "CheckCounts": {
+      "additionalProperties": false,
+      "description": "Checks per status.",
+      "properties": {
+        "pass": {
+          "title": "Pass",
+          "type": "integer"
+        },
+        "warn": {
+          "title": "Warn",
+          "type": "integer"
+        },
+        "fail": {
+          "title": "Fail",
+          "type": "integer"
+        },
+        "skip": {
+          "title": "Skip",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "pass",
+        "warn",
+        "fail",
+        "skip"
+      ],
+      "title": "CheckCounts",
+      "type": "object"
+    },
+    "RunVerification": {
+      "additionalProperties": false,
+      "description": "Per-run outcome: `rerun` is `identical`, `equivalent` (every output identical or, for JSON and Parquet,\nequal within the SPEC 7.2 cross-platform tolerance of 4 ulp on floating-point values), `differs`, `failed`,\n`skipped` (an integrity, signature or key-pin check failed) or `not_run`.",
+      "properties": {
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Run Id"
+        },
+        "inputs_ok": {
+          "title": "Inputs Ok",
+          "type": "boolean"
+        },
+        "outputs_ok": {
+          "title": "Outputs Ok",
+          "type": "boolean"
+        },
+        "binding_ok": {
+          "title": "Binding Ok",
+          "type": "boolean"
+        },
+        "rerun": {
+          "enum": [
+            "identical",
+            "equivalent",
+            "differs",
+            "failed",
+            "skipped",
+            "not_run"
+          ],
+          "title": "Rerun",
+          "type": "string"
+        },
+        "differing": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Differing",
+          "type": "array"
+        },
+        "within_tolerance": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Within Tolerance",
+          "type": "array"
+        }
+      },
+      "required": [
+        "label",
+        "kind",
+        "run_id",
+        "inputs_ok",
+        "outputs_ok",
+        "binding_ok",
+        "rerun"
+      ],
+      "title": "RunVerification",
+      "type": "object"
+    },
+    "VerifiedCertificate": {
+      "additionalProperties": false,
+      "description": "What was verified.",
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "certificate_id": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{16}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Certificate Id"
+        },
+        "body_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Body Sha256"
+        },
+        "issued_at": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Issued At"
+        },
+        "signed": {
+          "title": "Signed",
+          "type": "boolean"
+        },
+        "key_fingerprint": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Key Fingerprint"
+        },
+        "key_trusted": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Key Trusted"
+        }
+      },
+      "required": [
+        "path",
+        "certificate_id",
+        "body_sha256",
+        "issued_at",
+        "signed",
+        "key_fingerprint",
+        "key_trusted"
+      ],
+      "title": "VerifiedCertificate",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`qt.cert_verification` (`queuetruth verify-cert`): `status` is `fail` when any check failed.",
+  "properties": {
+    "schema": {
+      "const": "qt.cert_verification",
+      "default": "qt.cert_verification",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "certificate": {
+      "$ref": "#/$defs/VerifiedCertificate"
+    },
+    "rerun": {
+      "title": "Rerun",
+      "type": "boolean"
+    },
+    "status": {
+      "enum": [
+        "pass",
+        "fail"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "counts": {
+      "$ref": "#/$defs/CheckCounts"
+    },
+    "checks": {
+      "items": {
+        "$ref": "#/$defs/Check"
+      },
+      "title": "Checks",
+      "type": "array"
+    },
+    "runs": {
+      "items": {
+        "$ref": "#/$defs/RunVerification"
+      },
+      "title": "Runs",
+      "type": "array"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "certificate",
+    "rerun",
+    "status",
+    "counts",
+    "checks",
+    "runs"
+  ],
+  "type": "object"
+}

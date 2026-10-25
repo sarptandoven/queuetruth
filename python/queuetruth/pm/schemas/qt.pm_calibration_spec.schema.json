@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.pm_calibration_spec",
+  "$defs": {
+    "PathRef": {
+      "additionalProperties": false,
+      "description": "Local path reference (CLI, Python API, MCP local mode).",
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "PathRef",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`pm calibrate`: queue-position models against Kalshi's official queue positions, and the queue truth at\neach own maker fill (both venues).",
+  "properties": {
+    "pm": {
+      "$ref": "#/$defs/PathRef"
+    },
+    "out": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Out"
+    },
+    "families": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Families",
+      "type": "array"
+    },
+    "atomic": {
+      "default": true,
+      "title": "Atomic",
+      "type": "boolean"
+    },
+    "loss": {
+      "default": "rmse",
+      "enum": [
+        "rmse",
+        "mae"
+      ],
+      "title": "Loss",
+      "type": "string"
+    },
+    "grid_lo": {
+      "default": -4.0,
+      "title": "Grid Lo",
+      "type": "number"
+    },
+    "grid_hi": {
+      "default": 4.0,
+      "title": "Grid Hi",
+      "type": "number"
+    },
+    "grid_n": {
+      "default": 33,
+      "maximum": 401,
+      "minimum": 2,
+      "title": "Grid N",
+      "type": "integer"
+    },
+    "train_fraction": {
+      "default": 0.5,
+      "exclusiveMaximum": 1.0,
+      "exclusiveMinimum": 0.0,
+      "title": "Train Fraction",
+      "type": "number"
+    },
+    "sample_time": {
+      "default": "mid",
+      "enum": [
+        "recv",
+        "mid"
+      ],
+      "title": "Sample Time",
+      "type": "string"
+    },
+    "bootstrap_b": {
+      "default": 500,
+      "minimum": 0,
+      "title": "Bootstrap B",
+      "type": "integer"
+    },
+    "seed": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Seed",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "pm"
+  ],
+  "type": "object"
+}

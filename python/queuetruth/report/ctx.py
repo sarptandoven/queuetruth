@@ -15,7 +15,8 @@ MAX_POSITION_POINTS = 2000
 MAX_POSITION_TABLE_ROWS = 200
 MAX_POSITION_INSTRUMENTS = 12
 MAX_WHY_EVENTS = 300
-FULL_RELIABILITY_MODELS = 6
+#: Reliability diagrams of the first N models in leaderboard order are shown open; the rest are collapsed.
+OPEN_RELIABILITY_MODELS = 1
 
 
 @dataclass

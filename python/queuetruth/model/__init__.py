@@ -5,7 +5,8 @@ from __future__ import annotations
 from queuetruth.model._common import model_feature_names
 from queuetruth.model.card import assemble_card, fit_hazard
 from queuetruth.model.climatology import Climatology
-from queuetruth.model.hazard import HazardModel
+from queuetruth.model.hazard import HazardModel, model_sha256
+from queuetruth.model.persist import LegacyPickleWarning, TreeEnsemble
 from queuetruth.model.person_period import expand_person_period
 from queuetruth.model.scoring import (
     CensoringKM,
@@ -24,6 +25,8 @@ __all__ = [
     "CensoringKM",
     "Climatology",
     "HazardModel",
+    "LegacyPickleWarning",
+    "TreeEnsemble",
     "assemble_card",
     "auc_at",
     "c_index_uno",
@@ -36,6 +39,7 @@ __all__ = [
     "ipcw_logloss",
     "make_split",
     "model_feature_names",
+    "model_sha256",
     "rcll",
     "split_assignment",
 ]

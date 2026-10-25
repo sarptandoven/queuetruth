@@ -289,7 +289,7 @@ All settings are environment variables with the prefix `QT_`, read by the api, t
 | `QT_PART_SIZE_BYTES` | `67108864` (64 MiB) | multipart part size |
 | `QT_PENDING_UPLOAD_TTL_S` | `86400` | pending uploads older than this are aborted, marked failed and their parts deleted (at least 60) |
 | `QT_JOB_TIMEOUT_S` | `7200` | wall-clock limit per job for kinds not listed in `QT_JOB_TIMEOUTS_S`; the child is killed after it (`test_job_timeout_kills_child`) |
-| `QT_JOB_TIMEOUTS_S` | `{}` | per-kind wall-clock limits as a JSON object `{kind: seconds}`, for example `{"calibration": 14400, "report": 600}`; kinds are `replay`, `calibration`, `scorecard`, `report`, `dataset_validate` and `ingest`, and a kind without an entry uses `QT_JOB_TIMEOUT_S`. An unknown kind or a value that is not above 0 is a configuration error at startup (`test_job_timeout_per_kind`). An empty string is not valid JSON; leave the variable unset or use `{}` |
+| `QT_JOB_TIMEOUTS_S` | `{}` | per-kind wall-clock limits as a JSON object `{kind: seconds}`, for example `{"calibration": 14400, "report": 600}`; kinds are `replay`, `calibration`, `scorecard`, `report`, `dataset_validate`, `ingest` and `zoo`, and a kind without an entry uses `QT_JOB_TIMEOUT_S`. An unknown kind or a value that is not above 0 is a configuration error at startup (`test_job_timeout_per_kind`). An empty string is not valid JSON; leave the variable unset or use `{}` |
 | `QT_WORKER_CONCURRENCY` | `2` | jobs run at once per worker process |
 | `QT_TENANT_MAX_RUNNING` | `1` | running jobs per tenant across all workers (`0` = no cap); a tenant's further jobs wait in the queue. Raise it on a single-tenant install, or one tenant's jobs run one at a time |
 | `QT_TENANT_DEFER_S` | `5` | delay before a job held back by `QT_TENANT_MAX_RUNNING` is offered again |
@@ -464,8 +464,8 @@ and a `write` key only if the agent may start jobs. See [Use queuetruth from an 
 
 - No SSO or OAuth, no web UI; API keys only.
 - MCP is stdio only; there is no Streamable HTTP MCP endpoint on the service.
-- Job kinds: replay, calibration, scorecard, report and dataset validation. Zoo, features, hazard fitting, live
-  import, why traces and the referee run locally only.
+- Job kinds: replay, calibration, scorecard, report, dataset validation, ingest and zoo. Features, hazard fitting,
+  live import, why traces and the referee run locally only.
 - No CLI commands for uploads, datasets, keys or retention; use the Python client or the HTTP API.
 - The billing adapter is `noop` by default; nothing is metered outside your database.
 - The memory cap is Linux only; the zero-egress guard covers Python-level connections in job children.

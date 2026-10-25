@@ -131,8 +131,9 @@ class PartitionEntry(QtModel):
 
 
 VenueName = Literal["generic", "nasdaq", "cme", "coinbase"]
-#: 1.1: rule-set names (`qt_types::RuleSet`): every venue plus `crypto_l3`; 1.2 adds `iex` (IEX DEEP+).
-RuleSetName = Literal["generic", "nasdaq", "cme", "coinbase", "crypto_l3", "iex"]
+#: 1.1: rule-set names (`qt_types::RuleSet`): every venue plus `crypto_l3`; 1.2 adds `iex` (IEX DEEP+) and `nyse`
+#: (NYSE Group TAQ Integrated Feed).
+RuleSetName = Literal["generic", "nasdaq", "cme", "coinbase", "crypto_l3", "iex", "nyse"]
 ValidationStatusName = Literal["real_data", "synthetic_only", "assumed", "fixture_only"]
 
 
@@ -409,6 +410,21 @@ class LeaderboardEntry(QtModel):
     exact_fill_rate: HMap = Field(default_factory=dict)
     #: 0.1.1 (additive): the model's fill rate by horizon, its mean forecast over the label-eligible rows.
     model_fill_rate: HMap = Field(default_factory=dict)
+    #: additive (selection-stats): mean per-shadow first-fill error by horizon,
+    #: `|min(T_model, h) - min(T_exact, h)| / h` with `T = ts_first_fill - ts_live` (null = never), a share of the
+    #: horizon, on the leaderboard rows.
+    first_fill_error: HMap = Field(default_factory=dict)
+    #: additive (selection-stats): in the 90% model confidence set for first-fill error at the horizon (Hansen, Lunde,
+    #: Nason 2011, `T_R`, wild cluster bootstrap-t over the leaderboard blocks): statistically tied with the best
+    #: model; null where undefined (order-level reference, no rows, or fewer than 5 bootstrap blocks).
+    mcs_member: dict[HorizonKey, bool | None] = Field(default_factory=dict)
+    #: additive (selection-stats): the MCS p-value for first-fill error (member iff `mcs_p > 0.10`); resolution
+    #: `1 / bootstrap_b`, so 0 means below `1 / bootstrap_b`, not certainty.
+    mcs_p: HMap = Field(default_factory=dict)
+    #: additive (selection-stats): in the 90% model confidence set for the Brier loss at the horizon.
+    mcs_brier_member: dict[HorizonKey, bool | None] = Field(default_factory=dict)
+    #: additive (selection-stats): the MCS p-value for the Brier loss (resolution `1 / bootstrap_b`).
+    mcs_brier_p: HMap = Field(default_factory=dict)
 
 
 class ZooSummary(QtDoc):
@@ -434,6 +450,268 @@ class ZooSummary(QtDoc):
     #: 0.1.1 (additive): never-cancel shadows with an exact label in the leaderboard population (the same for every
     #: model); null from the Rust runner, which does not evaluate.
     n_leaderboard: int | None = None
+
+
+# ---- shadow impact (docs/concepts/impact-warning.md; queuetruth.eval.impact) -------------------------------------
+
+
+class ImpactConfig(QtModel):
+    """Coefficients and thresholds of `queuetruth.eval.impact` (defaults and references:
+    docs/concepts/impact-warning.md). Flags are inclusive (`>=`)."""
+
+    #: `Y` of the square-root law (order one in Toth et al. 2011 and Bouchaud et al. 2018, ch. 12).
+    coefficient: float = Field(default=1.0, ge=0.0)
+    #: Below this daily participation `Q / V` the impact is continued linearly (0 = pure square root).
+    linear_below: float = Field(default=1e-5, ge=0.0, lt=1.0)
+    #: Realized-variance sampling interval (5 minutes: Liu, Patton and Sheppard 2015).
+    rv_interval_ns: int = Field(default=300_000_000_000, gt=0)
+    #: Fewest grid returns for a `sigma_daily` (12 = one hour of 5-minute returns).
+    min_returns: int = Field(default=12, ge=1)
+    impact_ticks: float = Field(default=1.0, gt=0.0)
+    #: Also flag impact computed from the venue's own session volume (an upper bound; off by default).
+    flag_venue_volume_impact: bool = False
+    queue_share: float = Field(default=0.10, gt=0.0, le=1.0)
+    #: Smallest posted quantity the queue-share flag considers (dataset size units); null = the instrument's round
+    #: lot (100 shares on US equity venues, else `lot_size`).
+    queue_min_qty: int | None = Field(default=None, ge=0)
+    volume_share: float = Field(default=0.05, gt=0.0, le=1.0)
+    warn_fraction: float = Field(default=0.01, ge=0.0, le=1.0)
+
+
+class ImpactDistribution(QtModel):
+    """Quantiles (numpy linear) of one per-shadow figure over the assessed shadows where it is defined."""
+
+    n: int
+    p50: float | None
+    p90: float | None
+    p99: float | None
+    max: float | None
+
+
+class ImpactSensitivity(QtModel):
+    """Assessed shadows at or above one threshold of a figure."""
+
+    threshold: float
+    n_flagged: int
+
+
+class ImpactDay(QtModel):
+    """Daily figures of one instrument-day and its shadows."""
+
+    instrument_id: int
+    session_date: str
+    daily_volume: int | None
+    sigma_daily: float | None
+    volume_source: Literal["venue_session", "user"]
+    n_shadows: int
+    n_material: int
+
+
+class ShadowImpactSummary(QtDoc):
+    """`qt.shadow_impact_summary`: counts, distributions and the warning line of one `qt.shadow_impact` table."""
+
+    SCHEMA: ClassVar[str] = "qt.shadow_impact_summary"
+    schema_: Literal["qt.shadow_impact_summary"] = _tag("qt.shadow_impact_summary")
+    schema_version: Literal[1] = 1
+    #: What the shadows came from: a replay (`qt.shadow_results`) or a zoo run (`qt.zoo_predictions`).
+    source: Literal["replay", "zoo"]
+    config: ImpactConfig
+    volume_source: Literal["venue_session", "user", "mixed"]
+    #: Zoo: the evaluation-window cap asked for and the largest prediction horizon used as the life (null: replay).
+    h_max_ns: int | None
+    horizon_ns: int | None
+    #: The shadows' own fills are already in the trades (self-excluded twins), so `volume_share` = filled / life.
+    fills_in_tape: bool
+    dataset: str | None
+    inputs: Files
+    files: Files
+    n_shadows: int
+    #: Shadows that never rested (`rejected_*`) and shadows live outside the regular session: never flagged.
+    n_rejected: int
+    n_out_of_session: int
+    n_assessed: int
+    n_evaluable_impact: int
+    n_evaluable_queue: int
+    n_evaluable_volume: int
+    n_flag_impact: int
+    #: Assessed shadows at or above the impact threshold on venue volume only (an upper bound; not flagged unless
+    #: `flag_venue_volume_impact`).
+    n_impact_venue_bound: int
+    n_flag_queue: int
+    #: Assessed shadows at or above the queue-share threshold whose size is below `queue_min_qty` (not flagged).
+    n_queue_below_min_qty: int
+    n_flag_volume: int
+    #: Assessed shadows alone at their price at live (`level_qty_at_live = 0`).
+    n_alone_at_level: int
+    n_material: int
+    material_share: float | None
+    material: bool
+    distributions: dict[str, ImpactDistribution]
+    sensitivity: dict[str, list[ImpactSensitivity]]
+    by_instrument: dict[IdKey, int]
+    days: list[ImpactDay]
+    warning: str | None
+
+
+# ---- zoo toxicity (docs/design/extensions/fill-toxicity.md) -------------------------------------------------------
+
+#: Fill mechanisms of `qt.zoo_toxicity` (`queuetruth.eval.toxicity.MECHANISMS`) plus the roll-up `all`.
+ToxMechanism = Literal[
+    "queue", "swept", "cross_on_arrival", "crossed_resting", "hidden_print", "touch", "particle", "all"
+]
+
+
+class ToxStat(QtModel):
+    """Ratio-of-sums estimate with its 95% block-bootstrap percentile CI; `n` = rows (shadows or fills) with weight
+    in the denominator. `value` is null when the denominator is 0."""
+
+    value: float | None
+    ci_lo: float | None
+    ci_hi: float | None
+    n: int
+
+
+class ToxicityHorizon(QtModel):
+    """One model at one markout horizon: per-shadow first-fill markouts (unit quantity) over the `n` shadows whose
+    first-fill markouts are defined in every arm that filled them. `*_ticks` / `*_bps` sums are per shadow of the
+    population (`bias = grant + timing + deny = model_pnl - exact_pnl`, positive = the model overstates PnL); the
+    `*_mo_*` / `*_mm_*` entries are means over the shadows of one status (fill-price and mid-to-mid markouts)."""
+
+    n: int
+    model_pnl_ticks: ToxStat
+    exact_pnl_ticks: ToxStat
+    grant_ticks: ToxStat
+    deny_ticks: ToxStat
+    timing_ticks: ToxStat
+    bias_ticks: ToxStat
+    grant_bps: ToxStat
+    deny_bps: ToxStat
+    timing_bps: ToxStat
+    bias_bps: ToxStat
+    phantom_mo_ticks: ToxStat
+    missed_mo_ticks: ToxStat
+    confirmed_mo_ticks: ToxStat
+    confirmed_exact_mo_ticks: ToxStat
+    phantom_mm_ticks: ToxStat
+    missed_mm_ticks: ToxStat
+    confirmed_mm_ticks: ToxStat
+    confirmed_exact_mm_ticks: ToxStat
+
+
+class ToxicityModel(QtModel):
+    """Shadow-level discordance of one model against the exact arm within the fill window, and its markouts."""
+
+    model_id: str
+    family: str
+    n_shadows: int
+    n_model_filled: int
+    n_exact_filled: int
+    n_confirmed: int
+    n_phantom: int
+    n_missed: int
+    #: cross-check of the forecast against the fill rows: non-particle pairs whose p_fill of 0 or 1 at the window
+    #: disagrees with the presence of a fill row (the rows decide the status), and filled particle pairs without a
+    #: median first fill in the window (no markout)
+    n_inconsistent: int
+    phantom_rate: float | None
+    missed_rate: float | None
+    horizons: dict[HorizonKey, ToxicityHorizon]
+
+
+class TypeMarkouts(QtModel):
+    """Quantity-weighted mean markouts of the fill rows of one type at one horizon."""
+
+    mo_ticks: ToxStat
+    mo_bps: ToxStat
+    mm_ticks: ToxStat
+    mm_bps: ToxStat
+
+
+class FillTypeStats(QtModel):
+    """Fill rows of one arm (`exact` or a model id), status and mechanism; `missed` rows are the exact arm's fills of
+    the shadows the model did not fill (their mechanism is the exact one)."""
+
+    arm: str
+    status: Literal["confirmed", "phantom", "missed"] | None
+    mechanism: ToxMechanism
+    n_fills: int
+    n_shadows: int
+    qty: float
+    markouts: dict[HorizonKey, TypeMarkouts]
+
+
+class ToxGap(QtModel):
+    """Paired difference `|value| - |next value|` of two neighbouring places of a ranking, with its 95% percentile CI
+    from the shared bootstrap replicates."""
+
+    value: float
+    ci_lo: float | None
+    ci_hi: float | None
+
+
+class ToxicityRank(QtModel):
+    """One place of a ranking: rank 1 = the largest |value| (the largest PnL distortion of that kind); `value` keeps
+    its sign. `rank_lo`..`rank_hi` is the 95% rank interval over the bootstrap replicates (null when the value is
+    undefined); `gap_to_next` is the paired gap to the next place and `separated_from_next` whether its CI lies above
+    0 (null on the last place or next to an undefined value)."""
+
+    rank: int
+    model_id: str
+    value: float | None
+    ci_lo: float | None
+    ci_hi: float | None
+    rank_lo: int | None
+    rank_hi: int | None
+    gap_to_next: ToxGap | None
+    separated_from_next: bool | None
+
+
+class ToxicityRankings(QtModel):
+    """Models ranked at `horizon_ns` by `|grant_ticks|` (fills wrongly granted), `|deny_ticks|` (fills wrongly denied)
+    and `|bias_ticks|`, largest first; undefined values last, ties in model order."""
+
+    horizon_ns: int
+    grant: list[ToxicityRank]
+    deny: list[ToxicityRank]
+    bias: list[ToxicityRank]
+
+
+class ToxicityExact(QtModel):
+    """The exact arm's fills in the window over the population."""
+
+    n_filled: int
+    n_fills: int
+    fills_by_mechanism: dict[str, int]
+
+
+class ZooToxicity(QtDoc):
+    """Summary of `zoo-toxicity`: fill-type tags, markouts and the adverse-selection ranking of the zoo's models
+    (extension fill-toxicity; Python only)."""
+
+    SCHEMA: ClassVar[str] = "qt.zoo_toxicity"
+    schema_: Literal["qt.zoo_toxicity"] = _tag("qt.zoo_toxicity")
+    schema_version: Literal[1] = 1
+    run_id: RunId
+    engine_version: str
+    spec: dict[str, Any]
+    zoo_run_id: str | None
+    zoo_mode: str | None
+    n_shadows: int
+    n_excluded: dict[str, int]
+    #: share of the checked shadows whose replay did not reproduce the zoo's exact arm (non-zero only with
+    #: `allow_truth_mismatch`); null when no shadow was checked
+    truth_mismatch_rate: float | None
+    window_ns: int
+    horizons_ns: list[int]
+    ci_block: Literal["day", "30min"]
+    n_blocks: int
+    bootstrap_b: int
+    exact: ToxicityExact
+    models: list[ToxicityModel]
+    by_type: list[FillTypeStats]
+    rankings: ToxicityRankings
+    files: Files
+    warnings: list[str]
 
 
 # ---- calibration ------------------------------------------------------------------------------------------------
@@ -1248,7 +1526,7 @@ class Job(QtDoc):
     schema_: Literal["qt.job"] = _tag("qt.job")
     schema_version: Literal[1] = 1
     id: str
-    kind: Literal["ingest", "replay", "calibration", "scorecard", "report", "dataset_validate", "deletion"]
+    kind: Literal["ingest", "replay", "calibration", "scorecard", "report", "dataset_validate", "deletion", "zoo"]
     state: Literal["queued", "running", "succeeded", "failed", "canceled", "expired"]
     progress: Progress
     resource: ResourceRef
@@ -1544,6 +1822,8 @@ DOC_MODELS: dict[str, type[QtDoc]] = {
         ReplaySummary,
         ShadowSampleSummary,
         ZooSummary,
+        ShadowImpactSummary,
+        ZooToxicity,
         CalibrationResult,
         LiveCalibrationTest,
         FeatureSummary,
@@ -1575,6 +1855,21 @@ DOC_MODELS: dict[str, type[QtDoc]] = {
         Page,
     )
 }
+
+
+# `queuetruth certify` / `verify-cert` / `commit` / `reveal` / `cert keygen` documents (queuetruth.cert.models), the
+# conformal report (queuetruth.schemas.conformal), the `queuetruth demo` documents (queuetruth.schemas.demo) and the
+# trading-bot reconciliation (queuetruth.schemas.reconcile). The documents of the ledger and sandbox packages are added
+# by `queuetruth.schemas` (its `__init__`).
+from queuetruth.cert.models import CERT_DOC_MODELS  # noqa: E402
+from queuetruth.schemas.conformal import CONFORMAL_DOC_MODELS  # noqa: E402
+from queuetruth.schemas.demo import DEMO_DOC_MODELS  # noqa: E402
+from queuetruth.schemas.reconcile import RECONCILE_DOC_MODELS  # noqa: E402
+
+DOC_MODELS.update(CERT_DOC_MODELS)
+DOC_MODELS.update(CONFORMAL_DOC_MODELS)
+DOC_MODELS.update(DEMO_DOC_MODELS)
+DOC_MODELS.update(RECONCILE_DOC_MODELS)
 
 
 def parse_document(data: dict[str, Any]) -> QtDoc:

@@ -1,0 +1,299 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.ledger_stats",
+  "$defs": {
+    "Head": {
+      "additionalProperties": false,
+      "description": "The last record of a ledger: anchor it outside the ledger (`seq:hash`) to detect a rewritten history.",
+      "properties": {
+        "seq": {
+          "title": "Seq",
+          "type": "integer"
+        },
+        "hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "seq",
+        "hash"
+      ],
+      "title": "Head",
+      "type": "object"
+    },
+    "KindStats": {
+      "additionalProperties": false,
+      "description": "Counts of one kind or study.",
+      "properties": {
+        "records": {
+          "title": "Records",
+          "type": "integer"
+        },
+        "trials": {
+          "title": "Trials",
+          "type": "integer"
+        },
+        "configs": {
+          "title": "Configs",
+          "type": "integer"
+        },
+        "errors": {
+          "title": "Errors",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "records",
+        "trials",
+        "configs",
+        "errors"
+      ],
+      "title": "KindStats",
+      "type": "object"
+    },
+    "LedgerFilter": {
+      "additionalProperties": false,
+      "description": "Record selection. Every set field must match; prefixes and globs are case-sensitive.",
+      "properties": {
+        "kinds": {
+          "anyOf": [
+            {
+              "items": {
+                "enum": [
+                  "genesis",
+                  "zoo",
+                  "calibrate",
+                  "calibrate-live",
+                  "fit-hazard",
+                  "score",
+                  "shadows-sample",
+                  "variant"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Kinds"
+        },
+        "study": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Study"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "status": {
+          "default": "all",
+          "enum": [
+            "ok",
+            "error",
+            "all"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "since_ns": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Since Ns"
+        },
+        "until_ns": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Until Ns"
+        },
+        "dataset": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dataset"
+        },
+        "run_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Run Id"
+        },
+        "spec_hash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Spec Hash"
+        }
+      },
+      "title": "LedgerFilter",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`ledger stats`: what the filter selects.",
+  "properties": {
+    "schema": {
+      "const": "qt.ledger_stats",
+      "default": "qt.ledger_stats",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "ledger": {
+      "title": "Ledger",
+      "type": "string"
+    },
+    "ledger_id": {
+      "pattern": "^[0-9a-f]{32}$",
+      "title": "Ledger Id",
+      "type": "string"
+    },
+    "head": {
+      "$ref": "#/$defs/Head"
+    },
+    "filter": {
+      "$ref": "#/$defs/LedgerFilter"
+    },
+    "n_records": {
+      "title": "N Records",
+      "type": "integer"
+    },
+    "n_trials": {
+      "title": "N Trials",
+      "type": "integer"
+    },
+    "n_configs": {
+      "title": "N Configs",
+      "type": "integer"
+    },
+    "n_errors": {
+      "title": "N Errors",
+      "type": "integer"
+    },
+    "n_with_series": {
+      "title": "N With Series",
+      "type": "integer"
+    },
+    "n_conflicts": {
+      "title": "N Conflicts",
+      "type": "integer"
+    },
+    "n_linked": {
+      "title": "N Linked",
+      "type": "integer"
+    },
+    "by_kind": {
+      "additionalProperties": {
+        "$ref": "#/$defs/KindStats"
+      },
+      "title": "By Kind",
+      "type": "object"
+    },
+    "by_study": {
+      "additionalProperties": {
+        "$ref": "#/$defs/KindStats"
+      },
+      "title": "By Study",
+      "type": "object"
+    },
+    "first_recorded_at_ns": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "First Recorded At Ns"
+    },
+    "last_recorded_at_ns": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Last Recorded At Ns"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "ledger",
+    "ledger_id",
+    "head",
+    "filter",
+    "n_records",
+    "n_trials",
+    "n_configs",
+    "n_errors",
+    "n_with_series",
+    "n_conflicts",
+    "n_linked",
+    "by_kind",
+    "by_study",
+    "first_recorded_at_ns",
+    "last_recorded_at_ns"
+  ],
+  "type": "object"
+}

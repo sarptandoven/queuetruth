@@ -1,0 +1,221 @@
+{
+  "sample": {
+    "schema": "qt.forecast_scorecard",
+    "schema_version": 1,
+    "run_id": "0123456789abcdef",
+    "engine_version": "x",
+    "spec": {
+      "k": 1
+    },
+    "ledger": {
+      "path": "x",
+      "ledger_id": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "head_seq": 1,
+      "head_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "n_entries": 1,
+      "verified": true,
+      "anchors": [
+        {
+          "path": "x",
+          "commitment_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+          "head_seq": 1,
+          "head_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+          "anchored_at_ns": 1
+        }
+      ]
+    },
+    "counts": {
+      "forecasts": 1,
+      "by_status": {
+        "k": 1
+      },
+      "questions": 1,
+      "questions_resolved": 1,
+      "questions_void": 1,
+      "forecasters": 1
+    },
+    "forecasters": [
+      {
+        "forecaster": "x",
+        "n_forecasts": 1,
+        "n_scored": 1,
+        "n_rejected": 1,
+        "selection": {
+          "unresolved": 1,
+          "void": 1,
+          "voided_after_outcome": 1,
+          "outcome_corrected": 1,
+          "cutoff_tightened": 1
+        },
+        "n_anchored": 1,
+        "kinds": {
+          "k": 1
+        },
+        "scores": [
+          {
+            "kind": "binary",
+            "metric": "brier",
+            "n": 1,
+            "mean": {
+              "value": 0.5,
+              "ci_lo": 0.5,
+              "ci_hi": 0.5
+            },
+            "n_clipped": 1
+          }
+        ],
+        "calibration": [
+          {
+            "target": "binary",
+            "n": 1,
+            "n_bins": 1,
+            "ece": {
+              "value": 0.5,
+              "ci_lo": 0.5,
+              "ci_hi": 0.5
+            },
+            "ece_if_calibrated": 0.5,
+            "ece_p_value": 0.5,
+            "murphy": {
+              "k": 0.5
+            },
+            "bins": [
+              {
+                "lo": 0.5,
+                "hi": 0.5,
+                "count": 1,
+                "mean_p": 0.5,
+                "observed_rate": 0.5,
+                "rate_lo": 0.5,
+                "rate_hi": 0.5,
+                "consistency_lo": 0.5,
+                "consistency_hi": 0.5
+              }
+            ]
+          }
+        ],
+        "skill": [
+          {
+            "subject": "x",
+            "reference": "x",
+            "kind": "binary",
+            "metric": "brier",
+            "n": 1,
+            "n_clusters": 1,
+            "mean_diff": {
+              "value": 0.5,
+              "ci_lo": 0.5,
+              "ci_hi": 0.5
+            },
+            "skill": {
+              "value": 0.5,
+              "ci_lo": 0.5,
+              "ci_hi": 0.5
+            },
+            "p_bootstrap": 0.5,
+            "dm": {
+              "statistic": 0.5,
+              "p_value": 0.5,
+              "lag": 1,
+              "units": 1
+            },
+            "p_holm": 0.5,
+            "lead_diff_ns": 1
+          }
+        ],
+        "power": [
+          {
+            "reference": "x",
+            "kind": "binary",
+            "metric": "brier",
+            "n": 1,
+            "observed_edge": 0.5,
+            "sd_diff": 0.5,
+            "design_effect": 0.5,
+            "achieved_power": 0.5,
+            "n_required_observed": 1,
+            "min_edge": 0.5,
+            "n_required_min_edge": 1
+          }
+        ],
+        "pnl": {
+          "n_candidates": 1,
+          "n_bets": 1,
+          "n_skipped": {
+            "k": 1
+          },
+          "bankroll": 0.5,
+          "final_wealth": 0.5,
+          "total_return": 0.5,
+          "log_growth": 0.5,
+          "growth_per_bet": 0.5,
+          "isolated_growth": {
+            "value": 0.5,
+            "ci_lo": 0.5,
+            "ci_hi": 0.5
+          },
+          "frictionless_growth": 0.5,
+          "max_drawdown": 0.5,
+          "fees_paid": 0.5,
+          "spread_paid": 0.5,
+          "contracts": 0.5,
+          "depth_limited": 1,
+          "cash_limited": 1,
+          "path_cash_limited": true,
+          "hit_rate": 0.5
+        },
+        "median_lead_ns": 1
+      }
+    ],
+    "comparisons": [
+      {
+        "subject": "x",
+        "reference": "x",
+        "kind": "binary",
+        "metric": "brier",
+        "n": 1,
+        "n_clusters": 1,
+        "mean_diff": {
+          "value": 0.5,
+          "ci_lo": 0.5,
+          "ci_hi": 0.5
+        },
+        "skill": {
+          "value": 0.5,
+          "ci_lo": 0.5,
+          "ci_hi": 0.5
+        },
+        "p_bootstrap": 0.5,
+        "dm": {
+          "statistic": 0.5,
+          "p_value": 0.5,
+          "lag": 1,
+          "units": 1
+        },
+        "p_holm": 0.5,
+        "lead_diff_ns": 1
+      }
+    ],
+    "rejections": [
+      {
+        "seq": 1,
+        "question_id": "x",
+        "forecaster": "x",
+        "status": "scored",
+        "detail": "x"
+      }
+    ],
+    "rejections_truncated": true,
+    "files": [
+      {
+        "name": "x",
+        "rows": 1,
+        "bytes": 1,
+        "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      }
+    ],
+    "warnings": [
+      "x"
+    ]
+  }
+}

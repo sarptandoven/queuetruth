@@ -1,0 +1,155 @@
+{
+  "sample": {
+    "schema": "qt.certificate",
+    "schema_version": 1,
+    "certificate_id": "0123456789abcdef",
+    "title": "x",
+    "issuer": "x",
+    "issued_at": 1,
+    "environment": {
+      "queuetruth": "x",
+      "core": "x",
+      "engine_version": "x",
+      "python": "x",
+      "implementation": "x",
+      "platform": "x",
+      "machine": "x",
+      "packages": {
+        "k": "x"
+      },
+      "env": {
+        "k": "x"
+      }
+    },
+    "runs": [
+      {
+        "label": "replay",
+        "kind": "replay",
+        "path": "x",
+        "document": "summary.json",
+        "document_schema": "x",
+        "run_id": "0123456789abcdef",
+        "binding": "verified",
+        "engine_version": "x",
+        "spec": {
+          "k": 1
+        },
+        "inputs": [
+          {
+            "pointer": "x",
+            "input": "x"
+          }
+        ],
+        "outputs": [
+          {
+            "path": "summary.json",
+            "bytes": 1,
+            "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            "normalized_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+          }
+        ],
+        "reproduce": {
+          "api": "x",
+          "python": "x",
+          "verify": "x"
+        }
+      }
+    ],
+    "inputs": [
+      {
+        "id": "x",
+        "path": "x",
+        "kind": "dataset",
+        "identity": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "bytes": 1,
+        "files": [
+          {
+            "path": "summary.json",
+            "bytes": 1,
+            "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+          }
+        ],
+        "dataset_id": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "dataset_consistent": true,
+        "data_ts_min": 1,
+        "data_ts_max": 1
+      }
+    ],
+    "claims": [
+      {
+        "id": "x",
+        "text": "x",
+        "rendered": "x",
+        "evidence": [
+          {
+            "ref": "x",
+            "run": "replay",
+            "file": "summary.json",
+            "pointer": "x",
+            "value": 1
+          }
+        ]
+      }
+    ],
+    "attachments": [
+      {
+        "id": "x",
+        "path": "x",
+        "kind": "dataset",
+        "identity": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "bytes": 1,
+        "files": [
+          {
+            "path": "summary.json",
+            "bytes": 1,
+            "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+          }
+        ],
+        "dataset_id": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "dataset_consistent": true,
+        "data_ts_min": 1,
+        "data_ts_max": 1
+      }
+    ],
+    "commitments": [
+      {
+        "path": "x",
+        "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "root": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "label": "x",
+        "committed_at": 1,
+        "key_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "revealed": [
+          {
+            "index": 1,
+            "name": "x",
+            "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            "nonce": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            "inputs": [
+              "x"
+            ]
+          }
+        ],
+        "earliest_data_ts": 1,
+        "precedes_data": true
+      }
+    ],
+    "reproduce": [
+      "x"
+    ],
+    "warnings": [
+      "x"
+    ],
+    "integrity": {
+      "canonicalization": "rfc8785",
+      "domain": "queuetruth.certificate.v1",
+      "body_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "signature": {
+        "algorithm": "ed25519",
+        "public_key": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "key_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "value": "x"
+      }
+    }
+  }
+}

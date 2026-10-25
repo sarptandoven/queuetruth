@@ -1,0 +1,17 @@
+{
+  "sample": {
+    "schema": "qt.ledger_export",
+    "schema_version": 1,
+    "ledger": "x",
+    "ledger_id": "0123456789abcdef0123456789abcdef",
+    "head": {
+      "seq": 1,
+      "hash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    },
+    "out": "x",
+    "format": "jsonl",
+    "n_records": 1,
+    "bytes": 1,
+    "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  }
+}

@@ -54,6 +54,22 @@ validated on real data (one public day, below).
   zero shares. Non-printable executions are part of a later bulk print, which is why queue ahead is maintained from
   order records rather than prints ([A4](concepts/audit-rules.md#a4-queue-ahead-from-order-records)). Hidden
   interest ranks behind displayed interest at a price ([A3](concepts/audit-rules.md#a3-hidden-prints)).
+- **Orders released after the open keep their receipt priority.** Nasdaq holds some orders received before the
+  open and releases them 0.27 s to 40 s after it, with their original references, which are smaller than those of
+  orders already resting; the matching engine executes them by reference, ahead of those orders. Under the `exact`
+  fill rule, on instruments whose order ids are ITCH references (venue `nasdaq` with source `itch`, `etcsv` or
+  `dbn`; a `dbn` dataset with the `nasdaq` rule set is taken to be XNAS.ITCH), an add at a shadow's price whose
+  reference is below the largest reference its instrument had added when the shadow went live joins the shadow's
+  queue ahead (rule D1). That largest reference is a per-instrument lower bound on Nasdaq's counter, which several
+  symbols share, so a held order received after the instrument's last add can still rank behind a shadow it was
+  ahead of: an optimistic bias, largest for early pre-market shadows. The book itself, and the rank oracle, keep
+  arrival order.
+- **Hidden prints that continue a sweep.** With the same scope, a side-`N` print at the timestamp of exactly one open
+  execution sweep reaches only shadows on the swept side (D2), and an off-tick (midpoint) print that continues a sweep
+  can trade through a shadow it passes (D3). Otherwise the side is inferred from the shadow (A3) and off-tick prints
+  are not used. Other venues, IEX DEEP+, synthetic data and the `et` rule are unchanged. The evidence, order by order
+  against the independent oracle, is in
+  [Oracle disagreements on real data](design/extensions/oracle-disagreements.md).
 - **Sequencing.** One `sequence` per ITCH message, shared by its `T`, `F` and `C`; `LAST` on the message's last
   record. `instrument_id` is the stock locate code, which is assigned per day, so cross-day joins use the symbol.
 - **Prices and time.** ITCH prices have four decimals and are scaled exactly to the dataset's `price_exp`
@@ -107,12 +123,15 @@ show non-displayed orders or the hidden parts of reserve orders, and routed exec
 These readers port the predecessor engine's converters for captures you record yourself. Each line of a capture is
 one feed message plus your receive time `recv_ns`.
 
-- **Bitstamp** (`--format bitstamp`: `live_orders`, `live_trades`, `detail_order_book` JSONL). Order created,
-  changed and deleted become `A`, `M` (absolute remaining size) and `C`; a trade becomes a `T` (aggressor from the
-  trade type) plus `F` for each resting order. Bitstamp has no sequence numbers, so messages are merged by
-  microsecond timestamp and receive time. The first order-book snapshot seeds the book. Takers appear as an order
-  created and deleted within the same microsecond; within `taker_window_us` (default 100) such pairs are suppressed
-  and orders that would cross are held back until the book uncrosses (counters in `source_specific`).
+- **Bitstamp** (`--format bitstamp`: `live_orders`, `live_trades`, `detail_order_book` JSONL). Order created, changed
+  and deleted become `A`, `M` (absolute remaining size) and `C`; a trade becomes a `T` (aggressor from the trade type)
+  plus `F` for each resting order. Bitstamp has no sequence numbers, so messages are merged by microsecond timestamp
+  and receive time. Within one timestamp (order messages are stamped in whole milliseconds), new orders at one side
+  and price are ranked by order id, and a trade is placed after its maker's `order_created`. The book is seeded from
+  the first order-book snapshot that no later-arriving message is stamped before (if none qualifies, the first
+  snapshot, flagged `seed_ambiguous`). Takers appear as an order created and deleted within the same microsecond;
+  within `taker_window_us` (default 100) such pairs are suppressed unless a trade names the order as its maker, and
+  orders that would cross are held back until the book uncrosses (counters in `source_specific`).
 - **Bitfinex** (`--format bitfinex`: raw `book_R0` and `trades`, plus `book_P0` and heartbeats for sequence
   checks). The raw book gives per-order adds, updates (`M`) and deletes (`C`); trades give `T` with the taker side.
   The raw book carries **no fill records**: a maker's decrease arrives as an update or delete, so fills cannot be
@@ -131,10 +150,10 @@ one feed message plus your receive time `recv_ns`.
   and Hyperliquid node outputs with an L4 snapshot. Capture layout, record mapping and limits:
   [Ingest order-level crypto feeds](how-to/crypto-l3-sources.md). **Validation: synthetic fixtures only.**
 - **Validation: assumed.** Each reader was checked on one capture by the predecessor engine at most. queuetruth
-  replayed one 10-minute public capture per venue (2026-10-12, BTC-USD): Bitstamp 77,272 records and Bitfinex 51,701
-  records, equal to the predecessor's converted counts, with every invariant 0 and, on Bitstamp, 0 crossed books
-  after taker handling ([Results](RESULTS.md), RD-12). That shows replay and counters, not fill fidelity: neither feed
-  carries the execution records exact queue truth needs.
+  replayed one 10-minute public capture per venue (2026-10-12, BTC-USD): Bitstamp 77,157 records (77,272, the
+  predecessor's converted count, before the seed rule above) and Bitfinex 51,701 records (equal to the predecessor's),
+  with every invariant 0 and, on Bitstamp, 0 crossed books after taker handling ([Results](RESULTS.md), RD-12). That
+  shows replay and counters, not fill fidelity: neither feed carries the execution records exact queue truth needs.
 
 ## Tardis L2 (`--format tardis-l2`, L2 only)
 
@@ -154,11 +173,19 @@ against the predecessor (`make realdata`) replay the two public Nasdaq days from
 
 ## Out of scope
 
-Pro-rata and allocation matching, auctions (orders resting through them are censored), halts, CME implied
+Pro-rata and allocation matching, auctions (orders resting through them are censored), halts (below), CME implied
 liquidity, and iceberg reconstruction beyond the displayed slice. Kraken L3 is read, but only as a
 depth-window source: Kraken sends no delete when a level leaves the subscribed window, so queue-rank truth stops at
 the window. See [Data and licensing](data-and-licensing.md#vendor-notes) for the terms of IEX, Kraken and the other
 sources.
+
+**Halts are not handled yet.** The replay engine can end a shadow `censored_gap` over trading-halt spans that a Rust
+caller supplies, but ingest does not record Nasdaq's trading-state (`H`) messages and no Python, CLI or service path
+passes halt spans. So `replay`, the zoo and calibration treat a halted symbol as trading continuously: a shadow
+resting through a halt, LULD pause or IPO quotation period can be filled during it, at once when the halted book is
+displayed crossed. None of the four symbols of the published Nasdaq days halted on either day. Leave halted
+symbol-days out until halts are carried from ingest
+([halt censoring](design/extensions/halt-censoring.md)).
 
 ## Adding a venue
 

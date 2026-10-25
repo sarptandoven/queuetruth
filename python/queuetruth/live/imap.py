@@ -4,20 +4,28 @@
 `tick_size` and `lot_size` are decimal strings in real units and must be exact at `price_exp` / `size_exp`
 (`QT-INPUT-004`). A row with a `session_date` applies to that UTC date only and wins over a dateless row for the
 same (venue, instrument). Venue names compare case-insensitively (stored and looked up in lower case, E53).
+`price_exp`, `size_exp` and `instrument_id` are ASCII integers (an optional sign and the digits 0-9: no other
+Unicode digits, no `_` separators) and `session_date` is an ASCII `YYYY-MM-DD`; errors name the file and line.
 Without a matching row importers use the venue defaults (`price_exp = -9`;
 `size_exp = -8` for crypto venues and FIX, `0` for IBKR) and `instrument_id = null`.
 """
 
 from __future__ import annotations
 
+import datetime as dt
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
 from queuetruth.errors import QtError
-from queuetruth.live._common import date_days, dec, input_error, read_csv_rows, read_text, to_fixed
+from queuetruth.live._common import dec, input_error, read_csv_rows, read_text, to_fixed
 from queuetruth.schemas.io import sha256_file
 
 REQUIRED = ("venue", "instrument", "instrument_id", "price_exp", "size_exp", "tick_size", "lot_size")
+#: What `int()` would also accept (other Unicode digits, `1_000`) is refused, as in the other readers.
+_INT = re.compile(r"[+-]?[0-9]+", re.ASCII)
+_DATE = re.compile(r"([0-9]{4})-([0-9]{2})-([0-9]{2})", re.ASCII)
+_EPOCH = dt.date(1970, 1, 1)
 
 
 @dataclass(frozen=True)
@@ -58,13 +66,28 @@ class InstrumentMap:
 
 
 def _int(v: str, what: str, loc: str, lo: int, hi: int) -> int:
+    t = v.strip()
+    if _INT.fullmatch(t) is None:
+        raise input_error(loc, f"{what}: {v!r} is not an integer")
     try:
-        x = int(v.strip())
-    except ValueError as e:
+        x = int(t)
+    except ValueError as e:  # more digits than the interpreter converts
         raise input_error(loc, f"{what}: {v!r} is not an integer") from e
     if not lo <= x <= hi:
         raise input_error(loc, f"{what}: {x} outside [{lo}, {hi}]")
     return x
+
+
+def _date(v: str, loc: str) -> int:
+    """`session_date` (`YYYY-MM-DD`) -> days since 1970-01-01."""
+    m = _DATE.fullmatch(v)
+    if m is None:
+        raise input_error(loc, f"session_date: {v!r} is not a YYYY-MM-DD date")
+    try:
+        d = dt.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+    except ValueError as e:
+        raise input_error(loc, f"session_date: {v!r} is not a valid date ({e})") from e
+    return (d - _EPOCH).days
 
 
 def load_instrument_map(path: str | Path) -> InstrumentMap:
@@ -96,7 +119,7 @@ def load_instrument_map(path: str | Path) -> InstrumentMap:
                 venue=g("venue").lower(),
                 instrument=g("instrument"),
                 instrument_id=_int(g("instrument_id"), "instrument_id", loc, 0, 2**32 - 1),
-                session_date=date_days(sd) if sd else None,
+                session_date=_date(sd, loc) if sd else None,
                 price_exp=price_exp,
                 size_exp=size_exp,
                 tick_size=to_fixed(tick, price_exp, f"{loc} tick_size"),

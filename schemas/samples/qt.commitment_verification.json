@@ -1,0 +1,40 @@
+{
+  "sample": {
+    "schema": "qt.commitment_verification",
+    "schema_version": 1,
+    "commitment": {
+      "path": "x",
+      "root": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "label": "x",
+      "committed_at": 1,
+      "n_items": 1,
+      "signed": true,
+      "key_fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "key_trusted": true
+    },
+    "status": "pass",
+    "n_revealed": 1,
+    "revealed": [
+      {
+        "index": 1,
+        "name": "x",
+        "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "status": "match",
+        "file": "x"
+      }
+    ],
+    "unmatched_files": [
+      "x"
+    ],
+    "checks": [
+      {
+        "id": "x",
+        "status": "pass",
+        "summary": "x",
+        "details": [
+          "x"
+        ]
+      }
+    ]
+  }
+}

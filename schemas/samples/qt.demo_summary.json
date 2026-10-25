@@ -1,0 +1,130 @@
+{
+  "sample": {
+    "schema": "qt.demo_summary",
+    "schema_version": 1,
+    "run_id": "0123456789abcdef",
+    "queuetruth_version": "x",
+    "created": "x",
+    "spec": {
+      "k": 1
+    },
+    "source": {
+      "id": "x",
+      "title": "x",
+      "format": "itch",
+      "session_date": "x",
+      "location": "x",
+      "attribution": "x",
+      "terms_url": "x",
+      "note": "x"
+    },
+    "window": {
+      "timezone": "America/New_York",
+      "placement_start": "x",
+      "placement_end": "x",
+      "cut": "x",
+      "minutes": 1,
+      "h_max_s": 1
+    },
+    "data": {
+      "symbols": [
+        "x"
+      ],
+      "subset_path": "x",
+      "subset_bytes": 1,
+      "subset_sha256": "x",
+      "content_sha256": "x",
+      "kept_messages": 1,
+      "cache_hit": true,
+      "pinned": true,
+      "remote": true,
+      "bytes_downloaded": 1,
+      "file_bytes": 1,
+      "resumptions": 1,
+      "records": 1,
+      "data_quality": "clean",
+      "data_quality_reasons": [
+        "x"
+      ],
+      "dataset_id": "x"
+    },
+    "n_shadows": 1,
+    "n_leaderboard": 1,
+    "n_excluded_hbt_312": 1,
+    "zoo_run_id": "x",
+    "headline": {
+      "model_id": "x",
+      "label": "x",
+      "verified_against": "x",
+      "sentence": "x",
+      "cells": {
+        "k": {
+          "exact_fill_rate": 0.5,
+          "model_fill_rate": 0.5,
+          "bias": 0.5,
+          "ci_lo": 0.5,
+          "ci_hi": 0.5,
+          "n": 1,
+          "ci_method": "cluster_bootstrap"
+        }
+      }
+    },
+    "models": [
+      {
+        "model_id": "x",
+        "cells": {
+          "k": {
+            "exact_fill_rate": 0.5,
+            "model_fill_rate": 0.5,
+            "bias": 0.5,
+            "ci_lo": 0.5,
+            "ci_hi": 0.5,
+            "n": 1,
+            "ci_method": "cluster_bootstrap"
+          }
+        }
+      }
+    ],
+    "interval": {
+      "method": "x",
+      "cluster": "x",
+      "clusters": 1,
+      "bootstrap_b": 1,
+      "note": "x"
+    },
+    "reference": {
+      "label": "x",
+      "bias": {
+        "k": 0.5
+      },
+      "ci_lo": {
+        "k": 0.5
+      },
+      "ci_hi": {
+        "k": 0.5
+      },
+      "exact_fill_rate": {
+        "k": 0.5
+      }
+    },
+    "outputs": {
+      "dir": "x",
+      "html": "x",
+      "json": "x",
+      "dataset": "x",
+      "shadows": "x",
+      "zoo": "x"
+    },
+    "timings": {
+      "fetch_s": 0.5,
+      "ingest_s": 0.5,
+      "shadows_s": 0.5,
+      "zoo_s": 0.5,
+      "answer_s": 0.5,
+      "total_s": 0.5
+    },
+    "warnings": [
+      "x"
+    ]
+  }
+}

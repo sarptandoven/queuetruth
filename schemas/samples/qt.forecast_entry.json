@@ -1,0 +1,23 @@
+{
+  "sample": {
+    "schema": "qt.forecast_entry",
+    "schema_version": 1,
+    "seq": 1,
+    "prev_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "recorded_at_ns": 1,
+    "clock": "system",
+    "payload_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "payload": {
+      "type": "forecast",
+      "question_id": "x",
+      "forecaster": "x",
+      "forecast": {
+        "kind": "binary",
+        "p": 0.5
+      },
+      "as_of_ns": 1,
+      "nonce": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    },
+    "entry_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  }
+}

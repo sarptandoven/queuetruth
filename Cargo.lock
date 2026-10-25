@@ -1393,6 +1393,7 @@ dependencies = [
  "indexmap",
  "parquet",
  "proptest",
+ "queuetruth-ingest",
  "queuetruth-schema",
  "queuetruth-types",
  "serde",

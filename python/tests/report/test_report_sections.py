@@ -17,6 +17,7 @@ from queuetruth.report import fmt as F
 from queuetruth.report import render, why
 from queuetruth.report.compute import _pi, alloc_profile
 from queuetruth.schemas.models import WhyTrace
+from report import pageparse as pp
 from report import synth as rc
 
 
@@ -27,15 +28,19 @@ def _render(tmp_path: Path, inputs: list[Any], **kw: Any) -> tuple[Any, str]:
 
 
 def _section(html: str, sid: str) -> str:
-    m = re.search(rf'<section id="{sid}">(.*?)</section>', html, re.S)
+    m = re.search(rf'<section id="{sid}"[^>]*>(.*?)</section>', html, re.S)
     assert m, f"section {sid} missing"
     return m.group(1)
 
 
 def test_section_order_full_bundle(rendered: tuple[Any, str]) -> None:
     summary, html = rendered
+    # answer-first layout: the answer block and the leaderboard come right after the header, then the drill-downs
+    # in SPEC 5.9 order
     assert summary.sections == [
         "header",
+        "answer",
+        "leaderboard",
         "verdict",
         "data_quality",
         "two_by_two",
@@ -55,7 +60,7 @@ def test_section_order_full_bundle(rendered: tuple[Any, str]) -> None:
 
 def test_section_header_inputs_hashes_and_banner(bundle: Any, rendered: tuple[Any, str]) -> None:
     _, html = rendered
-    head = re.search(r'<header id="header">(.*?)</header>', html, re.S).group(1)
+    head = re.search(r'<header id="header"[^>]*>(.*?)</header>', html, re.S).group(1)
     for d in (bundle.score, bundle.zoo, bundle.cal, bundle.hazard, bundle.replay):
         for p in sorted(d.iterdir()):
             if p.suffix in (".json", ".parquet"):
@@ -87,7 +92,7 @@ def test_section_header_banner_vendor_cme(tmp_path: Path) -> None:
 def test_section_verdict(tmp_path: Path) -> None:
     rc.make_score_dir(tmp_path / "score", n=300)
     summary, html = _render(tmp_path, [tmp_path / "score"])
-    assert summary.sections[:2] == ["header", "verdict"]
+    assert summary.sections[:3] == ["header", "answer", "verdict"]
     v = _section(html, "verdict")
     doc = rc.json_load(tmp_path / "score" / "summary.json")
     assert rc.esc(doc["verdict"]["headline"]) in v
@@ -99,7 +104,7 @@ def test_section_data_quality_replay(tmp_path: Path) -> None:
     zf = rc.make_zoo_dir(tmp_path / "zoo", n=20)
     rc.make_replay_dir(tmp_path / "rep", zf["sids"], zf["ts_live"], zf["qa"])
     summary, html = _render(tmp_path, [tmp_path / "rep"])
-    assert summary.sections == ["header", "data_quality", "config"]
+    assert summary.sections == ["header", "answer", "data_quality", "config"]
     dq = _section(html, "data_quality")
     assert dq.count("Data-quality verdict: warnings") == 1  # data_quality.json deduplicated against the summary
     assert "Parity against source data: pass" in dq
@@ -175,7 +180,8 @@ def test_section_position_downsampled(tmp_path: Path) -> None:
 def test_section_zoo(tmp_path: Path) -> None:
     rc.make_zoo_dir(tmp_path / "zoo", n=120)
     summary, html = _render(tmp_path, [tmp_path / "zoo"])
-    assert "zoo" in summary.sections
+    assert summary.sections == ["header", "answer", "leaderboard", "zoo", "why", "config"]
+    lb = _section(html, "leaderboard")
     s = _section(html, "zoo")
     doc = rc.json_load(tmp_path / "zoo" / "summary.json")
     # trader review C1: sorted by absolute fill-rate bias at 60 s (Brier ties at short horizons), bias at every
@@ -187,13 +193,16 @@ def test_section_zoo(tmp_path: Path) -> None:
         return (v is None, abs(v) if v is not None else math.inf, e["brier"].get(h60) or math.inf, e["model_id"])
 
     ranked = sorted(doc["leaderboard"], key=key)
-    rows = re.findall(r"<tr><td>([^<]+)</td>", s.split("<tbody>", 1)[1])
-    assert rows[0] == "exact fill rate (truth)"  # the base rate of every bias in its column (0.1.1)
-    assert rc.esc(ranked[0]["model_id"]) == rows[1]
-    assert "sorted by absolute fill-rate bias at 60 s" in s
+    # the compact table: the exact fill rate (the base rate of every bias, 0.1.1), then every model in rank order
+    assert pp.leaderboard_rows(html) == ["exact fill rate (truth)", *(rc.esc(e["model_id"]) for e in ranked)]
+    assert "sorted by absolute fill-rate bias at 60 s" in lb
+    assert '<th scope="col" class="n">fill-rate bias 60 s (95% CI)</th>' in lb
+    # the full table (collapsed under the compact one) keeps every horizon with its CI
+    full = lb.split("<summary>Full leaderboard", 1)[1]
     for h in [*rc.HORIZONS, rc.H_MAX]:
-        assert f'<th scope="col" class="n">fill-rate bias {F.dur(h)}</th>' in s
-    sentences = re.findall(r"<li>(At 60 s, [^<]+)</li>", s)
+        assert f'<th scope="col" class="n">fill-rate bias {F.dur(h)}</th>' in full
+    assert pp.first_table_rows(full)[0] == "exact fill rate (truth)"
+    sentences = re.findall(r"<li>(At 60 s, [^<]+)</li>", lb)
     assert len(sentences) == len(rc.MODELS)
     assert sentences[0].startswith(f"At 60 s, {rc.esc(ranked[0]['model_id'])} ")
     v0 = ranked[0]["fill_rate_bias"][h60]
@@ -206,6 +215,17 @@ def test_section_zoo(tmp_path: Path) -> None:
     assert s.count("Fill-rate bias by queue decile at") == nh
     assert "horizon 1 s · n = " in s
     assert "qt.zoo_errors (block-bootstrap CIs in the tooltips; blocks are session days, or 30-minute blocks" in s
+    # drill-downs: the chart at the sort horizon is open, the other horizons are one collapsed block each
+    shown, rest = s.split("<summary>Signed fill-rate bias at the other horizons", 1)
+    assert "Signed fill-rate bias by model at 1 min" in shown and "at 1 min" not in rest.split("</details>", 1)[0]
+    assert f"{nh - 1} chart(s)" in rest
+    shown, rest = s.split("<summary>Queue-decile heatmaps at the other horizons", 1)
+    assert "Fill-rate bias by queue decile at 1 min" in shown.split("<h3>Fill-rate bias by queue decile</h3>")[1]
+    # reliability: one collapsible block per model, in leaderboard order, the first one open
+    rel = s.split("<h3>Reliability diagrams</h3>", 1)[1].split("<h3>Fill-rate bias by queue decile</h3>")[0]
+    blocks = re.findall(r'<details class="item"( open)?><summary><h4>([^<]+)</h4>', rel)
+    assert [m for _, m in blocks] == [rc.esc(e["model_id"]) for e in ranked]
+    assert [o for o, _ in blocks] == [" open"] + [""] * (len(blocks) - 1)
 
 
 def test_section_zoo_decile_fallback_and_empty_leaderboard(tmp_path: Path) -> None:
@@ -223,7 +243,7 @@ def test_section_zoo_decile_fallback_and_empty_leaderboard(tmp_path: Path) -> No
 def test_section_calibration(tmp_path: Path) -> None:
     f = rc.make_cal_dir(tmp_path / "cal")
     summary, html = _render(tmp_path, [tmp_path / "cal"])
-    assert summary.sections == ["header", "calibration", "config"]
+    assert summary.sections == ["header", "answer", "calibration", "config"]
     s = _section(html, "calibration")
     assert s.count("alloc · power3") == 1  # fit.json is superseded by calibration.json
     assert "Allocation quasi-log-likelihood profile (power3)" in s
@@ -251,7 +271,7 @@ def test_calibration_profile_matches_spec_formula() -> None:
 def test_section_learned_model(tmp_path: Path) -> None:
     rc.make_hazard_dir(tmp_path / "hz")
     summary, html = _render(tmp_path, [tmp_path / "hz"])
-    assert summary.sections == ["header", "learned_model", "config"]
+    assert summary.sections == ["header", "answer", "learned_model", "config"]
     s = _section(html, "learned_model")
     assert "Brier skill vs climatology by horizon" in s
     assert s.count('class="chart rel"') == 4
@@ -262,8 +282,11 @@ def test_section_learned_model(tmp_path: Path) -> None:
 def test_section_why_doc_trajectory_and_order(bundle: Any, rendered: tuple[Any, str]) -> None:
     _, html = rendered
     s = _section(html, "why")
-    items = re.findall(r'<div class="why" id="why-\d+"><h3>\d+\. ([^<]+)</h3>', s)
-    assert len(items) == 6
+    # each trace is one collapsed block whose summary is the index entry (answer-first layout: no separate list)
+    items = re.findall(r'<details class="item why" id="why-(\d+)"><summary><h3>(\d+)\. ([^<]+)</h3>', s)
+    assert [(a, b) for a, b, _ in items] == [(str(k), str(k)) for k in range(1, 7)]
+    items = [t for _, _, t in items]
+    assert '<details class="item why" id="why-1" open>' not in s  # collapsed by default
     assert items[0] == f"Order {bundle.facts['score']['sim_only_key']}"
     assert "qt.why_trace document in the inputs" in s
     assert "Exact queue trajectory" in s  # zoo shadows traced from the replay's qt.queue_trajectory

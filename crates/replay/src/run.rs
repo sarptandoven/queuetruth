@@ -31,7 +31,7 @@ use crate::sinks::{Chunker, NullSink, TableSet, Tables};
 use crate::util::date_string;
 use crate::{
     BboMode, EngineConfig, EngineReport, EventObserver, FillRule, HiddenPrintPolicy, PlannedEnd, ShadowDiagnostics,
-    Sink, Stats, TrajectoryMode,
+    Sink, Stats, TradingHalt, TrajectoryMode,
 };
 
 /// Overrides of the schema-1.1 `ReplaySpec` fields `exclude_order_ids` (A1), `fill_rule` (A4/A5 rule switch) and
@@ -49,6 +49,9 @@ pub struct ReplayOptions {
     pub fill_rule: FillRule,
     /// Hidden-print policy (`None` = the venue default).
     pub hidden_print_policy: Option<HiddenPrintPolicy>,
+    /// Spans in which instruments were not in continuous trading (SPEC 1.2; `Engine::set_trading_halts`): each
+    /// partition gets those of its instrument.
+    pub trading_halts: Vec<TradingHalt>,
 }
 
 impl ReplayOptions {
@@ -93,6 +96,7 @@ impl ReplayOptions {
             exclude_order_ids_dated,
             fill_rule,
             hidden_print_policy,
+            trading_halts: over.trading_halts.clone(),
         })
     }
 
@@ -124,7 +128,7 @@ impl ReplayOptions {
         Ok(())
     }
 
-    fn configure(&self, eng: &mut Engine, part: &Partition) {
+    fn configure(&self, eng: &mut Engine, part: &Partition) -> QtResult<()> {
         eng.set_fill_rule(self.fill_rule);
         if let Some(p) = self.hidden_print_policy {
             eng.set_hidden_print_policy(p);
@@ -144,6 +148,13 @@ impl ReplayOptions {
             eng.set_excluded_orders(ids);
             eng.set_twin_linking(true);
         }
+        let halts: Vec<TradingHalt> = self
+            .trading_halts
+            .iter()
+            .copied()
+            .filter(|h| h.instrument_id == part.instrument_id)
+            .collect();
+        eng.set_trading_halts(&halts)
     }
 }
 
@@ -238,7 +249,7 @@ pub(crate) fn partition_engine(
         .collect();
     let mut eng = Engine::new(cfg.clone(), &inst, shadows, amends)?;
     eng.set_sequence_gap_detection(false);
-    opts.configure(&mut eng, part);
+    opts.configure(&mut eng, part)?;
     eng.set_feed_gaps(&partition_gaps(gaps, part));
     if cfg.rules.supports_hidden_orders {
         // OC-28: side-N prints the source marks as crosses are not hidden prints.

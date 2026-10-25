@@ -457,5 +457,9 @@ pub mod dbn;
 /// et `mbo.csv` / `trades.csv` / `instruments.csv` readers.
 pub mod etcsv;
 
+/// NYSE Group TAQ Integrated Feed (order by order, CSV): `Reader`, `parse_line`, `Mapper` and the `nyse` rule set's
+/// per-market allocation (parity on NYSE, price-time elsewhere); `synth` writes synthetic files for tests.
+pub mod nyse;
+
 /// US/Eastern local midnight as UTC ns (DST rules as et `time.rs`) and date parsing.
 pub mod time;

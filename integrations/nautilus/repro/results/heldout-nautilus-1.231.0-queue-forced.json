@@ -1,0 +1,316 @@
+{
+ "nautilus_trader": "1.231.0",
+ "calibration_run_id": "4291537475bc10f3",
+ "family": "nt_queue_l2_prob_touch",
+ "p": 0.8711256117455138,
+ "train": {
+  "dates": [
+   "2019-12-30"
+  ],
+  "blocks": {
+   "index": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "n_blocks": 5
+  }
+ },
+ "test": {
+  "dates": [
+   "2020-01-30"
+  ],
+  "blocks": null
+ },
+ "n_shadows": 3000,
+ "n_submitted": 2916,
+ "seeds": 4,
+ "bootstrap": {
+  "replicates": 2000,
+  "unit": "order",
+  "seed": 0
+ },
+ "zoo_default_model": "nt_queue_l2_prob_touch[mode=faithful;p=1]",
+ "zoo_fitted_model": null,
+ "fills_after_cancel_time": {
+  "nt_default": 0,
+  "qt_calibrated": 0
+ },
+ "horizons": {
+  "0.1s": {
+   "exact_rate": 0.030666666666666665,
+   "default": {
+    "fill_rate": 0.030666666666666665,
+    "bias_pp": 0.0,
+    "bias_ci_pp": [
+     -0.1,
+     0.1
+    ],
+    "brier": 0.0006666666666666666,
+    "agree_with_zoo_p1": 1.0
+   },
+   "calibrated": {
+    "fill_rate": 0.030583333333333334,
+    "bias_pp": -0.008333333333333333,
+    "bias_ci_pp": [
+     -0.1,
+     0.09166666666666666
+    ],
+    "bias_pp_per_seed": {
+     "min": -0.03333333333333333,
+     "max": 0.0,
+     "sd": 0.016666666666666666
+    },
+    "abs_bias_pp_single_run_mean": 0.008333333333333333,
+    "brier_seed_mean": 0.0006875,
+    "brier_single_seed_mean": 0.00075
+   },
+   "paired": {
+    "abs_bias_reduction_pp": {
+     "value": -0.008333333333333333,
+     "ci": [
+      -0.025,
+      0.024999999999999994
+     ]
+    },
+    "abs_bias_reduction_single_run_pp": {
+     "value": -0.008333333333333333,
+     "ci": [
+      -0.025,
+      0.016666666666666663
+     ]
+    },
+    "brier_gain_seed_mean": {
+     "value": -2.0833333333333333e-05,
+     "ci": [
+      -6.25e-05,
+      0.0
+     ]
+    },
+    "brier_gain_single_run": {
+     "value": -8.333333333333333e-05,
+     "ci": [
+      -0.00025,
+      0.0
+     ]
+    }
+   },
+   "zoo_held_out": {
+    "calibrated_bias_pp": -0.009771398868677755,
+    "default_bias_pp": -5.898059818321144e-15,
+    "calibrated_brier": 0.0006779244967637828,
+    "default_brier": 0.0006666666666666666
+   }
+  },
+  "1s": {
+   "exact_rate": 0.185,
+   "default": {
+    "fill_rate": 0.184,
+    "bias_pp": -0.1,
+    "bias_ci_pp": [
+     -0.23333333333333336,
+     0.0
+    ],
+    "brier": 0.001,
+    "agree_with_zoo_p1": 1.0
+   },
+   "calibrated": {
+    "fill_rate": 0.18258333333333332,
+    "bias_pp": -0.24166666666666667,
+    "bias_ci_pp": [
+     -0.39166666666666666,
+     -0.125
+    ],
+    "bias_pp_per_seed": {
+     "min": -0.26666666666666666,
+     "max": -0.2,
+     "sd": 0.03191423692521126
+    },
+    "abs_bias_pp_single_run_mean": 0.24166666666666667,
+    "brier_seed_mean": 0.0014375,
+    "brier_single_seed_mean": 0.002416666666666667
+   },
+   "paired": {
+    "abs_bias_reduction_pp": {
+     "value": -0.14166666666666666,
+     "ci": [
+      -0.216875,
+      -0.075
+     ]
+    },
+    "abs_bias_reduction_single_run_pp": {
+     "value": -0.14166666666666666,
+     "ci": [
+      -0.21687500000000004,
+      -0.075
+     ]
+    },
+    "brier_gain_seed_mean": {
+     "value": -0.0004375,
+     "ci": [
+      -0.0007088541666666667,
+      -0.0001875
+     ]
+    },
+    "brier_gain_single_run": {
+     "value": -0.0014166666666666668,
+     "ci": [
+      -0.0021687499999999997,
+      -0.00075
+     ]
+    }
+   },
+   "zoo_held_out": {
+    "calibrated_bias_pp": -0.24227144104226328,
+    "default_bias_pp": -0.09999999999991682,
+    "calibrated_brier": 0.001177901760581302,
+    "default_brier": 0.001
+   }
+  },
+  "10s": {
+   "exact_rate": 0.582,
+   "default": {
+    "fill_rate": 0.5803333333333334,
+    "bias_pp": -0.16666666666666669,
+    "bias_ci_pp": [
+     -0.4,
+     0.03333333333333333
+    ],
+    "brier": 0.0036666666666666666,
+    "agree_with_zoo_p1": 1.0
+   },
+   "calibrated": {
+    "fill_rate": 0.5779166666666666,
+    "bias_pp": -0.40833333333333327,
+    "bias_ci_pp": [
+     -0.6502083333333333,
+     -0.18333333333333332
+    ],
+    "bias_pp_per_seed": {
+     "min": -0.5333333333333333,
+     "max": -0.33333333333333337,
+     "sd": 0.08766518798921943
+    },
+    "abs_bias_pp_single_run_mean": 0.40833333333333327,
+    "brier_seed_mean": 0.004354166666666667,
+    "brier_single_seed_mean": 0.005916666666666666
+   },
+   "paired": {
+    "abs_bias_reduction_pp": {
+     "value": -0.24166666666666659,
+     "ci": [
+      -0.35,
+      -0.1333333333333333
+     ]
+    },
+    "abs_bias_reduction_single_run_pp": {
+     "value": -0.24166666666666659,
+     "ci": [
+      -0.3499999999999999,
+      -0.13333333333333333
+     ]
+    },
+    "brier_gain_seed_mean": {
+     "value": -0.0006875,
+     "ci": [
+      -0.0011875,
+      -0.0001875
+     ]
+    },
+    "brier_gain_single_run": {
+     "value": -0.00225,
+     "ci": [
+      -0.0033333333333333335,
+      -0.00125
+     ]
+    }
+   },
+   "zoo_held_out": {
+    "calibrated_bias_pp": -0.3739046708357008,
+    "default_bias_pp": -0.16666666666690366,
+    "calibrated_brier": 0.003836718435222157,
+    "default_brier": 0.0036666666666666666
+   }
+  },
+  "60s": {
+   "exact_rate": 0.8073333333333333,
+   "default": {
+    "fill_rate": 0.805,
+    "bias_pp": -0.23333333333333336,
+    "bias_ci_pp": [
+     -0.4,
+     -0.06666666666666667
+    ],
+    "brier": 0.0023333333333333335,
+    "agree_with_zoo_p1": 1.0
+   },
+   "calibrated": {
+    "fill_rate": 0.804,
+    "bias_pp": -0.33333333333333337,
+    "bias_ci_pp": [
+     -0.5333333333333333,
+     -0.16666666666666669
+    ],
+    "bias_pp_per_seed": {
+     "min": -0.4333333333333333,
+     "max": -0.26666666666666666,
+     "sd": 0.07200822998230955
+    },
+    "abs_bias_pp_single_run_mean": 0.3333333333333333,
+    "brier_seed_mean": 0.0026666666666666666,
+    "brier_single_seed_mean": 0.0033333333333333335
+   },
+   "paired": {
+    "abs_bias_reduction_pp": {
+     "value": -0.1,
+     "ci": [
+      -0.16666666666666669,
+      -0.04166666666666665
+     ]
+    },
+    "abs_bias_reduction_single_run_pp": {
+     "value": -0.09999999999999996,
+     "ci": [
+      -0.16666666666666669,
+      -0.041666666666666664
+     ]
+    },
+    "brier_gain_seed_mean": {
+     "value": -0.0003333333333333333,
+     "ci": [
+      -0.0006041666666666667,
+      -0.00010416666666666667
+     ]
+    },
+    "brier_gain_single_run": {
+     "value": -0.001,
+     "ci": [
+      -0.0016666666666666668,
+      -0.0004166666666666667
+     ]
+    }
+   },
+   "zoo_held_out": {
+    "calibrated_bias_pp": -0.33017293527006775,
+    "default_bias_pp": -0.2333333333310872,
+    "calibrated_brier": 0.0024506158156414864,
+    "default_brier": 0.0023333333333333335
+   }
+  }
+ },
+ "queuetruth_nautilus": "0.1.0",
+ "fill_models": {
+  "nt_default": {
+   "class": "FillModel",
+   "prob_fill_on_limit": 1.0,
+   "prob_slippage": 0.0
+  },
+  "qt_calibrated": {
+   "class": "FillModel",
+   "prob_fill_on_limit": 0.8711256117455138,
+   "prob_slippage": 0.0
+  }
+ },
+ "generated": "2026-10-24"
+}

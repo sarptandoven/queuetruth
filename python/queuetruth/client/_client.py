@@ -51,12 +51,13 @@ TERMINAL_UPLOAD_STATES = frozenset({"verified", "failed"})
 #: Job-creating resources: kind -> (collection path, spec model, summary model or None).
 RUN_KINDS: dict[str, tuple[str, type[sp.SpecModel], type[m.QtDoc] | None]] = {
     "replay": ("replays", sp.ReplaySpec, m.ReplaySummary),
+    "zoo": ("zoos", sp.ZooSpec, m.ZooSummary),
     "calibration": ("calibrations", sp.CalibrationSpec, m.CalibrationResult),
     "scorecard": ("scorecards", sp.ScorecardSpec, m.ScorecardSummary),
     "report": ("reports", sp.ReportSpec, None),
 }
 #: Kinds with an `/estimate` endpoint and a `GET /{collection}/{id}` run record with a summary.
-ESTIMATE_KINDS = ("replay", "calibration", "scorecard")
+ESTIMATE_KINDS = ("replay", "zoo", "calibration", "scorecard")
 
 _ModelT = TypeVar("_ModelT", bound=BaseModel)
 

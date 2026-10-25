@@ -1,0 +1,239 @@
+{
+ "schema": "qt.calibration_result",
+ "schema_version": 1,
+ "run_id": "000000000000a7e1",
+ "spec": {
+  "kind": "nt_touch",
+  "family": "nt_prob_touch",
+  "dataset": {
+   "path": "nasdaq-2d"
+  },
+  "shadows": {
+   "path": "2d-sampled-6000.parquet"
+  },
+  "live": null,
+  "train": {
+   "dates": [
+    "2019-12-30"
+   ],
+   "blocks": {
+    "index": [
+     0,
+     1,
+     2,
+     3
+    ],
+    "n_blocks": 5
+   }
+  },
+  "test": {
+   "dates": [
+    "2020-01-30"
+   ],
+   "blocks": null
+  },
+  "mode": "faithful",
+  "exchange": "partial",
+  "l2": {
+   "depth_levels": 10,
+   "cadence_ns": 0,
+   "trade_position": "before",
+   "include_counts": true,
+   "emit_hidden_trades": true
+  },
+  "horizons_ns": [
+   100000000,
+   1000000000,
+   10000000000,
+   60000000000
+  ],
+  "h_max_ns": 300000000000,
+  "grid": {
+   "alloc": {
+    "lo": -3.0,
+    "hi": 4.0,
+    "n": 141
+   },
+   "databento": {
+    "lo": -0.99,
+    "hi": 0.99,
+    "n": 199
+   },
+   "survival": {
+    "lo": -0.98,
+    "hi": 0.9,
+    "n": 25
+   }
+  },
+  "bootstrap": {
+   "b": 200,
+   "block": "auto",
+   "seed": 0
+  },
+  "particles": 100,
+  "seed": 0
+ },
+ "kind": "nt_touch",
+ "family": "nt_prob_touch",
+ "mode": "faithful",
+ "param_name": "p",
+ "estimate": 0.28662597114317423,
+ "ci_profile": null,
+ "ci_bootstrap": [
+  0.26904733199411984,
+  0.3029454551964315
+ ],
+ "loglik": null,
+ "n_events": 3604,
+ "n_shadows": 1536,
+ "train": {
+  "dates": [
+   "2019-12-30"
+  ],
+  "blocks": {
+   "index": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "n_blocks": 5
+  }
+ },
+ "test": {
+  "dates": [
+   "2020-01-30"
+  ],
+  "blocks": null
+ },
+ "held_out": {
+  "nt_prob_touch[mode=faithful;p=0.28662597114317423]": {
+   "brier": {
+    "100000000": 0.0024920356221807076,
+    "1000000000": 0.01144928964111831,
+    "10000000000": 0.013857997604103596,
+    "60000000000": 0.0071554663958924795,
+    "300000000000": 0.003155089095547703
+   },
+   "logloss": {
+    "100000000": 0.010971976862959034,
+    "1000000000": 0.03242556566883214,
+    "10000000000": 0.04168815069531811,
+    "60000000000": 0.019603154347920905,
+    "300000000000": 0.008847211509759917
+   },
+   "fill_rate_bias": {
+    "100000000": 0.0027796497095661996,
+    "1000000000": 0.004112192665570474,
+    "10000000000": -0.003625351304672564,
+    "60000000000": -0.0037752689291170594,
+    "300000000000": -0.0017122098738235891
+   }
+  }
+ },
+ "baseline_held_out": {
+  "nt_prob_touch[mode=faithful;p=1]": {
+   "brier": {
+    "100000000": 0.008,
+    "1000000000": 0.028,
+    "10000000000": 0.02033333333333333,
+    "60000000000": 0.009333333333333334,
+    "300000000000": 0.004333333333333333
+   },
+   "logloss": {
+    "100000000": 0.11052507646398002,
+    "1000000000": 0.38683526762268033,
+    "10000000000": 0.28091636101184453,
+    "60000000000": 0.12894575587456,
+    "300000000000": 0.05986820808488501
+   },
+   "fill_rate_bias": {
+    "100000000": 0.007999999999999945,
+    "1000000000": 0.02800000000000083,
+    "10000000000": 0.020333333333330983,
+    "60000000000": 0.009333333333355731,
+    "300000000000": 0.004333333333365497
+   }
+  }
+ },
+ "stratified": [],
+ "latency": {
+  "entry_ns": {
+   "p10": 200320.32,
+   "p50": 250400.4,
+   "p90": 375600.6,
+   "p99": 500800.8,
+   "n": 40
+  },
+  "response_ns": {
+   "p10": 72000.0,
+   "p50": 90000.0,
+   "p90": 135000.0,
+   "p99": 180000.0,
+   "n": 40
+  },
+  "cancel_ns": {
+   "p10": 144000.0,
+   "p50": 180000.0,
+   "p90": 270000.0,
+   "p99": 360000.0,
+   "n": 12
+  },
+  "amend_ns": {
+   "p10": null,
+   "p50": null,
+   "p90": null,
+   "p99": null,
+   "n": 0
+  },
+  "clock_sync_assumed": true
+ },
+ "exports": {
+  "hftbacktest": {
+   "python": "# queuetruth 0.1.1 | calibration 000000000000a7e1 | nt_prob_touch fitted on 2019-12-30; held-out 2020-01-30\n# data: nasdaq (real_data, dataset 1a00f70976b6)\n# fit: p = 0.286626 (nt_touch); 3604 events from 1536 shadows; bootstrap CI [0.269047, 0.302945]; profile CI [-, -]\n# held-out: beats the default nt_prob_touch[mode=faithful;p=1] out of sample: better at 100ms, 1s, 10s, 60s, 5m\n# Paste into your existing BacktestAsset chain (keep your data/tick/lot/fee settings).\nfrom hftbacktest import BacktestAsset\nasset = (\n    BacktestAsset()\n    # ... your existing .data(...), .tick_size(...), .lot_size(...), fee model ...\n    .partial_fill_exchange()\n)\n",
+   "notes": [
+    "family nt_prob_touch has no hftbacktest queue model: queue-model line omitted",
+    "no latency calibration: keep your existing latency model (intp_order_latency line omitted).",
+    "hftbacktest #316/#312: released versions apply partial fills of resting orders to position only when the order completes, and a fill exactly equal to leaves can raise InvalidOrderStatus; check partial-fill accounting in your version before comparing fill quantities.",
+    "The fit used this L2 view of its data source: top 10 levels, unconflated (every book event). The parameter is specific to that feed, depth and conflation: if your backtest runs on conflated L2 or another depth, refit on that view."
+   ]
+  },
+  "nautilus": {
+   "python": "# queuetruth 0.1.1 | calibration 000000000000a7e1 | NautilusTrader API as documented at develop 5247ad5 (verify names\n# for your version; newer builds expose FillModel under nautilus_trader.execution)\n# nt_prob_touch fitted on 2019-12-30; held-out 2020-01-30; data: nasdaq (real_data, dataset 1a00f70976b6)\n# fit: p = 0.286626 (nt_touch); 3604 events from 1536 shadows; bootstrap CI [0.269047, 0.302945]; profile CI [-, -]\n# held-out: beats the default nt_prob_touch[mode=faithful;p=1] out of sample: better at 100ms, 1s, 10s, 60s, 5m\nfrom nautilus_trader.backtest.models import FillModel, LatencyModel\nfill_model = FillModel(prob_fill_on_limit=0.286626)\n# not fitted: prob_slippage, random_seed (set them as in your current FillModel)\nlatency_model = LatencyModel(base_latency_nanos=0, insert_latency_nanos=250400, delete_latency_nanos=180000)\n# not fitted (no samples): update_latency_nanos; set them yourself\n# queue_position=True and trade_execution=True on the venue config when the fit was queue-gated (no)\n",
+   "notes": [
+    "prob_fill_on_limit is a per-touch Bernoulli probability: it is not portable across feeds with different trade-print or quote-update rates; refit per data source.",
+    "latencies are p50 one-way values (entry, amend, cancel) and assume synchronized clocks; NautilusTrader's LatencyModel is static (no time-varying latency).",
+    "update_latency_nanos not fitted (no samples): set them yourself; with base_latency_nanos=0 an omitted component is 0 ns.",
+    "High-level BacktestVenueConfig accepts built-in fill/latency models only; pass these objects to BacktestEngine.add_venue(...) when your version requires it."
+   ]
+  },
+  "latency_npz": null
+ },
+ "data_sources": [
+  {
+   "dataset_id": "1a00f70976b648282e2680b23f5239ef4cf04eb91d6227fb113543cf52eacd37",
+   "venue": "nasdaq",
+   "source_venue": "nasdaq",
+   "validation_status": "real_data"
+  }
+ ],
+ "warnings": [
+  "info: p is per touch and not portable across feeds with different print rates",
+  "held_out: fitted nt_prob_touch[mode=faithful;p=0.28662597114317423] vs default nt_prob_touch[mode=faithful;p=1] on 30000 test prediction rows",
+  "trust: beats_default: 100000000=better,1000000000=better,10000000000=better,60000000000=better,300000000000=better (beats the default nt_prob_touch[mode=faithful;p=1] out of sample: better at 100ms, 1s, 10s, 60s, 5m)",
+  "trust: verdict: exportable"
+ ],
+ "held_out_discordance": null,
+ "trust": {
+  "verdict": "exportable",
+  "reasons": [],
+  "flags": [],
+  "beats_default": {
+   "100000000": "better",
+   "1000000000": "better",
+   "10000000000": "better",
+   "60000000000": "better",
+   "300000000000": "better"
+  }
+ }
+}

@@ -1,0 +1,165 @@
+{
+  "name": "qt.ledger",
+  "metadata": {
+    "qt.engine_version": "0.1.1",
+    "qt.schema": "qt.ledger",
+    "qt.schema_version": "1"
+  },
+  "fields": [
+    {
+      "name": "seq",
+      "type": "int64",
+      "nullable": false
+    },
+    {
+      "name": "hash",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "prev",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "recorded_at",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": false
+    },
+    {
+      "name": "started_at",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": true
+    },
+    {
+      "name": "kind",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "status",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "study",
+      "type": "utf8",
+      "nullable": true
+    },
+    {
+      "name": "trial_id",
+      "type": "utf8",
+      "nullable": true
+    },
+    {
+      "name": "run_id",
+      "type": "utf8",
+      "nullable": true
+    },
+    {
+      "name": "spec_hash",
+      "type": "utf8",
+      "nullable": true
+    },
+    {
+      "name": "dataset_hash",
+      "type": "utf8",
+      "nullable": true
+    },
+    {
+      "name": "name",
+      "type": "utf8",
+      "nullable": true
+    },
+    {
+      "name": "params_json",
+      "type": "utf8",
+      "nullable": true
+    },
+    {
+      "name": "inputs_json",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "metrics_json",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "series_kind",
+      "type": "utf8",
+      "nullable": true
+    },
+    {
+      "name": "series_sha256",
+      "type": "utf8",
+      "nullable": true
+    },
+    {
+      "name": "series",
+      "type": "list<float64>",
+      "nullable": true
+    },
+    {
+      "name": "series_index",
+      "type": "list<int64>",
+      "nullable": true
+    },
+    {
+      "name": "periods_per_year",
+      "type": "float64",
+      "nullable": true
+    },
+    {
+      "name": "higher_is_better",
+      "type": "bool",
+      "nullable": true
+    },
+    {
+      "name": "run_ids",
+      "type": "list<utf8>",
+      "nullable": false
+    },
+    {
+      "name": "code_queuetruth",
+      "type": "utf8",
+      "nullable": true
+    },
+    {
+      "name": "code_engine",
+      "type": "utf8",
+      "nullable": true
+    },
+    {
+      "name": "code_core",
+      "type": "utf8",
+      "nullable": true
+    },
+    {
+      "name": "code_git",
+      "type": "utf8",
+      "nullable": true
+    },
+    {
+      "name": "code_user",
+      "type": "utf8",
+      "nullable": true
+    },
+    {
+      "name": "error_code",
+      "type": "utf8",
+      "nullable": true
+    },
+    {
+      "name": "error_message",
+      "type": "utf8",
+      "nullable": true
+    },
+    {
+      "name": "note",
+      "type": "utf8",
+      "nullable": true
+    }
+  ]
+}

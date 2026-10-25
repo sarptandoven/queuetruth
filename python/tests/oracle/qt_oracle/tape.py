@@ -1,9 +1,10 @@
 """Records, event grouping, the tape book and tape readers.
 
 The tape book is the book exactly as the feed describes it (no shadow, no counterfactual). It keeps each price
-level in time-priority order, applies the venue's modify-priority facts and pairs execution removals with their
-`F` records. The oracle uses it as the source of every fork (the book at shadow activation) and as the reference
-for "what the market really showed" (crossed books, displayed interest ahead of a hidden print).
+level in time-priority order (arrival order, or receipt order by order reference on Nasdaq ITCH data: `prio`),
+applies the venue's modify-priority facts and pairs execution removals with their `F` records. The oracle uses it
+as the source of every fork (the book at shadow activation) and as the reference for "what the market really
+showed" (crossed books, displayed interest ahead of a hidden print).
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
-from .venue import VenueFacts, modify_keeps_priority
+from .venue import VenueFacts, modify_keeps_priority, venue_key
 
 UNDEF_PRICE = (1 << 63) - 1
 FLAG_LAST = 1 << 7
@@ -96,6 +97,17 @@ def group_events(records: Iterable[Rec]) -> Iterator[list[Rec]]:
         yield buf
 
 
+def insert_by_prio(level: dict, o) -> None:
+    """Inserts `o` (with a `prio` key) into a level dict kept in priority order: appended when it ranks at or after
+    the tail (the usual case), else the level is rebuilt in key order (stable for equal keys)."""
+    if level and next(reversed(level.values())).prio > o.prio:
+        items = sorted([*level.values(), o], key=lambda x: x.prio)
+        level.clear()
+        level.update((x.oid, x) for x in items)
+    else:
+        level[o.oid] = o
+
+
 def opposite(side: str) -> str:
     return "A" if side == "B" else "B"
 
@@ -110,20 +122,30 @@ def strictly_better(side: str, a: int, b: int) -> bool:
 
 
 class TapeOrder:
-    __slots__ = ("oid", "price", "side", "size")
+    __slots__ = ("oid", "price", "prio", "side", "size")
 
-    def __init__(self, oid: int, side: str, price: int, size: int) -> None:
+    def __init__(self, oid: int, side: str, price: int, size: int, prio: int = 0) -> None:
         self.oid = oid
         self.side = side
         self.price = price
         self.size = size
+        self.prio = prio  # priority key within its level: smaller ranks first (`TapeBook.key`)
 
 
 class TapeBook:
-    """The feed's book: per side, price -> {order_id: TapeOrder} in time priority, plus sorted price lists."""
+    """The feed's book: per side, price -> {order_id: TapeOrder} in time priority, plus sorted price lists.
 
-    def __init__(self, facts: VenueFacts) -> None:
+    Time priority is arrival order, or with `ref_priority` (Nasdaq ITCH data, `InstrumentMeta.order_ref_priority`)
+    receipt order: an order entering the book keys at `2 * reference`, so a reference older than orders resting at
+    its level (an order held until the open, released with its original reference) ranks ahead of them; an order
+    re-entering the book (a duplicate add, a modify that loses priority) is received now and keys at `2 * max_ref + 1`,
+    after every reference added so far."""
+
+    def __init__(self, facts: VenueFacts, ref_priority: bool = False) -> None:
         self.facts = facts
+        self.ref_priority = ref_priority
+        self.max_ref = 0  # largest order reference added so far
+        self.arrivals = 0
         self.orders: dict[int, TapeOrder] = {}
         self.levels: dict[str, dict[int, dict[int, TapeOrder]]] = {"B": {}, "A": {}}
         self.totals: dict[str, dict[int, int]] = {"B": {}, "A": {}}
@@ -159,15 +181,23 @@ class TapeBook:
         return b is not None and a is not None and b >= a
 
     # ----- mutations
+    def key(self, oid: int, reentry: bool) -> int:
+        """Priority key of an order entering the book now (`reentry`: it was on the book before)."""
+        self.arrivals += 1
+        if not self.ref_priority:
+            return self.arrivals
+        return 2 * max(self.max_ref, oid) + 1 if reentry else 2 * oid
+
     def _insert(self, o: TapeOrder) -> None:
         lv = self.levels[o.side].get(o.price)
         if lv is None:
             lv = self.levels[o.side][o.price] = {}
             self.totals[o.side][o.price] = 0
             bisect.insort(self.prices[o.side], o.price)
-        lv[o.oid] = o
+        insert_by_prio(lv, o)
         self.totals[o.side][o.price] += o.size
         self.orders[o.oid] = o
+        self.max_ref = max(self.max_ref, o.oid)
 
     def _remove(self, o: TapeOrder) -> None:
         lv = self.levels[o.side][o.price]
@@ -191,7 +221,7 @@ class TapeBook:
         old = self.orders.get(oid)
         if old is not None:
             self._remove(old)
-        self._insert(TapeOrder(oid, side, price, size))
+        self._insert(TapeOrder(oid, side, price, size, self.key(oid, old is not None)))
 
     def cancel(self, oid: int, size: int) -> None:
         o = self.orders.get(oid)
@@ -206,7 +236,7 @@ class TapeBook:
         o = self.orders.get(oid)
         if o is None:
             if size > 0:
-                self._insert(TapeOrder(oid, side, price, size))
+                self._insert(TapeOrder(oid, side, price, size, self.key(oid, False)))
             return
         if size == 0:
             self._remove(o)
@@ -215,7 +245,7 @@ class TapeBook:
             self._reduce(o, o.size - size)
         else:
             self._remove(o)
-            self._insert(TapeOrder(oid, o.side, price, size))
+            self._insert(TapeOrder(oid, o.side, price, size, self.key(oid, True)))
 
     def clear(self) -> None:
         self.orders.clear()
@@ -243,6 +273,15 @@ class InstrumentMeta:
     midnight_utc_ns: int
     open_s: int
     close_s: int
+    source: str = ""  # ingest format of the instrument row (`itch`, `etcsv`, `dbn`, `synthetic`, ...)
+
+    @property
+    def order_ref_priority(self) -> bool:
+        """Time priority follows the order id (an ITCH order reference number, assigned in receipt order across
+        the feed) rather than the arrival order of `A` records: Nasdaq data from TotalView-ITCH. Nasdaq releases
+        orders it held until the open by `A` records carrying their original, smaller references, and executes them
+        ahead of orders displayed earlier but received later. Other sources assign ids freely."""
+        return venue_key(self.venue) == "nasdaq" and self.source in ("itch", "etcsv", "dbn")
 
 
 @dataclass
@@ -306,6 +345,7 @@ def read_qt_dataset(root: str | Path) -> list[Partition]:
             int(r["midnight_utc_ns"]),
             int(r["open_s"]),
             int(r["close_s"]),
+            str(r.get("source") or ""),
         )
     out = []
     for p in manifest["partitions"]:
@@ -363,6 +403,8 @@ def read_et_csv(
                 )
             )
     return [
-        Partition(InstrumentMeta(i, session_date, venue, tick_size, midnight_utc_ns, open_s, close_s), [], recs)
+        Partition(
+            InstrumentMeta(i, session_date, venue, tick_size, midnight_utc_ns, open_s, close_s, "etcsv"), [], recs
+        )
         for i, recs in sorted(parts.items())
     ]

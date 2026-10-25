@@ -25,7 +25,7 @@ from queuetruth_service.routers.store import absolute, serve_file
 router = APIRouter(prefix="/v1/jobs")
 JobId = Annotated[str, Path(max_length=64)]
 Limit = Annotated[int, Query(ge=1, le=200)]
-Kind = Literal["ingest", "replay", "calibration", "scorecard", "report", "dataset_validate", "deletion"]
+Kind = Literal["ingest", "replay", "calibration", "scorecard", "report", "dataset_validate", "deletion", "zoo"]
 State = Literal["queued", "running", "succeeded", "failed", "canceled", "expired"]
 #: Longest a cancel waits for the job row (held briefly by the worker's claim, progress, heartbeat and finish
 #: transactions). A holder stuck longer (a stalled or partitioned worker mid-transaction) must not pin an API thread and

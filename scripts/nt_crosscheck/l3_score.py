@@ -85,6 +85,18 @@ def main() -> int:
                 f"{hz['nt_bias_pp']:+.2f} [{lo:+.2f}, {hi:+.2f}] | {100 * hz['agree_exact']:.2f}% | "
                 f"{hz['nt1_exact0']} | {hz['nt0_exact1']} | {hz['nt_queue_l2_bias_pp']:+.2f} |"
             )
+    # Harness check: each order is cancelled at ts_live + 60 s + 1 ns, so none may first fill after that.
+    late = {}
+    for c in sorted(set(l3.config)):
+        g = l3[l3.config == c]
+        ff = g.first_fill_ts.dropna().astype("int64")
+        late[c] = int((ff > g.loc[ff.index, "ts_live"].astype("int64") + H["60s"] + 1).sum())
+    out["filled_after_cancel"] = late
+    lines += [
+        "",
+        "Orders first filled after their end-of-window cancel (must be 0): "
+        + ", ".join(f"{c} {n}" for c, n in late.items()),
+    ]
     (work / f"l3_report{suffix}.json").write_text(json.dumps(out, indent=1))
     (work / f"l3_report{suffix}.md").write_text("\n".join(lines) + "\n")
     print("\n".join(lines))

@@ -127,8 +127,9 @@ class RunDir:
 #: Status of a dataset read from a vendor file (`VENDOR_FORMATS`) whose venue rule set is validated on
 #: synthetic data only: the manifest's `synthetic_only` describes the rules, not the data (Databento CME files).
 RULES_SYNTHETIC_ONLY = "rules_validated_on_synthetic_only"
-#: `source_format`s read from vendor files by `ingest` (the testkit writes `synthetic`).
-VENDOR_FORMATS = frozenset({"dbn", "itch", "iex", "etcsv"})
+#: `source_format`s read from vendor files by `ingest` (the testkit writes `synthetic`). `nyse_ibf`: NYSE TAQ
+#: Integrated Feed files, real data replayed with the `nyse` rule set, which is validated on synthetic data only.
+VENDOR_FORMATS = frozenset({"dbn", "itch", "iex", "etcsv", "nyse_ibf"})
 
 
 @dataclass

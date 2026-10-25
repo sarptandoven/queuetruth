@@ -19,6 +19,8 @@ gate = []
 [dependencies]
 queuetruth-types.workspace = true
 queuetruth-schema.workspace = true
+# Only for `dq::is_info_source_counter`: the INFO counter list is policy shared with ingest, not engine logic.
+queuetruth-ingest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

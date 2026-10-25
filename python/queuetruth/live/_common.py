@@ -32,7 +32,24 @@ U64_MAX = 2**64 - 1
 #: Maximum `order_key` length; leaves room for the `.leg<k>` suffix of schedule legs (ids are <= 128 chars).
 MAX_KEY_LEN = 116
 
+#: Range of every decimal an input may carry (`dec`): |x| < 1e31 with at most 40 fractional digits (71 digit
+#: positions). Venue quantities, prices, fees and ns epochs are far inside it, and so is the float noise a venue's
+#: JSON can carry (`1.3877787807814457e-17` has 33 fractional digits); outside it a value is an attack
+#: (`1e999999999` would make `int()` allocate gigabytes). Within it sums and differences of up to 10**9 values stay
+#: exact at the 80-digit context below. Whether a value is representable at its column's exponent is `to_fixed`'s
+#: check, not this one.
+MAX_MAGNITUDE = 30
+MAX_SCALE = 40
+
 _CTX = decimal.Context(prec=80, rounding=decimal.ROUND_HALF_EVEN)
+#: 80 digits, any exponent, and an exception instead of a rounded result: the fast path of `to_fixed` and `dmul`.
+_EXACT = decimal.Context(
+    prec=80,
+    rounding=decimal.ROUND_HALF_EVEN,
+    Emin=decimal.MIN_EMIN,
+    Emax=decimal.MAX_EMAX,
+    traps=[decimal.Inexact, decimal.Overflow, decimal.InvalidOperation],
+)
 
 
 def input_error(location: str, msg: str) -> QtError:
@@ -49,15 +66,18 @@ def units_error(msg: str) -> QtError:
 
 
 def dec(value: Any, what: str, location: str = "") -> Decimal | None:
-    """Decimal of a JSON / CSV value (str, int or Decimal); None for null or empty text. Non-numbers fail."""
+    """Decimal of a JSON / CSV value (str, int or Decimal); None for null or empty text. Non-numbers fail
+    `QT-INPUT-002`; values outside `MAX_MAGNITUDE` / `MAX_SCALE` fail `QT-INPUT-004`."""
     if value is None:
         return None
+    short = False  # text of at most MAX_SCALE characters without an exponent: its scale needs no check
     if isinstance(value, bool):
         raise input_error(location or what, f"{what}: boolean {value!r} is not a number")
     if isinstance(value, Decimal):
         d = value
     elif isinstance(value, int):
         d = Decimal(value)
+        short = True
     elif isinstance(value, float):
         d = Decimal(repr(value))
     else:
@@ -67,10 +87,38 @@ def dec(value: Any, what: str, location: str = "") -> Decimal | None:
         try:
             d = Decimal(text)
         except InvalidOperation as e:
-            raise input_error(location or what, f"{what}: {value!r} is not a decimal number") from e
+            raise input_error(location or what, f"{what}: {_show(value)} is not a decimal number") from e
+        short = len(text) <= MAX_SCALE and "e" not in text and "E" not in text
     if not d.is_finite():
-        raise input_error(location or what, f"{what}: {value!r} is not finite")
+        raise input_error(location or what, f"{what}: {_show(value)} is not finite")
+    if d.is_zero():
+        return Decimal(0).copy_sign(d)  # `0E+999999999` and friends: no extreme exponent leaks into arithmetic
+    if d.adjusted() > MAX_MAGNITUDE or not (short or _scale_ok(d)):
+        raise units_error(
+            f"{location or what}: {what}: {_show(value)} is outside the supported decimal range "
+            f"(|x| < 1e{MAX_MAGNITUDE + 1}, at most {MAX_SCALE} fractional digits)"
+        )
     return d
+
+
+def _scale_ok(d: Decimal) -> bool:
+    """At most `MAX_SCALE` fractional digits once trailing zeros are dropped (non-zero finite `d`)."""
+    exp = d.as_tuple().exponent
+    assert isinstance(exp, int)
+    return exp >= -MAX_SCALE or _eff_exp(d) >= -MAX_SCALE
+
+
+def _eff_exp(d: Decimal) -> int:
+    """Exponent of the last non-zero digit of a non-zero finite decimal (`1.500` -> -1, `1200` -> 2)."""
+    _, digits, exp = d.as_tuple()
+    assert isinstance(exp, int)
+    return exp + len(digits) - len(bytes(digits).rstrip(b"\x00"))
+
+
+def _show(value: Any) -> str:
+    """`repr` of an input value for an error message, shortened (inputs can be megabytes)."""
+    r = repr(value) if not isinstance(value, Decimal) else repr(str(value))
+    return r if len(r) <= 64 else f"{r[:40]}...({len(r)} chars)"
 
 
 def dec_text(value: Any) -> str | None:
@@ -81,17 +129,29 @@ def dec_text(value: Any) -> str | None:
         t = value.strip()
         return t or None
     if isinstance(value, Decimal):
-        return format(value, "f")
+        return plain_decimal(value)
     if isinstance(value, int) and not isinstance(value, bool):
         return str(value)
     return str(value)
 
 
 def to_fixed(d: Decimal, exp: int, what: str, *, unsigned: bool = False) -> int:
-    """`d * 10^-exp` as an exact integer (int64, or uint64 when `unsigned`); `QT-INPUT-004` when not exact."""
-    scaled = d.scaleb(-exp, _CTX)
-    if scaled != scaled.to_integral_value(context=_CTX):
-        raise units_error(f"{what}: {format(d, 'f')} is not representable at exponent {exp}")
+    """`d * 10^-exp` as an exact integer (int64, or uint64 when `unsigned`); `QT-INPUT-004` when not exact or out
+    of range. The range is checked on the decimal exponent before any integer is built, so a hostile exponent costs
+    nothing, and the scaling never rounds: when the scaled value would need more than 80 digits, it has non-zero
+    digits below the units place (it is below 10**21), so it is not representable."""
+    if not d.is_finite():
+        raise units_error(f"{what}: {d} is not a finite number")
+    if d.is_zero():
+        return 0
+    if d.adjusted() - exp > 20:  # the scaled value has more than 21 integer digits
+        raise units_error(f"{what}: {_show(d)} out of {'uint64' if unsigned else 'int64'} range at exponent {exp}")
+    try:
+        scaled = d.scaleb(-exp, _EXACT)
+    except decimal.Inexact:
+        scaled = None
+    if scaled is None or scaled != scaled.to_integral_value():
+        raise units_error(f"{what}: {_show(d)} is not representable at exponent {exp}")
     v = int(scaled)
     if unsigned:
         if v < 0 or v > U64_MAX:
@@ -115,8 +175,14 @@ def dsub(a: Decimal, b: Decimal) -> Decimal:
 
 
 def dmul(a: Decimal, b: Decimal) -> Decimal:
-    """Exact product."""
-    return _CTX.multiply(a, b)
+    """Exact product: at 80 digits when it fits (the common case), else in a context as wide as both factors'
+    digits, so nothing is rounded."""
+    try:
+        return _EXACT.multiply(a, b)
+    except decimal.Inexact:
+        ctx = _CTX.copy()
+        ctx.prec = len(a.as_tuple().digits) + len(b.as_tuple().digits)
+        return ctx.multiply(a, b)
 
 
 def ddiv_exact(a: Decimal, b: Decimal) -> Decimal | None:
@@ -132,6 +198,7 @@ def ddiv_exact(a: Decimal, b: Decimal) -> Decimal | None:
 _UNIT_MULT = {"s": 10**9, "ms": 10**6, "us": 10**3, "ns": 1}
 # Magnitude windows (2001-09 .. 5138) per epoch unit.
 _UNIT_BOUNDS = {"s": (10**9, 10**11), "ms": (10**12, 10**14), "us": (10**15, 10**17), "ns": (10**18, 10**20)}
+_EPOCH_MIN, _EPOCH_MAX = Decimal(10**9), Decimal(10**20)
 
 
 def epoch_ns(value: Any, unit: str, what: str, location: str = "") -> tuple[int, str]:
@@ -141,7 +208,9 @@ def epoch_ns(value: Any, unit: str, what: str, location: str = "") -> tuple[int,
     if d is None:
         raise input_error(location or what, f"{what}: missing timestamp")
     if d != d.to_integral_value():
-        raise input_error(location or what, f"{what}: {value!r} is not an integer epoch value")
+        raise input_error(location or what, f"{what}: {_show(value)} is not an integer epoch value")
+    if not _EPOCH_MIN <= d < _EPOCH_MAX:  # before int(): `1e999999999` must not become an integer
+        raise input_error(location or what, f"{what}: {_show(value)} is outside every epoch unit window")
     v = int(d)
     hits = [u for u, (lo, hi) in _UNIT_BOUNDS.items() if lo <= v < hi]
     if not hits:
@@ -173,7 +242,8 @@ def _precision(frac_digits: int) -> str:
 
 
 _RFC3339 = re.compile(
-    r"^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:[.,](\d{1,9}))?\s*(Z|z|[+-]\d{2}:?\d{2})?$"
+    r"^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:[.,](\d{1,9}))?\s*(Z|z|[+-]\d{2}:?\d{2})?$",
+    re.ASCII,
 )
 
 
@@ -182,7 +252,10 @@ def _offset_s(tz: str) -> int:
         return 0
     sign = -1 if tz[0] == "-" else 1
     body = tz[1:].replace(":", "")
-    return sign * (int(body[:2]) * 3600 + int(body[2:]) * 60)
+    h, m = int(body[:2]), int(body[2:])
+    if h > 23 or m > 59:
+        raise ValueError(f"UTC offset {tz!r} out of range")
+    return sign * (h * 3600 + m * 60)
 
 
 def rfc3339_ns(text: str, what: str, location: str = "", *, default_tz: str | None = None) -> tuple[int, str]:
@@ -190,13 +263,18 @@ def rfc3339_ns(text: str, what: str, location: str = "", *, default_tz: str | No
     offset, `default_tz` (IANA name) is required."""
     m = _RFC3339.match(str(text).strip())
     if not m:
-        raise input_error(location or what, f"{what}: {text!r} is not an RFC 3339 timestamp")
+        raise input_error(location or what, f"{what}: {_show(text)} is not an RFC 3339 timestamp")
     y, mo, d, h, mi, s = (int(m.group(i)) for i in range(1, 7))
     frac = m.group(7) or ""
     tz = m.group(8)
     frac_ns = int((frac + "000000000")[:9])
     if tz is not None:
-        secs = calendar.timegm((y, mo, d, h, mi, s, 0, 0, 0)) - _offset_s(tz)
+        _check_civil(y, mo, d, h, mi, s, text, what, location)
+        try:
+            off = _offset_s(tz)
+        except ValueError as e:
+            raise input_error(location or what, f"{what}: {_show(text)}: {e}") from e
+        secs = calendar.timegm((y, mo, d, h, mi, s, 0, 0, 0)) - off
         return secs * 10**9 + frac_ns, _precision(len(frac))
     if default_tz is None:
         raise input_error(location or what, f"{what}: {text!r} has no UTC offset and no time zone was given")
@@ -205,12 +283,15 @@ def rfc3339_ns(text: str, what: str, location: str = "", *, default_tz: str | No
 
 
 def local_to_utc_s(y: int, mo: int, d: int, h: int, mi: int, s: int, tz: str, what: str, location: str = "") -> int:
-    """Local wall time in IANA zone `tz` -> UTC epoch seconds; DST-ambiguous or nonexistent times fail."""
+    """Local wall time in IANA zone `tz` -> UTC epoch seconds; impossible dates and times (month 13, February 30,
+    hour 24, year 0) fail `QT-INPUT-002`, as do DST-ambiguous or nonexistent times. Second 60 (a leap second) is
+    accepted and counts as the next minute's second 0 (POSIX time)."""
+    _check_civil(y, mo, d, h, mi, s, f"{y:04d}-{mo:02d}-{d:02d} {h:02d}:{mi:02d}:{s:02d}", what, location)
     if tz.upper() == "UTC":
         return calendar.timegm((y, mo, d, h, mi, s, 0, 0, 0))
     try:
         zone = ZoneInfo(tz)
-    except (ZoneInfoNotFoundError, ValueError) as e:
+    except (ZoneInfoNotFoundError, ValueError, OSError) as e:
         raise QtError("QT-CONFIG-001", f"unknown time zone {tz!r}") from e
     try:
         naive = dt.datetime(y, mo, d, h, mi, s)
@@ -228,6 +309,16 @@ def local_to_utc_s(y: int, mo: int, d: int, h: int, mi: int, s: int, tz: str, wh
     return calendar.timegm((y, mo, d, h, mi, s, 0, 0, 0)) - off_s
 
 
+def _check_civil(y: int, mo: int, d: int, h: int, mi: int, s: int, text: str, what: str, location: str) -> None:
+    """`QT-INPUT-002` unless the fields name a real UTC date-time (second 60 allowed for leap seconds)."""
+    try:
+        dt.datetime(y, mo, d, h, mi, min(s, 59))
+    except ValueError as e:
+        raise input_error(location or what, f"{what}: {_show(text)} is not a valid date-time: {e}") from e
+    if s > 60:
+        raise input_error(location or what, f"{what}: {_show(text)} is not a valid date-time: second {s}")
+
+
 def utc_date_days(ts_ns: int) -> int:
     """Days since 1970-01-01 of a UTC ns timestamp."""
     return ts_ns // (86_400 * 10**9)
@@ -235,7 +326,10 @@ def utc_date_days(ts_ns: int) -> int:
 
 def date_days(text: str) -> int:
     """`YYYY-MM-DD` -> days since 1970-01-01."""
-    d = dt.date.fromisoformat(text.strip())
+    try:
+        d = dt.date.fromisoformat(text.strip())
+    except ValueError as e:
+        raise input_error(_show(text), f"not a YYYY-MM-DD date: {e}") from e
     return (d - dt.date(1970, 1, 1)).days
 
 
@@ -286,7 +380,19 @@ def _loads(text: str) -> Any:
 
 
 def _dump(obj: Any) -> str:
-    return json.dumps(obj, separators=(",", ":"), ensure_ascii=False, default=lambda o: format(o, "f"))
+    return json.dumps(obj, separators=(",", ":"), ensure_ascii=False, default=plain_decimal)
+
+
+def plain_decimal(d: Decimal) -> str:
+    """Positional text of a decimal (`1E+3` -> `1000`), or its scientific form when the positional one would run past
+    `_PLAIN_MAX` characters: `format(Decimal("1e999999999"), "f")` builds a billion-character string."""
+    t = d.as_tuple()
+    if d.is_finite() and isinstance(t.exponent, int) and t.exponent >= -_PLAIN_MAX and d.adjusted() <= _PLAIN_MAX:
+        return format(d, "f")
+    return str(d)
+
+
+_PLAIN_MAX = 100
 
 
 def read_text(path: Path) -> str:
@@ -307,8 +413,8 @@ def _unwrap(obj: Any, raw: str, location: str, file_idx: int, line_idx: int) -> 
         if isinstance(msg, str):
             try:
                 msg = _loads(msg)
-            except json.JSONDecodeError as e:
-                raise input_error(location, f"wrapped msg is not JSON: {e}") from e
+            except (ValueError, RecursionError) as e:
+                raise input_error(location, f"wrapped msg is not JSON: {type(e).__name__}: {e!s:.200}") from e
         rec = Record(msg, raw, location, file_idx, line_idx, wrapped=True)
         if "recv_ns" in obj:
             rec.recv_ns = _int_field(obj["recv_ns"], "recv_ns", location)
@@ -329,8 +435,8 @@ def _unwrap(obj: Any, raw: str, location: str, file_idx: int, line_idx: int) -> 
 
 def _int_field(v: Any, what: str, location: str) -> int:
     d = dec(v, what, location)
-    if d is None or d != d.to_integral_value():
-        raise input_error(location, f"{what} must be an integer ns timestamp, got {v!r}")
+    if d is None or d != d.to_integral_value() or not I64_MIN <= d <= I64_MAX:
+        raise input_error(location, f"{what} must be an integer ns timestamp (int64), got {_show(v)}")
     return int(d)
 
 
@@ -343,7 +449,7 @@ def read_json_records(path: Path, file_idx: int) -> list[Record]:
         return []
     try:
         doc = _loads(stripped)
-    except json.JSONDecodeError:
+    except (ValueError, RecursionError):  # JSONDecodeError, a number past the int digit limit, deep nesting
         doc = None
         whole = False
     else:
@@ -363,6 +469,10 @@ def read_json_records(path: Path, file_idx: int) -> list[Record]:
             obj = _loads(s)
         except json.JSONDecodeError as e:
             raise input_error(f"{path}:{n}", f"invalid JSON line: {e.msg}") from e
+        except ValueError as e:  # an integer past Python's int-string digit limit
+            raise input_error(f"{path}:{n}", f"invalid JSON line: {e}") from e
+        except RecursionError as e:
+            raise input_error(f"{path}:{n}", "invalid JSON line: nested too deeply") from e
         out.append(_unwrap(obj, s, f"{path}:{n}", file_idx, n))
     return out
 
@@ -372,9 +482,15 @@ def dump_raw(obj: Any) -> str:
     return _dump(obj)
 
 
-def read_csv_rows(text: str) -> tuple[list[str], list[list[str]]]:
-    """Header and rows of a CSV text (header names stripped)."""
-    rows = list(csv.reader(io.StringIO(text)))
+def read_csv_rows(text: str, where: str = "CSV input") -> tuple[list[str], list[list[str]]]:
+    """Header and rows of a CSV text (header names stripped); `QT-INPUT-002` naming `where` and the line when the
+    text is not CSV the reader accepts (a bare CR inside an unquoted field, a field past the reader's 128 KiB field
+    limit)."""
+    reader = csv.reader(io.StringIO(text))
+    try:
+        rows = list(reader)
+    except csv.Error as e:
+        raise input_error(f"{where}:{reader.line_num}", f"not readable as CSV: {e}") from e
     rows = [r for r in rows if any(c.strip() for c in r)]
     if not rows:
         return [], []
@@ -397,7 +513,7 @@ def text_or_none(v: Any) -> str | None:
     if v is None:
         return None
     if isinstance(v, Decimal):
-        s = format(v, "f")
+        s = plain_decimal(v)
     else:
         s = str(v).strip()
     return s or None

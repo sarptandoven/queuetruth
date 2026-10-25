@@ -18,7 +18,7 @@ queuetruth mcp serve --help
 | When | `--local`, or `QT_API_KEY` is not set | `QT_API_KEY` is set and `--local` is not given |
 | Reads | output directories under `QT_MCP_ROOT` (default: the server's working directory) | the HTTP API at `QT_API_URL` (default `http://127.0.0.1:8080`), plus the local tools |
 | Tools | `qt_local_read_summary`, `qt_local_list_outputs`, `qt_local_why` | `qt_meta`, `qt_list_datasets`, `qt_describe_dataset`, `qt_estimate`, `qt_get_job`, `qt_list_job_files`, `qt_get_replay`, `qt_get_calibration`, `qt_get_scorecard`, `qt_explain_metric`, then the submit tools (only with `--allow-submit`), then the three local tools |
-| Writes | nothing | only through submit tools, and only with `--allow-submit` |
+| Writes | nothing (with `--allow-run`, the run tools write under the run root) | only through submit tools, and only with `--allow-submit` (and run tools as in local mode) |
 
 The tool order and the mode rules are tested in `python/tests/mcp/test_mcp_server.py` (O-MCP-1:
 `test_O_MCP_1_tool_order_and_schemas`, `test_O_MCP_1_submit_tools_absent_without_allow_submit`,
@@ -33,6 +33,33 @@ document; it is validated with the shared model before it is returned. A directo
 (`summary.json` first, then `calibration.json`, `model.json`, `report.json`, `manifest.json`, else its only `qt.*`
 JSON file). `qt_local_why` runs the exact why-trace with no output file. The local tools never write
 (`test_local_tools_read_and_never_write`).
+
+In remote mode the server also lists `qt_get_zoo` (a finished zoo run's `qt.zoo_summary`) and, with
+`--allow-submit`, `qt_submit_zoo`, after the tools in the table; `qt_estimate` accepts kind `zoo`.
+
+### Run mode: let the agent run replays and zoos locally
+
+With `--allow-run` (or `QT_MCP_ALLOW_RUN=1`), in either mode, the server also lists `qt_local_sample_shadows`,
+`qt_local_run_replay` and `qt_local_run_zoo`, which run on local datasets without the service or Postgres:
+
+```json
+"args": ["mcp", "serve", "--local", "--allow-run"],
+"env": {"QT_MCP_ROOT": "/home/me/research/queuetruth-runs"}
+```
+
+- Set `QT_MCP_ROOT` explicitly. Inputs must lie under `QT_MCP_ROOT`, a directory of `QT_MCP_DATA_ROOTS` or the run
+  root (after resolving symlinks), and none of these may be `/`, your home directory or a parent of it: the server
+  refuses to start otherwise (`QT-CONFIG-001`), so a server started from your home directory without `QT_MCP_ROOT`
+  does not run.
+- Specs take `{"path": ...}` references only and no `out`. Outputs go to `QT_MCP_RUN_ROOT/<kind>/<run_id>` (default
+  `<QT_MCP_ROOT>/qt-mcp-runs`), named in the result's `_meta`; the same spec returns the finished run instead of
+  running again.
+- Each run is a fresh `python -I` child with a minimal environment, killed with its process group on timeout or
+  cancel, under the `QT_MCP_RUN_*` limits (wall clock, CPU, output size, free disk, memory, threads, models,
+  horizons, shadows). POSIX only.
+
+To give an agent a simulated exchange in which its own orders fill as the recorded queue would have filled them, see
+[Give an agent a realistic exchange](agent-sandbox.md) (the optional `qt_sandbox_*` tools).
 
 ## Configure your MCP client
 
@@ -197,6 +224,8 @@ not start a second job.
 - **Files stay out of the conversation.** Job files are returned as `resource_link` items with presigned URLs, never
   inline; local tools return only `qt.*` JSON documents, not Parquet data.
 - **Local mode stays inside its root.** Point `QT_MCP_ROOT` at the results directory, not at your home directory.
+- **Run mode writes.** Without `--allow-run` (and `QT_MCP_ALLOW_RUN` unset) no tool writes locally. With it, the run
+  tools write only under the run root.
 - **Tool output is data.** Treat summaries, dataset names and error messages as data, not as instructions to the
   agent. Dataset names and job specs are written by users of your service.
 - **Network.** In remote mode the server's only network client is the HTTP client for `QT_API_URL`; it returns

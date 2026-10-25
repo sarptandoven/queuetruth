@@ -38,7 +38,7 @@ def _render(out_dir: Path, inputs: list[Any], **kw: Any) -> tuple[Any, str]:
 
 
 def _section(html: str, sid: str) -> str:
-    m = re.search(rf'<section id="{sid}">(.*?)</section>', html, re.S)
+    m = re.search(rf'<section id="{sid}"[^>]*>(.*?)</section>', html, re.S)
     assert m, f"section {sid} missing"
     return m.group(1)
 
@@ -142,10 +142,13 @@ def test_a2_never_cancel_leaderboard_and_cancel_bearing(tmp_path: Path) -> None:
     assert any(r["metric"].startswith("cancel_bearing/") for r in errs)
     _, html = _render(tmp_path, [tmp_path / "zoo"])
     s = _section(html, "zoo")
-    assert "Leaderboard: never-cancel shadows" in s
+    # answer-first layout: the never-cancel leaderboard is its own section; cancel-bearing results stay in the zoo
+    # drill-down, so they can never be read as leaderboard rows
+    lb = _section(html, "leaderboard")
+    assert "Leaderboard: never-cancel shadows" in lb
+    assert "Cancel-bearing" not in lb
     assert "Cancel-bearing shadows (mirror orders with real cancel times), reported separately" in s
     assert "planned life of qt.zoo_shadows (audit ruling A2)" in s
-    lb = s.split("Cancel-bearing shadows")[0]
     aj = next(
         r
         for r in errs
@@ -190,7 +193,7 @@ def test_zoo_output_names(tmp_path: Path) -> None:
         ]
     )
     _, html = _render(tmp_path, [tmp_path / "zoo"])
-    head = re.search(r'<header id="header">(.*?)</header>', html, re.S).group(1)
+    head = re.search(r'<header id="header"[^>]*>(.*?)</header>', html, re.S).group(1)
     for n in names:
         assert f"zoo/{n}" in head
     assert "qt.zoo_shadows" in head
@@ -314,6 +317,6 @@ def test_calibrate_live_section(tmp_path: Path) -> None:
         held = next(x for x in cal.stratified if x.stratum_kind == "held_out_test" and x.stratum == "fill_rate_bias")
         assert rc.esc(F.pp(held.estimate)) in s
     assert "held_out_test" not in s  # echoed rows are rendered as the held-out block, not as strata
-    head = re.search(r'<header id="header">(.*?)</header>', html, re.S).group(1)
+    head = re.search(r'<header id="header"[^>]*>(.*?)</header>', html, re.S).group(1)
     assert "qt.live_calibration_test" in head
     assert "power_prob_queue_model3(" in s

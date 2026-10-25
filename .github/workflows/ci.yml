@@ -79,8 +79,8 @@ jobs:
         run: make develop
       - name: ruff
         run: |
-          uv run --frozen --no-sync ruff check python service scripts tests benches
-          uv run --frozen --no-sync ruff format --check python service scripts tests benches
+          uv run --frozen --no-sync ruff check python service scripts tests benches tools integrations
+          uv run --frozen --no-sync ruff format --check python service scripts tests benches tools integrations
       - name: schemas up to date
         run: make schemas-check
       - name: test-py

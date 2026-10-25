@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.forecast_commitment",
+  "additionalProperties": false,
+  "description": "`qt.forecast_commitment`: a plain-JSON commitment to a ledger head. It names the head entry's hash, which\ncommits to every earlier entry through the chain, and carries no forecast content, so it can be published,\nanchored or wrapped by a certificate (a timestamp authority signs `sha256(canonical_json(commitment))`) before\nthe questions resolve. `ledger_id` is the hash of entry 0.",
+  "properties": {
+    "schema": {
+      "const": "qt.forecast_commitment",
+      "default": "qt.forecast_commitment",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "ledger_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Ledger Id",
+      "type": "string"
+    },
+    "head_seq": {
+      "minimum": 0,
+      "title": "Head Seq",
+      "type": "integer"
+    },
+    "head_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Head Sha256",
+      "type": "string"
+    },
+    "head_recorded_at_ns": {
+      "title": "Head Recorded At Ns",
+      "type": "integer"
+    },
+    "n_entries": {
+      "minimum": 1,
+      "title": "N Entries",
+      "type": "integer"
+    },
+    "n_forecasts": {
+      "minimum": 0,
+      "title": "N Forecasts",
+      "type": "integer"
+    },
+    "n_resolutions": {
+      "minimum": 0,
+      "title": "N Resolutions",
+      "type": "integer"
+    },
+    "hash_alg": {
+      "const": "sha256",
+      "default": "sha256",
+      "title": "Hash Alg",
+      "type": "string"
+    },
+    "chain_rule": {
+      "title": "Chain Rule",
+      "type": "string"
+    },
+    "engine_version": {
+      "title": "Engine Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "ledger_id",
+    "head_seq",
+    "head_sha256",
+    "head_recorded_at_ns",
+    "n_entries",
+    "n_forecasts",
+    "n_resolutions",
+    "chain_rule",
+    "engine_version"
+  ],
+  "type": "object"
+}

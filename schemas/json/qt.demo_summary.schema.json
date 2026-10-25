@@ -1,0 +1,663 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.demo_summary",
+  "$defs": {
+    "Cell": {
+      "additionalProperties": false,
+      "description": "One model at one horizon: fill rates, bias (model minus exact) and its 95% interval.",
+      "properties": {
+        "exact_fill_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Exact Fill Rate"
+        },
+        "model_fill_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Model Fill Rate"
+        },
+        "bias": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Bias"
+        },
+        "ci_lo": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ci Lo"
+        },
+        "ci_hi": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ci Hi"
+        },
+        "n": {
+          "title": "N",
+          "type": "integer"
+        },
+        "ci_method": {
+          "enum": [
+            "cluster_bootstrap",
+            "none"
+          ],
+          "title": "Ci Method",
+          "type": "string"
+        }
+      },
+      "required": [
+        "exact_fill_rate",
+        "model_fill_rate",
+        "bias",
+        "ci_lo",
+        "ci_hi",
+        "n",
+        "ci_method"
+      ],
+      "title": "Cell",
+      "type": "object"
+    },
+    "DataInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "symbols": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Symbols",
+          "type": "array"
+        },
+        "subset_path": {
+          "title": "Subset Path",
+          "type": "string"
+        },
+        "subset_bytes": {
+          "title": "Subset Bytes",
+          "type": "integer"
+        },
+        "subset_sha256": {
+          "title": "Subset Sha256",
+          "type": "string"
+        },
+        "content_sha256": {
+          "title": "Content Sha256",
+          "type": "string"
+        },
+        "kept_messages": {
+          "title": "Kept Messages",
+          "type": "integer"
+        },
+        "cache_hit": {
+          "title": "Cache Hit",
+          "type": "boolean"
+        },
+        "pinned": {
+          "title": "Pinned",
+          "type": "boolean"
+        },
+        "remote": {
+          "title": "Remote",
+          "type": "boolean"
+        },
+        "bytes_downloaded": {
+          "title": "Bytes Downloaded",
+          "type": "integer"
+        },
+        "file_bytes": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "File Bytes"
+        },
+        "resumptions": {
+          "title": "Resumptions",
+          "type": "integer"
+        },
+        "records": {
+          "title": "Records",
+          "type": "integer"
+        },
+        "data_quality": {
+          "enum": [
+            "clean",
+            "warnings",
+            "unusable"
+          ],
+          "title": "Data Quality",
+          "type": "string"
+        },
+        "data_quality_reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Data Quality Reasons",
+          "type": "array"
+        },
+        "dataset_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Dataset Id"
+        }
+      },
+      "required": [
+        "symbols",
+        "subset_path",
+        "subset_bytes",
+        "subset_sha256",
+        "content_sha256",
+        "kept_messages",
+        "cache_hit",
+        "pinned",
+        "remote",
+        "bytes_downloaded",
+        "file_bytes",
+        "resumptions",
+        "records",
+        "data_quality",
+        "data_quality_reasons",
+        "dataset_id"
+      ],
+      "title": "DataInfo",
+      "type": "object"
+    },
+    "Headline": {
+      "additionalProperties": false,
+      "description": "The answer: NautilusTrader's default fill model against the exact queue. `verified_against` says which\nNautilusTrader releases the zoo's faithful replica was checked against, order for order (docs/RESULTS.md).",
+      "properties": {
+        "model_id": {
+          "title": "Model Id",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "verified_against": {
+          "title": "Verified Against",
+          "type": "string"
+        },
+        "sentence": {
+          "title": "Sentence",
+          "type": "string"
+        },
+        "cells": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Cell"
+          },
+          "title": "Cells",
+          "type": "object"
+        }
+      },
+      "required": [
+        "model_id",
+        "label",
+        "verified_against",
+        "sentence",
+        "cells"
+      ],
+      "title": "Headline",
+      "type": "object"
+    },
+    "Interval": {
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "title": "Method",
+          "type": "string"
+        },
+        "cluster": {
+          "title": "Cluster",
+          "type": "string"
+        },
+        "clusters": {
+          "title": "Clusters",
+          "type": "integer"
+        },
+        "bootstrap_b": {
+          "title": "Bootstrap B",
+          "type": "integer"
+        },
+        "note": {
+          "title": "Note",
+          "type": "string"
+        }
+      },
+      "required": [
+        "method",
+        "cluster",
+        "clusters",
+        "bootstrap_b",
+        "note"
+      ],
+      "title": "Interval",
+      "type": "object"
+    },
+    "ModelRow": {
+      "additionalProperties": false,
+      "description": "A zoo model's cells by horizon (`horizon_ns` as a decimal string).",
+      "properties": {
+        "model_id": {
+          "title": "Model Id",
+          "type": "string"
+        },
+        "cells": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Cell"
+          },
+          "title": "Cells",
+          "type": "object"
+        }
+      },
+      "required": [
+        "model_id",
+        "cells"
+      ],
+      "title": "ModelRow",
+      "type": "object"
+    },
+    "Outputs": {
+      "additionalProperties": false,
+      "properties": {
+        "dir": {
+          "title": "Dir",
+          "type": "string"
+        },
+        "html": {
+          "title": "Html",
+          "type": "string"
+        },
+        "json": {
+          "title": "Json",
+          "type": "string"
+        },
+        "dataset": {
+          "title": "Dataset",
+          "type": "string"
+        },
+        "shadows": {
+          "title": "Shadows",
+          "type": "string"
+        },
+        "zoo": {
+          "title": "Zoo",
+          "type": "string"
+        }
+      },
+      "required": [
+        "dir",
+        "html",
+        "json",
+        "dataset",
+        "shadows",
+        "zoo"
+      ],
+      "title": "Outputs",
+      "type": "object"
+    },
+    "Reference": {
+      "additionalProperties": false,
+      "description": "A published number on the same source, for comparison (full day, more shadows).",
+      "properties": {
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "bias": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Bias",
+          "type": "object"
+        },
+        "ci_lo": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Ci Lo",
+          "type": "object"
+        },
+        "ci_hi": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Ci Hi",
+          "type": "object"
+        },
+        "exact_fill_rate": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Exact Fill Rate",
+          "type": "object"
+        }
+      },
+      "required": [
+        "label",
+        "bias",
+        "ci_lo",
+        "ci_hi",
+        "exact_fill_rate"
+      ],
+      "title": "Reference",
+      "type": "object"
+    },
+    "SourceInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "format": {
+          "enum": [
+            "itch",
+            "iex"
+          ],
+          "title": "Format",
+          "type": "string"
+        },
+        "session_date": {
+          "title": "Session Date",
+          "type": "string"
+        },
+        "location": {
+          "title": "Location",
+          "type": "string"
+        },
+        "attribution": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Attribution"
+        },
+        "terms_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Terms Url"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Note"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "format",
+        "session_date",
+        "location",
+        "attribution",
+        "terms_url",
+        "note"
+      ],
+      "title": "SourceInfo",
+      "type": "object"
+    },
+    "Timings": {
+      "additionalProperties": false,
+      "properties": {
+        "fetch_s": {
+          "title": "Fetch S",
+          "type": "number"
+        },
+        "ingest_s": {
+          "title": "Ingest S",
+          "type": "number"
+        },
+        "shadows_s": {
+          "title": "Shadows S",
+          "type": "number"
+        },
+        "zoo_s": {
+          "title": "Zoo S",
+          "type": "number"
+        },
+        "answer_s": {
+          "title": "Answer S",
+          "type": "number"
+        },
+        "total_s": {
+          "title": "Total S",
+          "type": "number"
+        }
+      },
+      "required": [
+        "fetch_s",
+        "ingest_s",
+        "shadows_s",
+        "zoo_s",
+        "answer_s",
+        "total_s"
+      ],
+      "title": "Timings",
+      "type": "object"
+    },
+    "WindowInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "timezone": {
+          "const": "America/New_York",
+          "default": "America/New_York",
+          "title": "Timezone",
+          "type": "string"
+        },
+        "placement_start": {
+          "title": "Placement Start",
+          "type": "string"
+        },
+        "placement_end": {
+          "title": "Placement End",
+          "type": "string"
+        },
+        "cut": {
+          "title": "Cut",
+          "type": "string"
+        },
+        "minutes": {
+          "title": "Minutes",
+          "type": "integer"
+        },
+        "h_max_s": {
+          "title": "H Max S",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "placement_start",
+        "placement_end",
+        "cut",
+        "minutes",
+        "h_max_s"
+      ],
+      "title": "WindowInfo",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Summary of `queuetruth demo` (module docstring).",
+  "properties": {
+    "schema": {
+      "const": "qt.demo_summary",
+      "default": "qt.demo_summary",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "run_id": {
+      "pattern": "^[0-9a-f]{16}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "queuetruth_version": {
+      "title": "Queuetruth Version",
+      "type": "string"
+    },
+    "created": {
+      "title": "Created",
+      "type": "string"
+    },
+    "spec": {
+      "additionalProperties": true,
+      "title": "Spec",
+      "type": "object"
+    },
+    "source": {
+      "$ref": "#/$defs/SourceInfo"
+    },
+    "window": {
+      "$ref": "#/$defs/WindowInfo"
+    },
+    "data": {
+      "$ref": "#/$defs/DataInfo"
+    },
+    "n_shadows": {
+      "title": "N Shadows",
+      "type": "integer"
+    },
+    "n_leaderboard": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "N Leaderboard"
+    },
+    "n_excluded_hbt_312": {
+      "title": "N Excluded Hbt 312",
+      "type": "integer"
+    },
+    "zoo_run_id": {
+      "title": "Zoo Run Id",
+      "type": "string"
+    },
+    "headline": {
+      "$ref": "#/$defs/Headline"
+    },
+    "models": {
+      "items": {
+        "$ref": "#/$defs/ModelRow"
+      },
+      "title": "Models",
+      "type": "array"
+    },
+    "interval": {
+      "$ref": "#/$defs/Interval"
+    },
+    "reference": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Reference"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "outputs": {
+      "$ref": "#/$defs/Outputs"
+    },
+    "timings": {
+      "$ref": "#/$defs/Timings"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "run_id",
+    "queuetruth_version",
+    "created",
+    "spec",
+    "source",
+    "window",
+    "data",
+    "n_shadows",
+    "n_leaderboard",
+    "n_excluded_hbt_312",
+    "zoo_run_id",
+    "headline",
+    "models",
+    "interval",
+    "reference",
+    "outputs",
+    "timings",
+    "warnings"
+  ],
+  "type": "object"
+}

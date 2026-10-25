@@ -34,6 +34,7 @@ import pyarrow.parquet as pq
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from queuetruth.errors import QtError
+from queuetruth.ledger import recorded as _ledger_recorded
 from queuetruth.schemas import models as m
 from queuetruth.schemas import specs as s
 from queuetruth.schemas.arrow import ENGINE_VERSION, SCHEMAS
@@ -253,6 +254,7 @@ def replay(
     return _parse_doc(m.ReplaySummary, text, "queuetruth._core.replay")
 
 
+@_ledger_recorded("shadows-sample")
 def sample_shadows(spec: s.ShadowSampleSpec | dict[str, Any]) -> m.ShadowSampleSummary:
     """`shadows sample`."""
     return _native("sample_shadows", _validate(s.ShadowSampleSpec, spec), m.ShadowSampleSummary)
@@ -347,9 +349,17 @@ def _planned_life(out: Path) -> tuple[pa.Table, list[str]]:
 
 
 def _evaluate(
-    preds: pa.Table, out: Path, *, h_max_ns: int, bootstrap_b: int, seed: int, trajectory: pa.Table | None
+    preds: pa.Table,
+    out: Path,
+    *,
+    h_max_ns: int,
+    bootstrap_b: int,
+    seed: int,
+    trajectory: pa.Table | None,
+    mcs: bool = False,
 ) -> tuple[pa.Table, list[dict[str, Any]], list[str], dict[str, Any]]:
     from queuetruth.eval import aborted_shadows, evaluate_zoo, leaderboard_population
+    from queuetruth.eval.leaderboard import annotate_mcs
 
     planned, notes = _planned_life(out)
     errors, board = evaluate_zoo(
@@ -360,6 +370,9 @@ def _evaluate(
         seed=seed,
         planned_life=planned,
     )
+    if mcs:  # the zoo leaderboard's model confidence set (`queuetruth.eval.leaderboard`)
+        board, mcs_notes = annotate_mcs(board, preds, planned, h_max_ns=h_max_ns, bootstrap_b=bootstrap_b, seed=seed)
+        notes += mcs_notes
     population = {
         "n_excluded_hbt_312": len(aborted_shadows(preds)),
         "n_leaderboard": leaderboard_population(preds, planned, h_max_ns),
@@ -378,6 +391,7 @@ def resolve_order_ids(value: str | Path | list[Any] | dict[str, Any], dataset: s
     return [{k: v for k, v in it.items() if v is not None} for it in items]
 
 
+@_ledger_recorded("zoo")
 def run_zoo(spec: s.ZooSpec | dict[str, Any]) -> m.ZooSummary:
     """`zoo`: Rust run (`zoo_predictions`, `zoo_fills`, `zoo_trajectory`, `zoo_shadows`) + `queuetruth.eval`
     metrics (`zoo_errors.parquet`, leaderboard in `summary.json`). Bare order ids in a spec dict's
@@ -390,8 +404,11 @@ def run_zoo(spec: s.ZooSpec | dict[str, Any]) -> m.ZooSummary:
         traj_p = out / "zoo_trajectory.parquet"
         traj = pq.read_table(traj_p) if sp.write_trajectory and traj_p.exists() else None
         errors, board, notes, population = _evaluate(
-            preds, out, h_max_ns=sp.h_max_ns, bootstrap_b=sp.bootstrap_b, seed=sp.seed, trajectory=traj
+            preds, out, h_max_ns=sp.h_max_ns, bootstrap_b=sp.bootstrap_b, seed=sp.seed, trajectory=traj, mcs=True
         )
+        from queuetruth.eval.impact import zoo_spec_warnings
+
+        notes += zoo_spec_warnings(out, sp)
         entry = m.FileEntry.model_validate(write_table(errors, out / "zoo_errors.parquet"))
         files = [f for f in summ.files if f.name != entry.name] + [entry]
         summary = summ.model_copy(
@@ -594,6 +611,7 @@ def _annotate_trust(cal: m.CalibrationResult) -> m.CalibrationResult:
     return annotate(cal)
 
 
+@_ledger_recorded("calibrate")
 def calibrate(spec: s.CalibrationSpec | dict[str, Any]) -> m.CalibrationResult:
     """`calibrate`: alloc / survival / nt_touch (Rust fit + held-out zoo evaluation + `trust:` verdict + exports,
     `calibration.json`) or latency (Python)."""
@@ -616,6 +634,7 @@ def calibrate(spec: s.CalibrationSpec | dict[str, Any]) -> m.CalibrationResult:
     return cal
 
 
+@_ledger_recorded("calibrate-live")
 def calibrate_live(spec: Any, **kwargs: Any) -> m.CalibrationResult:
     """`calibrate-live`: fit a zoo parameter to the user's own live fills (`queuetruth.score.calibrate_live`)."""
     from queuetruth.score import calibrate_live as _calibrate_live
@@ -626,6 +645,7 @@ def calibrate_live(spec: Any, **kwargs: Any) -> m.CalibrationResult:
 # ---- Python-side operations -------------------------------------------------------------------------------------
 
 
+@_ledger_recorded("fit-hazard")
 def fit_hazard(spec: s.HazardFitSpec | dict[str, Any]) -> m.HazardModelCard:
     """`fit-hazard` (`queuetruth.model.fit_hazard`)."""
     from queuetruth.model import fit_hazard as _fit
@@ -680,6 +700,7 @@ def validate_live(path: str) -> list[str]:
     return list(qlive.validate(path))
 
 
+@_ledger_recorded("score")
 def score(spec: s.ScorecardSpec | dict[str, Any], **kwargs: Any) -> m.ScorecardSummary:
     """`score` (`queuetruth.score.build_scorecard`; keyword extras `window_ns`, `match_window_ns`, `self_exclude`).
     Failed gates are reported in `verdict.gates_passed` (the CLI exits 1)."""

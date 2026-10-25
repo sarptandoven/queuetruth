@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from queuetruth.live._common import Record, dump_raw, read_json_records
+from queuetruth.live._common import Record, dump_raw, input_error, read_json_records
 from queuetruth.live.builder import ImportResult, LogBuilder
 from queuetruth.live.imap import InstrumentMap
 
@@ -64,6 +64,29 @@ def sub_records(rec: Record, *keys: str) -> list[Record]:
             )
         )
     return out
+
+
+def _kind(v: Any) -> str:
+    return {dict: "an object", list: "an array", str: "a string", bool: "a boolean"}.get(type(v), "a number")
+
+
+def obj_field(v: Any, what: str, location: str) -> dict[str, Any]:
+    """A nested JSON object of a record: `v`, `{}` for null, `QT-INPUT-002` for any other JSON type (an importer
+    must never call `.get` on an array or a string a hostile file put where an object belongs)."""
+    if v is None:
+        return {}
+    if isinstance(v, dict):
+        return v
+    raise input_error(location, f"{what} must be an object, got {_kind(v)}")
+
+
+def list_field(v: Any, what: str, location: str) -> list[Any]:
+    """A nested JSON array of a record: `v`, `[]` for null, `QT-INPUT-002` for any other JSON type."""
+    if v is None:
+        return []
+    if isinstance(v, list):
+        return v
+    raise input_error(location, f"{what} must be an array, got {_kind(v)}")
 
 
 def side_of(v: Any) -> str | None:

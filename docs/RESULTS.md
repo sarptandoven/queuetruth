@@ -30,6 +30,7 @@ verified by the CSV runs.
 | `.realdata/headline/headline.json` (L2 leaderboard) | `7fb312eb7116aa97` | `scripts/realdata/headline.py --threads 4` | 2026-10-19 01:36 |
 | `.realdata/oracle/2019-12-30/discrepancy_report.json` | `aa332eb45846fa85` | `scripts/oracle/run_oracle.py --run-qt` | 2026-10-19 01:40 |
 | `.realdata/oracle/2020-01-30/discrepancy_report.json` | `f39e6326869baba9` | `scripts/oracle/run_oracle.py --run-qt` | 2026-10-19 01:44 |
+| oracle reruns with rules D1-D3 (section 3): raw ITCH 2019-12-30 / 2020-01-30, CSV 2019-12-30 / 2020-01-30, CSV 2019-12-30 with a 0.85 s cross window (`discrepancy_report.json` each) | `eca3ff686fe41a3f` / `281547836d397e10` / `4fdc8088b964b632` / `954705f2ab63a513` / `bf6d3360432a3e80` | `scripts/oracle/run_oracle.py --run-qt`, oracle 0.1.3 | 2026-10-24 21:03 .. 21:27 |
 | `.realdata/itch/realbytes-12302019.json` | `d122666c1cb3e305` | `scripts/realdata/itch_realbytes.py` | 2026-10-19 00:35 |
 | `.realdata/itch/realbytes-01302020.json` | `7cf822595e993f7d` | `scripts/realdata/itch_realbytes.py` | 2026-10-19 00:35 |
 | `.realdata/dbn-samples/results.json` (Databento DBN test files) | `c985f384672b87bb` | `scripts/realdata/dbn_samples.py` | 2026-10-19 01:27 |
@@ -39,9 +40,14 @@ verified by the CSV runs.
 | `.realdata/repro/phase1/decompose.json` (raw bytes vs CSV vs published) | `a750ce7076b874ec` | `scripts/repro/compare_published.py` functions, CSV control run | 2026-10-19 07:40 |
 | `.realdata/repro/results.json` (raw-bytes reproduction on commit `4be5240`) | `446c6b09ba71dbd8` | `make reproduce` (`scripts/repro/reproduce.py`), threads 4, 1,162 s | 2026-10-19 08:25 |
 | `.realdata/repro/breadth/breadth.json` (36 more symbols by tier) | `3771d1dd179fc32e` | `scripts/repro/breadth.py`, threads 4 | 2026-10-19 07:48 |
+| `results.json` of the RD-12 rerun (crypto captures, section 5); not yet copied to `.realdata/` | `488b4102ab93b6c8` | `validate_et.py --only RD-12`, extension `9d075d347aaed86a...` | 2026-10-25 |
+| `nt_prob_touch[p=1]` alone on all 3,000 shadows (section 4), raw ITCH ingest; not yet copied to `.realdata/` | `e08ac0be97dfcce3` | `qt.run_zoo` with that one model, faithful, seed 0, 4 threads, extension `9d075d347aaed86a...` | 2026-10-25 |
+| `headline.json` of the 0.1.1 rerun (section 4), raw ITCH ingest / CSV ingest; not yet copied to `.realdata/` | `b52f9c0aa9fdea85` / `e3bc86a0578b1238` | `scripts/realdata/headline.py --threads 4`, extension `9d075d347aaed86a...` | 2026-10-25 15:52 / 15:53 |
 
 `scripts/realdata/summarize.py --results .realdata/results.json --headline .realdata/headline/headline.json --bench
-.realdata/bench.json` prints every table below from those files. The engine is queuetruth 0.1.0 as built in the
+.realdata/bench.json` prints the RD checks and benchmark numbers from those files; section 4's tables are
+`scripts/repro/render_tables.py` on the 0.1.1 rerun's `headline.json` (row below), which `summarize.py --headline`
+also reads. The engine is queuetruth 0.1.0 as built in the
 working tree on 2026-10-18 (before the 0.1.0 commit `4be5240`), all builds after the zoo, calibration and feature engines stopped
 detecting sequence gaps per partition (section 6). The latest full `make realdata` (`results.json` above, finished
 2026-10-19 02:02 local time, UTC-4) ran after the self-exclusion fix of the scorer; it reproduces every RD-1 .. RD-12
@@ -51,12 +57,14 @@ oracle, RD-9 and RD-13 rerun files loaded the extension built at 21:30 on 2026-1
 (below), the et-artifact runs (RD-1 .. RD-12) were not. Section 7 (performance, including the RD-13 re-measurement)
 ran on 2026-10-19 with the binaries it names.
 
-The raw-bytes runs (sections 2, 3 raw rows, 4, 4b, RD-9, RD-10) are newer than everything above and ran on one
-build: `_core.abi3.so` sha256 `812f1e881489aec8...` (built 2026-10-19 03:10 local, after the per-shadow #312 ruling
+The raw-bytes runs (sections 2, 4b, RD-9, RD-10 and the 0.1.0 versions of sections 3 and 4) are newer than everything
+above and ran on one build: `_core.abi3.so` sha256 `812f1e881489aec8...` (built 2026-10-19 03:10 local, after the per-shadow #312 ruling
 and the NautilusTrader-verified faithful NT models), source-tree hash `fa118807fb672aa7...` (sha256 over the Rust and
 Python sources and lock files, recorded by `reproduce.py`; these runs predate the first commit). Two pieces loaded
 the next build (`4671359193252d96...`, 03:20, which changed only the crypto readers and Python files outside the zoo
-and replay): the day-two oracle subprocess and the day-two half of the breadth run.
+and replay): the day-two oracle subprocess and the day-two half of the breadth run. Newer still are the oracle reruns
+of section 3 (2026-10-24, with the receipt-priority rules) and the 0.1.1 leaderboard of section 4 (2026-10-25); each
+names its build.
 
 Release-commit rerun: `make reproduce` on commit `4be5240` (queuetruth 0.1.0; git HEAD recorded before and after the
 run) with the installed extension `4671359193252d96...`, unchanged during the run, wrote `.realdata/repro/results.json`
@@ -123,14 +131,14 @@ source-tree hash. Wall time 1,387 s at 4 threads with the subsets on disk; strea
 | ingest: records (= RD-1 / RD-1b), data-quality verdict, wall time | 6,103,262, `clean`, 3.0 s | 10,651,300, `clean`, 5.6 s |
 | hidden (`P`) + cross (`Q`, shares > 0) prints, each equal to the raw-stream count; sum = the CSV's side-`N` prints | 35,854 + 6 = 35,860 | 107,103 + 6 = 107,109 |
 | replay: 8 invariants; executions checked, price-priority violations; rank-0 share raw / sweep-adjusted; trade parity | all 0; 176,103, 0; 0.97575 / 0.98723; 211,867 compared, 0 mismatches | all 0; 314,369, 0; 0.98679 / 0.99089; 421,420, 0 |
-| leaderboard (section 4) vs the same run on the CSV dataset, same build: overall cells (17 models x 2 modes x 3 horizons), decile and bucket cells | 102 of 102 and 442 of 442 identical (bias, CI and n) | 102 of 102 and 442 of 442 identical |
+| 0.1.0 leaderboard (section 4 before its 0.1.1 rerun) vs the same run on the CSV dataset, same build: overall cells (17 models x 2 modes x 3 horizons), decile and bucket cells | 102 of 102 and 442 of 442 identical (bias, CI and n) | 102 of 102 and 442 of 442 identical |
 | RD-9 (4 families) vs the CSV dataset, same build; RD-10 vs the earlier CSV run | RD-9: identical estimates, CIs, event counts and held-out scores; RD-10: identical BSS and CIs | (two-day runs) |
 
 So on these two days the raw-bytes and CSV pipelines give the same leaderboard and calibration to the last digit; the separate hidden /
-cross prints of the raw bytes do not move any model or calibration on these orders. Every
-difference between section 4 below and the earlier published leaderboard comes from engine changes between the two
-builds (`.realdata/repro/phase1/decompose.json`): mainly the bounds (`trade_through_only` -1.2 .. -3.7 pp before,
--6.0 .. -15.8 pp now; `front_of_queue` +0.6 .. +3.0 before, +0.9 .. +3.3 now), the faithful NautilusTrader models
+cross prints of the raw bytes do not move any model or calibration on these orders (the 0.1.1 rerun of section 4
+again gives identical cells on both ingests). Every difference between this 0.1.0 leaderboard and the earlier
+published leaderboard comes from engine changes between the two builds (`.realdata/repro/phase1/decompose.json`): mainly the bounds (`trade_through_only` -1.2 .. -3.7 pp before,
+-6.0 .. -15.8 pp in 0.1.0; `front_of_queue` +0.6 .. +3.0 before, +0.9 .. +3.3 in 0.1.0), the faithful NautilusTrader models
 (verified against nautilus_trader 1.231.0, section 4), and faithful hftbacktest shadows that reach #312 now being left
 out per shadow (section 4); 19 of 204 overall cells moved by more than 0.5 pp, all of them bound or faithful
 `nt_prob_touch` cells.
@@ -156,19 +164,33 @@ both:
 
 | Dataset | Shadows | Build | Day | Agree | Disagree (by category) | Filled qty, oracle vs queuetruth |
 |---|---|---|---|---|---|---|
-| prototype CSV (`.realdata/ds/nasdaq-<date>`) | prototype's 3,000 mirror shadows | 2026-10-18 21:30 | 2019-12-30 | 2,997 / 3,000 | 3 (hidden prints 3) | 37,994 vs 37,994 |
-| prototype CSV | prototype's 3,000 mirror shadows | 2026-10-18 21:30 | 2020-01-30 | 2,997 / 3,000 | 3 (oracle divergence 3) | 22,237 vs 22,237 |
+| prototype CSV (`.realdata/ds/nasdaq-<date>`), cross prints by a 1 s window | prototype's 3,000 mirror shadows | 2026-10-24 (D1-D3, oracle 0.1.3) | 2019-12-30 | 2,997 / 3,000 | 3 (the oracle's 1 s cross window; 3,000 / 3,000 with a 0.85 s window) | 37,994 vs 37,994 |
+| prototype CSV, cross prints by a 1 s window | prototype's 3,000 mirror shadows | 2026-10-24 (D1-D3, oracle 0.1.3) | 2020-01-30 | 3,000 / 3,000 | 0 | 22,237 vs 22,237 |
 | raw ITCH bytes, real cross prints (`--cross-window-s 0`) | prototype's 3,000 mirror shadows | about 2026-10-19 00:35 UTC (older) | 2019-12-30 | 2,942 / 3,000 | 58 (crosses 57, off-price 1) | |
 | raw ITCH bytes, real cross prints | prototype's 3,000 mirror shadows | about 2026-10-19 00:35 UTC (older) | 2020-01-30 | 2,958 / 3,000 | 42 (crosses 39, oracle divergence 3) | |
-| raw ITCH bytes, real cross prints (`reproduce.py`) | `qt.mirror_real_orders`, 3,000, seed 0 | 2026-10-19 03:10 | 2019-12-30 | 2,992 / 3,000 | 8 (oracle divergence 6, crosses 2) | 169,123 vs 169,123 |
-| raw ITCH bytes, real cross prints (`reproduce.py`) | `qt.mirror_real_orders`, 3,000, seed 0 | 2026-10-19 03:20 | 2020-01-30 | 2,985 / 3,000 | 15 (oracle divergence 12, crosses 2, hidden prints 1) | 171,093 vs 171,093 |
+| raw ITCH bytes, real cross prints (`reproduce.py` ingest) | `qt.mirror_real_orders`, 3,000, seed 0 | 2026-10-24 (D1-D3, oracle 0.1.3) | 2019-12-30 | 3,000 / 3,000 | 0 | 169,123 vs 169,123 |
+| raw ITCH bytes, real cross prints (`reproduce.py` ingest) | `qt.mirror_real_orders`, 3,000, seed 0 | 2026-10-24 (D1-D3, oracle 0.1.3) | 2020-01-30 | 3,000 / 3,000 | 0 | 171,093 vs 171,093 |
 
 The public rows use queuetruth's own mirror sampler, which stratifies by outcome (1,498 and 1,499 of the 3,000 fill in
 the oracle, against 233 and 195 of the prototype's mirror shadows), so they test far more fills than the CSV rows and
-are not comparable one for one. Every disagreement is in a fill time or the queue-ahead trajectory; the filled
-quantities agree in total. 5 of the 6 day-one oracle divergences are within 40 s of the open. The older raw-bytes rows
-predate the liquidity rulings of the current build and have not been rerun with the prototype's shadows. An earlier
-CSV run on the 19:53 build (before the last engine rule changes) agreed on 2,992 and 2,996.
+are not comparable one for one. The older raw-bytes rows predate the liquidity rulings and the rules below and have
+not been rerun with the prototype's shadows.
+
+The 2026-10-24 rows are the reruns in [Oracle disagreements on real data](design/extensions/oracle-disagreements.md)
+(O.7), which explains every earlier disagreement order by order. On 2026-10-25 the integration build (extension
+`9d075d347aaed86a...`) replayed the same four shadow sets with the same specs and gave identical shadow results,
+fills and queue trajectories, so these rows hold for it. The 0.1.1 build agreed on 2,992 and 2,985 of 3,000
+on the raw-bytes days (8 and 15 disagreements, all in a fill time or the queue-ahead trajectory, with equal total
+filled quantity) and on 2,997 of 3,000 per day on the CSV. Three causes were on the engines' side: orders Nasdaq
+holds until the open are released 0.27 s to 40 s after it with their original, smaller references and keep their
+receipt priority (both engines ranked them at the tail; queuetruth rule D1, oracle rule O1), and two hidden-print
+cases that continue a sweep (D2: the print reaches only the swept side; D3: an off-tick midpoint print can trade
+through). The rules apply only under the `exact` rule on Nasdaq ITCH data ([Venue semantics](venue-semantics.md)).
+The 3 remaining CSV disagreements on day one are a convention of the comparison, not of either engine: the CSV marks
+no crosses, so the oracle declines every side-`N` print in the first second after a cross, and the print that fills
+these 3 shadows, 29 ms after MSFT's opening cross, is a continuous hidden execution. The oracle's fork no longer
+diverges from the tape on any of the four runs. An earlier CSV run on the 19:53 build (before the last engine rule
+changes) agreed on 2,992 and 2,996.
 
 The oracle's own limits (static counterfactual, invisible taker volume, hidden liquidity, auctions) are listed in
 [How queuetruth is tested](testing.md).
@@ -181,59 +203,83 @@ between 300 s after the open and 600 s before the close; planned life 300 s). Ev
 horizon (audit A2). Truth is the zoo's exact arm. Bias = mean model fill probability minus the exact fill rate at the
 horizon, with the zoo's day-block bootstrap 95% CI, in percentage points.
 
-Exact fill rates: 2019-12-30 331 / 1,453 / 2,250 of 3,000 at 1 s / 10 s / 60 s (11.0%, 48.4%, 75.0%); 2020-01-30 555
-/ 1,746 / 2,422 (18.5%, 58.2%, 80.7%). Zoo wall time for 17 models x 3,000 shadows at 4 threads: 11.6-12.8 s (day one),
-15.7-17.3 s (day two). The tables below are the raw-bytes run (`.realdata/repro/phase1/headline/`, section 2), which
-equals the CSV run on the same build cell for cell.
+Scoring population (queuetruth 0.1.1). A shadow on which any faithful hftbacktest model hit hftbacktest's bug #312
+(below) is left out of every model's faithful-mode metrics, so every model is scored on the same orders: 2,529 of
+the 3,000 on 2019-12-30 and 2,518 on 2020-01-30 (471 and 482 left out). Corrected mode has no aborts and scores all
+3,000. The left-out orders are ones that reach a partial fill, so the scored population is not the sampled one.
+
+Exact fill rates on all 3,000 shadows (corrected mode, the touch-model run below and the NautilusTrader cross-check):
+2019-12-30 331 / 1,453 / 2,250 of 3,000 at 1 s / 10 s / 60 s (11.0%, 48.4%, 75.0%); 2020-01-30 555 / 1,746 / 2,422
+(18.5%, 58.2%, 80.7%). On the faithful population: 305 / 1,233 / 1,860 of 2,529 (12.1%, 48.8%, 73.5%) and 509 / 1,462
+/ 1,999 of 2,518 (20.2%, 58.1%, 79.4%). Zoo wall time for the 16 models of `--models all` x 3,000 shadows at 4
+threads: 11.4-11.7 s faithful and 7.7 s corrected on day one, 15.2 s and 11.7-11.8 s on day two.
+
+The tables below are the rerun of 2026-10-25 (`scripts/realdata/headline.py --threads 4`, extension sha256
+`9d075d347aaed86a...`, built from the integration tree, which has the receipt-priority rules of section 3) on the
+raw-bytes ingest of `reproduce.py`'s pinned subsets (dataset ids `19fd29be6a516be3...` and `3c97b38f575262ff...`,
+6,103,262 and 10,651,300 records). The same run on the prototype's CSV ingest gives the same 3,456 cells (bias, CI and
+n). Against the 0.1.0 run (`.realdata/repro/phase1/headline/`), corrected mode, the exact arm and the abort counts are
+identical; every faithful cell moved because of the population rule, by up to 1.0 pp (`trade_through_only` at 10 s on
+day one); `hbt_power[n=1]`, which equals `hbt_power3[n=1]`, is no longer in `--models all`. The receipt-priority rules
+change nothing here: these shadows go live 300 s after the open, after every released order.
 
 What it shows on these orders:
 
 - NautilusTrader's touch fill model with the default `prob_fill_on_limit = 1` (`nt_prob_touch[p=1]`) is the most
-  optimistic real model: +3.13 pp at 1 s on day one (14.17% vs 11.03% exact) and +2.80 pp on day two. This is
-  verified against the real engine: nautilus_trader 1.231.0's `BacktestEngine`, fed the same L2 view as
-  `OrderBookDelta`s with `FillModel(prob_fill_on_limit=1)` and the same orders, fills exactly the same orders as the
-  faithful zoo model at 1 s, 10 s and 60 s on both days and on the synthetic fixture (100% agreement; Nautilus's own
-  bias +3.13 pp [+2.53, +3.77] and +2.80 pp [+2.23, +3.37] at 1 s, order-level bootstrap). The 2.0 release
-  candidate 2.0.0rc7 (`DefaultFillModel(prob_fill_on_limit=1)`) fills exactly the same orders. See the
-  NautilusTrader cross-check below.
-- The hftbacktest power and log models stay within about 1 pp of exact at every horizon on both days, mostly slightly
-  pessimistic; `hbt_risk_adverse` is pessimistic by up to 1.3 pp.
-- `nt_queue_l2` is within 0.8 pp on both days in faithful mode, and agrees with nautilus_trader 1.231.0's
-  `queue_position=True` on 100% of orders on a delta feed (2.0.0rc7: 99.60% to 99.97%, which caps queue ahead when a
-  level shrinks and is within 0.4 pp of exact).
-- The bounds span `front_of_queue` +0.9 .. +3.3 pp and `trade_through_only` -6.0 .. -15.8 pp. Faithful
-  `nt_prob_touch[p=1]` reaches `front_of_queue` in all six day and horizon cells. The bounds bracket the exact arm order by order by construction (O-ZOO-6, tested on
-  scenario and synthetic tapes); see the RD-8 note below for the real-data record.
-- `hbt_l3_fifo` (MBO input) faithful, which reproduces hftbacktest's L3 queue model, is pessimistic (-1.3 .. -3.4
-  pp); in corrected mode it equals the exact arm on every shadow (bias 0.00, as O-ZOO-4 requires).
+  optimistic real model: +3.08 pp at 1 s on day one (15.14% vs 12.06% exact on the 2,529 scored orders) and +2.50 pp
+  on day two. On all 3,000 orders (the model run alone, table below, which is also the population of the 0.1.0 table
+  and of the cross-check) it is +3.13 pp (14.17% vs 11.03%) and +2.80 pp. This is verified against the real engine:
+  nautilus_trader 1.231.0's `BacktestEngine`, fed the same L2 view as `OrderBookDelta`s with
+  `FillModel(prob_fill_on_limit=1)` and the same orders, fills exactly the same orders as the faithful zoo model at 1
+  s, 10 s and 60 s on both days and on the synthetic fixture (100% agreement; Nautilus's own bias on all 3,000 orders
+  +3.13 pp [+2.53, +3.77] and +2.80 pp [+2.23, +3.37] at 1 s, order-level bootstrap). The 2.0 release candidate
+  2.0.0rc7 (`DefaultFillModel(prob_fill_on_limit=1)`) fills exactly the same orders. See the NautilusTrader
+  cross-check below.
+- The hftbacktest power and log models stay within about 1 pp of exact at every horizon on both days (largest
+  -1.03 pp), mostly slightly pessimistic; `hbt_risk_adverse` is pessimistic by up to 1.3 pp.
+- `nt_queue_l2` is within 0.6 pp on both days in faithful mode, and agrees with nautilus_trader 1.231.0's
+  `queue_position=True` on 100% of orders on a delta feed (2.0.0rc7: 99.60% to 100% of orders per day and horizon;
+  2.0 caps queue ahead when a level shrinks, and is within 0.4 pp of exact).
+- The bounds span `front_of_queue` +0.95 .. +3.08 pp and `trade_through_only` -6.08 .. -14.75 pp. Faithful
+  `nt_prob_touch[p=1]` reaches `front_of_queue` in all six day and horizon cells. The bounds bracket the exact arm
+  order by order by construction (O-ZOO-6, tested on scenario and synthetic tapes); see the RD-8 note below for the
+  real-data record.
+- `hbt_l3_fifo` (MBO input) faithful, which reproduces hftbacktest's L3 queue model, is pessimistic (-1.46 ..
+  -4.05 pp); in corrected mode it equals the exact arm on every shadow (bias 0.00, as O-ZOO-4 requires).
 
 These shadows are small orders at or near the touch of four of the most liquid US stocks, where most of them fill
 within a minute; on 36 more names (section 4b) the NautilusTrader default overfills most on deep-queue names, while
 order size barely moves first-fill bias. Liquidity buckets are terciles of the
 traded volume in the 60 s before the shadow went live; queue deciles are deciles of exact queue ahead at entry, both
-pooled over the four instruments of the day. Per-decile cells hold 92 to 520 shadows.
+pooled over the four instruments of the day. Per-decile cells hold 84 to 427 shadows (faithful population).
 
 **faithful mode** (fill-rate bias in pp, 95% CI)
 
 | model | 2019-12-30 1 s | 2019-12-30 10 s | 2019-12-30 60 s | 2020-01-30 1 s | 2020-01-30 10 s | 2020-01-30 60 s |
 |---|---|---|---|---|---|---|
-| `databento_mc[k=-0.8;particles=100]` | -0.06 [-0.33, +0.18] | -0.35 [-0.65, -0.06] | -0.61 [-0.94, -0.25] | -0.32 [-0.77, +0.09] | -0.60 [-0.96, -0.30] | -0.26 [-0.62, +0.04] |
-| `databento_mc[k=-0.95;particles=100]` | -0.07 [-0.32, +0.17] | -0.55 [-0.88, -0.22] | -0.74 [-1.09, -0.36] | -0.35 [-0.78, +0.05] | -0.64 [-1.00, -0.34] | -0.30 [-0.64, +0.00] |
-| `front_of_queue` | +3.13 [+2.63, +3.64] | +3.30 [+2.47, +4.14] | +1.43 [+1.01, +1.92] | +2.80 [+2.15, +3.55] | +2.03 [+1.51, +2.54] | +0.93 [+0.50, +1.33] |
-| `hbt_l3_fifo` | -1.30 [-1.71, -0.84] | -1.93 [-2.49, -1.42] | -1.67 [-2.26, -1.10] | -2.17 [-2.85, -1.55] | -3.43 [-3.78, -3.11] | -1.83 [-2.41, -1.29] |
-| `hbt_log` | -0.23 [-0.52, +0.06] | -0.62 [-0.97, -0.28] | -0.66 [-0.97, -0.38] | -0.50 [-0.88, -0.14] | -0.97 [-1.41, -0.56] | -0.28 [-0.64, +0.03] |
-| `hbt_log2` | -0.27 [-0.51, -0.03] | -0.48 [-0.89, -0.10] | -0.70 [-1.11, -0.24] | -0.54 [-0.86, -0.21] | -0.83 [-1.19, -0.45] | -0.32 [-0.67, -0.03] |
-| `hbt_power2[n=2]` | +0.07 [-0.26, +0.38] | +0.74 [+0.22, +1.28] | +0.04 [-0.30, +0.38] | -0.37 [-0.78, +0.07] | -0.53 [-0.90, -0.21] | -0.15 [-0.58, +0.24] |
-| `hbt_power3[n=1]` | +0.07 [-0.26, +0.37] | +0.31 [-0.15, +0.87] | -0.11 [-0.43, +0.25] | -0.47 [-0.84, -0.10] | -0.49 [-0.86, -0.14] | -0.18 [-0.61, +0.18] |
-| `hbt_power3[n=2]` | -0.13 [-0.37, +0.10] | -0.21 [-0.63, +0.20] | -0.53 [-0.92, -0.14] | -0.50 [-0.86, -0.14] | -0.65 [-1.04, -0.30] | -0.25 [-0.62, +0.07] |
-| `hbt_power3[n=3]` | -0.27 [-0.51, -0.03] | -0.55 [-0.97, -0.13] | -0.84 [-1.29, -0.34] | -0.57 [-0.88, -0.28] | -0.83 [-1.20, -0.47] | -0.35 [-0.68, -0.07] |
-| `hbt_power[n=1]` | +0.07 [-0.26, +0.37] | +0.31 [-0.15, +0.87] | -0.11 [-0.43, +0.25] | -0.47 [-0.84, -0.10] | -0.49 [-0.86, -0.14] | -0.18 [-0.61, +0.18] |
-| `hbt_power[n=2]` | -0.07 [-0.34, +0.20] | +0.00 [-0.35, +0.31] | -0.39 [-0.71, -0.07] | -0.44 [-0.82, -0.03] | -0.65 [-1.04, -0.30] | -0.25 [-0.62, +0.07] |
-| `hbt_power[n=3]` | -0.03 [-0.33, +0.24] | -0.03 [-0.43, +0.30] | -0.46 [-0.83, -0.10] | -0.47 [-0.83, -0.11] | -0.66 [-1.03, -0.33] | -0.25 [-0.63, +0.07] |
-| `hbt_risk_adverse` | -0.37 [-0.58, -0.19] | -1.04 [-1.34, -0.72] | -1.18 [-1.51, -0.84] | -0.77 [-1.09, -0.49] | -1.27 [-1.63, -0.87] | -0.51 [-0.83, -0.25] |
+| `databento_mc[k=-0.8;particles=100]` | -0.07 [-0.35, +0.22] | -0.47 [-0.84, -0.07] | -0.73 [-1.05, -0.41] | -0.49 [-0.96, -0.06] | -0.72 [-1.10, -0.39] | -0.30 [-0.73, +0.10] |
+| `databento_mc[k=-0.95;particles=100]` | -0.08 [-0.35, +0.20] | -0.64 [-1.07, -0.23] | -0.86 [-1.21, -0.49] | -0.50 [-0.98, -0.08] | -0.75 [-1.14, -0.41] | -0.32 [-0.75, +0.08] |
+| `front_of_queue` | +3.08 [+2.39, +3.77] | +3.04 [+2.23, +3.94] | +1.46 [+0.95, +2.04] | +2.50 [+1.81, +3.21] | +1.95 [+1.41, +2.45] | +0.95 [+0.54, +1.37] |
+| `hbt_l3_fifo` | -1.46 [-1.96, -0.91] | -2.49 [-3.15, -1.89] | -2.10 [-2.76, -1.46] | -2.54 [-3.33, -1.84] | -4.05 [-4.49, -3.66] | -2.14 [-2.79, -1.53] |
+| `hbt_log` | -0.12 [-0.38, +0.16] | -0.51 [-0.93, -0.12] | -0.59 [-0.90, -0.31] | -0.64 [-1.09, -0.23] | -1.03 [-1.44, -0.67] | -0.36 [-0.75, -0.04] |
+| `hbt_log2` | -0.28 [-0.49, -0.08] | -0.47 [-0.98, +0.04] | -0.79 [-1.19, -0.36] | -0.71 [-1.13, -0.34] | -0.87 [-1.28, -0.48] | -0.32 [-0.72, +0.08] |
+| `hbt_power2[n=2]` | +0.04 [-0.31, +0.40] | +0.32 [-0.20, +0.90] | -0.16 [-0.51, +0.20] | -0.60 [-1.06, -0.17] | -0.64 [-1.03, -0.28] | -0.16 [-0.62, +0.27] |
+| `hbt_power3[n=1]` | +0.04 [-0.31, +0.40] | +0.12 [-0.37, +0.71] | -0.24 [-0.55, +0.08] | -0.68 [-1.10, -0.28] | -0.68 [-1.07, -0.32] | -0.20 [-0.66, +0.23] |
+| `hbt_power3[n=2]` | -0.16 [-0.39, +0.08] | -0.32 [-0.89, +0.27] | -0.59 [-1.04, -0.16] | -0.68 [-1.10, -0.28] | -0.75 [-1.16, -0.40] | -0.24 [-0.67, +0.16] |
+| `hbt_power3[n=3]` | -0.28 [-0.49, -0.08] | -0.51 [-1.02, +0.04] | -0.83 [-1.24, -0.35] | -0.71 [-1.13, -0.34] | -0.91 [-1.29, -0.56] | -0.36 [-0.75, -0.04] |
+| `hbt_power[n=2]` | -0.08 [-0.36, +0.20] | -0.16 [-0.62, +0.32] | -0.43 [-0.81, -0.04] | -0.68 [-1.10, -0.28] | -0.75 [-1.16, -0.40] | -0.24 [-0.67, +0.16] |
+| `hbt_power[n=3]` | -0.08 [-0.36, +0.20] | -0.20 [-0.70, +0.32] | -0.47 [-0.92, -0.04] | -0.68 [-1.10, -0.28] | -0.75 [-1.15, -0.43] | -0.24 [-0.67, +0.16] |
+| `hbt_risk_adverse` | -0.32 [-0.52, -0.12] | -0.99 [-1.38, -0.58] | -1.15 [-1.49, -0.80] | -0.87 [-1.26, -0.51] | -1.27 [-1.67, -0.88] | -0.48 [-0.81, -0.20] |
+| `nt_prob_touch[p=1]` | +3.08 [+2.39, +3.77] | +3.04 [+2.23, +3.94] | +1.46 [+0.95, +2.04] | +2.50 [+1.81, +3.21] | +1.95 [+1.41, +2.45] | +0.95 [+0.54, +1.37] |
+| `nt_queue_l2` | +0.00 [+0.00, +0.00] | -0.51 [-0.72, -0.32] | -0.47 [-0.71, -0.19] | -0.04 [-0.12, +0.00] | +0.00 [-0.15, +0.16] | -0.08 [-0.20, +0.00] |
+| `trade_through_only` | -6.33 [-8.31, -4.66] | -14.75 [-15.88, -13.56] | -9.92 [-11.52, -8.36] | -10.60 [-12.43, -8.94] | -12.27 [-13.06, -11.39] | -6.08 [-6.76, -5.35] |
+
+**`nt_prob_touch[p=1]` run alone** (faithful mode; with no hftbacktest model in the run no shadow is left out, so all
+3,000 are scored, the population of the 0.1.0 table; fill-rate bias in pp, 95% CI)
+
+| model | 2019-12-30 1 s | 2019-12-30 10 s | 2019-12-30 60 s | 2020-01-30 1 s | 2020-01-30 10 s | 2020-01-30 60 s |
+|---|---|---|---|---|---|---|
 | `nt_prob_touch[p=1]` | +3.13 [+2.63, +3.64] | +3.30 [+2.47, +4.14] | +1.43 [+1.01, +1.92] | +2.80 [+2.15, +3.55] | +2.03 [+1.51, +2.54] | +0.93 [+0.50, +1.33] |
-| `nt_queue_l2` | -0.10 [-0.25, +0.00] | -0.77 [-0.98, -0.54] | -0.70 [-1.03, -0.38] | -0.10 [-0.25, +0.00] | -0.17 [-0.38, +0.04] | -0.23 [-0.42, -0.07] |
-| `trade_through_only` | -5.97 [-7.71, -4.48] | -15.77 [-16.86, -14.63] | -10.13 [-12.00, -8.37] | -9.90 [-11.81, -8.21] | -12.93 [-13.80, -11.98] | -6.57 [-7.49, -5.60] |
 
 **corrected mode** (fill-rate bias in pp, 95% CI)
 
@@ -249,7 +295,6 @@ pooled over the four instruments of the day. Per-decile cells hold 92 to 520 sha
 | `hbt_power3[n=1]` | +0.07 [-0.26, +0.37] | +0.27 [-0.20, +0.80] | -0.17 [-0.46, +0.17] | -0.47 [-0.83, -0.10] | -0.53 [-0.90, -0.19] | -0.17 [-0.56, +0.17] |
 | `hbt_power3[n=2]` | -0.13 [-0.37, +0.10] | -0.23 [-0.66, +0.17] | -0.53 [-0.90, -0.16] | -0.53 [-0.86, -0.21] | -0.67 [-1.02, -0.33] | -0.23 [-0.59, +0.07] |
 | `hbt_power3[n=3]` | -0.27 [-0.51, -0.03] | -0.53 [-0.94, -0.13] | -0.80 [-1.22, -0.32] | -0.57 [-0.87, -0.28] | -0.80 [-1.16, -0.45] | -0.33 [-0.64, -0.07] |
-| `hbt_power[n=1]` | +0.07 [-0.26, +0.37] | +0.27 [-0.20, +0.80] | -0.17 [-0.46, +0.17] | -0.47 [-0.83, -0.10] | -0.53 [-0.90, -0.19] | -0.17 [-0.56, +0.17] |
 | `hbt_power[n=2]` | -0.03 [-0.33, +0.24] | -0.03 [-0.37, +0.29] | -0.40 [-0.69, -0.10] | -0.47 [-0.82, -0.10] | -0.67 [-1.02, -0.33] | -0.23 [-0.59, +0.07] |
 | `hbt_power[n=3]` | -0.03 [-0.33, +0.24] | -0.07 [-0.44, +0.27] | -0.47 [-0.83, -0.13] | -0.47 [-0.82, -0.10] | -0.63 [-1.00, -0.32] | -0.23 [-0.59, +0.07] |
 | `hbt_risk_adverse` | -0.37 [-0.58, -0.19] | -1.00 [-1.29, -0.70] | -1.10 [-1.41, -0.78] | -0.77 [-1.08, -0.48] | -1.20 [-1.54, -0.83] | -0.47 [-0.75, -0.23] |
@@ -261,43 +306,44 @@ pooled over the four instruments of the day. Per-decile cells hold 92 to 520 sha
 
 | model | day | queue decile 0 .. 9 | liquidity bucket 0 / 1 / 2 |
 |---|---|---|---|
-| `databento_mc[k=-0.8;particles=100]` | 2019-12-30 | +0.0 +0.2 -2.0 -0.5 +0.3 -1.7 -0.5 -2.0 -0.3 +0.1 | -0.5 / -0.8 / -0.5 |
-| `databento_mc[k=-0.8;particles=100]` | 2020-01-30 | +0.0 -0.4 +0.4 -1.6 +0.0 +0.1 +0.4 -0.9 +0.0 -0.6 | -0.1 / -0.5 / -0.2 |
-| `databento_mc[k=-0.95;particles=100]` | 2019-12-30 | +0.0 +0.0 -2.0 -0.5 +0.2 -1.7 -0.8 -2.2 -0.6 -0.1 | -0.6 / -1.0 / -0.6 |
-| `databento_mc[k=-0.95;particles=100]` | 2020-01-30 | +0.0 -0.4 +0.4 -1.6 +0.0 +0.0 +0.4 -1.0 +0.0 -0.6 | -0.1 / -0.5 / -0.3 |
-| `front_of_queue` | 2019-12-30 | +0.0 +1.9 +0.3 +2.1 +0.7 +2.1 +1.2 +2.3 +2.0 +2.4 | +1.7 / +1.1 / +1.5 |
-| `front_of_queue` | 2020-01-30 | +0.8 +0.4 +0.4 +0.3 +1.1 +1.7 +0.6 +1.4 +1.5 +1.8 | +1.5 / +0.5 / +0.8 |
-| `hbt_l3_fifo` | 2019-12-30 | +0.9 +0.6 -4.5 -3.1 -0.9 -4.7 +0.0 -2.9 -1.2 -1.0 | -2.1 / -1.6 / -1.3 |
-| `hbt_l3_fifo` | 2020-01-30 | +0.0 -1.3 -0.8 -5.9 -1.1 -2.9 -0.6 -1.4 -1.2 -2.4 | -2.3 / -1.5 / -1.7 |
-| `hbt_log` | 2019-12-30 | +0.0 -0.3 -2.3 -0.5 -0.2 -1.3 -0.4 -2.0 +0.3 +0.4 | -0.7 / -0.7 / -0.5 |
-| `hbt_log` | 2020-01-30 | +0.0 -0.5 +0.0 -1.6 +0.0 +0.0 +0.6 -1.1 +0.3 -0.6 | -0.2 / -0.5 / -0.1 |
-| `hbt_log2` | 2019-12-30 | +0.0 +0.3 -2.1 -1.1 +0.5 -1.8 -0.4 -2.4 -0.6 +0.0 | -0.6 / -1.1 / -0.4 |
-| `hbt_log2` | 2020-01-30 | +0.0 -0.5 +0.4 -1.6 +0.0 +0.6 +0.4 -1.5 +0.0 -0.6 | -0.2 / -0.4 / -0.3 |
-| `hbt_power2[n=2]` | 2019-12-30 | +0.0 +0.7 -2.1 +1.1 +0.5 -0.5 +0.4 -1.0 +0.9 +0.7 | +0.0 / -0.1 / +0.2 |
-| `hbt_power2[n=2]` | 2020-01-30 | +0.0 -0.5 +0.4 -1.6 +0.0 +0.6 +0.7 -0.8 +0.3 -0.3 | +0.0 / -0.4 / +0.0 |
-| `hbt_power3[n=1]` | 2019-12-30 | +0.0 +0.3 -2.1 +0.0 +0.5 -0.9 +0.4 -1.0 +0.9 +0.7 | -0.1 / -0.2 / +0.0 |
-| `hbt_power3[n=1]` | 2020-01-30 | +0.0 -0.5 +0.4 -1.6 +0.0 +0.6 +0.6 -0.7 +0.3 -0.6 | +0.0 / -0.4 / -0.1 |
-| `hbt_power3[n=2]` | 2019-12-30 | +0.0 +0.0 -2.0 -0.5 +0.5 -1.3 -0.4 -2.4 +0.3 +0.4 | -0.5 / -0.8 / -0.2 |
-| `hbt_power3[n=2]` | 2020-01-30 | +0.0 -0.5 +0.4 -1.6 +0.0 +0.6 +0.6 -1.4 +0.3 -0.6 | -0.1 / -0.4 / -0.2 |
-| `hbt_power3[n=3]` | 2019-12-30 | +0.0 +0.0 -2.3 -1.1 +0.0 -1.8 -0.4 -2.7 -0.3 +0.0 | -0.8 / -1.2 / -0.5 |
-| `hbt_power3[n=3]` | 2020-01-30 | +0.0 -0.5 +0.0 -1.6 +0.0 +0.6 +0.4 -1.5 +0.0 -0.6 | -0.3 / -0.4 / -0.3 |
-| `hbt_power[n=1]` | 2019-12-30 | +0.0 +0.3 -2.1 +0.0 +0.5 -0.9 +0.4 -1.0 +0.9 +0.7 | -0.1 / -0.2 / +0.0 |
-| `hbt_power[n=1]` | 2020-01-30 | +0.0 -0.5 +0.4 -1.6 +0.0 +0.6 +0.6 -0.7 +0.3 -0.6 | +0.0 / -0.4 / -0.1 |
-| `hbt_power[n=2]` | 2019-12-30 | +0.0 +0.0 -2.0 -0.5 +0.5 -1.3 +0.0 -2.0 +0.6 +0.7 | -0.4 / -0.6 / -0.1 |
-| `hbt_power[n=2]` | 2020-01-30 | +0.0 -0.5 +0.4 -1.6 +0.0 +0.6 +0.6 -1.4 +0.3 -0.6 | -0.1 / -0.4 / -0.2 |
-| `hbt_power[n=3]` | 2019-12-30 | +0.0 +0.0 -2.0 -0.5 +0.2 -1.3 +0.0 -2.0 +0.3 +0.7 | -0.5 / -0.6 / -0.2 |
-| `hbt_power[n=3]` | 2020-01-30 | +0.0 -0.5 +0.4 -1.6 +0.0 +0.6 +0.6 -1.4 +0.3 -0.6 | -0.1 / -0.4 / -0.2 |
-| `hbt_risk_adverse` | 2019-12-30 | +0.0 -0.3 -2.4 -1.6 -0.2 -1.8 -0.4 -3.4 -0.6 -1.1 | -1.2 / -1.3 / -1.1 |
-| `hbt_risk_adverse` | 2020-01-30 | +0.0 -0.5 +0.0 -1.6 -0.4 +0.0 +0.0 -1.5 +0.0 -0.7 | -0.5 / -0.6 / -0.4 |
-| `nt_prob_touch[p=1]` | 2019-12-30 | +0.0 +1.9 +0.3 +2.1 +0.7 +2.1 +1.2 +2.3 +2.0 +2.4 | +1.7 / +1.1 / +1.5 |
-| `nt_prob_touch[p=1]` | 2020-01-30 | +0.8 +0.4 +0.4 +0.3 +1.1 +1.7 +0.6 +1.4 +1.5 +1.8 | +1.5 / +0.5 / +0.8 |
-| `nt_queue_l2` | 2019-12-30 | +0.0 -0.3 -0.3 -0.5 -0.2 -0.9 -1.2 -2.3 -0.3 -1.4 | -0.6 / -0.7 / -0.8 |
-| `nt_queue_l2` | 2020-01-30 | +0.0 +0.0 +0.0 +0.0 -0.7 +0.0 +0.0 -0.7 +0.0 -0.9 | -0.5 / +0.0 / -0.2 |
-| `trade_through_only` | 2019-12-30 | -16.8 -11.3 -9.0 -7.2 -9.5 -11.5 -11.2 -14.8 -7.8 -10.6 | -11.6 / -10.4 / -8.4 |
-| `trade_through_only` | 2020-01-30 | -12.4 -7.5 -8.4 -3.4 -7.2 -5.2 -7.1 -8.7 -5.8 -6.0 | -8.0 / -6.0 / -5.7 |
+| `databento_mc[k=-0.8;particles=100]` | 2019-12-30 | +0.0 -0.1 +0.7 -2.2 -0.1 -2.0 -0.2 -2.4 +0.2 -0.2 | -0.9 / -0.9 / -0.4 |
+| `databento_mc[k=-0.8;particles=100]` | 2020-01-30 | +0.0 +0.0 +0.5 -1.6 -0.5 +0.1 +0.5 -0.9 +0.0 -0.7 | -0.1 / -0.6 / -0.2 |
+| `databento_mc[k=-0.95;particles=100]` | 2019-12-30 | +0.0 -0.4 +0.7 -2.2 -0.3 -2.0 -0.4 -2.7 +0.0 -0.4 | -1.1 / -1.1 / -0.5 |
+| `databento_mc[k=-0.95;particles=100]` | 2020-01-30 | +0.0 +0.0 +0.5 -1.6 -0.5 +0.0 +0.5 -0.9 +0.0 -0.7 | -0.1 / -0.6 / -0.2 |
+| `front_of_queue` | 2019-12-30 | +0.0 +2.1 +0.7 +0.6 +0.8 +1.5 +1.3 +1.2 +4.0 +2.5 | +1.7 / +1.0 / +1.8 |
+| `front_of_queue` | 2020-01-30 | +1.0 +0.5 +0.5 +0.3 +1.0 +1.4 +0.7 +1.8 +1.4 +1.8 | +1.5 / +0.6 / +0.7 |
+| `hbt_l3_fifo` | 2019-12-30 | +1.2 +0.8 +0.7 -6.4 -1.3 -5.1 -0.4 -3.1 -1.2 -2.5 | -2.5 / -2.1 / -1.7 |
+| `hbt_l3_fifo` | 2020-01-30 | +0.0 -1.0 -1.0 -6.3 -1.0 -3.4 -0.9 -1.8 -1.4 -2.9 | -2.6 / -1.8 / -2.0 |
+| `hbt_log` | 2019-12-30 | +0.0 -0.4 +0.7 -2.2 -0.3 -1.5 -0.4 -2.0 +0.8 +0.4 | -0.7 / -0.6 / -0.5 |
+| `hbt_log` | 2020-01-30 | +0.0 +0.0 +0.0 -1.6 -0.5 +0.0 +0.7 -1.4 +0.3 -1.1 | -0.2 / -0.6 / -0.2 |
+| `hbt_log2` | 2019-12-30 | +0.0 +0.0 +0.7 -2.2 +0.0 -2.0 -0.4 -2.8 +0.0 -0.4 | -0.8 / -1.2 / -0.4 |
+| `hbt_log2` | 2020-01-30 | +0.0 +0.0 +0.5 -1.6 -0.5 +0.7 +0.5 -1.4 +0.0 -0.7 | -0.2 / -0.5 / -0.2 |
+| `hbt_power2[n=2]` | 2019-12-30 | +0.0 +0.8 +0.7 -1.9 +0.0 -1.0 +0.4 -1.6 +1.6 +0.4 | -0.2 / -0.5 / +0.2 |
+| `hbt_power2[n=2]` | 2020-01-30 | +0.0 +0.0 +0.5 -1.6 -0.5 +0.7 +0.7 -0.9 +0.3 -0.4 | +0.0 / -0.5 / +0.0 |
+| `hbt_power3[n=1]` | 2019-12-30 | +0.0 +0.4 +0.7 -1.9 +0.0 -1.5 +0.4 -1.6 +1.6 +0.4 | -0.2 / -0.5 / +0.0 |
+| `hbt_power3[n=1]` | 2020-01-30 | +0.0 +0.0 +0.5 -1.6 -0.5 +0.7 +0.7 -0.9 +0.3 -0.7 | +0.0 / -0.5 / -0.1 |
+| `hbt_power3[n=2]` | 2019-12-30 | +0.0 +0.0 +0.7 -1.9 +0.0 -1.5 -0.4 -2.8 +0.8 +0.0 | -0.6 / -1.0 / -0.2 |
+| `hbt_power3[n=2]` | 2020-01-30 | +0.0 +0.0 +0.5 -1.6 -0.5 +0.7 +0.7 -1.4 +0.3 -0.7 | -0.1 / -0.5 / -0.1 |
+| `hbt_power3[n=3]` | 2019-12-30 | +0.0 +0.0 +0.0 -2.2 +0.0 -2.0 -0.4 -2.8 +0.0 -0.4 | -0.7 / -1.3 / -0.5 |
+| `hbt_power3[n=3]` | 2020-01-30 | +0.0 +0.0 +0.0 -1.6 -0.5 +0.7 +0.5 -1.4 +0.0 -0.7 | -0.4 / -0.5 / -0.2 |
+| `hbt_power[n=2]` | 2019-12-30 | +0.0 +0.0 +0.7 -1.9 +0.0 -1.5 +0.0 -2.4 +1.2 +0.4 | -0.5 / -0.7 / -0.1 |
+| `hbt_power[n=2]` | 2020-01-30 | +0.0 +0.0 +0.5 -1.6 -0.5 +0.7 +0.7 -1.4 +0.3 -0.7 | -0.1 / -0.5 / -0.1 |
+| `hbt_power[n=3]` | 2019-12-30 | +0.0 +0.0 +0.7 -1.9 +0.0 -1.5 +0.0 -2.4 +0.8 +0.4 | -0.5 / -0.7 / -0.2 |
+| `hbt_power[n=3]` | 2020-01-30 | +0.0 +0.0 +0.5 -1.6 -0.5 +0.7 +0.7 -1.4 +0.3 -0.7 | -0.1 / -0.5 / -0.1 |
+| `hbt_risk_adverse` | 2019-12-30 | +0.0 +0.0 -0.7 -2.5 -0.3 -2.0 -0.4 -3.5 -0.4 -1.1 | -1.1 / -1.4 / -0.9 |
+| `hbt_risk_adverse` | 2020-01-30 | +0.0 +0.0 +0.0 -1.6 -0.5 +0.0 +0.0 -1.4 +0.0 -0.7 | -0.5 / -0.6 / -0.4 |
+| `nt_prob_touch[p=1]` | 2019-12-30 | +0.0 +2.1 +0.7 +0.6 +0.8 +1.5 +1.3 +1.2 +4.0 +2.5 | +1.7 / +1.0 / +1.8 |
+| `nt_prob_touch[p=1]` | 2020-01-30 | +1.0 +0.5 +0.5 +0.3 +1.0 +1.4 +0.7 +1.8 +1.4 +1.8 | +1.5 / +0.6 / +0.7 |
+| `nt_queue_l2` | 2019-12-30 | +0.0 +0.0 -1.5 +0.0 +0.0 -1.0 -0.4 -2.4 +0.4 -0.7 | -0.5 / -0.5 / -0.5 |
+| `nt_queue_l2` | 2020-01-30 | +0.0 +0.0 +0.0 +0.0 -0.5 +0.0 +0.0 -0.5 +0.0 +0.0 | -0.2 / +0.0 / +0.0 |
+| `trade_through_only` | 2019-12-30 | -16.7 -10.4 -17.0 -5.3 -9.5 -12.7 -9.7 -14.6 -8.0 -10.6 | -11.5 / -9.9 / -8.4 |
+| `trade_through_only` | 2020-01-30 | -14.3 -5.9 -9.8 -2.7 -6.0 -5.4 -7.5 -6.4 -6.4 -4.4 | -7.1 / -6.0 / -5.1 |
 
-**hftbacktest #312 aborts** (faithful mode, shadows of 3,000 left out of the model's metrics)
+**hftbacktest #312 aborts** (faithful mode: shadows of 3,000 on which the model aborted; a shadow on which any of them
+aborted is left out of every model, 471 on 2019-12-30 and 482 on 2020-01-30)
 
+| model | 2019-12-30 | 2020-01-30 |
+|---|---|---|
 | model | 2019-12-30 | 2020-01-30 |
 |---|---|---|
 | `hbt_log` | 179 | 232 |
@@ -306,15 +352,15 @@ pooled over the four instruments of the day. Per-decile cells hold 92 to 520 sha
 | `hbt_power3[n=1]` | 261 | 294 |
 | `hbt_power3[n=2]` | 191 | 225 |
 | `hbt_power3[n=3]` | 197 | 236 |
-| `hbt_power[n=1]` | 261 | 294 |
 | `hbt_power[n=2]` | 186 | 217 |
 | `hbt_power[n=3]` | 181 | 229 |
 | `hbt_risk_adverse` | 268 | 313 |
 
 Faithful hftbacktest models reproduce hftbacktest's partial-fill exchange, which aborts a backtest with
-`InvalidOrderStatus` on these orders (issue #312). The zoo now stops only the affected shadow at that event and
-leaves it out of that model's metrics (the corrected models are not affected); the counts above are how many of the
-3,000 orders hftbacktest itself could not finish, 6.0% to 11.4% per model.
+`InvalidOrderStatus` on these orders (issue #312). The zoo stops only the affected shadow at that event, and since
+0.1.1 every model's faithful-mode metrics leave out every shadow on which any faithful hftbacktest model aborted (the
+corrected models are not affected). The counts above are how many of the 3,000 orders hftbacktest itself could not
+finish, 6.0% to 11.4% per model, and 15.7% and 16.1% of the orders for at least one model.
 
 RD-8 checks on day one (`.realdata/results.json`): 17 models in both modes on the 3,000 sampled shadows and on
 the prototype's 3,000 real-order mirror shadows (the cancel-bearing population, reported separately per A2); the
@@ -353,8 +399,8 @@ same days as depth-10 snapshots its queue model fills like the touch model: 13.9
 (+2.87, +3.27, +1.43 pp against exact) and +2.67, +2.03, +0.93 pp on day two, while the touch model is unchanged. The
 faithful NT models describe 1.231.0 on a delta feed.
 
-**NautilusTrader 2.0 (re-run 2026-10-22 on 2.0.0rc7, the latest release candidate; same orders, same harness, which
-now runs on 1.x and 2.x).** The touch default (`DefaultFillModel(prob_fill_on_limit=1)`) fills exactly the orders
+**NautilusTrader 2.0 (2.0.0rc7, the latest release candidate; same orders, same harness, which runs on 1.x and 2.x;
+re-run 2026-10-25 after the harness fix below).** The touch default (`DefaultFillModel(prob_fill_on_limit=1)`) fills exactly the orders
 1.231.0 fills, on both days, both feeds and the synthetic fixture: the +3.13 and +2.80 pp at 1 s above are
 unchanged. The queue model changed in two ways, both of which bring it closer to exact:
 
@@ -370,12 +416,22 @@ unchanged. The queue model changed in two ways, both of which bring it closer to
 | `queue_position=True`, delta or depth-10 feed | 2020-01-30 | 18.47% / 58.17% / 80.67% | -0.03 / -0.03 / -0.07 | 99.97% / 99.93% / 99.87% / 99.83% |
 
 All 18 (day one) and 10 (day two) differing orders fill in Nautilus and not in the zoo. With `p = 0.29` Nautilus's
-realised rates stay within 0.2 pp of the expectation under its own rules on both days.
+realised rates stay within 0.5 pp of the expectation under its own rules on both days (largest 0.43 pp, the touch
+model at 1 s on day two).
+
+Harness fix. On 2.x the harness's end-of-window cancel was a no-op: the order object `order_factory.limit` returns
+stays `INITIALIZED` after submission, and 2.x's `Strategy.cancel_order` takes a `ClientOrderId`. Unfilled orders
+therefore kept resting after their window in the 2026-10-22 run, where with `queue_position=True` they could share
+print volume with later orders. The harness now cancels the cache's order (by `ClientOrderId` on 2.x) and reports
+how many orders fill after their cancel time: 0 in every configuration on both days of the rerun. The touch results,
+every number of the 2.0.0rc7 table above and the counts of differing orders are the same as in the 2026-10-22 run;
+only the random draws at `p = 0.29` changed (`scripts/nt_crosscheck/run.py`, work directories' `report.json`, nautilus_trader
+2.0.0rc7, extension `9d075d347aaed86a...`).
 
 Fed the MBO book itself (`scripts/nt_crosscheck/l3_mbo.py`: every resting order with its ID as of the live time,
 then the day's add, cancel, modify and trade messages as L3 deltas and trade ticks; `book_type=L3_MBO`,
-`queue_position=True`), 2.0.0rc7's queue model fills the same orders as the exact replay: every order at every
-horizon on day one, and on day two all but 1 order at 0.1 s and 2 at 10 s (+0.03 and +0.07 pp; each fills on a
+`queue_position=True`; rerun 2026-10-25 with the fixed cancel, unchanged), 2.0.0rc7's queue model fills the same
+orders as the exact replay: every order at every horizon on day one, and on day two all but 1 order at 0.1 s and 2 at 10 s (+0.03 and +0.07 pp; each fills on a
 hidden print, which the harness passes as a `NO_AGGRESSOR` trade and the exact replay does not count). The same feed
 in 1.231.0 overfills: +1.73 / +2.40 / +1.17 pp at 1 / 10 / 60 s on day one and +1.67 / +1.53 / +0.60 pp on day two.
 With `queue_position=False` the L3 feed fills like the L2 touch model in both versions.
@@ -417,6 +473,9 @@ Exactness on the new names (raw ITCH bytes, rank oracle and trade parity as in s
 `front_of_queue` and faithful `nt_prob_touch[p=1]` are identical in every tier, population, day and horizon, so the
 tables show one column for both. All 17 models produced rows everywhere; each faithful hftbacktest model left out
 0.05% to 8.2% of a population's shadows at the #312 event (`hbt_power3[n=2]`: 12 to 195 of 3,000 standard shadows).
+This is a 0.1.0 run: each faithful hftbacktest model left out only its own #312 aborts, against a truth on every
+shadow. It has not been rerun under 0.1.1's common population (section 4), which would move the hftbacktest cells
+and score every model on fewer shadows.
 
 
 **standard shadows** (faithful mode, 60 s; bias in pp, 95% CI)
@@ -541,12 +600,16 @@ full run, which agrees with the earlier run): `front_of_queue` and `nt_prob_touc
 -0.14]; `trade_through_only` -7.83 [-9.39, -6.39]. These are real orders with real cancel times, where most orders
 cancel before they could fill, so the biases are smaller than on the never-cancel shadows of section 4.
 
-**RD-12 crypto** (venue `generic`, `size_exp -8`, taker window 100 us): Bitstamp 77,272 records (equal to
-the prototype's converted count), 76,907 events, 135 trades, 8 invariants 0, 0 crossed books after the last record
-with taker handling (12,447 taker orders suppressed); Bitfinex R0 51,701 records (equal), 51,201 events, 243 trades,
-invariants 0, 51 out-of-order timestamps. Both verdicts are `warnings` (feed anomalies listed in the run). This shows
-replay and counters on the captures, not fill fidelity: neither feed carries the execution records exact queue truth
-needs.
+**RD-12 crypto** (venue `generic`, `size_exp -8`, taker window 100 us; rerun on 2026-10-25 with the integration
+build, `validate_et.py --only RD-12`, results sha256 `488b4102ab93b6c8...`): Bitstamp 77,157 records, 76,792
+events, 135 trades, 8 invariants 0, 0 crossed books after the last record with taker handling (12,373 taker orders
+suppressed); Bitfinex R0 51,701 records (equal to the prototype's converted count), 51,201 events, 243 trades,
+invariants 0, 51 out-of-order timestamps. Both verdicts are `warnings` (feed anomalies listed in the run). The
+Bitstamp reader now seeds the book from the first snapshot that no later-arriving message is stamped before (266 rows
+before it are skipped, against 2 when it seeded from the first snapshot) and ranks new orders of one timestamp at
+one price by order id; the earlier build, which seeded from the first snapshot, gave 77,272 records (equal to the
+prototype's converter), 76,907 events and 12,447 suppressed takers. This shows replay and counters on the captures,
+not fill fidelity: neither feed carries the execution records exact queue truth needs.
 
 ## 5b. Real DBN bytes: Databento's test files
 

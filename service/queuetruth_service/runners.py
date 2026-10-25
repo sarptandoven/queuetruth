@@ -1,4 +1,4 @@
-"""Job runners. Child side (`replay`, `calibrate`, `score`, `report`, `ingest`): call the `queuetruth` Python API
+"""Job runners. Child side (`replay`, `zoo`, `calibrate`, `score`, `report`, `ingest`): call the `queuetruth` Python API
 (SPEC 4.3) with a spec whose references were resolved to paths relative to the job's work directory, and return the
 summary document. Archive inputs are unpacked in the child too (`apply_extractions`), inside its memory limit,
 timeout and cancel (security review M2). Parent side helpers: output listing and content types, usage meters.
@@ -66,6 +66,13 @@ def replay(spec: dict[str, Any]) -> dict[str, Any]:
     return _dump(api.replay(spec))
 
 
+def zoo(spec: dict[str, Any]) -> dict[str, Any]:
+    """`queuetruth.run_zoo` (the Rust run plus the `queuetruth.eval` leaderboard; writes `summary.json`)."""
+    from queuetruth import api
+
+    return _dump(api.run_zoo(spec))
+
+
 def calibrate(spec: dict[str, Any]) -> dict[str, Any]:
     """`queuetruth.calibrate`."""
     from queuetruth import api
@@ -97,6 +104,7 @@ def ingest(spec: dict[str, Any]) -> dict[str, Any]:
 #: job kind -> child target.
 TARGETS: dict[str, str] = {
     "replay": "queuetruth_service.runners:replay",
+    "zoo": "queuetruth_service.runners:zoo",
     "calibration": "queuetruth_service.runners:calibrate",
     "scorecard": "queuetruth_service.runners:score",
     "report": "queuetruth_service.runners:report",
@@ -262,6 +270,12 @@ def usage_meters(kind: str, summary: dict[str, Any] | None, cpu_ms: int) -> dict
         n_shadows = float(s.get("n_shadows", 0) or 0)
         meters["shadow_orders"] = (n_shadows, "orders")
         models = len(s.get("held_out") or {}) + len(s.get("baseline_held_out") or {})
+        if models:
+            meters["zoo_pairs"] = (n_shadows * models, "pairs")
+    elif kind == "zoo":
+        n_shadows = float(s.get("n_shadows", 0) or 0)
+        meters["shadow_orders"] = (n_shadows, "orders")
+        models = len(s.get("models") or [])
         if models:
             meters["zoo_pairs"] = (n_shadows * models, "pairs")
     elif kind == "scorecard":

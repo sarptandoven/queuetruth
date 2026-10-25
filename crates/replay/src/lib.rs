@@ -115,7 +115,9 @@ impl EngineConfig {
 pub enum FillRule {
     /// Audit rulings A3-A5 with E36 and oracle rulings A3d / A4b (default): queue ahead is the
     /// exact displayed size of the real orders ahead, maintained from their own records (a duplicate add outside a
-    /// flagged snapshot re-queues the order behind the shadow); fills come from executions of real orders behind
+    /// flagged snapshot re-queues the order behind the shadow; on Nasdaq ITCH data an order added later with a
+    /// reference older than the shadow, released from the pre-open hold, joins it: oracle-disagreements D1); fills
+    /// come from executions of real orders behind
     /// the shadow at its price executed at that displayed price, executions of orders resting strictly through its
     /// price (and executed through it), hidden prints per `HiddenPrintPolicy`, and taker fills walking the opposite
     /// book when it crosses the shadow's price, after the real same-side orders with priority. Prints never shrink
@@ -127,6 +129,21 @@ pub enum FillRule {
     Et,
 }
 
+/// A span in which an instrument is not in continuous trading (halted, paused, or quoting before an IPO or halt
+/// cross: Nasdaq ITCH Stock Trading Action `H` state `H`, `P` or `Q` until the next state `T`), `[ts_start, ts_end)`
+/// in UTC ns (`ts_end = i64::MAX` when it lasts past the end of the input). SPEC 1.2 censors shadows there
+/// (`Engine::set_trading_halts`): a live shadow ends `censored_gap` at `ts_start`, and a shadow whose `ts_live` falls
+/// in the span never goes live and ends `censored_gap` at its `ts_live`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct TradingHalt {
+    /// Instrument.
+    pub instrument_id: u32,
+    /// First instant of the span (the time of the message that left continuous trading).
+    pub ts_start: Ts,
+    /// First instant after the span (the time of the message that resumed continuous trading).
+    pub ts_end: Ts,
+}
+
 /// Hidden (side-`N`) prints on venues with hidden orders (audit ruling A3; `Exact` rule only).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum HiddenPrintPolicy {
@@ -134,10 +151,15 @@ pub enum HiddenPrintPolicy {
     Ignore,
     /// A hidden print at the shadow's price fills it when the book at the print shows no displayed interest at or
     /// through that price on either side (displayed beats hidden at a price; a locked or crossed price is not
-    /// continuous matching; oracle ruling A3d, superseding the quote-rule reading of E36(c)).
+    /// continuous matching; oracle ruling A3d, superseding the quote-rule reading of E36(c)). On Nasdaq ITCH data
+    /// (`Instrument.source` `itch`, `etcsv` or `dbn`), when the print continues an execution sweep of one resting
+    /// side at the same `ts_event` (the aggressor walked that side's displayed orders, then its hidden interest), it
+    /// reaches only shadows on that side (oracle-disagreements extension, D2); otherwise the side is inferred from
+    /// the shadow.
     Behind,
     /// `Behind`, plus a usable hidden print (same condition) strictly through the shadow's price is a
-    /// trade-through. Default on Nasdaq.
+    /// trade-through (off the tick grid too when it continues a sweep on Nasdaq ITCH data: a midpoint execution the
+    /// aggressor reached; D3). Default on Nasdaq.
     BehindAndThrough,
 }
 

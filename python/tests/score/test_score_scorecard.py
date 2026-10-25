@@ -75,6 +75,7 @@ def test_exact_arm_outputs_and_schema(basic, tmp_path, repo_root):
         "score_markouts.parquet",
         "score_orders.parquet",
         "score_position.parquet",
+        "score_shortfall.parquet",
         "score_tests.parquet",
     ]
     for f in s.files:

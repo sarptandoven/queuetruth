@@ -979,6 +979,52 @@
         "title": "CalibrationTrust",
         "type": "object"
       },
+      "CiValue": {
+        "additionalProperties": false,
+        "description": "Point estimate with a confidence interval.",
+        "properties": {
+          "ci_hi": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ci Hi"
+          },
+          "ci_lo": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ci Lo"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "value",
+          "ci_lo",
+          "ci_hi"
+        ],
+        "title": "CiValue",
+        "type": "object"
+      },
       "CompletedPart": {
         "additionalProperties": false,
         "description": "One uploaded part and the ETag the store returned.",
@@ -1416,7 +1462,8 @@
                   "cme",
                   "coinbase",
                   "crypto_l3",
-                  "iex"
+                  "iex",
+                  "nyse"
                 ],
                 "type": "string"
               },
@@ -2742,7 +2789,8 @@
               "scorecard",
               "report",
               "dataset_validate",
-              "deletion"
+              "deletion",
+              "zoo"
             ],
             "title": "Kind",
             "type": "string"
@@ -3025,6 +3073,231 @@
           }
         },
         "title": "LatencyModel",
+        "type": "object"
+      },
+      "LeaderboardEntry": {
+        "additionalProperties": false,
+        "description": "One model's metrics vs exact truth (SPEC 5.6).",
+        "properties": {
+          "brier": {
+            "patternProperties": {
+              "^[0-9]+$": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "title": "Brier",
+            "type": "object"
+          },
+          "exact_fill_rate": {
+            "patternProperties": {
+              "^[0-9]+$": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "title": "Exact Fill Rate",
+            "type": "object"
+          },
+          "fill_rate_bias": {
+            "patternProperties": {
+              "^[0-9]+$": {
+                "$ref": "#/components/schemas/CiValue"
+              }
+            },
+            "title": "Fill Rate Bias",
+            "type": "object"
+          },
+          "first_fill_error": {
+            "patternProperties": {
+              "^[0-9]+$": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "title": "First Fill Error",
+            "type": "object"
+          },
+          "logloss": {
+            "patternProperties": {
+              "^[0-9]+$": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "title": "Logloss",
+            "type": "object"
+          },
+          "mcnemar": {
+            "$ref": "#/components/schemas/McNemarSmall"
+          },
+          "mcs_brier_member": {
+            "patternProperties": {
+              "^[0-9]+$": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "title": "Mcs Brier Member",
+            "type": "object"
+          },
+          "mcs_brier_p": {
+            "patternProperties": {
+              "^[0-9]+$": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "title": "Mcs Brier P",
+            "type": "object"
+          },
+          "mcs_member": {
+            "patternProperties": {
+              "^[0-9]+$": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "title": "Mcs Member",
+            "type": "object"
+          },
+          "mcs_p": {
+            "patternProperties": {
+              "^[0-9]+$": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "title": "Mcs P",
+            "type": "object"
+          },
+          "model_fill_rate": {
+            "patternProperties": {
+              "^[0-9]+$": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "title": "Model Fill Rate",
+            "type": "object"
+          },
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          },
+          "overfill_bias": {
+            "$ref": "#/components/schemas/CiValue"
+          },
+          "qtrack_mae": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qtrack Mae"
+          },
+          "qty_bias": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qty Bias"
+          },
+          "ttf_iad": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ttf Iad"
+          },
+          "ttf_log_ratio_median": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ttf Log Ratio Median"
+          }
+        },
+        "required": [
+          "model_id",
+          "brier",
+          "logloss",
+          "fill_rate_bias",
+          "overfill_bias",
+          "qty_bias",
+          "ttf_iad",
+          "mcnemar"
+        ],
+        "title": "LeaderboardEntry",
         "type": "object"
       },
       "Limits": {
@@ -3389,6 +3662,38 @@
           "p_exact"
         ],
         "title": "McNemar",
+        "type": "object"
+      },
+      "McNemarSmall": {
+        "additionalProperties": false,
+        "description": "Discordant counts and exact McNemar p-value.",
+        "properties": {
+          "b": {
+            "title": "B",
+            "type": "integer"
+          },
+          "c": {
+            "title": "C",
+            "type": "integer"
+          },
+          "p_exact": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P Exact"
+          }
+        },
+        "required": [
+          "b",
+          "c",
+          "p_exact"
+        ],
+        "title": "McNemarSmall",
         "type": "object"
       },
       "Meta": {
@@ -6143,6 +6448,337 @@
         },
         "title": "WindowSpec",
         "type": "object"
+      },
+      "ZooRecord": {
+        "description": "`GET /v1/zoos/{id}`.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "spec": {
+            "additionalProperties": true,
+            "title": "Spec",
+            "type": "object"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ZooSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "spec",
+          "job_id"
+        ],
+        "title": "ZooRecord",
+        "type": "object"
+      },
+      "ZooRecordPage": {
+        "additionalProperties": false,
+        "description": "`qt.page` of ZooRecord.",
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ZooRecord"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "has_more": {
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "schema": {
+            "const": "qt.page",
+            "default": "qt.page",
+            "title": "Schema",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": 1,
+            "default": 1,
+            "title": "Schema Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "schema",
+          "schema_version",
+          "data",
+          "has_more",
+          "next_cursor"
+        ],
+        "title": "ZooRecordPage",
+        "type": "object"
+      },
+      "ZooSpec": {
+        "additionalProperties": false,
+        "description": "`zoo`: run queue models on the L2 view and compare with exact truth.",
+        "properties": {
+          "amends": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PathRef"
+              },
+              {
+                "$ref": "#/components/schemas/UploadRef"
+              },
+              {
+                "$ref": "#/components/schemas/JobFileRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amends"
+          },
+          "bootstrap_b": {
+            "default": 1000,
+            "minimum": 1.0,
+            "title": "Bootstrap B",
+            "type": "integer"
+          },
+          "dataset": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PathRef"
+              },
+              {
+                "$ref": "#/components/schemas/DatasetIdRef"
+              }
+            ],
+            "title": "Dataset"
+          },
+          "exchange": {
+            "default": "partial",
+            "enum": [
+              "partial",
+              "no_partial"
+            ],
+            "title": "Exchange",
+            "type": "string"
+          },
+          "exclude_order_ids": {
+            "items": {
+              "$ref": "#/components/schemas/ExcludeOrderId"
+            },
+            "title": "Exclude Order Ids",
+            "type": "array"
+          },
+          "h_max_ns": {
+            "default": 300000000000,
+            "minimum": 0.0,
+            "title": "H Max Ns",
+            "type": "integer"
+          },
+          "horizons_ns": {
+            "items": {
+              "minimum": 0.0,
+              "type": "integer"
+            },
+            "title": "Horizons Ns",
+            "type": "array"
+          },
+          "l2": {
+            "$ref": "#/components/schemas/L2Config"
+          },
+          "latency": {
+            "$ref": "#/components/schemas/LatencyModel"
+          },
+          "mode": {
+            "default": "faithful",
+            "enum": [
+              "faithful",
+              "corrected"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "models": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "out": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Out"
+          },
+          "particles": {
+            "default": 100,
+            "minimum": 1.0,
+            "title": "Particles",
+            "type": "integer"
+          },
+          "seed": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Seed",
+            "type": "integer"
+          },
+          "shadows": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PathRef"
+              },
+              {
+                "$ref": "#/components/schemas/UploadRef"
+              },
+              {
+                "$ref": "#/components/schemas/JobFileRef"
+              }
+            ],
+            "title": "Shadows"
+          },
+          "threads": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Threads",
+            "type": "integer"
+          },
+          "write_fills": {
+            "default": true,
+            "title": "Write Fills",
+            "type": "boolean"
+          },
+          "write_trajectory": {
+            "default": false,
+            "title": "Write Trajectory",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "dataset",
+          "shadows"
+        ],
+        "title": "ZooSpec",
+        "type": "object"
+      },
+      "ZooSummary": {
+        "additionalProperties": false,
+        "description": "Summary of `zoo`; the Rust runner leaves `leaderboard` empty (filled by `queuetruth.eval`).",
+        "properties": {
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/FileEntry"
+            },
+            "title": "Files",
+            "type": "array"
+          },
+          "hbt_312_aborts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Hbt 312 Aborts",
+            "type": "object"
+          },
+          "leaderboard": {
+            "items": {
+              "$ref": "#/components/schemas/LeaderboardEntry"
+            },
+            "title": "Leaderboard",
+            "type": "array"
+          },
+          "models": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "n_excluded_hbt_312": {
+            "default": 0,
+            "title": "N Excluded Hbt 312",
+            "type": "integer"
+          },
+          "n_leaderboard": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Leaderboard"
+          },
+          "n_shadows": {
+            "title": "N Shadows",
+            "type": "integer"
+          },
+          "run_id": {
+            "pattern": "^[0-9a-f]{16}$",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "schema": {
+            "const": "qt.zoo_summary",
+            "default": "qt.zoo_summary",
+            "title": "Schema",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": 1,
+            "default": 1,
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "spec": {
+            "additionalProperties": true,
+            "title": "Spec",
+            "type": "object"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "schema",
+          "schema_version",
+          "run_id",
+          "spec",
+          "n_shadows",
+          "models",
+          "leaderboard",
+          "files",
+          "warnings"
+        ],
+        "title": "ZooSummary",
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -7684,7 +8320,8 @@
                     "scorecard",
                     "report",
                     "dataset_validate",
-                    "deletion"
+                    "deletion",
+                    "zoo"
                   ],
                   "type": "string"
                 },
@@ -11534,6 +12171,555 @@
           }
         ],
         "summary": "Usage report"
+      }
+    },
+    "/v1/zoos": {
+      "get": {
+        "description": "`qt.page` of `{id, spec, job_id, summary?}`.",
+        "operationId": "list_zoos_v1_zoos_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "starting_after",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Starting After"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZooRecordPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Insufficient scope"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not found (unknown or other-tenant id)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Payload too large"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Internal error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "basic": []
+          }
+        ],
+        "summary": "List zoo runs"
+      },
+      "post": {
+        "description": "`ZooSpec` (dataset and shadows as tenant ids) -> `{id, job}` + `Location`; the job runs every model on the L2\nview and scores it against exact truth.",
+        "operationId": "submit_zoo_v1_zoos_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "minLength": 1,
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ZooSpec"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Submitted"
+                }
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "Location": {
+                "description": "URL of the job",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Insufficient scope"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not found (unknown or other-tenant id)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Payload too large"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Internal error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "basic": []
+          }
+        ],
+        "summary": "Submit a zoo run"
+      }
+    },
+    "/v1/zoos/estimate": {
+      "post": {
+        "description": "`qt.estimate`.",
+        "operationId": "estimate_zoo_v1_zoos_estimate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ZooSpec"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Estimate"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Insufficient scope"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not found (unknown or other-tenant id)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Payload too large"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Internal error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "basic": []
+          }
+        ],
+        "summary": "Estimate a zoo run"
+      }
+    },
+    "/v1/zoos/{zoo_id}": {
+      "get": {
+        "description": "`{id, spec, job_id, summary?: qt.zoo_summary}`.",
+        "operationId": "get_zoo_v1_zoos__zoo_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "zoo_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "title": "Zoo Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ZooRecord"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Insufficient scope"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not found (unknown or other-tenant id)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Payload too large"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Internal error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "basic": []
+          }
+        ],
+        "summary": "Get a zoo run"
       }
     }
   },

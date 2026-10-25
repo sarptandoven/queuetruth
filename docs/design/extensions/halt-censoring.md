@@ -1,0 +1,123 @@
+# Trading halts censor shadows (fix of finding F2; SPEC 1.2)
+
+Status: the engine side is built and tested (`crates/replay/src/engine.rs`, `crates/replay/src/shadow/mod.rs`,
+`crates/replay/src/run.rs`, `crates/replay/tests/halts.rs`). Ingest does not produce the trading state yet, so the fix
+is reachable only from Rust callers that supply the spans (H.5). This note is the contract the fix was built against,
+written to be merged into [the design specification](../spec.md) (sections 1.2 and 5.2.7).
+
+## H.1 The defect
+
+SPEC 1.2 (non-goals for v0.1): "No auction modelling: shadows resting through an auction or halt are censored
+(`end_state = censored_gap`)". The engine had no trading state, so the exact fill rule matched shadows through
+halts, LULD pauses and IPO quotation periods as if the venue were trading continuously. On the 2020-01-30
+full-market pilot, 1,125 of the 8,000 shadows of ANPC, BDTX, RKDA and DTSS were first filled while the symbol was not
+trading, all by `crossed` or `crossed_at_live` fills against a displayed book the venue did not match (finding F2,
+[`scripts/scale/findings/README.md`](https://github.com/sarptandoven/queuetruth/blob/main/scripts/scale/findings/README.md); [the atlas trace
+note](atlas-trace.md)). The book replay was right; only the shadows' fill truth was wrong, so no replay-check flag
+catches it.
+
+## H.2 The contract as built
+
+Input: `qt_replay::TradingHalt {instrument_id, ts_start, ts_end}`, a span `[ts_start, ts_end)` in UTC ns in which the
+instrument is not in continuous trading (Nasdaq ITCH: from an `H` message with state `H`, `P` or `Q` to the next
+`H` with state `T`; `ts_end = i64::MAX` when trading does not resume). `Engine::set_trading_halts(&[TradingHalt])`
+takes them (call before the first record; calls add up; overlapping spans merge; `ts_end <= ts_start` is
+`QT-CONFIG-001`); `ReplayOptions::trading_halts` gives each partition engine the spans of its instrument
+(`run_dataset_with`). Spans of instruments without shadows are ignored. Both fill rules, `exact` and `et`, follow:
+
+1. **A shadow live when a halt starts** ends `censored_gap` at `ts_start`. As for feed gaps, the censoring happens
+   at the start of the instrument's first event with `ts_event > ts_start`, so an event at `ts_start` itself still
+   trades (on ITCH, messages with the halt message's timestamp may precede it in the feed), and its fills stand.
+   Before the halt ends the shadows, every shadow's own work effective before `ts_start` is done in input order:
+   a cancel or amend effective before `ts_start` still applies (`cancelled`, `amended_to_filled`), and one
+   effective at `ts_start` loses to the halt, as it loses to a feed gap (agenda order: time, then gap, cancel).
+2. **A shadow whose `ts_live` falls in `[ts_start, ts_end)`** never goes live and ends `censored_gap` at its
+   `ts_live`, with no queue state (`ts_activated_event` and the `*_at_live` columns null). A cancel, or an amend to
+   zero, effective at or before `ts_live` still ends it `cancelled` (5.2.1). The halt instant is halted and the
+   resumption instant trades: `ts_live = ts_end` goes live normally.
+3. **A shadow that went live before the halt but whose instrument had no event between its `ts_live` and the halt**
+   is activated on the first event after the halt as before, on the book it went live on (no event changed it), so
+   a `crossed_at_live` fill at its `ts_live` is a fill before the halt and stands; then it ends `censored_gap` at
+   `ts_start`. Its `ts_activated_event` is later than its end time, as already happens for a shadow whose cancel
+   comes before its activation event.
+4. **Twins (A1).** A shadow that would be linked to an excluded order whose `A` / `M` record falls in a halt is
+   linked and ends `censored_gap` at its `ts_live` without going live; the twin stays on the tape for everyone
+   else, as it does when its shadow is cancelled.
+5. **End of input.** A pending shadow whose `ts_live` falls in a halt ends `censored_gap` at its `ts_live`, not
+   `open_at_end` or `censored_session_end`. A live shadow whose halt starts at or after the instrument's last event
+   keeps the existing end (`censored_session_end` or `open_at_end` at that last event, which comes first).
+6. **Everything else is unchanged.** Without spans no code path differs; with spans, a shadow live only before the
+   halt or only from the resumption on has the same result, fills and trajectory as without them (H.3 property
+   test), and feed gaps, clears and bad-book records censor as before.
+
+Taking part in the halt or IPO cross at the cross price is not part of the v0.1 contract; it is a possible v0.2
+extension.
+
+## H.3 Evidence
+
+`crates/replay/tests/halts.rs`, 9 tests, all failing before the fix (with `set_trading_halts` accepting and ignoring
+the spans) and passing after it:
+
+- `f2_reproduction_itch_day_halt_censors_shadows`: the Rust port of
+  `scripts/scale/findings/repro_halt_shadow_fill.py`, the same 15-message ITCH day encoded by `qt_ingest::itch`,
+  ingested by `qt_ingest::ingest` and replayed by `run_dataset_with`, with the spans derived from its `H` messages.
+  Without the spans it reproduces the finding exactly (`S1` 100 @ 10.00 `crossed` at 10:02:00, `S2` 100 @ 9.99
+  `crossed_at_live` at 10:02:30); with them there is no fill, `S1` (live, queue ahead 0) ends `censored_gap` at
+  10:01:00 and `S2` ends `censored_gap` at its `ts_live` 10:02:30 without going live.
+- One test per rule of H.2: the cancel before the halt and the tie at it (rule 1), `ts_live` at the halt instant,
+  inside the halt and at the resumption instant (2), an event at the halt instant that still trades and a partial
+  fill kept (1), activation after a halt without events (3), a twin added during a halt (4), a halt to the end of
+  the input (5), and the empty-span configuration error.
+- `only_the_halt_changes_anything_on_random_streams`: 72 random venue-consistent streams (CME, Nasdaq, generic;
+  `exact` and `et`; 12 seeds each; 1,200 events, 60 abs and touch shadows with latency jitter, cancels and amends;
+  a halt in the middle third) compared shadow by shadow with the replay without the halt: a shadow live from the
+  resumption on or ended before the halt has the identical result and fills; a shadow with `ts_live` in the halt
+  never goes live, has no fill, and ends `censored_gap` at its `ts_live` (or `cancelled`); a shadow live at the halt
+  keeps exactly its fills up to the halt instant and ends `censored_gap` there (or as before when it ended at that
+  very instant); no fill falls inside the halt; and spans of another instrument change no row. Every case occurs
+  for every venue and rule.
+- The existing suites pass unchanged: `cargo test --locked -p queuetruth-replay -p queuetruth-book` (including the
+  receipt-priority tests `oracle_disagreements.rs`, `twins.rs`, O-SH-2 against the independent reference and O-SH-3),
+  the workspace tests with `--features gate`, `cargo clippy -D warnings` and `cargo fmt --check` on the changed files.
+
+## H.4 What changes in results
+
+Nothing for any run that passes no spans: every public entry point today (Python `qt.replay`, the CLI, the service,
+`why`, zoo, calibration, features) passes none (H.5). On the two public Nasdaq days the four symbols (AAPL, MSFT,
+SPY, TSLA) have one `H` message each, state `T` before the open, so their spans are empty and their results cannot
+change either. The real-data checks were rerun with the rebuilt extension; see H.4.1.
+
+### H.4.1 Real-data rerun
+
+`scripts/realdata/validate_et.py --only RD-1,RD-2,RD-5,RD-6,RD-6s,RD-11` (the prototype's CSV ingests of 2019-12-30
+and 2020-01-30 under `.realdata`, as in the oracle-disagreements report), run once with the extension built before
+the fix and once with the extension rebuilt from the fixed sources (`ws ext`), same machine, same day: every check
+passes both times (RD-1, RD-1b, RD-2, RD-5, RD-6, RD-6s, RD-11). Of the 2,739 values in the two `results.json`
+files, the 25 that differ are wall times, throughputs and the run's own output paths; every count (invariants,
+rank oracle, BBO and trade parity, the 3,000 mirror shadows per day, RD-11's 3,000 of 3,000 matched orders per day)
+is identical, and all 50 Parquet outputs the two runs wrote are byte-identical. No exactness result changes.
+`repro_halt_shadow_fill.py` with the rebuilt extension still exits 1 (H.5).
+
+## H.5 Open
+
+- **The trading state does not reach the engine.** The ITCH mapper drops `H` (Stock Trading Action), `h`
+  (Operational Halt) and `K` (IPO Quoting Period) (`crates/ingest/src/itch/mapper.rs`), and the IEX, DBN and NYSE
+  readers do not turn their status messages into spans either (IEX only counts trading-status messages, NYSE uses
+  its security status only for the open time, DBN skips status records), so no dataset carries the spans and the Python `ReplaySpec`, the binding
+  and the CLI have no field for them. Needed: ingest records each instrument's non-`T` spans (state, reason, and
+  the feed position of the message, which would also settle the same-nanosecond order at the halt instant exactly)
+  next to `qt.data_quality.feed_gaps`; `run_dataset`, `why` and the zoo, calibration and features engines load them
+  per partition as they load feed gaps; then `repro_halt_shadow_fill.py` exits 0, the strict xfail in
+  `scripts/scale/tests/test_trace_flags.py` turns into an unexpected pass, and `--flag-policy exclude` stops being
+  required for published atlas tables. Until then `docs/concepts/exact-truth.md` and `docs/venue-semantics.md`
+  need the caveat the atlas trace note asks for.
+- **Halt crosses disseminated after the resumption.** Nasdaq sends the halt or IPO cross's executions after the
+  `H` T message (54 to 148 crossed events per cross on 2020-01-30). A shadow that goes live in that window sees the
+  still-crossed displayed book and can be filled `crossed_at_live`. The span ends at the resumption message, so this
+  window is treated as trading.
+- **Sampling.** `sample_shadows` still draws shadows inside halts; they now end `censored_gap` instead of being
+  skipped or tagged.
+- **Reference.** The independent reference of O-SH-2 (`qt_testkit::try_reference_shadows`) has no halts; the halt
+  rules are checked by the tests above and the property against the engine's own unhalted replay.
+- **F1.** The replay checks still count crossed events and price-priority violations inside halts and crosses
+  together with continuous trading.

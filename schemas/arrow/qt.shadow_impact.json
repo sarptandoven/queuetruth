@@ -1,0 +1,184 @@
+{
+  "name": "qt.shadow_impact",
+  "metadata": {
+    "qt.engine_version": "0.1.1",
+    "qt.schema": "qt.shadow_impact",
+    "qt.schema_version": "1.1"
+  },
+  "fields": [
+    {
+      "name": "shadow_id",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "instrument_id",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "session_date",
+      "type": "date32",
+      "nullable": false
+    },
+    {
+      "name": "status",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "live",
+        "rejected",
+        "out_of_session"
+      ]
+    },
+    {
+      "name": "qty",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "filled_qty",
+      "type": "uint64",
+      "nullable": true
+    },
+    {
+      "name": "fills_in_tape",
+      "type": "bool",
+      "nullable": false
+    },
+    {
+      "name": "ts_live",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": false
+    },
+    {
+      "name": "ts_end",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": false
+    },
+    {
+      "name": "end_source",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "full_fill",
+        "trajectory_end",
+        "cancel",
+        "planned_end",
+        "admin_end",
+        "horizon",
+        "session_close",
+        "rejected"
+      ]
+    },
+    {
+      "name": "ref_price",
+      "type": "int64",
+      "nullable": true
+    },
+    {
+      "name": "ref_price_source",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "order",
+        "last_trade",
+        "none"
+      ]
+    },
+    {
+      "name": "tick_size",
+      "type": "int64",
+      "nullable": true
+    },
+    {
+      "name": "daily_volume",
+      "type": "uint64",
+      "nullable": true
+    },
+    {
+      "name": "volume_source",
+      "type": "dictionary<int8, utf8>",
+      "nullable": false,
+      "values": [
+        "venue_session",
+        "user"
+      ]
+    },
+    {
+      "name": "sigma_daily",
+      "type": "float64",
+      "nullable": true
+    },
+    {
+      "name": "daily_participation",
+      "type": "float64",
+      "nullable": true
+    },
+    {
+      "name": "impact_frac",
+      "type": "float64",
+      "nullable": true
+    },
+    {
+      "name": "impact_bps",
+      "type": "float64",
+      "nullable": true
+    },
+    {
+      "name": "impact_ticks",
+      "type": "float64",
+      "nullable": true
+    },
+    {
+      "name": "level_qty_at_live",
+      "type": "uint64",
+      "nullable": true
+    },
+    {
+      "name": "queue_share_at_live",
+      "type": "float64",
+      "nullable": true
+    },
+    {
+      "name": "queue_share_max",
+      "type": "float64",
+      "nullable": true
+    },
+    {
+      "name": "queue_min_qty",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "life_volume",
+      "type": "uint64",
+      "nullable": true
+    },
+    {
+      "name": "volume_share",
+      "type": "float64",
+      "nullable": true
+    },
+    {
+      "name": "flag_impact",
+      "type": "bool",
+      "nullable": false
+    },
+    {
+      "name": "flag_queue",
+      "type": "bool",
+      "nullable": false
+    },
+    {
+      "name": "flag_volume",
+      "type": "bool",
+      "nullable": false
+    },
+    {
+      "name": "material",
+      "type": "bool",
+      "nullable": false
+    }
+  ]
+}

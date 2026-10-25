@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.commitment_opening",
+  "$defs": {
+    "OpeningItem": {
+      "additionalProperties": false,
+      "description": "The secret of one committed file.",
+      "properties": {
+        "index": {
+          "title": "Index",
+          "type": "integer"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "bytes": {
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "nonce": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Nonce",
+          "type": "string"
+        }
+      },
+      "required": [
+        "index",
+        "name",
+        "bytes",
+        "sha256",
+        "nonce"
+      ],
+      "title": "OpeningItem",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`qt.commitment_opening`: keep private until reveal; any subset of `items` opens those items alone.",
+  "properties": {
+    "schema": {
+      "const": "qt.commitment_opening",
+      "default": "qt.commitment_opening",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "root": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Root",
+      "type": "string"
+    },
+    "items": {
+      "items": {
+        "$ref": "#/$defs/OpeningItem"
+      },
+      "title": "Items",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "root",
+    "items"
+  ],
+  "type": "object"
+}

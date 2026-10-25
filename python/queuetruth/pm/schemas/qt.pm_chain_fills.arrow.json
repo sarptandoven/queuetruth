@@ -1,0 +1,135 @@
+{
+  "name": "qt.pm_chain_fills",
+  "metadata": {
+    "qt.engine_version": "0.1.1",
+    "qt.schema": "qt.pm_chain_fills",
+    "qt.schema_version": "1.1"
+  },
+  "fields": [
+    {
+      "name": "tx",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "block",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "log_index",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "ts_block",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": true
+    },
+    {
+      "name": "ts_match",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": true
+    },
+    {
+      "name": "exchange",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "version",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "role",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "match_idx",
+      "type": "int32",
+      "nullable": true
+    },
+    {
+      "name": "maker_pos",
+      "type": "int32",
+      "nullable": true
+    },
+    {
+      "name": "order_hash",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "maker",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "taker",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "side",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "token_id",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "outcome",
+      "type": "utf8",
+      "nullable": true
+    },
+    {
+      "name": "instrument_id",
+      "type": "uint32",
+      "nullable": true
+    },
+    {
+      "name": "canon_side",
+      "type": "uint8",
+      "nullable": true
+    },
+    {
+      "name": "price",
+      "type": "int64",
+      "nullable": true
+    },
+    {
+      "name": "price_exact",
+      "type": "bool",
+      "nullable": false
+    },
+    {
+      "name": "size",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "collateral",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "fee",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "fee_asset",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "own",
+      "type": "bool",
+      "nullable": false
+    }
+  ]
+}

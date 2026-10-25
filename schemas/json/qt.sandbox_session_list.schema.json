@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.sandbox_session_list",
+  "$defs": {
+    "SessionItem": {
+      "additionalProperties": false,
+      "description": "One open sandbox session of an MCP server: its instrument-day, clock, step, orders and seconds since its last\ntool call.",
+      "properties": {
+        "session_id": {
+          "title": "Session Id",
+          "type": "string"
+        },
+        "instrument_id": {
+          "title": "Instrument Id",
+          "type": "integer"
+        },
+        "symbol": {
+          "title": "Symbol",
+          "type": "string"
+        },
+        "session_date": {
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "title": "Session Date",
+          "type": "string"
+        },
+        "clock_ns": {
+          "title": "Clock Ns",
+          "type": "integer"
+        },
+        "time_local": {
+          "title": "Time Local",
+          "type": "string"
+        },
+        "step": {
+          "title": "Step",
+          "type": "integer"
+        },
+        "n_orders": {
+          "title": "N Orders",
+          "type": "integer"
+        },
+        "n_open": {
+          "title": "N Open",
+          "type": "integer"
+        },
+        "idle_s": {
+          "title": "Idle S",
+          "type": "number"
+        }
+      },
+      "required": [
+        "session_id",
+        "instrument_id",
+        "symbol",
+        "session_date",
+        "clock_ns",
+        "time_local",
+        "step",
+        "n_orders",
+        "n_open",
+        "idle_s"
+      ],
+      "title": "SessionItem",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`qt_sandbox_list` / `qt_sandbox_close` result: the server's open sessions, its limits, and the session just\nclosed (`closed`, `qt_sandbox_close` only).",
+  "properties": {
+    "schema": {
+      "const": "qt.sandbox_session_list",
+      "default": "qt.sandbox_session_list",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "sessions": {
+      "items": {
+        "$ref": "#/$defs/SessionItem"
+      },
+      "title": "Sessions",
+      "type": "array"
+    },
+    "max_sessions": {
+      "title": "Max Sessions",
+      "type": "integer"
+    },
+    "idle_timeout_s": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Idle Timeout S"
+    },
+    "closed": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SessionItem"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "sessions",
+    "max_sessions",
+    "idle_timeout_s",
+    "closed"
+  ],
+  "type": "object"
+}

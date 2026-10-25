@@ -1,0 +1,179 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.ledger_verification",
+  "$defs": {
+    "Head": {
+      "additionalProperties": false,
+      "description": "The last record of a ledger: anchor it outside the ledger (`seq:hash`) to detect a rewritten history.",
+      "properties": {
+        "seq": {
+          "title": "Seq",
+          "type": "integer"
+        },
+        "hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "seq",
+        "hash"
+      ],
+      "title": "Head",
+      "type": "object"
+    },
+    "Problem": {
+      "additionalProperties": false,
+      "description": "One integrity problem found by `verify`.",
+      "properties": {
+        "line": {
+          "title": "Line",
+          "type": "integer"
+        },
+        "seq": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Seq"
+        },
+        "reason": {
+          "enum": [
+            "malformed",
+            "hash_mismatch",
+            "not_canonical",
+            "invalid_record",
+            "seq_gap",
+            "broken_link",
+            "ledger_id_mismatch",
+            "genesis",
+            "anchor_mismatch",
+            "series_missing",
+            "series_mismatch"
+          ],
+          "title": "Reason",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "line",
+        "reason",
+        "message"
+      ],
+      "title": "Problem",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`ledger verify`: the full integrity check of a ledger file.",
+  "properties": {
+    "schema": {
+      "const": "qt.ledger_verification",
+      "default": "qt.ledger_verification",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "ledger": {
+      "title": "Ledger",
+      "type": "string"
+    },
+    "ok": {
+      "title": "Ok",
+      "type": "boolean"
+    },
+    "ledger_id": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{32}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Ledger Id"
+    },
+    "n_records": {
+      "title": "N Records",
+      "type": "integer"
+    },
+    "head": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Head"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "uncommitted_tail_bytes": {
+      "title": "Uncommitted Tail Bytes",
+      "type": "integer"
+    },
+    "anchor": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Anchor"
+    },
+    "anchor_ok": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Anchor Ok"
+    },
+    "problems": {
+      "items": {
+        "$ref": "#/$defs/Problem"
+      },
+      "title": "Problems",
+      "type": "array"
+    },
+    "n_problems": {
+      "title": "N Problems",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "ledger",
+    "ok",
+    "ledger_id",
+    "n_records",
+    "head",
+    "uncommitted_tail_bytes",
+    "problems",
+    "n_problems"
+  ],
+  "type": "object"
+}

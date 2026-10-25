@@ -1,0 +1,50 @@
+{
+  "name": "qt.zoo_toxicity_markouts",
+  "metadata": {
+    "qt.engine_version": "0.1.1",
+    "qt.schema": "qt.zoo_toxicity_markouts",
+    "qt.schema_version": "1.1"
+  },
+  "fields": [
+    {
+      "name": "arm",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "shadow_id",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "fill_seq",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "horizon_ns",
+      "type": "int64",
+      "nullable": false
+    },
+    {
+      "name": "mo_ticks",
+      "type": "float64",
+      "nullable": true
+    },
+    {
+      "name": "mo_bps",
+      "type": "float64",
+      "nullable": true
+    },
+    {
+      "name": "mm_ticks",
+      "type": "float64",
+      "nullable": true
+    },
+    {
+      "name": "mm_bps",
+      "type": "float64",
+      "nullable": true
+    }
+  ]
+}

@@ -183,6 +183,9 @@ def _render_zoo(doc: Doc, args: Doc, extra: Doc) -> str | None:
     from queuetruth.eval.leaderboard import (
         DEFAULT_SORT_HORIZON_NS,
         bias_sentence,
+        has_mcs,
+        mcs_sentence,
+        mcs_table,
         pct,
         rank_leaderboard,
         rates_at,
@@ -238,6 +241,11 @@ def _render_zoo(doc: Doc, args: Doc, extra: Doc) -> str | None:
         rows.append(cells)
     lines += _table(["model", *(_hz(h) for h in horizons)], rows, right=set(range(1, len(horizons) + 1)))
     lines.append("")
+    if has_mcs(board):  # the model confidence set on first-fill error (`queuetruth.eval.leaderboard`)
+        legend, mrows = mcs_table(ranked, horizons)
+        lines += legend
+        lines += _table(["model", *(_hz(h) for h in horizons)], mrows, right=set(range(1, len(horizons) + 1)))
+        lines.append("")
     lines.append("in plain words:")
     for e in ranked:
         mid = str(e.get("model_id"))
@@ -252,6 +260,8 @@ def _render_zoo(doc: Doc, args: Doc, extra: Doc) -> str | None:
         if more:
             sentence = f"{sentence[:-1]}; {'; '.join(more)}."
         lines.append(f"  {sentence}")
+    if (tied := mcs_sentence(ranked, sort_h)) is not None:
+        lines.append(f"  {tied}")
     lines += _files_lines(doc)
     return "\n".join(lines)
 
@@ -774,6 +784,10 @@ def render(
             text = _render_calibration(doc, args, path)
         elif isinstance(doc, dict) and key == ("dq",):
             text = _render_dq(doc, args)
+        elif isinstance(doc, dict) and key == ("zoo-toxicity",):
+            from queuetruth.eval.toxicity import render_toxicity
+
+            text = render_toxicity(doc)
     except Exception:  # a view never fails a command that succeeded
         log.debug("human view failed; plain rendering", exc_info=True)
         text = None
@@ -1061,7 +1075,9 @@ def _dispatch(cmd: Doc, ctx: Doc | None = None) -> tuple[Doc | None, bool]:
         ctx.setdefault("notes", []).extend(x.notes)
         return _plain(x.trace), False
     if imp == "native":
-        return _native(cmd)
+        from queuetruth.ledger import run_native  # trial ledger: records `shadows sample`
+
+        return run_native(cmd, _native)
     if key == ("doctor",):
         return _doctor(cmd)
     if key == ("shadows", "from-live"):
@@ -1075,6 +1091,10 @@ def _dispatch(cmd: Doc, ctx: Doc | None = None) -> tuple[Doc | None, bool]:
             dataset = (args.get("dataset") or {}).get("path", "")
             args = {**args, "exclude_order_ids": api.resolve_order_ids(extra["exclude_order_ids"], dataset)}
         return _plain(api.run_zoo(args)), False
+    if key == ("zoo-toxicity",):
+        from queuetruth.eval.toxicity import run_zoo_toxicity
+
+        return _plain(run_zoo_toxicity(args)), False
     if key[0] == "calibrate" or key == ("calibrate-live",):
         cal = _plain(api.calibrate(args) if key[0] == "calibrate" else api.calibrate_live(args))
         err = _calibration_refused(cal)
@@ -1082,7 +1102,17 @@ def _dispatch(cmd: Doc, ctx: Doc | None = None) -> tuple[Doc | None, bool]:
             raise err
         return cal, False
     if key == ("fit-hazard",):
-        return _plain(api.fit_hazard(args)), False
+        after = None
+        if extra.get("conformal_alpha") is not None:  # --conformal-alpha A: conformal.json next to the model
+            from queuetruth.model.conformal import conformal_step
+
+            after = conformal_step(args, extra["conformal_alpha"])  # checks alpha, --out, features before the fit
+        card = _plain(api.fit_hazard(args))
+        if after is not None:
+            files, lines = after(card)
+            card["files"] = [*card.get("files", []), *files]  # the printed card lists the conformal files too
+            ctx.setdefault("notes", []).extend(lines)
+        return card, False
     if key == ("live", "import"):
         return _plain(api.import_live(args, tz=extra.get("tz"), **(extra.get("options") or {}))), False
     if key == ("live", "validate"):
@@ -1129,7 +1159,12 @@ def _dispatch(cmd: Doc, ctx: Doc | None = None) -> tuple[Doc | None, bool]:
             if not _missing_extra(e):
                 raise
             raise QtError("QT-USAGE-001", 'mcp serve needs the MCP extra: pip install "queuetruth[mcp]"') from None
-        serve(allow_submit=bool(args.get("allow_submit")), local=bool(args.get("local")))
+        # `--allow-run` turns run mode on; without it serve() reads QT_MCP_ALLOW_RUN
+        serve(
+            allow_submit=bool(args.get("allow_submit")),
+            local=bool(args.get("local")),
+            allow_run=True if args.get("allow_run") else None,
+        )
         return None, False
     raise QtError("QT-USAGE-001", f"unknown command {' '.join(path)!r}")
 
@@ -1150,6 +1185,35 @@ def _emit_error(e: QtError, json_out: bool) -> int:
 def main(argv: list[str] | None = None) -> int:
     """Entry point; returns the exit code (0 ok, 1 gate failed, 2 error)."""
     args = list(sys.argv[1:] if argv is None else argv)
+    # The Python-only groups run with their own argparse parsers before the clap grammar, which lists them in
+    # `--help` (rows generated by crates/cli/gen_python_commands.py). `help G [SUB]` is `G [SUB] --help` for them,
+    # so both spellings print the group's own help.
+    python_groups = ("demo", "forecast", "ledger", "pm", "certify", "verify-cert", "commit", "reveal", "cert")
+    i = 0
+    while i < len(args) and args[i].startswith("-") and args[i] != "--":
+        i += 2 if args[i] in ("--format", "--output-format", "--log-level", "--threads", "--seed") else 1
+    if args[i : i + 1] == ["help"] and args[i + 1 : i + 2] and args[i + 1] in python_groups:
+        args = [*args[:i], *args[i + 1 :], "--help"]
+    from queuetruth.demo._dispatch import maybe_run as _demo  # `queuetruth demo` (Python only, before the grammar)
+
+    if (rc := _demo(args)) is not None:
+        return rc
+    from queuetruth.forecast.cli import forecast_main  # `forecast ...`: Python-only argparse group
+
+    if (rc := forecast_main(args)) is not None:
+        return rc
+    from queuetruth.ledger.cli import main_if_ledger  # `queuetruth ledger ...` (not in the Rust grammar)
+
+    if (rc := main_if_ledger(args)) is not None:
+        return rc
+    from queuetruth.cert.cli import maybe_main  # certify, verify-cert, commit, reveal, cert (Python-only grammar)
+
+    if (rc := maybe_main(args)) is not None:
+        return rc
+    from queuetruth.pm.cli import run as pm_run  # `queuetruth pm ...`: Python-only group (queuetruth.pm.cli)
+
+    if (rc := pm_run(args)) is not None:
+        return rc
     json_out = _wants_json(args)
     try:
         core = _core()

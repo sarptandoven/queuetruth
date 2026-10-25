@@ -1,0 +1,737 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.zoo_toxicity",
+  "$defs": {
+    "FileEntry": {
+      "additionalProperties": false,
+      "description": "One output file: name relative to the output directory, row count for tables, size and sha256.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "rows": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rows"
+        },
+        "bytes": {
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "bytes",
+        "sha256"
+      ],
+      "title": "FileEntry",
+      "type": "object"
+    },
+    "FillTypeStats": {
+      "additionalProperties": false,
+      "description": "Fill rows of one arm (`exact` or a model id), status and mechanism; `missed` rows are the exact arm's fills of\nthe shadows the model did not fill (their mechanism is the exact one).",
+      "properties": {
+        "arm": {
+          "title": "Arm",
+          "type": "string"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "enum": [
+                "confirmed",
+                "phantom",
+                "missed"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Status"
+        },
+        "mechanism": {
+          "enum": [
+            "queue",
+            "swept",
+            "cross_on_arrival",
+            "crossed_resting",
+            "hidden_print",
+            "touch",
+            "particle",
+            "all"
+          ],
+          "title": "Mechanism",
+          "type": "string"
+        },
+        "n_fills": {
+          "title": "N Fills",
+          "type": "integer"
+        },
+        "n_shadows": {
+          "title": "N Shadows",
+          "type": "integer"
+        },
+        "qty": {
+          "title": "Qty",
+          "type": "number"
+        },
+        "markouts": {
+          "patternProperties": {
+            "^[0-9]+$": {
+              "$ref": "#/$defs/TypeMarkouts"
+            }
+          },
+          "title": "Markouts",
+          "type": "object"
+        }
+      },
+      "required": [
+        "arm",
+        "status",
+        "mechanism",
+        "n_fills",
+        "n_shadows",
+        "qty",
+        "markouts"
+      ],
+      "title": "FillTypeStats",
+      "type": "object"
+    },
+    "ToxGap": {
+      "additionalProperties": false,
+      "description": "Paired difference `|value| - |next value|` of two neighbouring places of a ranking, with its 95% percentile CI\nfrom the shared bootstrap replicates.",
+      "properties": {
+        "value": {
+          "title": "Value",
+          "type": "number"
+        },
+        "ci_lo": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ci Lo"
+        },
+        "ci_hi": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ci Hi"
+        }
+      },
+      "required": [
+        "value",
+        "ci_lo",
+        "ci_hi"
+      ],
+      "title": "ToxGap",
+      "type": "object"
+    },
+    "ToxStat": {
+      "additionalProperties": false,
+      "description": "Ratio-of-sums estimate with its 95% block-bootstrap percentile CI; `n` = rows (shadows or fills) with weight\nin the denominator. `value` is null when the denominator is 0.",
+      "properties": {
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        },
+        "ci_lo": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ci Lo"
+        },
+        "ci_hi": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ci Hi"
+        },
+        "n": {
+          "title": "N",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "value",
+        "ci_lo",
+        "ci_hi",
+        "n"
+      ],
+      "title": "ToxStat",
+      "type": "object"
+    },
+    "ToxicityExact": {
+      "additionalProperties": false,
+      "description": "The exact arm's fills in the window over the population.",
+      "properties": {
+        "n_filled": {
+          "title": "N Filled",
+          "type": "integer"
+        },
+        "n_fills": {
+          "title": "N Fills",
+          "type": "integer"
+        },
+        "fills_by_mechanism": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Fills By Mechanism",
+          "type": "object"
+        }
+      },
+      "required": [
+        "n_filled",
+        "n_fills",
+        "fills_by_mechanism"
+      ],
+      "title": "ToxicityExact",
+      "type": "object"
+    },
+    "ToxicityHorizon": {
+      "additionalProperties": false,
+      "description": "One model at one markout horizon: per-shadow first-fill markouts (unit quantity) over the `n` shadows whose\nfirst-fill markouts are defined in every arm that filled them. `*_ticks` / `*_bps` sums are per shadow of the\npopulation (`bias = grant + timing + deny = model_pnl - exact_pnl`, positive = the model overstates PnL); the\n`*_mo_*` / `*_mm_*` entries are means over the shadows of one status (fill-price and mid-to-mid markouts).",
+      "properties": {
+        "n": {
+          "title": "N",
+          "type": "integer"
+        },
+        "model_pnl_ticks": {
+          "$ref": "#/$defs/ToxStat"
+        },
+        "exact_pnl_ticks": {
+          "$ref": "#/$defs/ToxStat"
+        },
+        "grant_ticks": {
+          "$ref": "#/$defs/ToxStat"
+        },
+        "deny_ticks": {
+          "$ref": "#/$defs/ToxStat"
+        },
+        "timing_ticks": {
+          "$ref": "#/$defs/ToxStat"
+        },
+        "bias_ticks": {
+          "$ref": "#/$defs/ToxStat"
+        },
+        "grant_bps": {
+          "$ref": "#/$defs/ToxStat"
+        },
+        "deny_bps": {
+          "$ref": "#/$defs/ToxStat"
+        },
+        "timing_bps": {
+          "$ref": "#/$defs/ToxStat"
+        },
+        "bias_bps": {
+          "$ref": "#/$defs/ToxStat"
+        },
+        "phantom_mo_ticks": {
+          "$ref": "#/$defs/ToxStat"
+        },
+        "missed_mo_ticks": {
+          "$ref": "#/$defs/ToxStat"
+        },
+        "confirmed_mo_ticks": {
+          "$ref": "#/$defs/ToxStat"
+        },
+        "confirmed_exact_mo_ticks": {
+          "$ref": "#/$defs/ToxStat"
+        },
+        "phantom_mm_ticks": {
+          "$ref": "#/$defs/ToxStat"
+        },
+        "missed_mm_ticks": {
+          "$ref": "#/$defs/ToxStat"
+        },
+        "confirmed_mm_ticks": {
+          "$ref": "#/$defs/ToxStat"
+        },
+        "confirmed_exact_mm_ticks": {
+          "$ref": "#/$defs/ToxStat"
+        }
+      },
+      "required": [
+        "n",
+        "model_pnl_ticks",
+        "exact_pnl_ticks",
+        "grant_ticks",
+        "deny_ticks",
+        "timing_ticks",
+        "bias_ticks",
+        "grant_bps",
+        "deny_bps",
+        "timing_bps",
+        "bias_bps",
+        "phantom_mo_ticks",
+        "missed_mo_ticks",
+        "confirmed_mo_ticks",
+        "confirmed_exact_mo_ticks",
+        "phantom_mm_ticks",
+        "missed_mm_ticks",
+        "confirmed_mm_ticks",
+        "confirmed_exact_mm_ticks"
+      ],
+      "title": "ToxicityHorizon",
+      "type": "object"
+    },
+    "ToxicityModel": {
+      "additionalProperties": false,
+      "description": "Shadow-level discordance of one model against the exact arm within the fill window, and its markouts.",
+      "properties": {
+        "model_id": {
+          "title": "Model Id",
+          "type": "string"
+        },
+        "family": {
+          "title": "Family",
+          "type": "string"
+        },
+        "n_shadows": {
+          "title": "N Shadows",
+          "type": "integer"
+        },
+        "n_model_filled": {
+          "title": "N Model Filled",
+          "type": "integer"
+        },
+        "n_exact_filled": {
+          "title": "N Exact Filled",
+          "type": "integer"
+        },
+        "n_confirmed": {
+          "title": "N Confirmed",
+          "type": "integer"
+        },
+        "n_phantom": {
+          "title": "N Phantom",
+          "type": "integer"
+        },
+        "n_missed": {
+          "title": "N Missed",
+          "type": "integer"
+        },
+        "n_inconsistent": {
+          "title": "N Inconsistent",
+          "type": "integer"
+        },
+        "phantom_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Phantom Rate"
+        },
+        "missed_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Missed Rate"
+        },
+        "horizons": {
+          "patternProperties": {
+            "^[0-9]+$": {
+              "$ref": "#/$defs/ToxicityHorizon"
+            }
+          },
+          "title": "Horizons",
+          "type": "object"
+        }
+      },
+      "required": [
+        "model_id",
+        "family",
+        "n_shadows",
+        "n_model_filled",
+        "n_exact_filled",
+        "n_confirmed",
+        "n_phantom",
+        "n_missed",
+        "n_inconsistent",
+        "phantom_rate",
+        "missed_rate",
+        "horizons"
+      ],
+      "title": "ToxicityModel",
+      "type": "object"
+    },
+    "ToxicityRank": {
+      "additionalProperties": false,
+      "description": "One place of a ranking: rank 1 = the largest |value| (the largest PnL distortion of that kind); `value` keeps\nits sign. `rank_lo`..`rank_hi` is the 95% rank interval over the bootstrap replicates (null when the value is\nundefined); `gap_to_next` is the paired gap to the next place and `separated_from_next` whether its CI lies above\n0 (null on the last place or next to an undefined value).",
+      "properties": {
+        "rank": {
+          "title": "Rank",
+          "type": "integer"
+        },
+        "model_id": {
+          "title": "Model Id",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        },
+        "ci_lo": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ci Lo"
+        },
+        "ci_hi": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ci Hi"
+        },
+        "rank_lo": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Rank Lo"
+        },
+        "rank_hi": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Rank Hi"
+        },
+        "gap_to_next": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ToxGap"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "separated_from_next": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Separated From Next"
+        }
+      },
+      "required": [
+        "rank",
+        "model_id",
+        "value",
+        "ci_lo",
+        "ci_hi",
+        "rank_lo",
+        "rank_hi",
+        "gap_to_next",
+        "separated_from_next"
+      ],
+      "title": "ToxicityRank",
+      "type": "object"
+    },
+    "ToxicityRankings": {
+      "additionalProperties": false,
+      "description": "Models ranked at `horizon_ns` by `|grant_ticks|` (fills wrongly granted), `|deny_ticks|` (fills wrongly denied)\nand `|bias_ticks|`, largest first; undefined values last, ties in model order.",
+      "properties": {
+        "horizon_ns": {
+          "title": "Horizon Ns",
+          "type": "integer"
+        },
+        "grant": {
+          "items": {
+            "$ref": "#/$defs/ToxicityRank"
+          },
+          "title": "Grant",
+          "type": "array"
+        },
+        "deny": {
+          "items": {
+            "$ref": "#/$defs/ToxicityRank"
+          },
+          "title": "Deny",
+          "type": "array"
+        },
+        "bias": {
+          "items": {
+            "$ref": "#/$defs/ToxicityRank"
+          },
+          "title": "Bias",
+          "type": "array"
+        }
+      },
+      "required": [
+        "horizon_ns",
+        "grant",
+        "deny",
+        "bias"
+      ],
+      "title": "ToxicityRankings",
+      "type": "object"
+    },
+    "TypeMarkouts": {
+      "additionalProperties": false,
+      "description": "Quantity-weighted mean markouts of the fill rows of one type at one horizon.",
+      "properties": {
+        "mo_ticks": {
+          "$ref": "#/$defs/ToxStat"
+        },
+        "mo_bps": {
+          "$ref": "#/$defs/ToxStat"
+        },
+        "mm_ticks": {
+          "$ref": "#/$defs/ToxStat"
+        },
+        "mm_bps": {
+          "$ref": "#/$defs/ToxStat"
+        }
+      },
+      "required": [
+        "mo_ticks",
+        "mo_bps",
+        "mm_ticks",
+        "mm_bps"
+      ],
+      "title": "TypeMarkouts",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Summary of `zoo-toxicity`: fill-type tags, markouts and the adverse-selection ranking of the zoo's models\n(extension fill-toxicity; Python only).",
+  "properties": {
+    "schema": {
+      "const": "qt.zoo_toxicity",
+      "default": "qt.zoo_toxicity",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "run_id": {
+      "pattern": "^[0-9a-f]{16}$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "engine_version": {
+      "title": "Engine Version",
+      "type": "string"
+    },
+    "spec": {
+      "additionalProperties": true,
+      "title": "Spec",
+      "type": "object"
+    },
+    "zoo_run_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Zoo Run Id"
+    },
+    "zoo_mode": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Zoo Mode"
+    },
+    "n_shadows": {
+      "title": "N Shadows",
+      "type": "integer"
+    },
+    "n_excluded": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "title": "N Excluded",
+      "type": "object"
+    },
+    "truth_mismatch_rate": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Truth Mismatch Rate"
+    },
+    "window_ns": {
+      "title": "Window Ns",
+      "type": "integer"
+    },
+    "horizons_ns": {
+      "items": {
+        "type": "integer"
+      },
+      "title": "Horizons Ns",
+      "type": "array"
+    },
+    "ci_block": {
+      "enum": [
+        "day",
+        "30min"
+      ],
+      "title": "Ci Block",
+      "type": "string"
+    },
+    "n_blocks": {
+      "title": "N Blocks",
+      "type": "integer"
+    },
+    "bootstrap_b": {
+      "title": "Bootstrap B",
+      "type": "integer"
+    },
+    "exact": {
+      "$ref": "#/$defs/ToxicityExact"
+    },
+    "models": {
+      "items": {
+        "$ref": "#/$defs/ToxicityModel"
+      },
+      "title": "Models",
+      "type": "array"
+    },
+    "by_type": {
+      "items": {
+        "$ref": "#/$defs/FillTypeStats"
+      },
+      "title": "By Type",
+      "type": "array"
+    },
+    "rankings": {
+      "$ref": "#/$defs/ToxicityRankings"
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/FileEntry"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "run_id",
+    "engine_version",
+    "spec",
+    "zoo_run_id",
+    "zoo_mode",
+    "n_shadows",
+    "n_excluded",
+    "truth_mismatch_rate",
+    "window_ns",
+    "horizons_ns",
+    "ci_block",
+    "n_blocks",
+    "bootstrap_b",
+    "exact",
+    "models",
+    "by_type",
+    "rankings",
+    "files",
+    "warnings"
+  ],
+  "type": "object"
+}

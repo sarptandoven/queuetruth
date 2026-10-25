@@ -26,7 +26,7 @@ from typing import Any
 from queuetruth.errors import QtError
 from queuetruth.live._common import Record, as_bool, dec, dec_text, dsub, epoch_ns, text_or_none
 from queuetruth.live.builder import ImportResult, LogBuilder
-from queuetruth.live.importers._base import ImportOptions, json_records, new_builder, side_of, sub_records
+from queuetruth.live.importers._base import ImportOptions, json_records, new_builder, obj_field, side_of, sub_records
 
 VENUE = "deribit"
 _TIF = {
@@ -212,7 +212,7 @@ def import_deribit(paths: list[str], opts: ImportOptions) -> ImportResult:
             b.skip("non-object record")
             continue
         if obj.get("method") == "subscription":
-            params = obj.get("params") or {}
+            params = obj_field(obj.get("params"), "params", rec.location)
             channel = str(params.get("channel", ""))
             kind = channel.split(".")[1] if channel.count(".") >= 1 else ""
             for sub in sub_records(

@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.sandbox_order_log",
+  "$defs": {
+    "LogEntry": {
+      "additionalProperties": false,
+      "description": "One committed log entry. `clock_ns` = the agent's clock when it acted, `visible_ns` / `rows_seen` = the data\nit had seen (the visible cut and the number of source records at or before it); `data` holds the instruction\n(submit, cancel), the error (reject) or the digest of what the step reported (advance, finish). `hash =\nsha256(canonical_json(entry without hash))`, chained through `prev`.",
+      "properties": {
+        "seq": {
+          "minimum": 0,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "kind": {
+          "enum": [
+            "open",
+            "submit",
+            "cancel",
+            "reject",
+            "advance",
+            "finish"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "clock_ns": {
+          "title": "Clock Ns",
+          "type": "integer"
+        },
+        "visible_ns": {
+          "title": "Visible Ns",
+          "type": "integer"
+        },
+        "rows_seen": {
+          "minimum": 0,
+          "title": "Rows Seen",
+          "type": "integer"
+        },
+        "data": {
+          "additionalProperties": true,
+          "title": "Data",
+          "type": "object"
+        },
+        "prev": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Prev",
+          "type": "string"
+        },
+        "hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "seq",
+        "kind",
+        "clock_ns",
+        "visible_ns",
+        "rows_seen",
+        "data",
+        "prev",
+        "hash"
+      ],
+      "title": "LogEntry",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The committed order log of an episode: every instruction in order with the information set it was made on,\nhash-chained; `root` = the last entry's hash.",
+  "properties": {
+    "schema": {
+      "const": "qt.sandbox_order_log",
+      "default": "qt.sandbox_order_log",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "engine_version": {
+      "title": "Engine Version",
+      "type": "string"
+    },
+    "dataset_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Dataset Id",
+      "type": "string"
+    },
+    "spec_id": {
+      "pattern": "^[0-9a-f]{16}$",
+      "title": "Spec Id",
+      "type": "string"
+    },
+    "spec": {
+      "additionalProperties": true,
+      "title": "Spec",
+      "type": "object"
+    },
+    "entries": {
+      "items": {
+        "$ref": "#/$defs/LogEntry"
+      },
+      "title": "Entries",
+      "type": "array"
+    },
+    "root": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Root",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "engine_version",
+    "dataset_id",
+    "spec_id",
+    "spec",
+    "entries",
+    "root"
+  ],
+  "type": "object"
+}

@@ -1,0 +1,90 @@
+{
+  "name": "qt.conformal_sets",
+  "metadata": {
+    "qt.engine_version": "0.1.1",
+    "qt.schema": "qt.conformal_sets",
+    "qt.schema_version": "1"
+  },
+  "fields": [
+    {
+      "name": "order_ref",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "landmark_ns",
+      "type": "int64",
+      "nullable": false
+    },
+    {
+      "name": "horizon_ns",
+      "type": "int64",
+      "nullable": false
+    },
+    {
+      "name": "stratum",
+      "type": "dictionary<int16, utf8>",
+      "nullable": false
+    },
+    {
+      "name": "p",
+      "type": "float64",
+      "nullable": false
+    },
+    {
+      "name": "y_fill",
+      "type": "bool",
+      "nullable": true
+    },
+    {
+      "name": "pvalue_nofill",
+      "type": "float64",
+      "nullable": false
+    },
+    {
+      "name": "pvalue_fill",
+      "type": "float64",
+      "nullable": false
+    },
+    {
+      "name": "set_nofill",
+      "type": "bool",
+      "nullable": false
+    },
+    {
+      "name": "set_fill",
+      "type": "bool",
+      "nullable": false
+    },
+    {
+      "name": "va_p0",
+      "type": "float64",
+      "nullable": false
+    },
+    {
+      "name": "va_p1",
+      "type": "float64",
+      "nullable": false
+    },
+    {
+      "name": "no_fill_within_ns",
+      "type": "int64",
+      "nullable": true
+    },
+    {
+      "name": "fill_within_ns",
+      "type": "int64",
+      "nullable": true
+    },
+    {
+      "name": "interval_no_fill_within_ns",
+      "type": "int64",
+      "nullable": true
+    },
+    {
+      "name": "interval_fill_within_ns",
+      "type": "int64",
+      "nullable": true
+    }
+  ]
+}

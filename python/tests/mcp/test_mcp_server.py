@@ -18,13 +18,15 @@ from mcp.shared.exceptions import MCPError
 
 from queuetruth.client.testing import FakeService
 from queuetruth.mcp.metrics import METRICS
-from queuetruth.mcp.server import build_server
+from queuetruth.mcp.server import ZOO_TOOLS, build_server
 from queuetruth.mcp.tools import TOOL_NAMES, TOOLS
 from queuetruth.schemas.models import parse_document
 
 REPO = Path(__file__).resolve().parents[3]
 SCHEMAS = REPO / "schemas" / "json"
-SUBMIT = {t.name for t in TOOLS if t.submit}
+SUBMIT = {t.name for t in (*TOOLS, *ZOO_TOOLS) if t.submit}
+#: Service zoo tools, listed after the SPEC 4.6 tools in remote mode.
+ZOO = [t.name for t in ZOO_TOOLS]
 LOCAL = [t.name for t in TOOLS if t.local]
 REMOTE_READ = [t.name for t in TOOLS if not t.local and not t.submit]
 
@@ -120,7 +122,8 @@ async def test_O_MCP_1_tool_order_and_schemas(fake: FakeService, outputs: Path, 
     app = build_server(client=fake.client(), allow_submit=True, root=outputs)
     async with McpClient(app.server, mode=mode) as c:
         tools = (await c.list_tools()).tools
-    assert [t.name for t in tools] == list(TOOL_NAMES)
+    assert [t.name for t in tools] == [*TOOL_NAMES, *ZOO]
+    assert ZOO == ["qt_get_zoo", "qt_submit_zoo"]
     assert TOOL_NAMES[:10] == (
         "qt_meta",
         "qt_list_datasets",
@@ -142,7 +145,7 @@ async def test_O_MCP_1_tool_order_and_schemas(fake: FakeService, outputs: Path, 
         "qt_local_list_outputs",
         "qt_local_why",
     )
-    by_def = {t.name: t for t in TOOLS}
+    by_def = {t.name: t for t in (*TOOLS, *ZOO_TOOLS)}
     for tool in tools:
         assert tool.input_schema["type"] == "object" and tool.output_schema is not None
         jsonschema.Draft202012Validator.check_schema(tool.input_schema)
@@ -153,18 +156,27 @@ async def test_O_MCP_1_tool_order_and_schemas(fake: FakeService, outputs: Path, 
             assert tool.output_schema == committed_schema(out), tool.name
         assert tool.annotations is not None and tool.annotations.destructive_hint is False
         assert tool.annotations.read_only_hint is (tool.name not in SUBMIT)
-    spec_defs = {"qt_submit_replay": "ReplaySpec", "qt_submit_calibration": "CalibrationSpec"}
+    spec_defs = {
+        "qt_submit_replay": "ReplaySpec",
+        "qt_submit_calibration": "CalibrationSpec",
+        "qt_submit_zoo": "ZooSpec",
+    }
     schemas = {t.name: t.input_schema for t in tools}
     for name, model in spec_defs.items():
         assert schemas[name]["properties"]["spec"] == {"$ref": f"#/$defs/{model}"}
     est = schemas["qt_estimate"]["properties"]["spec"]["anyOf"]
-    assert [x["$ref"] for x in est] == ["#/$defs/ReplaySpec", "#/$defs/CalibrationSpec", "#/$defs/ScorecardSpec"]
+    assert [x["$ref"] for x in est] == [
+        "#/$defs/ReplaySpec",
+        "#/$defs/CalibrationSpec",
+        "#/$defs/ScorecardSpec",
+        "#/$defs/ZooSpec",
+    ]
 
 
 @pytest.mark.asyncio
 async def test_O_MCP_1_submit_tools_absent_without_allow_submit(fake: FakeService, outputs: Path) -> None:
     names = await list_names(build_server(client=fake.client(), root=outputs))
-    assert names == [n for n in TOOL_NAMES if n not in SUBMIT]
+    assert names == [n for n in (*TOOL_NAMES, *ZOO) if n not in SUBMIT]
     async with McpClient(build_server(client=fake.client(), root=outputs).server) as c:
         with pytest.raises(MCPError):
             await c.call_tool("qt_submit_replay", {"spec": {}})
@@ -194,17 +206,19 @@ async def test_instructions_name_only_listed_tools(fake: FakeService, outputs: P
     for app in (
         build_server(local=True, root=outputs),
         build_server(allow_submit=True, client=fake.client(), root=outputs),
+        build_server(client=fake.client(), root=outputs),
     ):
         listed = set(await list_names(app))
         async with McpClient(app.server) as c:
             text = c.instructions or ""
-        named = {t.name for t in TOOLS if t.name in text}
+        named = {t.name for t in (*TOOLS, *ZOO_TOOLS) if t.name in text}
         if app.local_mode:
             assert "qt_explain_metric" not in listed
             assert set(LOCAL) <= named and named - set(LOCAL) == {"qt_explain_metric"}
             assert "need remote mode" in text  # named only to say it is not available here
         else:
-            assert named <= listed and "qt_explain_metric" in named
+            assert named <= listed and {"qt_explain_metric", "qt_get_zoo"} <= named
+            assert ("qt_submit_zoo" in named) is app.allow_submit
 
 
 @pytest.mark.asyncio

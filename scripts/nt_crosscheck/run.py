@@ -599,6 +599,7 @@ def run_instrument_nt(work: Path, iid: int, cfg_names: list[str], window_ns: int
             self.coid: dict[str, int] = {}
             self.fills: dict[int, list[tuple[int, int, int, str]]] = {}
             self.events: dict[int, list[str]] = {}
+            self.cancels_sent: set[int] = set()
 
         def on_start(self) -> None:
             for k in self.items:
@@ -622,8 +623,12 @@ def run_instrument_nt(work: Path, iid: int, cfg_names: list[str], window_ns: int
         def _cancel(self, ev) -> None:
             k = int(ev.name[1:])
             o = self.orders.get(k)
-            if o is not None and o.is_open:
-                self.cancel_order(o)
+            # 2.x: the object order_factory returned is a snapshot that stays INITIALIZED, so read the cache's order;
+            # and 2.x cancel_order takes the ClientOrderId (an exception in a timer callback is swallowed)
+            c = None if o is None else self.cache.order(o.client_order_id)
+            if c is not None and c.is_open:
+                self.cancel_order(c.client_order_id if nt2 else c)
+                self.cancels_sent.add(k)
 
         def on_order_filled(self, e) -> None:
             k = self.coid[e.client_order_id.value]
@@ -704,6 +709,7 @@ def run_instrument_nt(work: Path, iid: int, cfg_names: list[str], window_ns: int
                     "n_fills": len(fl),
                     "fills_json": json.dumps(fl),
                     "events": ";".join(strat.events.get(k, [])),
+                    "cancel_sent": k in strat.cancels_sent,
                 }
                 for h in HORIZONS_NS:
                     row[f"qty_{HNAME[h]}"] = sum(q for (t, q, _, _) in fl if t <= ts_live[k] + h)
@@ -1020,6 +1026,20 @@ def cmd_compare(a: argparse.Namespace) -> None:
             report["extra_pairs"][f"{cname} vs {zmodel}"] = crep
         else:
             report["configs"][cname] = crep
+
+    # Harness check: every order is cancelled at ts_live + window + 1 ns, so none may first fill after that (on 2.x
+    # a cancel that is a no-op leaves unfilled orders resting, where they share print volume with later orders).
+    late = {}
+    for cname in cfgs:
+        g = ntby[cname]
+        ff = g.first_fill_ts.dropna().astype("int64")
+        late[cname] = int((ff > g.loc[ff.index, "ts_live"].astype("int64") + WINDOW_NS + 1).sum())
+    report["filled_after_cancel"] = late
+    lines += [
+        "",
+        "Orders first filled after their end-of-window cancel (must be 0): "
+        + ", ".join(f"{c} {n}" for c, n in late.items()),
+    ]
 
     if reps:
         lines += [

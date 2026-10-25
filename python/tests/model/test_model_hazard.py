@@ -1,5 +1,6 @@
 """`HazardModel`: O-MOD-2 (CIFs monotone in horizon, `CIF_fill + CIF_cancel <= 1`), prediction table contract,
-save / load with sha256 verification, privileged columns, and determinism across `OMP_NUM_THREADS` (SPEC 7.2)."""
+save / load of `model.npz` with sha256 verification, privileged columns, and determinism across `OMP_NUM_THREADS`
+(SPEC 7.2). The safe format and the legacy pickle path in depth: `test_model_persist.py`."""
 
 from __future__ import annotations
 
@@ -18,7 +19,7 @@ import pytest
 from model.hazard_synth import make_features
 from queuetruth.errors import QtError
 from queuetruth.model import HazardModel, cif_from_hazards, model_feature_names
-from queuetruth.model.hazard import pickle_sha256
+from queuetruth.model.hazard import model_sha256, pickle_sha256
 from queuetruth.schemas.arrow import SCHEMAS
 from queuetruth.schemas.models import HazardModelCard
 
@@ -113,32 +114,33 @@ def test_save_load_round_trip_and_tamper(fitted: HazardModel, tmp_path: Path) ->
     fitted.card = None
     fitted.save(str(out))
     card = HazardModelCard.model_validate(json.loads((out / "model.json").read_text()))
-    assert [f.name for f in card.files] == ["model.pkl"]
+    assert [f.name for f in card.files] == ["model.npz"]
+    assert sorted(p.name for p in out.iterdir()) == ["model.json", "model.npz"]
     assert card.feature_names == fitted.feature_names
     assert fitted.split_features is not None
-    digest = pickle_sha256(card)
-    assert digest == hashlib.sha256((out / "model.pkl").read_bytes()).hexdigest()
-    loaded = HazardModel.load(str(out), sha256=digest)
-    for p in (str(out / "model.json"), str(out / "model.pkl")):
-        HazardModel.load(p, sha256=digest)
-    HazardModel.load(str(out), trusted=True)
+    digest = model_sha256(card)
+    assert digest == pickle_sha256(card) == hashlib.sha256((out / "model.npz").read_bytes()).hexdigest()
+    loaded = HazardModel.load(str(out))  # no code runs: the card's digest is an integrity check, no trust needed
+    for p in (str(out / "model.json"), str(out / "model.npz")):
+        assert HazardModel.load(p, sha256=digest).warnings == []  # authenticated, fitted by this scikit-learn
+    HazardModel.load(str(out), sha256=digest.upper(), trusted=True, allow_pickle=True)  # flags do not apply
     a = fitted.predict(fitted.split_features)
     b = loaded.predict(fitted.split_features)
     assert a.equals(b)
-    # Authenticity (security L6): no trusted digest -> refused before unpickling; a wrong one -> refused.
-    with pytest.raises(QtError) as err:
-        HazardModel.load(str(out))
-    assert err.value.code == "QT-CONFIG-001" and "sha256" in err.value.message
+    assert loaded.card == card and loaded.n_rows_train == fitted.n_rows_train
+    assert len(loaded.warnings) == 1 and "model.npz not authenticated" in loaded.warnings[0]
+    # Authenticity: a trusted digest that differs is refused; a malformed one is a config error.
     with pytest.raises(QtError) as err:
         HazardModel.load(str(out), sha256="0" * 64)
     assert err.value.code == "QT-INPUT-002" and "trusted digest" in err.value.message
     with pytest.raises(QtError) as err:
         HazardModel.load(str(out), sha256="not-a-digest")
     assert err.value.code == "QT-CONFIG-001"
-    blob = bytearray((out / "model.pkl").read_bytes())
-    blob[-3] ^= 0xFF
-    (out / "model.pkl").write_bytes(bytes(blob))
-    for kw in ({"sha256": digest}, {"trusted": True}):
+    # Integrity: changed bytes no longer match the card.
+    blob = bytearray((out / "model.npz").read_bytes())
+    blob[-30] ^= 0xFF
+    (out / "model.npz").write_bytes(bytes(blob))
+    for kw in ({}, {"sha256": digest}):
         with pytest.raises(QtError) as err:
             HazardModel.load(str(out), **kw)  # type: ignore[arg-type]
         assert err.value.code == "QT-INPUT-002" and "refusing" in err.value.message
@@ -171,14 +173,14 @@ a = m.predict_arrays(m.split_features)
 h = hashlib.sha256()
 for k in sorted(a):
     h.update(a[k].tobytes())
-pkl = hashlib.sha256(open(sys.argv[4] + "/model.pkl", "rb").read()).hexdigest()
+npz = hashlib.sha256(open(sys.argv[4] + "/model.npz", "rb").read()).hexdigest()
 card = hashlib.sha256(open(sys.argv[4] + "/model.json", "rb").read()).hexdigest()
-print(h.hexdigest(), pkl, card)
+print(h.hexdigest(), npz, card)
 """
 
 
 def test_fit_deterministic_across_omp_threads(features: pa.Table, tmp_path: Path) -> None:
-    """Same features + spec + seed -> identical hazards, CIFs, model.pkl and model.json with OMP_NUM_THREADS 1 and 4."""
+    """Same features + spec + seed -> identical hazards, CIFs, model.npz and model.json with OMP_NUM_THREADS 1 and 4."""
     import pyarrow.parquet as pq
 
     pq.write_table(features, tmp_path / "features.parquet")
@@ -204,7 +206,7 @@ def test_fit_deterministic_across_omp_threads(features: pa.Table, tmp_path: Path
         assert r.returncode == 0, r.stderr
         outs.append(r.stdout.split())
     assert outs[0] == outs[1] == outs[2]
-    assert hashlib.sha256((tmp_path / "out0" / "model.pkl").read_bytes()).hexdigest() == outs[0][1]
+    assert hashlib.sha256((tmp_path / "out0" / "model.npz").read_bytes()).hexdigest() == outs[0][1]
 
 
 def test_check_spec_rejects_n_blocks_with_days_scheme(features: pa.Table) -> None:

@@ -163,7 +163,7 @@ queue gate. (The specification extends the out-of-view correction to every corre
 NautilusTrader 1.231.0 resets `queue_position` whenever an `OrderBookDepth10` arrives, so on a depth-10 feed its
 queue families fill like `nt_prob_touch`. From 2.0.0rc5 a depth snapshot keeps the queue position, and 2.0 also caps
 queue ahead at a level's new size when the level shrinks, so faithful `nt_queue_l2` (1.231.0's rules) agrees with
-2.0.0rc7 on 99.60% to 99.97% of orders ([Results](../RESULTS.md#nautilustrader-cross-check)). These models describe
+2.0.0rc7 on 99.60% to 100% of orders per day and horizon ([Results](../RESULTS.md#nautilustrader-cross-check)). These models describe
 NautilusTrader 1.231.0 on a delta feed.
 
 ### (e) `nt_prob_touch[p]`

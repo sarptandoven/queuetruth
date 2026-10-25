@@ -57,7 +57,8 @@ fn o_schema_1_arrow_dumps_match_committed() {
         let theirs = std::fs::read_to_string(dir.join(format!("{name}.json"))).unwrap_or_default();
         assert_eq!(ours, theirs, "schema dump differs for {name}");
     }
-    assert_eq!(crate::schema_names().len(), 29);
+    // 31 engine tables and 6 written by Python only (`qt.zoo_toxicity_*`, `qt.conformal_*`, `qt.ledger`).
+    assert_eq!(crate::schema_names().len(), 37);
     assert!(crate::schema("qt.nope").is_none());
 }
 
@@ -906,19 +907,54 @@ fn doc_roundtrip(name: &str, v: &Value) -> Option<Value> {
     })
 }
 
-/// Service-only documents of SPEC 4.5 and the Python-only `dq` documents (1.2) without a Rust mirror.
-const PYTHON_ONLY: [&str; 11] = [
+/// Service-only documents of SPEC 4.5 and the Python-only documents and specs (dq, forecast, certificates, impact,
+/// toxicity, conformal, trial ledger, demo, agent sandbox, bot reconciliation) that have no Rust mirror, sorted: exactly
+/// the committed samples without a mirror. A slice, so additions do not change a declared length.
+const PYTHON_ONLY: &[&str] = &[
     "qt.api_key",
     "qt.api_key_created",
+    "qt.bot_reconcile",
+    "qt.cert_verification",
+    "qt.certificate",
+    "qt.commitment",
+    "qt.commitment_opening",
+    "qt.commitment_verification",
+    "qt.conformal_report",
     "qt.dataset",
+    "qt.demo_plan",
+    "qt.demo_sources",
+    "qt.demo_summary",
     "qt.dq_report",
     "qt.dq_spec",
+    "qt.forecast_commitment",
+    "qt.forecast_entry",
+    "qt.forecast_ledger_summary",
+    "qt.forecast_scorecard",
     "qt.health",
+    "qt.ledger_dump",
+    "qt.ledger_export",
+    "qt.ledger_list",
+    "qt.ledger_record",
+    "qt.ledger_stats",
+    "qt.ledger_verification",
     "qt.meta",
     "qt.page",
+    "qt.sandbox_ack",
+    "qt.sandbox_finish",
+    "qt.sandbox_observation",
+    "qt.sandbox_order_log",
+    "qt.sandbox_scorecard",
+    "qt.sandbox_session",
+    "qt.sandbox_session_list",
+    "qt.sandbox_spec",
+    "qt.sandbox_verification",
+    "qt.selection_inputs",
+    "qt.shadow_impact_summary",
+    "qt.signing_key",
     "qt.tenant",
     "qt.upload",
     "qt.usage_report",
+    "qt.zoo_toxicity",
 ];
 
 /// Every committed sample (generated from the Pydantic models) round-trips through the Rust mirror unchanged
@@ -932,6 +968,7 @@ fn json_mirrors_round_trip_committed_samples() {
         .collect();
     entries.sort();
     let mut checked = 0;
+    let mut unmirrored: Vec<String> = Vec::new();
     for p in entries {
         let name = p
             .file_stem()
@@ -943,6 +980,7 @@ fn json_mirrors_round_trip_committed_samples() {
             Some(back) => assert_eq!(&back, sample, "{name}: sample round trip"),
             None => {
                 assert!(PYTHON_ONLY.contains(&name.as_str()), "{name}: no Rust mirror");
+                unmirrored.push(name);
                 continue;
             }
         }
@@ -956,6 +994,10 @@ fn json_mirrors_round_trip_committed_samples() {
         checked += 1;
     }
     assert_eq!(checked, 26 + 15);
+    assert_eq!(
+        unmirrored, PYTHON_ONLY,
+        "PYTHON_ONLY lists a name without a committed sample"
+    );
 }
 
 #[test]
@@ -1169,7 +1211,7 @@ fn v1_1_layouts() {
         assert_eq!(full.metadata(), core.metadata(), "{name}");
         assert_eq!(
             full.metadata().get("qt.schema_version").map(String::as_str),
-            Some("1.1")
+            Some(crate::table_version(name))
         );
     }
     assert!(crate::added_columns("qt.nope").is_none());
@@ -1191,6 +1233,51 @@ fn v1_1_layouts() {
     assert_eq!(FillReason::TradeThrough.liquidity(), Liquidity::Maker);
     assert_eq!(ZooFillReason::TouchDraw.liquidity(), Liquidity::Maker);
     assert_eq!(ZooFillReason::CrossedAtLive.liquidity(), Liquidity::Taker);
+}
+
+/// The tables written by Python only: version-1 metadata where the writer declares it, the open `int16` dictionary of
+/// `qt.conformal_sets.stratum` and the list columns of `qt.ledger`.
+#[test]
+fn python_written_tables() {
+    use arrow_schema::DataType;
+    for (name, version) in [
+        ("qt.conformal_sets", "1"),
+        ("qt.conformal_calibrator", "1"),
+        ("qt.ledger", "1"),
+        ("qt.zoo_toxicity_fills", "1.1"),
+        ("qt.mbo", "1.1"),
+        ("qt.nope", "1.1"),
+    ] {
+        assert_eq!(crate::table_version(name), version, "{name}");
+    }
+    let sets = crate::schema("qt.conformal_sets").unwrap_or_else(|| panic!("qt.conformal_sets"));
+    let stratum = sets.field_with_name("stratum").unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(
+        stratum.data_type(),
+        &DataType::Dictionary(Box::new(DataType::Int16), Box::new(DataType::Utf8))
+    );
+    assert_eq!(crate::dict_values("qt.conformal_sets", "stratum"), None);
+    let ledger = crate::schema("qt.ledger").unwrap_or_else(|| panic!("qt.ledger"));
+    let ty = |c: &str| {
+        crate::type_name(
+            ledger
+                .field_with_name(c)
+                .map(|f| f.data_type())
+                .unwrap_or(&DataType::Null),
+        )
+    };
+    assert_eq!(
+        (ty("series"), ty("series_index"), ty("run_ids")),
+        ("list<float64>".into(), "list<int64>".into(), "list<utf8>".into())
+    );
+    assert_eq!(
+        crate::dict_values("qt.zoo_toxicity_shadows", "status"),
+        Some(&["confirmed", "phantom", "missed", "neither"][..])
+    );
+    assert_eq!(
+        crate::dict_values("qt.zoo_toxicity_fills", "mechanism").map(<[&str]>::len),
+        Some(7)
+    );
 }
 
 /// Old (v0.1) and new (1.1) files are both readable; full writers upgrade v0.1 batches.

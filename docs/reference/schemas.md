@@ -47,11 +47,21 @@ directory with `orders.parquet` (`qt.live_orders`), `events.parquet` (`qt.live_e
 | [`qt.api_key`](#qtapi_key) | An API key (secret never included). |
 | [`qt.api_key_created`](#qtapi_key_created) | A newly created API key with its secret (shown once). |
 | [`qt.bench`](#qtbench) | Result of `bench replay`. |
+| [`qt.bot_reconcile`](#qtbot_reconcile) | `reconcile.json` (`qt.bot_reconcile`): counts, price advantage, the score result and every order row (sorted). `run_id` hashes the spec (`options`: every input as a sha256, every option) with the engine version (SPEC 7.3); the log paths are relative to the output directory, so the document does not depend on where it was written. |
 | [`qt.calibration_result`](#qtcalibration_result) | Result of `calibrate` (SPEC 5.4). |
 | [`qt.calibration_spec`](#qtcalibration_spec) | `calibrate`: fit queue-model parameters against exact truth, or latency from live logs. |
+| [`qt.cert_verification`](#qtcert_verification) | `qt.cert_verification` (`queuetruth verify-cert`): `status` is `fail` when any check failed. |
+| [`qt.certificate`](#qtcertificate) | `qt.certificate`: a rerunnable record of runs, inputs, outputs and claims (`queuetruth certify`). |
+| [`qt.commitment`](#qtcommitment) | `qt.commitment` (`queuetruth commit`): public, reveals nothing about the files but their number. |
+| [`qt.commitment_opening`](#qtcommitment_opening) | `qt.commitment_opening`: keep private until reveal; any subset of `items` opens those items alone. |
+| [`qt.commitment_verification`](#qtcommitment_verification) | `qt.commitment_verification` (`queuetruth reveal`). |
+| [`qt.conformal_report`](#qtconformal_report) | `conformal.json`: coverage of conformal fill sets, Venn-Abers intervals and fill-time bounds on the test rows and the exchangeability martingale (extension `conformal-fill`). `drift_familywise_alarm` = some drift cell reached `drift_familywise_threshold` = `alarm_threshold x len(drift)` (Bonferroni: family-wise false-alarm probability at most `1 / alarm_threshold` under exchangeability). |
 | [`qt.data_quality`](#qtdata_quality) | Data-quality counters and verdict (SPEC 5.1.5). |
 | [`qt.dataset`](#qtdataset) | A service dataset. |
 | [`qt.dataset_manifest`](#qtdataset_manifest) | `manifest.json` of a dataset directory (SPEC 3.3). |
+| [`qt.demo_plan`](#qtdemo_plan) | What `queuetruth demo --dry-run` would do. |
+| [`qt.demo_sources`](#qtdemo_sources) | The public days `queuetruth demo --list-sources` knows. |
+| [`qt.demo_summary`](#qtdemo_summary) | Summary of `queuetruth demo` (module docstring). |
 | [`qt.doctor`](#qtdoctor) | Result of `doctor`. |
 | [`qt.dq_report`](#qtdq_report) | 1.2: `qt.dq_report` (`queuetruth dq`, `dq_report.json`): `status` = the worst check status (`pass` when every check passed or was skipped); `gate_failed` = the status reached `spec.fail_on`. |
 | [`qt.dq_spec`](#qtdq_spec) | 1.2: `queuetruth dq` spec (`qt.dq_spec`; checks in `queuetruth.dq`). `dataset`: the dataset to check; `out`: output directory for `dq_report.json` and `dq_report.html` (null = return the report, write nothing); `compare`: a second dataset of the same session(s) for the cross-source parity check; `checks`: run only these check ids (null = all); `fail_on`: the CLI exits 1 when any check reaches this status (`warn`: warn or fail; `fail`: fail only; `never`); `max_evidence`: evidence rows kept per table; `stale_ns`: a book with no update for longer than this while trades print is stale; `latency_outlier_ns`: `ts_recv - ts_event` above this is an outlier (null = 10 x p99, at least 1 ms); `session_tolerance_ns`: slack at the session open and close before coverage warns; `replay`: run the exact replay for the book checks (crossed books, prints through the book, trade parity, replay counters); `verify_sources`: re-hash the raw input files recorded in the manifest when they still exist (otherwise only their size is compared); `title`: HTML title. |
@@ -63,12 +73,22 @@ directory with `orders.parquet` (`qt.live_orders`), `events.parquet` (`qt.live_e
 | [`qt.feature_summary`](#qtfeature_summary) | Summary of `features`. |
 | [`qt.file_manifest`](#qtfile_manifest) | Downloadable files of a job. |
 | [`qt.fixtures_summary`](#qtfixtures_summary) | Summary of `referee fixtures`. |
+| [`qt.forecast_commitment`](#qtforecast_commitment) | `qt.forecast_commitment`: a plain-JSON commitment to a ledger head. It names the head entry's hash, which commits to every earlier entry through the chain, and carries no forecast content, so it can be published, anchored or wrapped by a certificate (a timestamp authority signs `sha256(canonical_json(commitment))`) before the questions resolve. `ledger_id` is the hash of entry 0. |
+| [`qt.forecast_entry`](#qtforecast_entry) | `qt.forecast_entry`: one line of a forecast ledger (`ledger.jsonl`). `entry_sha256` = sha256 of the RFC 8785 canonical JSON of the entry without `entry_sha256`; `prev_sha256` is the previous entry's hash (64 zeros for seq 0); `payload_sha256` = sha256 of the canonical JSON of `payload`. `clock`: `system` (the writer's UTC clock, never earlier than the previous entry) or `declared` (a time the writer supplied; not trusted by `score`). |
+| [`qt.forecast_ledger_summary`](#qtforecast_ledger_summary) | `qt.forecast_ledger_summary` (`forecast commit`, `forecast resolve`, `forecast verify`): what was appended, the head commitment and the chain verification (`verified` false lists `problems`). |
+| [`qt.forecast_scorecard`](#qtforecast_scorecard) | `qt.forecast_scorecard` (`forecast score`, `forecast_scorecard.json`). |
 | [`qt.hazard_fit_spec`](#qthazard_fit_spec) | `fit-hazard`: discrete-time competing-risk hazard model. |
 | [`qt.hazard_model_card`](#qthazard_model_card) | `model.json` of `fit-hazard` (SPEC 5.5.8). |
 | [`qt.health`](#qthealth) | Service health. |
 | [`qt.ingest_spec`](#qtingest_spec) | `ingest`: source files -> normalized dataset (SPEC 3.3). |
 | [`qt.ingest_summary`](#qtingest_summary) | Summary of `ingest`. |
 | [`qt.job`](#qtjob) | A service job. |
+| [`qt.ledger_dump`](#qtledger_dump) | The `.json` export: the selected records with their hashes, the series they reference (by sha256, checked), and the head they were read at. |
+| [`qt.ledger_export`](#qtledger_export) | `ledger export`: what was written. |
+| [`qt.ledger_list`](#qtledger_list) | `ledger list`: the selected records, oldest first. |
+| [`qt.ledger_record`](#qtledger_record) | One ledger record (the `record` of a ledger line). |
+| [`qt.ledger_stats`](#qtledger_stats) | `ledger stats`: what the filter selects. |
+| [`qt.ledger_verification`](#qtledger_verification) | `ledger verify`: the full integrity check of a ledger file. |
 | [`qt.live_calibration_spec`](#qtlive_calibration_spec) | 1.1 (3.11 #11): `calibrate-live`: fit a zoo parameter to the user's own live outcomes on an L2 (or MBO) tape (as built in `queuetruth.score.calibrate_live`). |
 | [`qt.live_calibration_test`](#qtlive_calibration_test) | 1.1 (3.11 #11): `live_calibration_test.json` of `calibrate-live` (fitted model, grid profile, held-out discordance; same fields as `HeldOutDiscordance`). |
 | [`qt.live_import_spec`](#qtlive_import_spec) | `live import`: venue exports -> canonical live log (SPEC 3.8). |
@@ -85,10 +105,22 @@ directory with `orders.parquet` (`qt.live_orders`), `events.parquet` (`qt.live_e
 | [`qt.replay_summary`](#qtreplay_summary) | Summary of `replay` (SPEC 5.1.6). |
 | [`qt.report_spec`](#qtreport_spec) | `report`: static HTML report from output directories. |
 | [`qt.report_summary`](#qtreport_summary) | Summary of `report`. |
+| [`qt.sandbox_ack`](#qtsandbox_ack) | `submit` / `cancel` result: the order as now known and the receipt of the committed log entry. |
+| [`qt.sandbox_finish`](#qtsandbox_finish) | `qt_sandbox_finish` result: the scorecard without its per-order and per-fill arrays (so a tool result stays small however long the episode), with the counts of orders and fills and the certificate; the full scorecard and order log are files the server wrote (`out_dir`, `files`) or, on request, inline (`scorecard`). |
+| [`qt.sandbox_observation`](#qtsandbox_observation) | What the agent sees after `open`, `observe` or `advance`: the market and its own orders at the visible cut, and what happened since the previous step (prints, fills, markouts that became computable). |
+| [`qt.sandbox_order_log`](#qtsandbox_order_log) | The committed order log of an episode: every instruction in order with the information set it was made on, hash-chained; `root` = the last entry's hash. |
+| [`qt.sandbox_scorecard`](#qtsandbox_scorecard) | `finish` result: PnL after fees, fill rates, markouts and adverse selection, the final orders and fills, the runtime consistency proof and the certificate. |
+| [`qt.sandbox_session`](#qtsandbox_session) | `open` result: the episode, the instrument, the rules of the simulation and the first observation. |
+| [`qt.sandbox_session_list`](#qtsandbox_session_list) | `qt_sandbox_list` / `qt_sandbox_close` result: the server's open sessions, its limits, and the session just closed (`closed`, `qt_sandbox_close` only). |
+| [`qt.sandbox_spec`](#qtsandbox_spec) | One sandbox episode (`qt.sandbox_spec`): one instrument-day of an MBO dataset, an episode window and the exchange simulation settings. Times are absolute ns since the epoch; `Sandbox.open` also accepts local times of day (`"10:30"`) and duration strings (`"1ms"`) and converts them before validation. |
+| [`qt.sandbox_verification`](#qtsandbox_verification) | `verify` result: the hash chain, the header (engine version and spec id, committed by the `open` entry), the dataset identity (`dataset_id` and the sha256 of every partition file), a deterministic re-execution of the log on the dataset (every entry must reproduce with the same hash), plus the scorecard digest when one was given. |
 | [`qt.scorecard_spec`](#qtscorecard_spec) | `score`: live log vs simulator arm (SPEC 5.7). |
 | [`qt.scorecard_summary`](#qtscorecard_summary) | Summary of `score` (SPEC 5.7). |
+| [`qt.selection_inputs`](#qtselection_inputs) | `selection_inputs`: the trial count and per-trial series a selection statistic consumes. Plain data; nothing is computed from the series. `n_trials` with the variance of the trials' Sharpe ratios is what the Deflated Sharpe Ratio needs; PBO, SPA and model confidence sets also need every trial's series on the same periods, which `aligned` reports. |
+| [`qt.shadow_impact_summary`](#qtshadow_impact_summary) | `qt.shadow_impact_summary`: counts, distributions and the warning line of one `qt.shadow_impact` table. |
 | [`qt.shadow_sample_spec`](#qtshadow_sample_spec) | `shadows sample`: seeded random shadow orders. |
 | [`qt.shadow_sample_summary`](#qtshadow_sample_summary) | Summary of `shadows sample`, `shadows mirror-real` and `shadows from-live`. |
+| [`qt.signing_key`](#qtsigning_key) | `qt.signing_key` (`queuetruth cert keygen` / `cert pubkey`): never carries private key material. |
 | [`qt.tenant`](#qttenant) | A tenant. |
 | [`qt.upload`](#qtupload) | A multipart upload. |
 | [`qt.usage_report`](#qtusage_report) | Usage over a period. |
@@ -96,6 +128,7 @@ directory with `orders.parquet` (`qt.live_orders`), `events.parquet` (`qt.live_e
 | [`qt.why_trace`](#qtwhy_trace) | Event-by-event trace of one shadow or live order. |
 | [`qt.zoo_spec`](#qtzoo_spec) | `zoo`: run queue models on the L2 view and compare with exact truth. |
 | [`qt.zoo_summary`](#qtzoo_summary) | Summary of `zoo`; the Rust runner leaves `leaderboard` empty (filled by `queuetruth.eval`). |
+| [`qt.zoo_toxicity`](#qtzoo_toxicity) | Summary of `zoo-toxicity`: fill-type tags, markouts and the adverse-selection ranking of the zoo's models (extension fill-toxicity; Python only). |
 
 ### qt.api_key
 
@@ -146,6 +179,84 @@ Result of `bench replay`.
 | `records` | integer | yes |  |  |
 | `wall_s` | array of number | yes |  |  |
 | `records_per_s_median` | number or null | yes |  |  |
+
+### qt.bot_reconcile
+
+File: `schemas/json/qt.bot_reconcile.schema.json`.
+
+`reconcile.json` (`qt.bot_reconcile`): counts, price advantage, the score result and every order row (sorted). `run_id` hashes the spec (`options`: every input as a sha256, every option) with the engine version (SPEC 7.3); the log paths are relative to the output directory, so the document does not depend on where it was written.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.bot_reconcile" | yes | `"qt.bot_reconcile"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `kind` | one of "freqtrade", "hummingbot" | yes |  |  |
+| `run_id` | string | yes |  |  |
+| `live_log` | string | yes |  |  |
+| `sim_log` | string | yes |  |  |
+| `n_live_orders` | integer | yes |  |  |
+| `n_sim_orders` | integer | yes |  |  |
+| `n_paired` | integer | yes |  |  |
+| `pairing_coverage` | number or null | no | `null` |  |
+| `counts` | map of integer | yes |  |  |
+| `sim_price_advantage_quote` | map of string | yes |  |  |
+| `missed_fill_notional` | map of string | yes |  |  |
+| `score` | ReconcileScore or null | no | `null` |  |
+| `score_error` | string or null | no | `null` |  |
+| `options` | object | no |  |  |
+| `warnings` | array of string | yes |  |  |
+| `orders` | array of ReconcileOrder | yes |  |  |
+
+**`ReconcileOrder`** (in `qt.bot_reconcile`)
+
+One row of the reconciliation: a live order, a simulator order, or a paired pair of them.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `live_key` | string or null | yes |  |  |
+| `sim_key` | string or null | yes |  |  |
+| `instrument` | string | yes |  |  |
+| `side` | one of "buy", "sell" | yes |  |  |
+| `role` | string | yes |  |  |
+| `category` | one of "match", "missed_fill", "extra_live_fill", "partial_fill", "price", "timing", "both_unfilled", "stop_not_triggered", "no_sim_twin", "no_live_twin" | yes |  |  |
+| `issues` | array of string | yes |  |  |
+| `score_class` | string or null | no | `null` |  |
+| `live_status` | string or null | no | `null` |  |
+| `sim_status` | string or null | no | `null` |  |
+| `qty` | string | yes |  |  |
+| `live_limit_px` | string or null | no | `null` |  |
+| `sim_limit_px` | string or null | no | `null` |  |
+| `live_filled_qty` | string or null | no | `null` |  |
+| `sim_filled_qty` | string or null | no | `null` |  |
+| `live_avg_px` | string or null | no | `null` |  |
+| `sim_avg_px` | string or null | no | `null` |  |
+| `live_placed` | string or null | no | `null` |  |
+| `live_first_fill` | string or null | no | `null` |  |
+| `sim_first_fill` | string or null | no | `null` |  |
+| `fill_delay_ns` | integer or null | no | `null` |  |
+| `sim_price_advantage_bps` | number or null | no | `null` |  |
+| `sim_price_advantage_quote` | string or null | no | `null` |  |
+| `live_note` | string or null | no | `null` |  |
+| `sim_note` | string or null | no | `null` |  |
+| `explanation` | string | yes |  |  |
+
+**`ReconcileScore`** (in `qt.bot_reconcile`)
+
+The `score` result the reconciliation ran (sim arm = the simulator log); `path` is relative to the reconciliation's output directory.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `path` | string | yes |  |  |
+| `run_id` | string | yes |  |  |
+| `headline` | string | yes |  |  |
+| `n_orders` | integer | yes |  |  |
+| `n_matched` | integer | yes |  |  |
+| `n_unmatched_live` | integer | yes |  |  |
+| `n_unmatched_sim` | integer | yes |  |  |
+| `two_by_two` | map of integer | yes |  |  |
+| `fill_rate_bias` | number or null | yes |  |  |
+| `n_clusters` | integer or null | no | `null` |  |
+| `interpretable` | boolean | no | `true` |  |
 
 ### qt.calibration_result
 
@@ -432,6 +543,480 @@ Train/test window: dates or blocks; both null = all data.
 | `dates` | array of string or null | no | `null` |  |
 | `blocks` | BlockWindow or null | no | `null` |  |
 
+### qt.cert_verification
+
+File: `schemas/json/qt.cert_verification.schema.json`.
+
+`qt.cert_verification` (`queuetruth verify-cert`): `status` is `fail` when any check failed.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.cert_verification" | yes | `"qt.cert_verification"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `certificate` | VerifiedCertificate | yes |  |  |
+| `rerun` | boolean | yes |  |  |
+| `status` | one of "pass", "fail" | yes |  |  |
+| `counts` | CheckCounts | yes |  |  |
+| `checks` | array of Check | yes |  |  |
+| `runs` | array of RunVerification | yes |  |  |
+| `warnings` | array of string | no |  |  |
+
+**`Check`** (in `qt.cert_verification`)
+
+One verification check: `fail` makes the verdict fail; `warn` does not.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `id` | string | yes |  |  |
+| `status` | one of "pass", "warn", "fail", "skip" | yes |  |  |
+| `summary` | string | yes |  |  |
+| `details` | array of string | no |  |  |
+
+**`CheckCounts`** (in `qt.cert_verification`)
+
+Checks per status.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `pass` | integer | yes |  |  |
+| `warn` | integer | yes |  |  |
+| `fail` | integer | yes |  |  |
+| `skip` | integer | yes |  |  |
+
+**`RunVerification`** (in `qt.cert_verification`)
+
+Per-run outcome: `rerun` is `identical`, `equivalent` (every output identical or, for JSON and Parquet, equal within the SPEC 7.2 cross-platform tolerance of 4 ulp on floating-point values), `differs`, `failed`, `skipped` (an integrity, signature or key-pin check failed) or `not_run`.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `label` | string | yes |  |  |
+| `kind` | string | yes |  |  |
+| `run_id` | string or null | yes |  |  |
+| `inputs_ok` | boolean | yes |  |  |
+| `outputs_ok` | boolean | yes |  |  |
+| `binding_ok` | boolean | yes |  |  |
+| `rerun` | one of "identical", "equivalent", "differs", "failed", "skipped", "not_run" | yes |  |  |
+| `differing` | array of string | no |  |  |
+| `within_tolerance` | array of string | no |  |  |
+
+**`VerifiedCertificate`** (in `qt.cert_verification`)
+
+What was verified.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `path` | string | yes |  |  |
+| `certificate_id` | string or null | yes |  |  |
+| `body_sha256` | string or null | yes |  |  |
+| `issued_at` | integer or null | yes |  |  |
+| `signed` | boolean | yes |  |  |
+| `key_fingerprint` | string or null | yes |  |  |
+| `key_trusted` | boolean or null | yes |  |  |
+
+### qt.certificate
+
+File: `schemas/json/qt.certificate.schema.json`.
+
+`qt.certificate`: a rerunnable record of runs, inputs, outputs and claims (`queuetruth certify`).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.certificate" | yes | `"qt.certificate"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `certificate_id` | string | yes |  |  |
+| `title` | string or null | no | `null` |  |
+| `issuer` | string or null | no | `null` |  |
+| `issued_at` | integer | yes |  |  |
+| `environment` | Environment | yes |  |  |
+| `runs` | array of CertRun | yes |  |  |
+| `inputs` | array of CertInput | yes |  |  |
+| `claims` | array of Claim | yes |  |  |
+| `attachments` | array of CertInput | no |  |  |
+| `commitments` | array of CommitmentLink | no |  |  |
+| `reproduce` | array of string | yes |  |  |
+| `warnings` | array of string | no |  |  |
+| `integrity` | Integrity | yes |  |  |
+
+**`CertInput`** (in `qt.certificate`)
+
+An input of one or more runs (or an attachment): every file it consists of, hashed.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `id` | string | yes |  |  |
+| `path` | string | yes |  |  |
+| `kind` | one of "dataset", "directory", "file" | yes |  |  |
+| `identity` | string | yes |  |  |
+| `bytes` | integer | yes |  |  |
+| `files` | array of HashedFile | yes |  |  |
+| `dataset_id` | string or null | no | `null` |  |
+| `dataset_consistent` | boolean or null | no | `null` |  |
+| `data_ts_min` | integer or null | no | `null` |  |
+| `data_ts_max` | integer or null | no | `null` |  |
+
+**`CertRun`** (in `qt.certificate`)
+
+One certified run directory.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `label` | string | yes |  |  |
+| `kind` | one of "replay", "zoo", "calibrate", "calibrate_live", "fit_hazard", "score", "referee", "dq" | yes |  |  |
+| `path` | string | yes |  |  |
+| `document` | string | yes |  |  |
+| `document_schema` | string | yes |  |  |
+| `run_id` | string | yes |  |  |
+| `binding` | one of "verified", "recomputed" | yes |  |  |
+| `engine_version` | string | yes |  |  |
+| `spec` | object | yes |  |  |
+| `inputs` | array of RunInput | yes |  |  |
+| `outputs` | array of OutputFile | yes |  |  |
+| `reproduce` | Reproduce | yes |  |  |
+
+**`Claim`** (in `qt.certificate`)
+
+A claim: the text as given (with `{run#/pointer}` references), the text with the values filled in, and the exact values.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `id` | string | yes |  |  |
+| `text` | string | yes |  |  |
+| `rendered` | string | yes |  |  |
+| `evidence` | array of Evidence | yes |  |  |
+
+**`CommitmentLink`** (in `qt.certificate`)
+
+A `qt.commitment` linked to the certificate through an opening of some of its items.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `path` | string | yes |  |  |
+| `sha256` | string | yes |  |  |
+| `root` | string | yes |  |  |
+| `label` | string or null | yes |  |  |
+| `committed_at` | integer | yes |  |  |
+| `key_fingerprint` | string or null | yes |  |  |
+| `revealed` | array of RevealedItem | yes |  |  |
+| `earliest_data_ts` | integer or null | yes |  |  |
+| `precedes_data` | boolean or null | yes |  |  |
+
+**`Environment`** (in `qt.certificate`)
+
+Software and platform of the certifying run (no hostname, user name or absolute path).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `queuetruth` | string | yes |  |  |
+| `core` | string or null | yes |  |  |
+| `engine_version` | string | yes |  |  |
+| `python` | string | yes |  |  |
+| `implementation` | string | yes |  |  |
+| `platform` | string | yes |  |  |
+| `machine` | string | yes |  |  |
+| `packages` | map of string | yes |  |  |
+| `env` | map of string | yes |  |  |
+
+**`Evidence`** (in `qt.certificate`)
+
+One result value a claim rests on: `{run}[:{file}]#{pointer}` resolved at certification time.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `ref` | string | yes |  |  |
+| `run` | string | yes |  |  |
+| `file` | string | yes |  |  |
+| `pointer` | string | yes |  |  |
+| `value` | any | yes |  |  |
+
+**`HashedFile`** (in `qt.certificate`)
+
+One file: path relative to its input or run directory (POSIX separators), size and sha256 of the bytes.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `path` | string | yes |  |  |
+| `bytes` | integer | yes |  |  |
+| `sha256` | string | yes |  |  |
+
+**`Integrity`** (in `qt.certificate`)
+
+`body_sha256` = sha256 of `canonical_json(body)`; `signature` signs `domain + "\n" + body`.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `canonicalization` | const "rfc8785" | no | `"rfc8785"` |  |
+| `domain` | const "queuetruth.certificate.v1" | no | `"queuetruth.certificate.v1"` |  |
+| `body_sha256` | string | yes |  |  |
+| `signature` | Signature or null | no | `null` |  |
+
+**`OutputFile`** (in `qt.certificate`)
+
+An output file of a run. `normalized_sha256` is what `--rerun` compares (SPEC 7.2): JSON files canonicalised (RFC 8785) without `timings` at any depth and without the execution-only `out` / `threads` of the top-level `spec` echo; other files hashed as bytes.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `path` | string | yes |  |  |
+| `bytes` | integer | yes |  |  |
+| `sha256` | string | yes |  |  |
+| `normalized_sha256` | string | yes |  |  |
+
+**`Reproduce`** (in `qt.certificate`)
+
+How to re-execute one run: the Python API call and the verification command.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `api` | string | yes |  |  |
+| `python` | string | yes |  |  |
+| `verify` | string | yes |  |  |
+
+**`RevealedItem`** (in `qt.certificate`)
+
+A committed file revealed by an opening and matched (by sha256) to certificate inputs.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `index` | integer | yes |  |  |
+| `name` | string | yes |  |  |
+| `sha256` | string | yes |  |  |
+| `nonce` | string | yes |  |  |
+| `inputs` | array of string | yes |  |  |
+
+**`RunInput`** (in `qt.certificate`)
+
+A reference of a run's spec: JSON pointer into the spec echo and the certificate input it names.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `pointer` | string | yes |  |  |
+| `input` | string | yes |  |  |
+
+**`Signature`** (in `qt.certificate`)
+
+An Ed25519 signature over `domain + "\n" + canonical_json(body)` (RFC 8032, pure Ed25519).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `algorithm` | const "ed25519" | no | `"ed25519"` |  |
+| `public_key` | string | yes |  |  |
+| `key_fingerprint` | string | yes |  |  |
+| `value` | string | yes |  |  |
+
+### qt.commitment
+
+File: `schemas/json/qt.commitment.schema.json`.
+
+`qt.commitment` (`queuetruth commit`): public, reveals nothing about the files but their number.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.commitment" | yes | `"qt.commitment"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `scheme` | const "qt-commit-v1" | no | `"qt-commit-v1"` |  |
+| `label` | string or null | no | `null` |  |
+| `committed_at` | integer | yes |  |  |
+| `n_items` | integer | yes |  |  |
+| `leaves` | array of string | yes |  |  |
+| `root` | string | yes |  |  |
+| `signature` | Signature or null | no | `null` |  |
+
+**`Signature`** (in `qt.commitment`)
+
+An Ed25519 signature over `domain + "\n" + canonical_json(body)` (RFC 8032, pure Ed25519).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `algorithm` | const "ed25519" | no | `"ed25519"` |  |
+| `public_key` | string | yes |  |  |
+| `key_fingerprint` | string | yes |  |  |
+| `value` | string | yes |  |  |
+
+### qt.commitment_opening
+
+File: `schemas/json/qt.commitment_opening.schema.json`.
+
+`qt.commitment_opening`: keep private until reveal; any subset of `items` opens those items alone.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.commitment_opening" | yes | `"qt.commitment_opening"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `root` | string | yes |  |  |
+| `items` | array of OpeningItem | yes |  |  |
+
+**`OpeningItem`** (in `qt.commitment_opening`)
+
+The secret of one committed file.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `index` | integer | yes |  |  |
+| `name` | string | yes |  |  |
+| `bytes` | integer | yes |  |  |
+| `sha256` | string | yes |  |  |
+| `nonce` | string | yes |  |  |
+
+### qt.commitment_verification
+
+File: `schemas/json/qt.commitment_verification.schema.json`.
+
+`qt.commitment_verification` (`queuetruth reveal`).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.commitment_verification" | yes | `"qt.commitment_verification"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `commitment` | VerifiedCommitment | yes |  |  |
+| `status` | one of "pass", "fail" | yes |  |  |
+| `n_revealed` | integer | yes |  |  |
+| `revealed` | array of RevealOutcome | yes |  |  |
+| `unmatched_files` | array of string | yes |  |  |
+| `checks` | array of Check | yes |  |  |
+
+**`Check`** (in `qt.commitment_verification`)
+
+One verification check: `fail` makes the verdict fail; `warn` does not.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `id` | string | yes |  |  |
+| `status` | one of "pass", "warn", "fail", "skip" | yes |  |  |
+| `summary` | string | yes |  |  |
+| `details` | array of string | no |  |  |
+
+**`RevealOutcome`** (in `qt.commitment_verification`)
+
+One opened item: `match` (leaf and file agree), `leaf_mismatch` (the opening does not open this leaf), `content_mismatch` (no given file has the committed content) or `not_given` (no file given for it).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `index` | integer | yes |  |  |
+| `name` | string | yes |  |  |
+| `sha256` | string | yes |  |  |
+| `status` | one of "match", "leaf_mismatch", "content_mismatch", "not_given" | yes |  |  |
+| `file` | string or null | yes |  |  |
+
+**`VerifiedCommitment`** (in `qt.commitment_verification`)
+
+The commitment that was checked.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `path` | string | yes |  |  |
+| `root` | string or null | yes |  |  |
+| `label` | string or null | yes |  |  |
+| `committed_at` | integer or null | yes |  |  |
+| `n_items` | integer or null | yes |  |  |
+| `signed` | boolean | yes |  |  |
+| `key_fingerprint` | string or null | yes |  |  |
+| `key_trusted` | boolean or null | yes |  |  |
+
+### qt.conformal_report
+
+File: `schemas/json/qt.conformal_report.schema.json`.
+
+`conformal.json`: coverage of conformal fill sets, Venn-Abers intervals and fill-time bounds on the test rows and the exchangeability martingale (extension `conformal-fill`). `drift_familywise_alarm` = some drift cell reached `drift_familywise_threshold` = `alarm_threshold x len(drift)` (Bonferroni: family-wise false-alarm probability at most `1 / alarm_threshold` under exchangeability).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.conformal_report" | yes | `"qt.conformal_report"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `run_id` | string | yes |  |  |
+| `spec` | object | yes |  |  |
+| `source` | one of "hazard", "zoo" | yes |  |  |
+| `model_id` | string | yes |  |  |
+| `score` | string | yes |  |  |
+| `alpha` | number | yes |  |  |
+| `grid_ns` | array of integer | yes |  |  |
+| `n_calib_rows` | integer | yes |  |  |
+| `n_test_rows` | integer | yes |  |  |
+| `calib_dates` | array of string | yes |  |  |
+| `test_dates` | array of string | yes |  |  |
+| `guarantee` | string | yes |  |  |
+| `cells` | array of CoverageCell | yes |  |  |
+| `fill_time` | array of FillTimeCell | yes |  |  |
+| `drift` | array of DriftCell | yes |  |  |
+| `drift_familywise_threshold` | number or null | yes |  |  |
+| `drift_familywise_alarm` | boolean | yes |  |  |
+| `warnings` | array of string | yes |  |  |
+
+**`CoverageCell`** (in `qt.conformal_report`)
+
+Prediction-set coverage of one horizon x landmark x stratum (`all` = pooled) on the test rows.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `horizon_ns` | integer | yes |  |  |
+| `landmark_ns` | integer or null | yes |  |  |
+| `stratum` | string | yes |  |  |
+| `n_calib` | integer | yes |  |  |
+| `n_test` | integer | yes |  |  |
+| `n_test_fill` | integer | yes |  |  |
+| `coverage` | number or null | yes |  |  |
+| `coverage_ci_lo` | number or null | yes |  |  |
+| `coverage_ci_hi` | number or null | yes |  |  |
+| `frac_empty` | number or null | yes |  |  |
+| `frac_singleton` | number or null | yes |  |  |
+| `frac_both` | number or null | yes |  |  |
+| `fill_rate_calib` | number or null | yes |  |  |
+| `fill_rate_test` | number or null | yes |  |  |
+| `mean_p_test` | number or null | yes |  |  |
+| `va_p0_mean` | number or null | yes |  |  |
+| `va_p1_mean` | number or null | yes |  |  |
+| `va_true_label_mean` | number or null | yes |  |  |
+| `coverage_fill` | number or null | yes |  |  |
+| `coverage_nofill` | number or null | yes |  |  |
+| `informative` | boolean | yes |  |  |
+
+**`DriftCell`** (in `qt.conformal_report`)
+
+Exchangeability martingale of the calibration rows, then the test rows, of one horizon x landmark. `alarm` is at the per-cell level `1 / alarm_threshold`.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `horizon_ns` | integer | yes |  |  |
+| `landmark_ns` | integer | yes |  |  |
+| `method` | string | yes |  |  |
+| `n` | integer | yes |  |  |
+| `log10_final` | number | yes |  |  |
+| `log10_max` | number | yes |  |  |
+| `alarm` | boolean | yes |  |  |
+| `alarm_group` | string or null | yes |  |  |
+| `groups` | array of DriftGroup | yes |  |  |
+
+**`DriftGroup`** (in `qt.conformal_report`)
+
+Martingale statistics of one (role, session date) group, in processing order (`group` = `<role>:<date>`, or `<role>` when the dates are unknown).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `group` | string | yes |  |  |
+| `role` | one of "calib", "test" | yes |  |  |
+| `date` | string or null | yes |  |  |
+| `n` | integer | yes |  |  |
+| `log10_end` | number | yes |  |  |
+| `log10_max` | number | yes |  |  |
+| `mean_pvalue` | number | yes |  |  |
+| `ks_uniform` | number | yes |  |  |
+
+**`FillTimeCell`** (in `qt.conformal_report`)
+
+Coverage of the conformal fill-time bounds of one landmark x stratum (`all` = pooled) on the test rows.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `landmark_ns` | integer or null | yes |  |  |
+| `stratum` | string | yes |  |  |
+| `n_calib` | integer | yes |  |  |
+| `n_test` | integer | yes |  |  |
+| `lower_coverage` | number or null | yes |  |  |
+| `upper_coverage` | number or null | yes |  |  |
+| `interval_coverage` | number or null | yes |  |  |
+| `frac_lower_claim` | number or null | yes |  |  |
+| `frac_upper_claim` | number or null | yes |  |  |
+| `median_lower_ns` | integer or null | yes |  |  |
+| `median_upper_ns` | integer or null | yes |  |  |
+
 ### qt.data_quality
 
 File: `schemas/json/qt.data_quality.schema.json`.
@@ -539,7 +1124,7 @@ Data-quality counters and verdict (SPEC 5.1.5).
 | `price_exp_by_instrument` | object | yes |  |  |
 | `created_by` | string | yes |  |  |
 | `validation_status` | one of "real_data", "synthetic_only", "assumed", "fixture_only" | yes |  |  |
-| `rule_set` | one of "generic", "nasdaq", "cme", "coinbase", "crypto_l3", "iex" or null | no | `null` |  |
+| `rule_set` | one of "generic", "nasdaq", "cme", "coinbase", "crypto_l3", "iex", "nyse" or null | no | `null` |  |
 | `source_vintage` | array of SourceVintage or null | no | `null` |  |
 
 **`FeedGap`** (in `qt.dataset`)
@@ -620,7 +1205,7 @@ File: `schemas/json/qt.dataset_manifest.schema.json`.
 | `price_exp_by_instrument` | object | yes |  |  |
 | `created_by` | string | yes |  |  |
 | `validation_status` | one of "real_data", "synthetic_only", "assumed", "fixture_only" | yes |  |  |
-| `rule_set` | one of "generic", "nasdaq", "cme", "coinbase", "crypto_l3", "iex" or null | no | `null` |  |
+| `rule_set` | one of "generic", "nasdaq", "cme", "coinbase", "crypto_l3", "iex", "nyse" or null | no | `null` |  |
 | `source_vintage` | array of SourceVintage or null | no | `null` |  |
 
 **`InputFile`** (in `qt.dataset_manifest`)
@@ -669,6 +1254,232 @@ One Parquet file of a partition, path relative to the dataset root.
 | `start_ns` | integer or null | no | `null` |  |
 | `end_ns` | integer or null | no | `null` |  |
 | `publisher_id` | integer or null | no | `null` |  |
+
+### qt.demo_plan
+
+File: `schemas/json/qt.demo_plan.schema.json`.
+
+What `queuetruth demo --dry-run` would do.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.demo_plan" | yes | `"qt.demo_plan"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `source` | SourceInfo | yes |  |  |
+| `window` | WindowInfo | yes |  |  |
+| `symbols` | array of string | yes |  |  |
+| `cache_dir` | string | yes |  |  |
+| `cache_hit` | boolean | yes |  |  |
+| `download_needed` | boolean | yes |  |  |
+| `estimated_download_bytes` | integer or null | yes |  |  |
+| `estimate_extrapolated` | boolean | yes |  |  |
+| `max_download_bytes` | integer or null | yes |  |  |
+| `file_bytes` | integer or null | yes |  |  |
+| `out` | string | yes |  |  |
+
+**`SourceInfo`** (in `qt.demo_plan`)
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `id` | string | yes |  |  |
+| `title` | string | yes |  |  |
+| `format` | one of "itch", "iex" | yes |  |  |
+| `session_date` | string | yes |  |  |
+| `location` | string | yes |  |  |
+| `attribution` | string or null | yes |  |  |
+| `terms_url` | string or null | yes |  |  |
+| `note` | string or null | yes |  |  |
+
+**`WindowInfo`** (in `qt.demo_plan`)
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `timezone` | const "America/New_York" | no | `"America/New_York"` |  |
+| `placement_start` | string | yes |  |  |
+| `placement_end` | string | yes |  |  |
+| `cut` | string | yes |  |  |
+| `minutes` | integer | yes |  |  |
+| `h_max_s` | integer | yes |  |  |
+
+### qt.demo_sources
+
+File: `schemas/json/qt.demo_sources.schema.json`.
+
+The public days `queuetruth demo --list-sources` knows.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.demo_sources" | yes | `"qt.demo_sources"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `default` | string | yes |  |  |
+| `aliases` | map of string | yes |  |  |
+| `sources` | array of DemoSourceRow | yes |  |  |
+
+**`DemoSourceRow`** (in `qt.demo_sources`)
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `id` | string | yes |  |  |
+| `title` | string | yes |  |  |
+| `format` | one of "itch", "iex" | yes |  |  |
+| `session_date` | string | yes |  |  |
+| `url` | string | yes |  |  |
+| `default_symbols` | array of string | yes |  |  |
+| `attribution` | string or null | yes |  |  |
+| `terms_url` | string or null | yes |  |  |
+
+### qt.demo_summary
+
+File: `schemas/json/qt.demo_summary.schema.json`.
+
+Summary of `queuetruth demo` (module docstring).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.demo_summary" | yes | `"qt.demo_summary"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `run_id` | string | yes |  |  |
+| `queuetruth_version` | string | yes |  |  |
+| `created` | string | yes |  |  |
+| `spec` | object | yes |  |  |
+| `source` | SourceInfo | yes |  |  |
+| `window` | WindowInfo | yes |  |  |
+| `data` | DataInfo | yes |  |  |
+| `n_shadows` | integer | yes |  |  |
+| `n_leaderboard` | integer or null | yes |  |  |
+| `n_excluded_hbt_312` | integer | yes |  |  |
+| `zoo_run_id` | string | yes |  |  |
+| `headline` | Headline | yes |  |  |
+| `models` | array of ModelRow | yes |  |  |
+| `interval` | Interval | yes |  |  |
+| `reference` | Reference or null | yes |  |  |
+| `outputs` | Outputs | yes |  |  |
+| `timings` | Timings | yes |  |  |
+| `warnings` | array of string | yes |  |  |
+
+**`Cell`** (in `qt.demo_summary`)
+
+One model at one horizon: fill rates, bias (model minus exact) and its 95% interval.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `exact_fill_rate` | number or null | yes |  |  |
+| `model_fill_rate` | number or null | yes |  |  |
+| `bias` | number or null | yes |  |  |
+| `ci_lo` | number or null | yes |  |  |
+| `ci_hi` | number or null | yes |  |  |
+| `n` | integer | yes |  |  |
+| `ci_method` | one of "cluster_bootstrap", "none" | yes |  |  |
+
+**`DataInfo`** (in `qt.demo_summary`)
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `symbols` | array of string | yes |  |  |
+| `subset_path` | string | yes |  |  |
+| `subset_bytes` | integer | yes |  |  |
+| `subset_sha256` | string | yes |  |  |
+| `content_sha256` | string | yes |  |  |
+| `kept_messages` | integer | yes |  |  |
+| `cache_hit` | boolean | yes |  |  |
+| `pinned` | boolean | yes |  |  |
+| `remote` | boolean | yes |  |  |
+| `bytes_downloaded` | integer | yes |  |  |
+| `file_bytes` | integer or null | yes |  |  |
+| `resumptions` | integer | yes |  |  |
+| `records` | integer | yes |  |  |
+| `data_quality` | one of "clean", "warnings", "unusable" | yes |  |  |
+| `data_quality_reasons` | array of string | yes |  |  |
+| `dataset_id` | string or null | yes |  |  |
+
+**`Headline`** (in `qt.demo_summary`)
+
+The answer: NautilusTrader's default fill model against the exact queue. `verified_against` says which NautilusTrader releases the zoo's faithful replica was checked against, order for order (docs/RESULTS.md).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `model_id` | string | yes |  |  |
+| `label` | string | yes |  |  |
+| `verified_against` | string | yes |  |  |
+| `sentence` | string | yes |  |  |
+| `cells` | map of Cell | yes |  |  |
+
+**`Interval`** (in `qt.demo_summary`)
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `method` | string | yes |  |  |
+| `cluster` | string | yes |  |  |
+| `clusters` | integer | yes |  |  |
+| `bootstrap_b` | integer | yes |  |  |
+| `note` | string | yes |  |  |
+
+**`ModelRow`** (in `qt.demo_summary`)
+
+A zoo model's cells by horizon (`horizon_ns` as a decimal string).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `model_id` | string | yes |  |  |
+| `cells` | map of Cell | yes |  |  |
+
+**`Outputs`** (in `qt.demo_summary`)
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `dir` | string | yes |  |  |
+| `html` | string | yes |  |  |
+| `json` | string | yes |  |  |
+| `dataset` | string | yes |  |  |
+| `shadows` | string | yes |  |  |
+| `zoo` | string | yes |  |  |
+
+**`Reference`** (in `qt.demo_summary`)
+
+A published number on the same source, for comparison (full day, more shadows).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `label` | string | yes |  |  |
+| `bias` | map of number | yes |  |  |
+| `ci_lo` | map of number | yes |  |  |
+| `ci_hi` | map of number | yes |  |  |
+| `exact_fill_rate` | map of number | yes |  |  |
+
+**`SourceInfo`** (in `qt.demo_summary`)
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `id` | string | yes |  |  |
+| `title` | string | yes |  |  |
+| `format` | one of "itch", "iex" | yes |  |  |
+| `session_date` | string | yes |  |  |
+| `location` | string | yes |  |  |
+| `attribution` | string or null | yes |  |  |
+| `terms_url` | string or null | yes |  |  |
+| `note` | string or null | yes |  |  |
+
+**`Timings`** (in `qt.demo_summary`)
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `fetch_s` | number | yes |  |  |
+| `ingest_s` | number | yes |  |  |
+| `shadows_s` | number | yes |  |  |
+| `zoo_s` | number | yes |  |  |
+| `answer_s` | number | yes |  |  |
+| `total_s` | number | yes |  |  |
+
+**`WindowInfo`** (in `qt.demo_summary`)
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `timezone` | const "America/New_York" | no | `"America/New_York"` |  |
+| `placement_start` | string | yes |  |  |
+| `placement_end` | string | yes |  |  |
+| `cut` | string | yes |  |  |
+| `minutes` | integer | yes |  |  |
+| `h_max_s` | integer | yes |  |  |
 
 ### qt.doctor
 
@@ -1110,6 +1921,436 @@ One written fixture directory.
 | `path` | string | yes |  |  |
 | `files` | array of FileEntry | yes |  |  |
 
+### qt.forecast_commitment
+
+File: `schemas/json/qt.forecast_commitment.schema.json`.
+
+`qt.forecast_commitment`: a plain-JSON commitment to a ledger head. It names the head entry's hash, which commits to every earlier entry through the chain, and carries no forecast content, so it can be published, anchored or wrapped by a certificate (a timestamp authority signs `sha256(canonical_json(commitment))`) before the questions resolve. `ledger_id` is the hash of entry 0.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.forecast_commitment" | yes | `"qt.forecast_commitment"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `ledger_id` | string | yes |  |  |
+| `head_seq` | integer | yes |  |  |
+| `head_sha256` | string | yes |  |  |
+| `head_recorded_at_ns` | integer | yes |  |  |
+| `n_entries` | integer | yes |  |  |
+| `n_forecasts` | integer | yes |  |  |
+| `n_resolutions` | integer | yes |  |  |
+| `hash_alg` | const "sha256" | no | `"sha256"` |  |
+| `chain_rule` | string | yes |  |  |
+| `engine_version` | string | yes |  |  |
+
+### qt.forecast_entry
+
+File: `schemas/json/qt.forecast_entry.schema.json`.
+
+`qt.forecast_entry`: one line of a forecast ledger (`ledger.jsonl`). `entry_sha256` = sha256 of the RFC 8785 canonical JSON of the entry without `entry_sha256`; `prev_sha256` is the previous entry's hash (64 zeros for seq 0); `payload_sha256` = sha256 of the canonical JSON of `payload`. `clock`: `system` (the writer's UTC clock, never earlier than the previous entry) or `declared` (a time the writer supplied; not trusted by `score`).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.forecast_entry" | yes | `"qt.forecast_entry"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `seq` | integer | yes |  |  |
+| `prev_sha256` | string | yes |  |  |
+| `recorded_at_ns` | integer | yes |  |  |
+| `clock` | one of "system", "declared" | yes |  |  |
+| `payload_sha256` | string | yes |  |  |
+| `payload` | any | yes |  |  |
+| `entry_sha256` | string | yes |  |  |
+
+**`BinaryForecast`** (in `qt.forecast_entry`)
+
+P(outcome = 1).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `kind` | const "binary" | no | `"binary"` |  |
+| `p` | number | yes |  |  |
+
+**`CategoricalForecast`** (in `qt.forecast_entry`)
+
+Probability per outcome label. `forecast commit` normalises them to sum to 1 (refusing a sum more than 1e-3 away) and `score` re-checks the sum against `SUM_TOL` and the question's outcome set.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `kind` | const "categorical" | no | `"categorical"` |  |
+| `probs` | map of number | yes |  |  |
+
+**`ContinuousForecast`** (in `qt.forecast_entry`)
+
+A predictive distribution of a real-valued outcome.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `kind` | const "continuous" | no | `"continuous"` |  |
+| `dist` | any | yes |  |  |
+
+**`ForecastPayload`** (in `qt.forecast_entry`)
+
+One forecast: who, which question, what. `as_of_ns` is the forecaster's own information timestamp (optional; it may not be later than the commit). `nonce` (64 hex, 256 random bits) makes the payload digest unguessable, so a published commitment does not reveal the forecast before it is opened.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `type` | const "forecast" | no | `"forecast"` |  |
+| `question_id` | string | yes |  |  |
+| `forecaster` | string | yes |  |  |
+| `forecast` | any | yes |  |  |
+| `as_of_ns` | integer or null | no | `null` |  |
+| `nonce` | string | yes |  |  |
+
+**`NormalDist`** (in `qt.forecast_entry`)
+
+Gaussian predictive distribution.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `family` | const "normal" | no | `"normal"` |  |
+| `mean` | number | yes |  |  |
+| `sd` | number | yes |  |  |
+
+**`QuantileDist`** (in `qt.forecast_entry`)
+
+Predictive quantiles: `values[i]` at probability level `levels[i]` (strictly increasing, in (0, 1)); `values` non-decreasing.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `family` | const "quantiles" | no | `"quantiles"` |  |
+| `levels` | array of number | yes |  |  |
+| `values` | array of number | yes |  |  |
+
+**`ResolutionPayload`** (in `qt.forecast_entry`)
+
+How a question resolved. `outcome`: 0 or 1 (binary), a label of `outcomes` (categorical), a number (continuous); null only when `void`. `info_cutoff_ns`: when the outcome became knowable, if earlier than `resolved_at_ns`. `ordered`: categorical outcomes are ordinal in the listed order (enables RPS). `group`: related questions (shared climatology and, with `cluster: group`, one bootstrap cluster).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `type` | const "resolution" | no | `"resolution"` |  |
+| `question_id` | string | yes |  |  |
+| `kind` | one of "binary", "categorical", "continuous" | yes |  |  |
+| `outcome` | number or string or null | yes |  |  |
+| `outcomes` | array of string or null | no | `null` |  |
+| `ordered` | boolean | no | `false` |  |
+| `resolved_at_ns` | integer | yes |  |  |
+| `info_cutoff_ns` | integer or null | no | `null` |  |
+| `void` | boolean | no | `false` |  |
+| `group` | string or null | no | `null` |  |
+| `source` | string or null | no | `null` |  |
+
+**`SampleDist`** (in `qt.forecast_entry`)
+
+Ensemble or Monte Carlo samples of the predictive distribution (equal weights).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `family` | const "samples" | no | `"samples"` |  |
+| `samples` | array of number | yes |  |  |
+
+### qt.forecast_ledger_summary
+
+File: `schemas/json/qt.forecast_ledger_summary.schema.json`.
+
+`qt.forecast_ledger_summary` (`forecast commit`, `forecast resolve`, `forecast verify`): what was appended, the head commitment and the chain verification (`verified` false lists `problems`).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.forecast_ledger_summary" | yes | `"qt.forecast_ledger_summary"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `action` | one of "commit", "resolve", "verify" | yes |  |  |
+| `ledger` | string | yes |  |  |
+| `engine_version` | string | yes |  |  |
+| `appended` | integer | yes |  |  |
+| `entries` | array of LedgerEntryRef | yes |  |  |
+| `entries_truncated` | boolean | yes |  |  |
+| `commitment` | ForecastCommitment or null | yes |  |  |
+| `verified` | boolean | yes |  |  |
+| `problems` | array of LedgerProblem | yes |  |  |
+| `warnings` | array of string | yes |  |  |
+
+**`ForecastCommitment`** (in `qt.forecast_ledger_summary`)
+
+`qt.forecast_commitment`: a plain-JSON commitment to a ledger head. It names the head entry's hash, which commits to every earlier entry through the chain, and carries no forecast content, so it can be published, anchored or wrapped by a certificate (a timestamp authority signs `sha256(canonical_json(commitment))`) before the questions resolve. `ledger_id` is the hash of entry 0.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.forecast_commitment" | yes | `"qt.forecast_commitment"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `ledger_id` | string | yes |  |  |
+| `head_seq` | integer | yes |  |  |
+| `head_sha256` | string | yes |  |  |
+| `head_recorded_at_ns` | integer | yes |  |  |
+| `n_entries` | integer | yes |  |  |
+| `n_forecasts` | integer | yes |  |  |
+| `n_resolutions` | integer | yes |  |  |
+| `hash_alg` | const "sha256" | no | `"sha256"` |  |
+| `chain_rule` | string | yes |  |  |
+| `engine_version` | string | yes |  |  |
+
+**`LedgerEntryRef`** (in `qt.forecast_ledger_summary`)
+
+One appended entry, as the commit and resolve summaries list it.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `seq` | integer | yes |  |  |
+| `type` | one of "forecast", "resolution" | yes |  |  |
+| `question_id` | string | yes |  |  |
+| `forecaster` | string or null | yes |  |  |
+| `entry_sha256` | string | yes |  |  |
+
+**`LedgerProblem`** (in `qt.forecast_ledger_summary`)
+
+One integrity problem found by `verify_ledger`.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `seq` | integer or null | yes |  |  |
+| `line` | integer | yes |  |  |
+| `problem` | string | yes |  |  |
+
+### qt.forecast_scorecard
+
+File: `schemas/json/qt.forecast_scorecard.schema.json`.
+
+`qt.forecast_scorecard` (`forecast score`, `forecast_scorecard.json`).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.forecast_scorecard" | yes | `"qt.forecast_scorecard"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `run_id` | string | yes |  |  |
+| `engine_version` | string | yes |  |  |
+| `spec` | object | yes |  |  |
+| `ledger` | LedgerEcho | yes |  |  |
+| `counts` | ScoreCounts | yes |  |  |
+| `forecasters` | array of ForecasterScore | yes |  |  |
+| `comparisons` | array of Comparison | yes |  |  |
+| `rejections` | array of Rejection | yes |  |  |
+| `rejections_truncated` | boolean | yes |  |  |
+| `files` | array of FileEntry | yes |  |  |
+| `warnings` | array of string | yes |  |  |
+
+**`AnchorEcho`** (in `qt.forecast_scorecard`)
+
+One anchored commitment that was checked against the ledger.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `path` | string | yes |  |  |
+| `commitment_sha256` | string | yes |  |  |
+| `head_seq` | integer | yes |  |  |
+| `head_sha256` | string | yes |  |  |
+| `anchored_at_ns` | integer | yes |  |  |
+
+**`Calibration`** (in `qt.forecast_scorecard`)
+
+Calibration of binary forecasts (`target: binary`) or the top-label confidence of categorical ones (`target: top_label`): ECE (equal-width bins) with a cluster-bootstrap CI, its expectation and p-value under perfect calibration (outcomes resampled from the forecasts), and the Murphy decomposition (equal-count bins).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `target` | one of "binary", "top_label" | yes |  |  |
+| `n` | integer | yes |  |  |
+| `n_bins` | integer | yes |  |  |
+| `ece` | CiValue | yes |  |  |
+| `ece_if_calibrated` | number or null | yes |  |  |
+| `ece_p_value` | number or null | yes |  |  |
+| `murphy` | map of number or null | yes |  |  |
+| `bins` | array of ReliabilityBin | yes |  |  |
+
+**`CiValue`** (in `qt.forecast_scorecard`)
+
+Point estimate with a confidence interval.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `value` | number or null | yes |  |  |
+| `ci_lo` | number or null | yes |  |  |
+| `ci_hi` | number or null | yes |  |  |
+
+**`Comparison`** (in `qt.forecast_scorecard`)
+
+Paired comparison on common questions: `mean_diff` = mean loss of `reference` minus mean loss of `subject` (positive = subject better) with a cluster-bootstrap CI and two-sided p-value, `skill` = 1 - loss(subject) / loss(reference) with its CI, the DM test, and `p_holm`: the DM p-value Holm-adjusted across every comparison of the scorecard with the same kind and metric (baselines and forecaster pairs). A reference is a baseline name (`market`, `climatology`, `uniform`) or another forecaster; for forecaster pairs `lead_diff_ns` is the median over common questions of the subject's lead minus the reference's (positive = the subject committed earlier, with less information).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `subject` | string | yes |  |  |
+| `reference` | string | yes |  |  |
+| `kind` | one of "binary", "categorical", "continuous" | yes |  |  |
+| `metric` | one of "brier", "log", "spherical", "rps", "crps" | yes |  |  |
+| `n` | integer | yes |  |  |
+| `n_clusters` | integer | yes |  |  |
+| `mean_diff` | CiValue | yes |  |  |
+| `skill` | CiValue | yes |  |  |
+| `p_bootstrap` | number or null | yes |  |  |
+| `dm` | DmTest | yes |  |  |
+| `p_holm` | number or null | no | `null` |  |
+| `lead_diff_ns` | integer or null | no | `null` |  |
+
+**`DmTest`** (in `qt.forecast_scorecard`)
+
+Diebold-Mariano test of equal expected loss on per-question loss differentials ordered by resolution time: Newey-West (Bartlett) long-run variance with `lag` lags, Harvey-Leybourne-Newbold correction, Student t with `units - 1` df; two-sided. `units` is the number of questions, or of clusters when a cluster holds more than one row (then the test runs on cluster sums: CR1 at lag 0). `statistic` > 0 when the subject has the lower loss; both are null when the differences are constant but not zero, or fewer than 2 units.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `statistic` | number or null | yes |  |  |
+| `p_value` | number or null | yes |  |  |
+| `lag` | integer | yes |  |  |
+| `units` | integer | yes |  |  |
+
+**`FileEntry`** (in `qt.forecast_scorecard`)
+
+One output file: name relative to the output directory, row count for tables, size and sha256.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `name` | string | yes |  |  |
+| `rows` | integer or null | no | `null` |  |
+| `bytes` | integer | yes |  |  |
+| `sha256` | string | yes |  |  |
+
+**`ForecasterScore`** (in `qt.forecast_scorecard`)
+
+Every number for one forecaster (`n_rejected`: the leakage and validity guard; `n_anchored`: scored forecasts covered by an anchored commitment).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `forecaster` | string | yes |  |  |
+| `n_forecasts` | integer | yes |  |  |
+| `n_scored` | integer | yes |  |  |
+| `n_rejected` | integer | yes |  |  |
+| `selection` | Selection | yes |  |  |
+| `n_anchored` | integer | yes |  |  |
+| `kinds` | map of integer | yes |  |  |
+| `scores` | array of MetricScore | yes |  |  |
+| `calibration` | array of Calibration | yes |  |  |
+| `skill` | array of Comparison | yes |  |  |
+| `power` | array of PowerAnalysis | yes |  |  |
+| `pnl` | PnlResult or null | yes |  |  |
+| `median_lead_ns` | integer or null | yes |  |  |
+
+**`LedgerEcho`** (in `qt.forecast_scorecard`)
+
+The ledger that was scored, and the anchored commitments it was checked against.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `path` | string | yes |  |  |
+| `ledger_id` | string | yes |  |  |
+| `head_seq` | integer | yes |  |  |
+| `head_sha256` | string | yes |  |  |
+| `n_entries` | integer | yes |  |  |
+| `verified` | boolean | yes |  |  |
+| `anchors` | array of AnchorEcho | no |  |  |
+
+**`MetricScore`** (in `qt.forecast_scorecard`)
+
+Mean loss over the forecaster's scored questions, with a cluster-bootstrap percentile CI.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `kind` | one of "binary", "categorical", "continuous" | yes |  |  |
+| `metric` | one of "brier", "log", "spherical", "rps", "crps" | yes |  |  |
+| `n` | integer | yes |  |  |
+| `mean` | CiValue | yes |  |  |
+| `n_clipped` | integer | no | `0` |  |
+
+**`PnlResult`** (in `qt.forecast_scorecard`)
+
+Executable PnL (binary forecasts with quotes). `isolated_growth` = mean log return of each bet sized on a fresh bankroll (CI by cluster bootstrap): the per-question edge after costs. `frictionless_growth` = a full-Kelly bettor at the decision-time mid with no spread, fees, depth limit or latency, which equals the mean log-score difference against that mid. The bankroll path: `log_growth` = log(final / bankroll) (null when the bankroll is lost), `growth_per_bet` = log_growth / n_bets, `total_return`, `max_drawdown`; `path_cash_limited` is true when cash skipped or trimmed more than 10% of the candidates, and the path then describes an arbitrary subset of bets (read `isolated_growth`).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `n_candidates` | integer | yes |  |  |
+| `n_bets` | integer | yes |  |  |
+| `n_skipped` | map of integer | yes |  |  |
+| `bankroll` | number | yes |  |  |
+| `final_wealth` | number | yes |  |  |
+| `total_return` | number | yes |  |  |
+| `log_growth` | number or null | yes |  |  |
+| `growth_per_bet` | number or null | yes |  |  |
+| `isolated_growth` | CiValue | yes |  |  |
+| `frictionless_growth` | number or null | yes |  |  |
+| `max_drawdown` | number | yes |  |  |
+| `fees_paid` | number | yes |  |  |
+| `spread_paid` | number | yes |  |  |
+| `contracts` | number | yes |  |  |
+| `depth_limited` | integer | yes |  |  |
+| `cash_limited` | integer | yes |  |  |
+| `path_cash_limited` | boolean | yes |  |  |
+| `hit_rate` | number or null | yes |  |  |
+
+**`PowerAnalysis`** (in `qt.forecast_scorecard`)
+
+Resolved questions needed to detect an edge in `metric` against `reference` with a two-sided paired test at `alpha` and `power` (noncentral t, design effect from clustering): for the spec's `min_edge` (the planning number) and for the observed edge; `achieved_power` = power of the current sample against the observed edge. The observed-edge numbers are noisy estimates (post-hoc power is a function of the p-value).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `reference` | string | yes |  |  |
+| `kind` | one of "binary", "categorical", "continuous" | yes |  |  |
+| `metric` | one of "brier", "log", "spherical", "rps", "crps" | yes |  |  |
+| `n` | integer | yes |  |  |
+| `observed_edge` | number or null | yes |  |  |
+| `sd_diff` | number or null | yes |  |  |
+| `design_effect` | number | yes |  |  |
+| `achieved_power` | number or null | yes |  |  |
+| `n_required_observed` | integer or null | yes |  |  |
+| `min_edge` | number or null | yes |  |  |
+| `n_required_min_edge` | integer or null | yes |  |  |
+
+**`Rejection`** (in `qt.forecast_scorecard`)
+
+One rejected forecast entry (the first 1,000; all of them are in `forecast_eligibility.parquet`).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `seq` | integer | yes |  |  |
+| `question_id` | string | yes |  |  |
+| `forecaster` | string | yes |  |  |
+| `status` | one of "scored", "superseded", "unresolved", "void", "after_resolution_entry", "after_cutoff", "short_lead", "declared_clock", "as_of_after_commit", "kind_mismatch", "outcome_mismatch", "unanchored", "anchored_after_cutoff" | yes |  |  |
+| `detail` | string | yes |  |  |
+
+**`ReliabilityBin`** (in `qt.forecast_scorecard`)
+
+One equal-width bin of the reliability diagram: Wilson 95% interval of the observed rate and the consistency band (2.5% and 97.5% quantiles of the rate when outcomes are drawn from the forecasts).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `lo` | number | yes |  |  |
+| `hi` | number | yes |  |  |
+| `count` | integer | yes |  |  |
+| `mean_p` | number or null | yes |  |  |
+| `observed_rate` | number or null | yes |  |  |
+| `rate_lo` | number or null | yes |  |  |
+| `rate_hi` | number or null | yes |  |  |
+| `consistency_lo` | number or null | yes |  |  |
+| `consistency_hi` | number or null | yes |  |  |
+
+**`ScoreCounts`** (in `qt.forecast_scorecard`)
+
+Forecast entries by eligibility status, and resolved questions.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `forecasts` | integer | yes |  |  |
+| `by_status` | map of integer | yes |  |  |
+| `questions` | integer | yes |  |  |
+| `questions_resolved` | integer | yes |  |  |
+| `questions_void` | integer | yes |  |  |
+| `forecasters` | integer | yes |  |  |
+
+**`Selection`** (in `qt.forecast_scorecard`)
+
+What the resolutions did to one forecaster's record. Resolutions, cutoffs and voids are trusted input: whoever writes them can shape the record, so these counts make that visible. `unresolved` / `void`: forecast entries on questions with no resolution, or a void effective resolution. `voided_after_outcome`: questions of this forecaster's entries first resolved with an outcome and later corrected to void. `outcome_corrected`: questions whose scored outcome differs from the first resolution's. `cutoff_tightened`: questions whose correction moved the cutoff earlier.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `unresolved` | integer | no | `0` |  |
+| `void` | integer | no | `0` |  |
+| `voided_after_outcome` | integer | no | `0` |  |
+| `outcome_corrected` | integer | no | `0` |  |
+| `cutoff_tightened` | integer | no | `0` |  |
+
 ### qt.hazard_fit_spec
 
 File: `schemas/json/qt.hazard_fit_spec.schema.json`.
@@ -1304,7 +2545,7 @@ File: `schemas/json/qt.ingest_spec.schema.json`.
 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `format` | one of "itch", "dbn", "etcsv", "parquet", "bitstamp", "bitfinex", "coinbase", "tardis_l2", "iex_deep_plus", "coinbase_level3", "kraken_l3", "hyperliquid_node" | yes |  |  |
+| `format` | one of "itch", "dbn", "etcsv", "parquet", "bitstamp", "bitfinex", "coinbase", "tardis_l2", "iex_deep_plus", "coinbase_level3", "kraken_l3", "hyperliquid_node", "nyse_ibf" | yes |  |  |
 | `inputs` | array of PathRef or UploadRef or JobFileRef | yes |  |  |
 | `venue` | string | yes |  |  |
 | `source_venue` | string or null | no | `null` |  |
@@ -1418,7 +2659,7 @@ Data-quality counters and verdict (SPEC 5.1.5).
 | `price_exp_by_instrument` | object | yes |  |  |
 | `created_by` | string | yes |  |  |
 | `validation_status` | one of "real_data", "synthetic_only", "assumed", "fixture_only" | yes |  |  |
-| `rule_set` | one of "generic", "nasdaq", "cme", "coinbase", "crypto_l3", "iex" or null | no | `null` |  |
+| `rule_set` | one of "generic", "nasdaq", "cme", "coinbase", "crypto_l3", "iex", "nyse" or null | no | `null` |  |
 | `source_vintage` | array of SourceVintage or null | no | `null` |  |
 
 **`FeedGap`** (in `qt.ingest_summary`)
@@ -1501,7 +2742,7 @@ A service job.
 | `schema` | const "qt.job" | yes | `"qt.job"` |  |
 | `schema_version` | const 1 | yes | `1` |  |
 | `id` | string | yes |  |  |
-| `kind` | one of "ingest", "replay", "calibration", "scorecard", "report", "dataset_validate", "deletion" | yes |  |  |
+| `kind` | one of "ingest", "replay", "calibration", "scorecard", "report", "dataset_validate", "deletion", "zoo" | yes |  |  |
 | `state` | one of "queued", "running", "succeeded", "failed", "canceled", "expired" | yes |  |  |
 | `progress` | Progress | yes |  |  |
 | `resource` | ResourceRef | yes |  |  |
@@ -1555,6 +2796,436 @@ The resource a job produces or acts on.
 |---|---|---|---|---|
 | `type` | string | yes |  |  |
 | `id` | string | yes |  |  |
+
+### qt.ledger_dump
+
+File: `schemas/json/qt.ledger_dump.schema.json`.
+
+The `.json` export: the selected records with their hashes, the series they reference (by sha256, checked), and the head they were read at.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.ledger_dump" | yes | `"qt.ledger_dump"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `ledger_id` | string | yes |  |  |
+| `head` | Head | yes |  |  |
+| `filter` | LedgerFilter | yes |  |  |
+| `entries` | array of Envelope | yes |  |  |
+| `series` | map of SeriesData | no |  |  |
+
+**`CodeVersion`** (in `qt.ledger_dump`)
+
+What code produced the trial.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `queuetruth` | string | yes |  |  |
+| `engine` | string | yes |  |  |
+| `core` | string or null | no | `null` |  |
+| `git` | string or null | no | `null` |  |
+| `project_git` | string or null | no | `null` |  |
+| `user` | string or null | no | `null` |  |
+
+**`Envelope`** (in `qt.ledger_dump`)
+
+A ledger line as data: the record and its stored hash.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `hash` | string | yes |  |  |
+| `record` | LedgerRecord | yes |  |  |
+
+**`ErrorInfo`** (in `qt.ledger_dump`)
+
+The `QT-*` error of a run that failed.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `code` | string | yes |  |  |
+| `message` | string | yes |  |  |
+
+**`Head`** (in `qt.ledger_dump`)
+
+The last record of a ledger: anchor it outside the ledger (`seq:hash`) to detect a rewritten history.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `seq` | integer | yes |  |  |
+| `hash` | string | yes |  |  |
+
+**`LedgerFilter`** (in `qt.ledger_dump`)
+
+Record selection. Every set field must match; prefixes and globs are case-sensitive.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `kinds` | array of one of "genesis", "zoo", "calibrate", "calibrate-live", "fit-hazard", "score", "shadows-sample", "variant" or null | no | `null` |  |
+| `study` | string or null | no | `null` |  |
+| `name` | string or null | no | `null` |  |
+| `status` | one of "ok", "error", "all" | no | `"all"` |  |
+| `since_ns` | integer or null | no | `null` |  |
+| `until_ns` | integer or null | no | `null` |  |
+| `dataset` | string or null | no | `null` |  |
+| `run_id` | string or null | no | `null` |  |
+| `spec_hash` | string or null | no | `null` |  |
+
+**`LedgerRecord`** (in `qt.ledger_dump`)
+
+One ledger record (the `record` of a ledger line).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.ledger_record" | yes | `"qt.ledger_record"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `ledger_id` | string | yes |  |  |
+| `seq` | integer | yes |  |  |
+| `prev` | string | yes |  |  |
+| `kind` | one of "genesis", "zoo", "calibrate", "calibrate-live", "fit-hazard", "score", "shadows-sample", "variant" | yes |  |  |
+| `status` | one of "ok", "error" | yes |  |  |
+| `study` | string or null | no | `null` |  |
+| `trial_id` | string or null | no | `null` |  |
+| `run_id` | string or null | no | `null` |  |
+| `spec_hash` | string or null | no | `null` |  |
+| `dataset_hash` | string or null | no | `null` |  |
+| `inputs` | map of string | no |  |  |
+| `name` | string or null | no | `null` |  |
+| `params` | object or null | no | `null` |  |
+| `metrics` | map of number or integer or string or boolean or null | no |  |  |
+| `series` | SeriesRef or null | no | `null` |  |
+| `run_ids` | array of string | no |  |  |
+| `code` | CodeVersion or null | no | `null` |  |
+| `error` | ErrorInfo or null | no | `null` |  |
+| `note` | string or null | no | `null` |  |
+| `started_at_ns` | integer or null | no | `null` |  |
+| `recorded_at_ns` | integer | yes |  |  |
+
+**`SeriesData`** (in `qt.ledger_dump`)
+
+The values (and index) of a stored series, checked against its sha256.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `values` | array of number | yes |  |  |
+| `index` | array of integer or null | no | `null` |  |
+
+**`SeriesRef`** (in `qt.ledger_dump`)
+
+A record's series, stored out of line: the values (and index) live in `<ledger dir>/series/<sha256>.qts`, content-addressed, and the record keeps their sha256, so the hash chain covers them and counting, listing and statistics never read them.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `kind` | one of "returns", "scores" | yes |  |  |
+| `sha256` | string | yes |  |  |
+| `n_obs` | integer | yes |  |  |
+| `indexed` | boolean | yes |  |  |
+| `periods_per_year` | number or null | no | `null` |  |
+| `higher_is_better` | boolean | no | `true` |  |
+
+### qt.ledger_export
+
+File: `schemas/json/qt.ledger_export.schema.json`.
+
+`ledger export`: what was written.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.ledger_export" | yes | `"qt.ledger_export"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `ledger` | string | yes |  |  |
+| `ledger_id` | string | yes |  |  |
+| `head` | Head | yes |  |  |
+| `out` | string | yes |  |  |
+| `format` | one of "jsonl", "json", "parquet", "selection" | yes |  |  |
+| `n_records` | integer | yes |  |  |
+| `bytes` | integer | yes |  |  |
+| `sha256` | string | yes |  |  |
+
+**`Head`** (in `qt.ledger_export`)
+
+The last record of a ledger: anchor it outside the ledger (`seq:hash`) to detect a rewritten history.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `seq` | integer | yes |  |  |
+| `hash` | string | yes |  |  |
+
+### qt.ledger_list
+
+File: `schemas/json/qt.ledger_list.schema.json`.
+
+`ledger list`: the selected records, oldest first.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.ledger_list" | yes | `"qt.ledger_list"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `ledger` | string | yes |  |  |
+| `ledger_id` | string | yes |  |  |
+| `head` | Head | yes |  |  |
+| `filter` | LedgerFilter | yes |  |  |
+| `n_matching` | integer | yes |  |  |
+| `n_conflicts` | integer | yes |  |  |
+| `records` | array of LedgerRecord | yes |  |  |
+
+**`CodeVersion`** (in `qt.ledger_list`)
+
+What code produced the trial.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `queuetruth` | string | yes |  |  |
+| `engine` | string | yes |  |  |
+| `core` | string or null | no | `null` |  |
+| `git` | string or null | no | `null` |  |
+| `project_git` | string or null | no | `null` |  |
+| `user` | string or null | no | `null` |  |
+
+**`ErrorInfo`** (in `qt.ledger_list`)
+
+The `QT-*` error of a run that failed.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `code` | string | yes |  |  |
+| `message` | string | yes |  |  |
+
+**`Head`** (in `qt.ledger_list`)
+
+The last record of a ledger: anchor it outside the ledger (`seq:hash`) to detect a rewritten history.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `seq` | integer | yes |  |  |
+| `hash` | string | yes |  |  |
+
+**`LedgerFilter`** (in `qt.ledger_list`)
+
+Record selection. Every set field must match; prefixes and globs are case-sensitive.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `kinds` | array of one of "genesis", "zoo", "calibrate", "calibrate-live", "fit-hazard", "score", "shadows-sample", "variant" or null | no | `null` |  |
+| `study` | string or null | no | `null` |  |
+| `name` | string or null | no | `null` |  |
+| `status` | one of "ok", "error", "all" | no | `"all"` |  |
+| `since_ns` | integer or null | no | `null` |  |
+| `until_ns` | integer or null | no | `null` |  |
+| `dataset` | string or null | no | `null` |  |
+| `run_id` | string or null | no | `null` |  |
+| `spec_hash` | string or null | no | `null` |  |
+
+**`LedgerRecord`** (in `qt.ledger_list`)
+
+One ledger record (the `record` of a ledger line).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.ledger_record" | yes | `"qt.ledger_record"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `ledger_id` | string | yes |  |  |
+| `seq` | integer | yes |  |  |
+| `prev` | string | yes |  |  |
+| `kind` | one of "genesis", "zoo", "calibrate", "calibrate-live", "fit-hazard", "score", "shadows-sample", "variant" | yes |  |  |
+| `status` | one of "ok", "error" | yes |  |  |
+| `study` | string or null | no | `null` |  |
+| `trial_id` | string or null | no | `null` |  |
+| `run_id` | string or null | no | `null` |  |
+| `spec_hash` | string or null | no | `null` |  |
+| `dataset_hash` | string or null | no | `null` |  |
+| `inputs` | map of string | no |  |  |
+| `name` | string or null | no | `null` |  |
+| `params` | object or null | no | `null` |  |
+| `metrics` | map of number or integer or string or boolean or null | no |  |  |
+| `series` | SeriesRef or null | no | `null` |  |
+| `run_ids` | array of string | no |  |  |
+| `code` | CodeVersion or null | no | `null` |  |
+| `error` | ErrorInfo or null | no | `null` |  |
+| `note` | string or null | no | `null` |  |
+| `started_at_ns` | integer or null | no | `null` |  |
+| `recorded_at_ns` | integer | yes |  |  |
+
+**`SeriesRef`** (in `qt.ledger_list`)
+
+A record's series, stored out of line: the values (and index) live in `<ledger dir>/series/<sha256>.qts`, content-addressed, and the record keeps their sha256, so the hash chain covers them and counting, listing and statistics never read them.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `kind` | one of "returns", "scores" | yes |  |  |
+| `sha256` | string | yes |  |  |
+| `n_obs` | integer | yes |  |  |
+| `indexed` | boolean | yes |  |  |
+| `periods_per_year` | number or null | no | `null` |  |
+| `higher_is_better` | boolean | no | `true` |  |
+
+### qt.ledger_record
+
+File: `schemas/json/qt.ledger_record.schema.json`.
+
+One ledger record (the `record` of a ledger line).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.ledger_record" | yes | `"qt.ledger_record"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `ledger_id` | string | yes |  |  |
+| `seq` | integer | yes |  |  |
+| `prev` | string | yes |  |  |
+| `kind` | one of "genesis", "zoo", "calibrate", "calibrate-live", "fit-hazard", "score", "shadows-sample", "variant" | yes |  |  |
+| `status` | one of "ok", "error" | yes |  |  |
+| `study` | string or null | no | `null` |  |
+| `trial_id` | string or null | no | `null` |  |
+| `run_id` | string or null | no | `null` |  |
+| `spec_hash` | string or null | no | `null` |  |
+| `dataset_hash` | string or null | no | `null` |  |
+| `inputs` | map of string | no |  |  |
+| `name` | string or null | no | `null` |  |
+| `params` | object or null | no | `null` |  |
+| `metrics` | map of number or integer or string or boolean or null | no |  |  |
+| `series` | SeriesRef or null | no | `null` |  |
+| `run_ids` | array of string | no |  |  |
+| `code` | CodeVersion or null | no | `null` |  |
+| `error` | ErrorInfo or null | no | `null` |  |
+| `note` | string or null | no | `null` |  |
+| `started_at_ns` | integer or null | no | `null` |  |
+| `recorded_at_ns` | integer | yes |  |  |
+
+**`CodeVersion`** (in `qt.ledger_record`)
+
+What code produced the trial.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `queuetruth` | string | yes |  |  |
+| `engine` | string | yes |  |  |
+| `core` | string or null | no | `null` |  |
+| `git` | string or null | no | `null` |  |
+| `project_git` | string or null | no | `null` |  |
+| `user` | string or null | no | `null` |  |
+
+**`ErrorInfo`** (in `qt.ledger_record`)
+
+The `QT-*` error of a run that failed.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `code` | string | yes |  |  |
+| `message` | string | yes |  |  |
+
+**`SeriesRef`** (in `qt.ledger_record`)
+
+A record's series, stored out of line: the values (and index) live in `<ledger dir>/series/<sha256>.qts`, content-addressed, and the record keeps their sha256, so the hash chain covers them and counting, listing and statistics never read them.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `kind` | one of "returns", "scores" | yes |  |  |
+| `sha256` | string | yes |  |  |
+| `n_obs` | integer | yes |  |  |
+| `indexed` | boolean | yes |  |  |
+| `periods_per_year` | number or null | no | `null` |  |
+| `higher_is_better` | boolean | no | `true` |  |
+
+### qt.ledger_stats
+
+File: `schemas/json/qt.ledger_stats.schema.json`.
+
+`ledger stats`: what the filter selects.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.ledger_stats" | yes | `"qt.ledger_stats"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `ledger` | string | yes |  |  |
+| `ledger_id` | string | yes |  |  |
+| `head` | Head | yes |  |  |
+| `filter` | LedgerFilter | yes |  |  |
+| `n_records` | integer | yes |  |  |
+| `n_trials` | integer | yes |  |  |
+| `n_configs` | integer | yes |  |  |
+| `n_errors` | integer | yes |  |  |
+| `n_with_series` | integer | yes |  |  |
+| `n_conflicts` | integer | yes |  |  |
+| `n_linked` | integer | yes |  |  |
+| `by_kind` | map of KindStats | yes |  |  |
+| `by_study` | map of KindStats | yes |  |  |
+| `first_recorded_at_ns` | integer or null | yes |  |  |
+| `last_recorded_at_ns` | integer or null | yes |  |  |
+
+**`Head`** (in `qt.ledger_stats`)
+
+The last record of a ledger: anchor it outside the ledger (`seq:hash`) to detect a rewritten history.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `seq` | integer | yes |  |  |
+| `hash` | string | yes |  |  |
+
+**`KindStats`** (in `qt.ledger_stats`)
+
+Counts of one kind or study.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `records` | integer | yes |  |  |
+| `trials` | integer | yes |  |  |
+| `configs` | integer | yes |  |  |
+| `errors` | integer | yes |  |  |
+
+**`LedgerFilter`** (in `qt.ledger_stats`)
+
+Record selection. Every set field must match; prefixes and globs are case-sensitive.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `kinds` | array of one of "genesis", "zoo", "calibrate", "calibrate-live", "fit-hazard", "score", "shadows-sample", "variant" or null | no | `null` |  |
+| `study` | string or null | no | `null` |  |
+| `name` | string or null | no | `null` |  |
+| `status` | one of "ok", "error", "all" | no | `"all"` |  |
+| `since_ns` | integer or null | no | `null` |  |
+| `until_ns` | integer or null | no | `null` |  |
+| `dataset` | string or null | no | `null` |  |
+| `run_id` | string or null | no | `null` |  |
+| `spec_hash` | string or null | no | `null` |  |
+
+### qt.ledger_verification
+
+File: `schemas/json/qt.ledger_verification.schema.json`.
+
+`ledger verify`: the full integrity check of a ledger file.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.ledger_verification" | yes | `"qt.ledger_verification"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `ledger` | string | yes |  |  |
+| `ok` | boolean | yes |  |  |
+| `ledger_id` | string or null | yes |  |  |
+| `n_records` | integer | yes |  |  |
+| `head` | Head or null | yes |  |  |
+| `uncommitted_tail_bytes` | integer | yes |  |  |
+| `anchor` | string or null | no | `null` |  |
+| `anchor_ok` | boolean or null | no | `null` |  |
+| `problems` | array of Problem | yes |  |  |
+| `n_problems` | integer | yes |  |  |
+
+**`Head`** (in `qt.ledger_verification`)
+
+The last record of a ledger: anchor it outside the ledger (`seq:hash`) to detect a rewritten history.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `seq` | integer | yes |  |  |
+| `hash` | string | yes |  |  |
+
+**`Problem`** (in `qt.ledger_verification`)
+
+One integrity problem found by `verify`.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `line` | integer | yes |  |  |
+| `seq` | integer or null | no | `null` |  |
+| `reason` | one of "malformed", "hash_mismatch", "not_canonical", "invalid_record", "seq_gap", "broken_link", "ledger_id_mismatch", "genesis", "anchor_mismatch", "series_missing", "series_mismatch" | yes |  |  |
+| `message` | string | yes |  |  |
 
 ### qt.live_calibration_spec
 
@@ -2480,6 +4151,1024 @@ Summary of `report`.
 | `bytes` | integer | yes |  |  |
 | `sha256` | string | yes |  |  |
 
+### qt.sandbox_ack
+
+File: `schemas/json/qt.sandbox_ack.schema.json`.
+
+`submit` / `cancel` result: the order as now known and the receipt of the committed log entry.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.sandbox_ack" | yes | `"qt.sandbox_ack"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `action` | one of "submit", "cancel" | yes |  |  |
+| `clock_ns` | integer | yes |  |  |
+| `order` | OrderView | yes |  |  |
+| `duplicate` | boolean | yes |  |  |
+| `log_seq` | integer | yes |  |  |
+| `log_hash` | string | yes |  |  |
+| `warnings` | array of string | yes |  |  |
+
+**`OrderView`** (in `qt.sandbox_ack`)
+
+An order as the agent knows it at the visible cut. `pending` = sent, not yet confirmed at the venue (the first market event after its arrival confirms it, SPEC 5.2.1); `working` = resting (queue fields set); `expired` = still open at the end of the data; `censored` = the venue cleared the book or the feed had a gap.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `order_id` | string | yes |  |  |
+| `client_order_id` | string or null | yes |  |  |
+| `side` | one of "buy", "sell" | yes |  |  |
+| `type` | one of "limit", "market" | yes |  |  |
+| `tif` | one of "day", "ioc" | yes |  |  |
+| `price` | integer or null | yes |  |  |
+| `peg_offset_ticks` | integer or null | yes |  |  |
+| `qty` | integer | yes |  |  |
+| `filled_qty` | integer | yes |  |  |
+| `leaves_qty` | integer | yes |  |  |
+| `status` | one of "pending", "working", "filled", "cancelled", "rejected", "expired", "censored" | yes |  |  |
+| `reason` | string or null | yes |  |  |
+| `ts_submit` | integer | yes |  |  |
+| `ts_activated` | integer or null | yes |  |  |
+| `ts_done` | integer or null | yes |  |  |
+| `queue_ahead` | integer or null | yes |  |  |
+| `rank` | integer or null | yes |  |  |
+| `level_qty` | integer or null | yes |  |  |
+| `cancel_sent_ns` | integer or null | yes |  |  |
+| `n_fills` | integer | yes |  |  |
+| `avg_fill_price` | number or null | yes |  |  |
+
+### qt.sandbox_finish
+
+File: `schemas/json/qt.sandbox_finish.schema.json`.
+
+`qt_sandbox_finish` result: the scorecard without its per-order and per-fill arrays (so a tool result stays small however long the episode), with the counts of orders and fills and the certificate; the full scorecard and order log are files the server wrote (`out_dir`, `files`) or, on request, inline (`scorecard`).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.sandbox_finish" | yes | `"qt.sandbox_finish"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `session_id` | string or null | yes |  |  |
+| `run_id` | string | yes |  |  |
+| `spec_id` | string | yes |  |  |
+| `engine_version` | string | yes |  |  |
+| `dataset_id` | string | yes |  |  |
+| `instrument` | InstrumentInfo | yes |  |  |
+| `start_ns` | integer | yes |  |  |
+| `end_ns` | integer | yes |  |  |
+| `finish_ns` | integer | yes |  |  |
+| `steps` | integer | yes |  |  |
+| `n_orders` | integer | yes |  |  |
+| `n_fills` | integer | yes |  |  |
+| `n_fills_maker` | integer | yes |  |  |
+| `pnl` | PnLView | yes |  |  |
+| `fill_rates` | array of FillRateRow | yes |  |  |
+| `markouts` | array of MarkoutRow | yes |  |  |
+| `adverse_selection` | array of AdverseSelection | yes |  |  |
+| `execution_cost` | ExecutionCost | yes |  |  |
+| `consistency` | Consistency | yes |  |  |
+| `diagnostics` | Diagnostics | yes |  |  |
+| `data_quality` | string | yes |  |  |
+| `warnings` | array of string | yes |  |  |
+| `certificate` | Certificate | yes |  |  |
+| `out_dir` | string or null | yes |  |  |
+| `files` | array of FileEntry | yes |  |  |
+| `scorecard` | SandboxScorecard or null | yes |  |  |
+
+**`AdverseSelection`** (in `qt.sandbox_finish`)
+
+Adverse selection of passive (maker) fills at each horizon: `cost_ccy = -sum(maker mo_ccy)` (positive = the market moved against your resting orders after they filled) and the share of maker fills with a negative markout.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `horizon_ns` | integer | yes |  |  |
+| `n_maker_fills` | integer | yes |  |  |
+| `cost_ccy` | number or null | yes |  |  |
+| `mean_ticks` | number or null | yes |  |  |
+| `adverse_fraction` | number or null | yes |  |  |
+
+**`Certificate`** (in `qt.sandbox_finish`)
+
+What a third party needs to recompute this scorecard: the dataset, the engine, the spec identity and the root of the committed log; `scorecard_sha256` covers the scorecard without `certificate`, `timings` and `files`.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `dataset_id` | string | yes |  |  |
+| `engine_version` | string | yes |  |  |
+| `spec_id` | string | yes |  |  |
+| `log_root` | string | yes |  |  |
+| `run_id` | string | yes |  |  |
+| `scorecard_sha256` | string | yes |  |  |
+
+**`Consistency`** (in `qt.sandbox_finish`)
+
+Runtime proof that the step-by-step session equals one exact replay of the committed orders: every fill reported during the session is a row of the single full replay (all columns equal), every fill of that replay that was knowable by the last visible cut was reported, at the step whose cut first covered it, and every order was shown working and shown ended at the steps whose cuts first covered its activation and the event that decided its end, with the replay's end (`statuses_mismatched` counts the orders where any of this differs).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `method` | string | yes |  |  |
+| `steps` | integer | yes |  |  |
+| `window_replays` | integer | yes |  |  |
+| `fills_reported` | integer | yes |  |  |
+| `fills_matched` | integer | yes |  |  |
+| `fills_unreported` | integer | yes |  |  |
+| `fills_misattributed` | integer | yes |  |  |
+| `fills_after_last_cut` | integer | yes |  |  |
+| `statuses_checked` | integer | yes |  |  |
+| `statuses_mismatched` | integer | yes |  |  |
+| `timestamps_monotone` | boolean | yes |  |  |
+| `equal` | boolean | yes |  |  |
+
+**`Diagnostics`** (in `qt.sandbox_finish`)
+
+Simulation limits made visible: your orders never see each other (SPEC 1.2), so two of them working at the same price both assume the full queue, taker fills in one event can take the same displayed size twice, and a buy and a sell at crossing prices would have traded with each other.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `same_price_overlaps` | integer | yes |  |  |
+| `taker_same_event_overlaps` | integer | yes |  |  |
+| `self_cross_pairs` | integer | yes |  |  |
+| `out_of_session_orders` | integer | yes |  |  |
+| `rejected_instructions` | integer | yes |  |  |
+
+**`ExecutionCost`** (in `qt.sandbox_finish`)
+
+Execution versus the mid you saw when you decided: `edge_ccy = sum d (mid_decision - P) q` (positive = you bought below / sold above that mid), by liquidity, over fills whose decision-time mid existed.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `n_fills` | integer | yes |  |  |
+| `edge_ccy` | number or null | yes |  |  |
+| `edge_maker_ccy` | number or null | yes |  |  |
+| `edge_taker_ccy` | number or null | yes |  |  |
+| `mean_edge_ticks` | number or null | yes |  |  |
+
+**`FileEntry`** (in `qt.sandbox_finish`)
+
+One output file: name relative to the output directory, row count for tables, size and sha256.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `name` | string | yes |  |  |
+| `rows` | integer or null | no | `null` |  |
+| `bytes` | integer | yes |  |  |
+| `sha256` | string | yes |  |  |
+
+**`FillRateRow`** (in `qt.sandbox_finish`)
+
+Fill rates of one order class over the orders that reached the venue (`n_live`).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `order_class` | one of "passive_limit", "marketable_limit", "ioc_limit", "market", "all" | yes |  |  |
+| `n_orders` | integer | yes |  |  |
+| `n_live` | integer | yes |  |  |
+| `n_any_fill` | integer | yes |  |  |
+| `n_full_fill` | integer | yes |  |  |
+| `qty_live` | integer | yes |  |  |
+| `filled_qty` | integer | yes |  |  |
+| `rate_any` | number or null | yes |  |  |
+| `rate_full` | number or null | yes |  |  |
+| `rate_qty` | number or null | yes |  |  |
+| `median_ttf_ns` | integer or null | yes |  |  |
+
+**`FillView`** (in `qt.sandbox_finish`)
+
+One fill of one of your orders (a `qt.shadow_fills` row). `ts_known` = when the sandbox could know it: the fill's event, or for an arrival (taker) fill the first event after arrival. `step` = the step that reported it (null: after the session's last visible cut, reported only by the scorecard).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `order_id` | string | yes |  |  |
+| `fill_seq` | integer | yes |  |  |
+| `ts_event` | integer | yes |  |  |
+| `ts_known` | integer | yes |  |  |
+| `side` | one of "buy", "sell" | yes |  |  |
+| `price` | integer | yes |  |  |
+| `qty` | integer | yes |  |  |
+| `liquidity` | one of "maker", "taker" | yes |  |  |
+| `reason` | one of "queue_depleted", "trade_through", "crossed", "crossed_at_live" | yes |  |  |
+| `queue_ahead_before` | integer | yes |  |  |
+| `fee` | number | yes |  |  |
+| `step` | integer or null | yes |  |  |
+
+**`InstrumentInfo`** (in `qt.sandbox_finish`)
+
+The traded instrument-day (`qt.instruments` row) with the session open and close as absolute ns.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `instrument_id` | integer | yes |  |  |
+| `symbol` | string | yes |  |  |
+| `session_date` | string | yes |  |  |
+| `venue` | string | yes |  |  |
+| `rule_set` | string | yes |  |  |
+| `tick_size` | integer | yes |  |  |
+| `lot_size` | integer | yes |  |  |
+| `price_exp` | integer | yes |  |  |
+| `size_exp` | integer | yes |  |  |
+| `contract_multiplier` | number | yes |  |  |
+| `currency` | string | yes |  |  |
+| `session_tz` | string | yes |  |  |
+| `midnight_utc_ns` | integer | yes |  |  |
+| `open_ns` | integer | yes |  |  |
+| `close_ns` | integer | yes |  |  |
+
+**`MarkoutRow`** (in `qt.sandbox_finish`)
+
+Markouts at one horizon over fills of one liquidity (`all`, `maker`, `taker`): counts, means and the total in currency. `n_adverse` counts fills whose markout is negative (the price moved against you).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `horizon_ns` | integer | yes |  |  |
+| `liquidity` | one of "all", "maker", "taker" | yes |  |  |
+| `n` | integer | yes |  |  |
+| `n_null` | integer | yes |  |  |
+| `mean_ticks` | number or null | yes |  |  |
+| `mean_bps` | number or null | yes |  |  |
+| `total_ccy` | number or null | yes |  |  |
+| `n_adverse` | integer | yes |  |  |
+
+**`OrderView`** (in `qt.sandbox_finish`)
+
+An order as the agent knows it at the visible cut. `pending` = sent, not yet confirmed at the venue (the first market event after its arrival confirms it, SPEC 5.2.1); `working` = resting (queue fields set); `expired` = still open at the end of the data; `censored` = the venue cleared the book or the feed had a gap.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `order_id` | string | yes |  |  |
+| `client_order_id` | string or null | yes |  |  |
+| `side` | one of "buy", "sell" | yes |  |  |
+| `type` | one of "limit", "market" | yes |  |  |
+| `tif` | one of "day", "ioc" | yes |  |  |
+| `price` | integer or null | yes |  |  |
+| `peg_offset_ticks` | integer or null | yes |  |  |
+| `qty` | integer | yes |  |  |
+| `filled_qty` | integer | yes |  |  |
+| `leaves_qty` | integer | yes |  |  |
+| `status` | one of "pending", "working", "filled", "cancelled", "rejected", "expired", "censored" | yes |  |  |
+| `reason` | string or null | yes |  |  |
+| `ts_submit` | integer | yes |  |  |
+| `ts_activated` | integer or null | yes |  |  |
+| `ts_done` | integer or null | yes |  |  |
+| `queue_ahead` | integer or null | yes |  |  |
+| `rank` | integer or null | yes |  |  |
+| `level_qty` | integer or null | yes |  |  |
+| `cancel_sent_ns` | integer or null | yes |  |  |
+| `n_fills` | integer | yes |  |  |
+| `avg_fill_price` | number or null | yes |  |  |
+
+**`PnLView`** (in `qt.sandbox_finish`)
+
+Episode PnL: cash flows of every fill (including fills while the final cancels were in flight), the end position marked at the mid at `mark_ns` (else the last print), fees by liquidity, and the conservative mark at the touch (long at the bid, short at the ask).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `currency` | string | yes |  |  |
+| `position_end` | integer | yes |  |  |
+| `bought_qty` | integer | yes |  |  |
+| `sold_qty` | integer | yes |  |  |
+| `cash` | number | yes |  |  |
+| `mark_ns` | integer | yes |  |  |
+| `mark_price` | number or null | yes |  |  |
+| `mark_source` | one of "mid", "last_trade" or null | yes |  |  |
+| `pnl_gross` | number or null | yes |  |  |
+| `fees` | number | yes |  |  |
+| `fees_maker` | number | yes |  |  |
+| `fees_taker` | number | yes |  |  |
+| `pnl_net` | number or null | yes |  |  |
+| `pnl_net_at_touch` | number or null | yes |  |  |
+| `notional_traded` | number | yes |  |  |
+
+**`SandboxScorecard`** (in `qt.sandbox_finish`)
+
+`finish` result: PnL after fees, fill rates, markouts and adverse selection, the final orders and fills, the runtime consistency proof and the certificate.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.sandbox_scorecard" | yes | `"qt.sandbox_scorecard"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `run_id` | string | yes |  |  |
+| `spec_id` | string | yes |  |  |
+| `engine_version` | string | yes |  |  |
+| `dataset_id` | string | yes |  |  |
+| `instrument` | InstrumentInfo | yes |  |  |
+| `start_ns` | integer | yes |  |  |
+| `end_ns` | integer | yes |  |  |
+| `finish_ns` | integer | yes |  |  |
+| `steps` | integer | yes |  |  |
+| `orders` | array of OrderView | yes |  |  |
+| `fills` | array of FillView | yes |  |  |
+| `fill_rates` | array of FillRateRow | yes |  |  |
+| `pnl` | PnLView | yes |  |  |
+| `markouts` | array of MarkoutRow | yes |  |  |
+| `adverse_selection` | array of AdverseSelection | yes |  |  |
+| `execution_cost` | ExecutionCost | yes |  |  |
+| `consistency` | Consistency | yes |  |  |
+| `diagnostics` | Diagnostics | yes |  |  |
+| `data_quality` | string | yes |  |  |
+| `warnings` | array of string | yes |  |  |
+| `certificate` | Certificate | yes |  |  |
+| `timings` | map of number | yes |  |  |
+| `files` | array of FileEntry | yes |  |  |
+
+### qt.sandbox_observation
+
+File: `schemas/json/qt.sandbox_observation.schema.json`.
+
+What the agent sees after `open`, `observe` or `advance`: the market and its own orders at the visible cut, and what happened since the previous step (prints, fills, markouts that became computable).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.sandbox_observation" | yes | `"qt.sandbox_observation"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `step` | integer | yes |  |  |
+| `clock_ns` | integer | yes |  |  |
+| `visible_ns` | integer | yes |  |  |
+| `time_local` | string | yes |  |  |
+| `done` | boolean | yes |  |  |
+| `book` | BookState | yes |  |  |
+| `trades` | array of TradeView | yes |  |  |
+| `trades_since_last` | TradeStats | yes |  |  |
+| `session_trades` | TradeStats | yes |  |  |
+| `orders` | array of OrderView | yes |  |  |
+| `n_orders` | integer | yes |  |  |
+| `n_open` | integer | yes |  |  |
+| `fills` | array of FillView | yes |  |  |
+| `markouts` | array of MarkoutView | yes |  |  |
+| `position` | PositionView | yes |  |  |
+| `warnings` | array of string | yes |  |  |
+
+**`BookState`** (in `qt.sandbox_observation`)
+
+The displayed book at the visible cut: best levels and the top `depth_levels` per side as `[price, size, count]`, best first. `ts_event` = time of the last event in view.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `ts_event` | integer or null | yes |  |  |
+| `bid` | array of any or null | yes |  |  |
+| `ask` | array of any or null | yes |  |  |
+| `bids` | array of array of any | yes |  |  |
+| `asks` | array of array of any | yes |  |  |
+| `spread_ticks` | integer or null | yes |  |  |
+
+**`FillView`** (in `qt.sandbox_observation`)
+
+One fill of one of your orders (a `qt.shadow_fills` row). `ts_known` = when the sandbox could know it: the fill's event, or for an arrival (taker) fill the first event after arrival. `step` = the step that reported it (null: after the session's last visible cut, reported only by the scorecard).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `order_id` | string | yes |  |  |
+| `fill_seq` | integer | yes |  |  |
+| `ts_event` | integer | yes |  |  |
+| `ts_known` | integer | yes |  |  |
+| `side` | one of "buy", "sell" | yes |  |  |
+| `price` | integer | yes |  |  |
+| `qty` | integer | yes |  |  |
+| `liquidity` | one of "maker", "taker" | yes |  |  |
+| `reason` | one of "queue_depleted", "trade_through", "crossed", "crossed_at_live" | yes |  |  |
+| `queue_ahead_before` | integer | yes |  |  |
+| `fee` | number | yes |  |  |
+| `step` | integer or null | yes |  |  |
+
+**`MarkoutView`** (in `qt.sandbox_observation`)
+
+Markout of one fill at one horizon against the mid (SPEC 5.7.5): `d (mid(t+h) - P)` in ticks, basis points and currency (positive = the fill was good for you). Listed once `t + h` is visible.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `order_id` | string | yes |  |  |
+| `fill_seq` | integer | yes |  |  |
+| `horizon_ns` | integer | yes |  |  |
+| `mo_ticks` | number or null | yes |  |  |
+| `mo_bps` | number or null | yes |  |  |
+| `mo_ccy` | number or null | yes |  |  |
+
+**`OrderView`** (in `qt.sandbox_observation`)
+
+An order as the agent knows it at the visible cut. `pending` = sent, not yet confirmed at the venue (the first market event after its arrival confirms it, SPEC 5.2.1); `working` = resting (queue fields set); `expired` = still open at the end of the data; `censored` = the venue cleared the book or the feed had a gap.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `order_id` | string | yes |  |  |
+| `client_order_id` | string or null | yes |  |  |
+| `side` | one of "buy", "sell" | yes |  |  |
+| `type` | one of "limit", "market" | yes |  |  |
+| `tif` | one of "day", "ioc" | yes |  |  |
+| `price` | integer or null | yes |  |  |
+| `peg_offset_ticks` | integer or null | yes |  |  |
+| `qty` | integer | yes |  |  |
+| `filled_qty` | integer | yes |  |  |
+| `leaves_qty` | integer | yes |  |  |
+| `status` | one of "pending", "working", "filled", "cancelled", "rejected", "expired", "censored" | yes |  |  |
+| `reason` | string or null | yes |  |  |
+| `ts_submit` | integer | yes |  |  |
+| `ts_activated` | integer or null | yes |  |  |
+| `ts_done` | integer or null | yes |  |  |
+| `queue_ahead` | integer or null | yes |  |  |
+| `rank` | integer or null | yes |  |  |
+| `level_qty` | integer or null | yes |  |  |
+| `cancel_sent_ns` | integer or null | yes |  |  |
+| `n_fills` | integer | yes |  |  |
+| `avg_fill_price` | number or null | yes |  |  |
+
+**`PositionView`** (in `qt.sandbox_observation`)
+
+Position (size units, signed), cash and fees (currency) from the fills so far, marked at `mark_price` (the mid at the visible cut, else the last print). `pnl_gross = cash + position * mark`, `pnl_net = pnl_gross - fees`.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `qty` | integer | yes |  |  |
+| `bought_qty` | integer | yes |  |  |
+| `sold_qty` | integer | yes |  |  |
+| `cash` | number | yes |  |  |
+| `fees` | number | yes |  |  |
+| `mark_price` | number or null | yes |  |  |
+| `mark_source` | one of "mid", "last_trade" or null | yes |  |  |
+| `pnl_gross` | number or null | yes |  |  |
+| `pnl_net` | number or null | yes |  |  |
+| `currency` | string | yes |  |  |
+
+**`TradeStats`** (in `qt.sandbox_observation`)
+
+Prints over an interval: count, volume (size units), `vwap_price` (a real price, float), high/low/last (raw fixed-point prices, like every other price field).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `n` | integer | yes |  |  |
+| `volume` | integer | yes |  |  |
+| `vwap_price` | number or null | yes |  |  |
+| `high` | integer or null | yes |  |  |
+| `low` | integer or null | yes |  |  |
+| `last` | integer or null | yes |  |  |
+| `first_ts` | integer or null | yes |  |  |
+| `last_ts` | integer or null | yes |  |  |
+
+**`TradeView`** (in `qt.sandbox_observation`)
+
+One print (`T` record): aggressor side `B`/`A`, or `N` (none); kind as in `qt.trades`.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `ts_event` | integer | yes |  |  |
+| `price` | integer | yes |  |  |
+| `size` | integer | yes |  |  |
+| `aggressor` | one of "B", "A", "N" | yes |  |  |
+| `kind` | one of "displayed", "hidden", "cross" | yes |  |  |
+
+### qt.sandbox_order_log
+
+File: `schemas/json/qt.sandbox_order_log.schema.json`.
+
+The committed order log of an episode: every instruction in order with the information set it was made on, hash-chained; `root` = the last entry's hash.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.sandbox_order_log" | yes | `"qt.sandbox_order_log"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `engine_version` | string | yes |  |  |
+| `dataset_id` | string | yes |  |  |
+| `spec_id` | string | yes |  |  |
+| `spec` | object | yes |  |  |
+| `entries` | array of LogEntry | yes |  |  |
+| `root` | string | yes |  |  |
+
+**`LogEntry`** (in `qt.sandbox_order_log`)
+
+One committed log entry. `clock_ns` = the agent's clock when it acted, `visible_ns` / `rows_seen` = the data it had seen (the visible cut and the number of source records at or before it); `data` holds the instruction (submit, cancel), the error (reject) or the digest of what the step reported (advance, finish). `hash = sha256(canonical_json(entry without hash))`, chained through `prev`.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `seq` | integer | yes |  |  |
+| `kind` | one of "open", "submit", "cancel", "reject", "advance", "finish" | yes |  |  |
+| `clock_ns` | integer | yes |  |  |
+| `visible_ns` | integer | yes |  |  |
+| `rows_seen` | integer | yes |  |  |
+| `data` | object | yes |  |  |
+| `prev` | string | yes |  |  |
+| `hash` | string | yes |  |  |
+
+### qt.sandbox_scorecard
+
+File: `schemas/json/qt.sandbox_scorecard.schema.json`.
+
+`finish` result: PnL after fees, fill rates, markouts and adverse selection, the final orders and fills, the runtime consistency proof and the certificate.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.sandbox_scorecard" | yes | `"qt.sandbox_scorecard"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `run_id` | string | yes |  |  |
+| `spec_id` | string | yes |  |  |
+| `engine_version` | string | yes |  |  |
+| `dataset_id` | string | yes |  |  |
+| `instrument` | InstrumentInfo | yes |  |  |
+| `start_ns` | integer | yes |  |  |
+| `end_ns` | integer | yes |  |  |
+| `finish_ns` | integer | yes |  |  |
+| `steps` | integer | yes |  |  |
+| `orders` | array of OrderView | yes |  |  |
+| `fills` | array of FillView | yes |  |  |
+| `fill_rates` | array of FillRateRow | yes |  |  |
+| `pnl` | PnLView | yes |  |  |
+| `markouts` | array of MarkoutRow | yes |  |  |
+| `adverse_selection` | array of AdverseSelection | yes |  |  |
+| `execution_cost` | ExecutionCost | yes |  |  |
+| `consistency` | Consistency | yes |  |  |
+| `diagnostics` | Diagnostics | yes |  |  |
+| `data_quality` | string | yes |  |  |
+| `warnings` | array of string | yes |  |  |
+| `certificate` | Certificate | yes |  |  |
+| `timings` | map of number | yes |  |  |
+| `files` | array of FileEntry | yes |  |  |
+
+**`AdverseSelection`** (in `qt.sandbox_scorecard`)
+
+Adverse selection of passive (maker) fills at each horizon: `cost_ccy = -sum(maker mo_ccy)` (positive = the market moved against your resting orders after they filled) and the share of maker fills with a negative markout.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `horizon_ns` | integer | yes |  |  |
+| `n_maker_fills` | integer | yes |  |  |
+| `cost_ccy` | number or null | yes |  |  |
+| `mean_ticks` | number or null | yes |  |  |
+| `adverse_fraction` | number or null | yes |  |  |
+
+**`Certificate`** (in `qt.sandbox_scorecard`)
+
+What a third party needs to recompute this scorecard: the dataset, the engine, the spec identity and the root of the committed log; `scorecard_sha256` covers the scorecard without `certificate`, `timings` and `files`.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `dataset_id` | string | yes |  |  |
+| `engine_version` | string | yes |  |  |
+| `spec_id` | string | yes |  |  |
+| `log_root` | string | yes |  |  |
+| `run_id` | string | yes |  |  |
+| `scorecard_sha256` | string | yes |  |  |
+
+**`Consistency`** (in `qt.sandbox_scorecard`)
+
+Runtime proof that the step-by-step session equals one exact replay of the committed orders: every fill reported during the session is a row of the single full replay (all columns equal), every fill of that replay that was knowable by the last visible cut was reported, at the step whose cut first covered it, and every order was shown working and shown ended at the steps whose cuts first covered its activation and the event that decided its end, with the replay's end (`statuses_mismatched` counts the orders where any of this differs).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `method` | string | yes |  |  |
+| `steps` | integer | yes |  |  |
+| `window_replays` | integer | yes |  |  |
+| `fills_reported` | integer | yes |  |  |
+| `fills_matched` | integer | yes |  |  |
+| `fills_unreported` | integer | yes |  |  |
+| `fills_misattributed` | integer | yes |  |  |
+| `fills_after_last_cut` | integer | yes |  |  |
+| `statuses_checked` | integer | yes |  |  |
+| `statuses_mismatched` | integer | yes |  |  |
+| `timestamps_monotone` | boolean | yes |  |  |
+| `equal` | boolean | yes |  |  |
+
+**`Diagnostics`** (in `qt.sandbox_scorecard`)
+
+Simulation limits made visible: your orders never see each other (SPEC 1.2), so two of them working at the same price both assume the full queue, taker fills in one event can take the same displayed size twice, and a buy and a sell at crossing prices would have traded with each other.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `same_price_overlaps` | integer | yes |  |  |
+| `taker_same_event_overlaps` | integer | yes |  |  |
+| `self_cross_pairs` | integer | yes |  |  |
+| `out_of_session_orders` | integer | yes |  |  |
+| `rejected_instructions` | integer | yes |  |  |
+
+**`ExecutionCost`** (in `qt.sandbox_scorecard`)
+
+Execution versus the mid you saw when you decided: `edge_ccy = sum d (mid_decision - P) q` (positive = you bought below / sold above that mid), by liquidity, over fills whose decision-time mid existed.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `n_fills` | integer | yes |  |  |
+| `edge_ccy` | number or null | yes |  |  |
+| `edge_maker_ccy` | number or null | yes |  |  |
+| `edge_taker_ccy` | number or null | yes |  |  |
+| `mean_edge_ticks` | number or null | yes |  |  |
+
+**`FileEntry`** (in `qt.sandbox_scorecard`)
+
+One output file: name relative to the output directory, row count for tables, size and sha256.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `name` | string | yes |  |  |
+| `rows` | integer or null | no | `null` |  |
+| `bytes` | integer | yes |  |  |
+| `sha256` | string | yes |  |  |
+
+**`FillRateRow`** (in `qt.sandbox_scorecard`)
+
+Fill rates of one order class over the orders that reached the venue (`n_live`).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `order_class` | one of "passive_limit", "marketable_limit", "ioc_limit", "market", "all" | yes |  |  |
+| `n_orders` | integer | yes |  |  |
+| `n_live` | integer | yes |  |  |
+| `n_any_fill` | integer | yes |  |  |
+| `n_full_fill` | integer | yes |  |  |
+| `qty_live` | integer | yes |  |  |
+| `filled_qty` | integer | yes |  |  |
+| `rate_any` | number or null | yes |  |  |
+| `rate_full` | number or null | yes |  |  |
+| `rate_qty` | number or null | yes |  |  |
+| `median_ttf_ns` | integer or null | yes |  |  |
+
+**`FillView`** (in `qt.sandbox_scorecard`)
+
+One fill of one of your orders (a `qt.shadow_fills` row). `ts_known` = when the sandbox could know it: the fill's event, or for an arrival (taker) fill the first event after arrival. `step` = the step that reported it (null: after the session's last visible cut, reported only by the scorecard).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `order_id` | string | yes |  |  |
+| `fill_seq` | integer | yes |  |  |
+| `ts_event` | integer | yes |  |  |
+| `ts_known` | integer | yes |  |  |
+| `side` | one of "buy", "sell" | yes |  |  |
+| `price` | integer | yes |  |  |
+| `qty` | integer | yes |  |  |
+| `liquidity` | one of "maker", "taker" | yes |  |  |
+| `reason` | one of "queue_depleted", "trade_through", "crossed", "crossed_at_live" | yes |  |  |
+| `queue_ahead_before` | integer | yes |  |  |
+| `fee` | number | yes |  |  |
+| `step` | integer or null | yes |  |  |
+
+**`InstrumentInfo`** (in `qt.sandbox_scorecard`)
+
+The traded instrument-day (`qt.instruments` row) with the session open and close as absolute ns.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `instrument_id` | integer | yes |  |  |
+| `symbol` | string | yes |  |  |
+| `session_date` | string | yes |  |  |
+| `venue` | string | yes |  |  |
+| `rule_set` | string | yes |  |  |
+| `tick_size` | integer | yes |  |  |
+| `lot_size` | integer | yes |  |  |
+| `price_exp` | integer | yes |  |  |
+| `size_exp` | integer | yes |  |  |
+| `contract_multiplier` | number | yes |  |  |
+| `currency` | string | yes |  |  |
+| `session_tz` | string | yes |  |  |
+| `midnight_utc_ns` | integer | yes |  |  |
+| `open_ns` | integer | yes |  |  |
+| `close_ns` | integer | yes |  |  |
+
+**`MarkoutRow`** (in `qt.sandbox_scorecard`)
+
+Markouts at one horizon over fills of one liquidity (`all`, `maker`, `taker`): counts, means and the total in currency. `n_adverse` counts fills whose markout is negative (the price moved against you).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `horizon_ns` | integer | yes |  |  |
+| `liquidity` | one of "all", "maker", "taker" | yes |  |  |
+| `n` | integer | yes |  |  |
+| `n_null` | integer | yes |  |  |
+| `mean_ticks` | number or null | yes |  |  |
+| `mean_bps` | number or null | yes |  |  |
+| `total_ccy` | number or null | yes |  |  |
+| `n_adverse` | integer | yes |  |  |
+
+**`OrderView`** (in `qt.sandbox_scorecard`)
+
+An order as the agent knows it at the visible cut. `pending` = sent, not yet confirmed at the venue (the first market event after its arrival confirms it, SPEC 5.2.1); `working` = resting (queue fields set); `expired` = still open at the end of the data; `censored` = the venue cleared the book or the feed had a gap.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `order_id` | string | yes |  |  |
+| `client_order_id` | string or null | yes |  |  |
+| `side` | one of "buy", "sell" | yes |  |  |
+| `type` | one of "limit", "market" | yes |  |  |
+| `tif` | one of "day", "ioc" | yes |  |  |
+| `price` | integer or null | yes |  |  |
+| `peg_offset_ticks` | integer or null | yes |  |  |
+| `qty` | integer | yes |  |  |
+| `filled_qty` | integer | yes |  |  |
+| `leaves_qty` | integer | yes |  |  |
+| `status` | one of "pending", "working", "filled", "cancelled", "rejected", "expired", "censored" | yes |  |  |
+| `reason` | string or null | yes |  |  |
+| `ts_submit` | integer | yes |  |  |
+| `ts_activated` | integer or null | yes |  |  |
+| `ts_done` | integer or null | yes |  |  |
+| `queue_ahead` | integer or null | yes |  |  |
+| `rank` | integer or null | yes |  |  |
+| `level_qty` | integer or null | yes |  |  |
+| `cancel_sent_ns` | integer or null | yes |  |  |
+| `n_fills` | integer | yes |  |  |
+| `avg_fill_price` | number or null | yes |  |  |
+
+**`PnLView`** (in `qt.sandbox_scorecard`)
+
+Episode PnL: cash flows of every fill (including fills while the final cancels were in flight), the end position marked at the mid at `mark_ns` (else the last print), fees by liquidity, and the conservative mark at the touch (long at the bid, short at the ask).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `currency` | string | yes |  |  |
+| `position_end` | integer | yes |  |  |
+| `bought_qty` | integer | yes |  |  |
+| `sold_qty` | integer | yes |  |  |
+| `cash` | number | yes |  |  |
+| `mark_ns` | integer | yes |  |  |
+| `mark_price` | number or null | yes |  |  |
+| `mark_source` | one of "mid", "last_trade" or null | yes |  |  |
+| `pnl_gross` | number or null | yes |  |  |
+| `fees` | number | yes |  |  |
+| `fees_maker` | number | yes |  |  |
+| `fees_taker` | number | yes |  |  |
+| `pnl_net` | number or null | yes |  |  |
+| `pnl_net_at_touch` | number or null | yes |  |  |
+| `notional_traded` | number | yes |  |  |
+
+### qt.sandbox_session
+
+File: `schemas/json/qt.sandbox_session.schema.json`.
+
+`open` result: the episode, the instrument, the rules of the simulation and the first observation.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.sandbox_session" | yes | `"qt.sandbox_session"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `session_id` | string or null | yes |  |  |
+| `engine_version` | string | yes |  |  |
+| `spec_id` | string | yes |  |  |
+| `dataset_id` | string | yes |  |  |
+| `spec` | object | yes |  |  |
+| `instrument` | InstrumentInfo | yes |  |  |
+| `start_ns` | integer | yes |  |  |
+| `end_ns` | integer | yes |  |  |
+| `rules` | array of string | yes |  |  |
+| `observation` | SandboxObservation | yes |  |  |
+
+**`BookState`** (in `qt.sandbox_session`)
+
+The displayed book at the visible cut: best levels and the top `depth_levels` per side as `[price, size, count]`, best first. `ts_event` = time of the last event in view.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `ts_event` | integer or null | yes |  |  |
+| `bid` | array of any or null | yes |  |  |
+| `ask` | array of any or null | yes |  |  |
+| `bids` | array of array of any | yes |  |  |
+| `asks` | array of array of any | yes |  |  |
+| `spread_ticks` | integer or null | yes |  |  |
+
+**`FillView`** (in `qt.sandbox_session`)
+
+One fill of one of your orders (a `qt.shadow_fills` row). `ts_known` = when the sandbox could know it: the fill's event, or for an arrival (taker) fill the first event after arrival. `step` = the step that reported it (null: after the session's last visible cut, reported only by the scorecard).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `order_id` | string | yes |  |  |
+| `fill_seq` | integer | yes |  |  |
+| `ts_event` | integer | yes |  |  |
+| `ts_known` | integer | yes |  |  |
+| `side` | one of "buy", "sell" | yes |  |  |
+| `price` | integer | yes |  |  |
+| `qty` | integer | yes |  |  |
+| `liquidity` | one of "maker", "taker" | yes |  |  |
+| `reason` | one of "queue_depleted", "trade_through", "crossed", "crossed_at_live" | yes |  |  |
+| `queue_ahead_before` | integer | yes |  |  |
+| `fee` | number | yes |  |  |
+| `step` | integer or null | yes |  |  |
+
+**`InstrumentInfo`** (in `qt.sandbox_session`)
+
+The traded instrument-day (`qt.instruments` row) with the session open and close as absolute ns.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `instrument_id` | integer | yes |  |  |
+| `symbol` | string | yes |  |  |
+| `session_date` | string | yes |  |  |
+| `venue` | string | yes |  |  |
+| `rule_set` | string | yes |  |  |
+| `tick_size` | integer | yes |  |  |
+| `lot_size` | integer | yes |  |  |
+| `price_exp` | integer | yes |  |  |
+| `size_exp` | integer | yes |  |  |
+| `contract_multiplier` | number | yes |  |  |
+| `currency` | string | yes |  |  |
+| `session_tz` | string | yes |  |  |
+| `midnight_utc_ns` | integer | yes |  |  |
+| `open_ns` | integer | yes |  |  |
+| `close_ns` | integer | yes |  |  |
+
+**`MarkoutView`** (in `qt.sandbox_session`)
+
+Markout of one fill at one horizon against the mid (SPEC 5.7.5): `d (mid(t+h) - P)` in ticks, basis points and currency (positive = the fill was good for you). Listed once `t + h` is visible.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `order_id` | string | yes |  |  |
+| `fill_seq` | integer | yes |  |  |
+| `horizon_ns` | integer | yes |  |  |
+| `mo_ticks` | number or null | yes |  |  |
+| `mo_bps` | number or null | yes |  |  |
+| `mo_ccy` | number or null | yes |  |  |
+
+**`OrderView`** (in `qt.sandbox_session`)
+
+An order as the agent knows it at the visible cut. `pending` = sent, not yet confirmed at the venue (the first market event after its arrival confirms it, SPEC 5.2.1); `working` = resting (queue fields set); `expired` = still open at the end of the data; `censored` = the venue cleared the book or the feed had a gap.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `order_id` | string | yes |  |  |
+| `client_order_id` | string or null | yes |  |  |
+| `side` | one of "buy", "sell" | yes |  |  |
+| `type` | one of "limit", "market" | yes |  |  |
+| `tif` | one of "day", "ioc" | yes |  |  |
+| `price` | integer or null | yes |  |  |
+| `peg_offset_ticks` | integer or null | yes |  |  |
+| `qty` | integer | yes |  |  |
+| `filled_qty` | integer | yes |  |  |
+| `leaves_qty` | integer | yes |  |  |
+| `status` | one of "pending", "working", "filled", "cancelled", "rejected", "expired", "censored" | yes |  |  |
+| `reason` | string or null | yes |  |  |
+| `ts_submit` | integer | yes |  |  |
+| `ts_activated` | integer or null | yes |  |  |
+| `ts_done` | integer or null | yes |  |  |
+| `queue_ahead` | integer or null | yes |  |  |
+| `rank` | integer or null | yes |  |  |
+| `level_qty` | integer or null | yes |  |  |
+| `cancel_sent_ns` | integer or null | yes |  |  |
+| `n_fills` | integer | yes |  |  |
+| `avg_fill_price` | number or null | yes |  |  |
+
+**`PositionView`** (in `qt.sandbox_session`)
+
+Position (size units, signed), cash and fees (currency) from the fills so far, marked at `mark_price` (the mid at the visible cut, else the last print). `pnl_gross = cash + position * mark`, `pnl_net = pnl_gross - fees`.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `qty` | integer | yes |  |  |
+| `bought_qty` | integer | yes |  |  |
+| `sold_qty` | integer | yes |  |  |
+| `cash` | number | yes |  |  |
+| `fees` | number | yes |  |  |
+| `mark_price` | number or null | yes |  |  |
+| `mark_source` | one of "mid", "last_trade" or null | yes |  |  |
+| `pnl_gross` | number or null | yes |  |  |
+| `pnl_net` | number or null | yes |  |  |
+| `currency` | string | yes |  |  |
+
+**`SandboxObservation`** (in `qt.sandbox_session`)
+
+What the agent sees after `open`, `observe` or `advance`: the market and its own orders at the visible cut, and what happened since the previous step (prints, fills, markouts that became computable).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.sandbox_observation" | yes | `"qt.sandbox_observation"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `step` | integer | yes |  |  |
+| `clock_ns` | integer | yes |  |  |
+| `visible_ns` | integer | yes |  |  |
+| `time_local` | string | yes |  |  |
+| `done` | boolean | yes |  |  |
+| `book` | BookState | yes |  |  |
+| `trades` | array of TradeView | yes |  |  |
+| `trades_since_last` | TradeStats | yes |  |  |
+| `session_trades` | TradeStats | yes |  |  |
+| `orders` | array of OrderView | yes |  |  |
+| `n_orders` | integer | yes |  |  |
+| `n_open` | integer | yes |  |  |
+| `fills` | array of FillView | yes |  |  |
+| `markouts` | array of MarkoutView | yes |  |  |
+| `position` | PositionView | yes |  |  |
+| `warnings` | array of string | yes |  |  |
+
+**`TradeStats`** (in `qt.sandbox_session`)
+
+Prints over an interval: count, volume (size units), `vwap_price` (a real price, float), high/low/last (raw fixed-point prices, like every other price field).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `n` | integer | yes |  |  |
+| `volume` | integer | yes |  |  |
+| `vwap_price` | number or null | yes |  |  |
+| `high` | integer or null | yes |  |  |
+| `low` | integer or null | yes |  |  |
+| `last` | integer or null | yes |  |  |
+| `first_ts` | integer or null | yes |  |  |
+| `last_ts` | integer or null | yes |  |  |
+
+**`TradeView`** (in `qt.sandbox_session`)
+
+One print (`T` record): aggressor side `B`/`A`, or `N` (none); kind as in `qt.trades`.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `ts_event` | integer | yes |  |  |
+| `price` | integer | yes |  |  |
+| `size` | integer | yes |  |  |
+| `aggressor` | one of "B", "A", "N" | yes |  |  |
+| `kind` | one of "displayed", "hidden", "cross" | yes |  |  |
+
+### qt.sandbox_session_list
+
+File: `schemas/json/qt.sandbox_session_list.schema.json`.
+
+`qt_sandbox_list` / `qt_sandbox_close` result: the server's open sessions, its limits, and the session just closed (`closed`, `qt_sandbox_close` only).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.sandbox_session_list" | yes | `"qt.sandbox_session_list"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `sessions` | array of SessionItem | yes |  |  |
+| `max_sessions` | integer | yes |  |  |
+| `idle_timeout_s` | number or null | yes |  |  |
+| `closed` | SessionItem or null | yes |  |  |
+
+**`SessionItem`** (in `qt.sandbox_session_list`)
+
+One open sandbox session of an MCP server: its instrument-day, clock, step, orders and seconds since its last tool call.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `session_id` | string | yes |  |  |
+| `instrument_id` | integer | yes |  |  |
+| `symbol` | string | yes |  |  |
+| `session_date` | string | yes |  |  |
+| `clock_ns` | integer | yes |  |  |
+| `time_local` | string | yes |  |  |
+| `step` | integer | yes |  |  |
+| `n_orders` | integer | yes |  |  |
+| `n_open` | integer | yes |  |  |
+| `idle_s` | number | yes |  |  |
+
+### qt.sandbox_spec
+
+File: `schemas/json/qt.sandbox_spec.schema.json`.
+
+One sandbox episode (`qt.sandbox_spec`): one instrument-day of an MBO dataset, an episode window and the exchange simulation settings. Times are absolute ns since the epoch; `Sandbox.open` also accepts local times of day (`"10:30"`) and duration strings (`"1ms"`) and converts them before validation.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `dataset` | PathRef | yes |  |  |
+| `instrument_id` | integer or null | no | `null` |  |
+| `symbol` | string or null | no | `null` |  |
+| `session_date` | string or null | no | `null` |  |
+| `start_ns` | integer or null | no | `null` |  |
+| `end_ns` | integer or null | no | `null` |  |
+| `latency_ns` | integer | no | `0` |  |
+| `jitter_ns` | integer | no | `0` |  |
+| `feed_latency_ns` | integer | no | `0` |  |
+| `seed` | integer | no | `0` |  |
+| `depth_levels` | integer | no | `5` |  |
+| `max_trades` | integer | no | `20` |  |
+| `fees` | FeeSchedule | no |  |  |
+| `markout_horizons_ns` | array of integer | no |  |  |
+| `market_collar_bps` | number | no | `100.0` |  |
+| `max_order_qty` | integer or null | no | `null` |  |
+| `max_position` | integer or null | no | `null` |  |
+| `max_open_orders` | integer | no | `100` |  |
+| `self_trade_prevention` | one of "reject_new", "off" | no | `"reject_new"` |  |
+| `hidden_print_policy` | one of "ignore", "behind", "behind_and_through" or null | no | `null` |  |
+| `max_steps` | integer | no | `100000` |  |
+
+**`FeeSchedule`** (in `qt.sandbox_spec`)
+
+Fees per fill by liquidity. `*_per_unit`: currency per size unit (real units, e.g. USD per share); `*_bps`: basis points of the fill's notional. Positive = cost, negative = rebate (SPEC 0.1). Both parts add up.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `maker_per_unit` | number | no | `0.0` |  |
+| `taker_per_unit` | number | no | `0.0` |  |
+| `maker_bps` | number | no | `0.0` |  |
+| `taker_bps` | number | no | `0.0` |  |
+
+**`PathRef`** (in `qt.sandbox_spec`)
+
+Local path reference (CLI, Python API, MCP local mode).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `path` | string | yes |  |  |
+
+### qt.sandbox_verification
+
+File: `schemas/json/qt.sandbox_verification.schema.json`.
+
+`verify` result: the hash chain, the header (engine version and spec id, committed by the `open` entry), the dataset identity (`dataset_id` and the sha256 of every partition file), a deterministic re-execution of the log on the dataset (every entry must reproduce with the same hash), plus the scorecard digest when one was given.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.sandbox_verification" | yes | `"qt.sandbox_verification"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `ok` | boolean | yes |  |  |
+| `run_id` | string or null | yes |  |  |
+| `log_root` | string | yes |  |  |
+| `chain_ok` | boolean | yes |  |  |
+| `header_ok` | boolean | yes |  |  |
+| `dataset_ok` | boolean | yes |  |  |
+| `reexecution_ok` | boolean | yes |  |  |
+| `scorecard_ok` | boolean or null | yes |  |  |
+| `first_divergence` | integer or null | yes |  |  |
+| `problems` | array of string | yes |  |  |
+
 ### qt.scorecard_spec
 
 File: `schemas/json/qt.scorecard_spec.schema.json`.
@@ -2922,6 +5611,184 @@ Headline and gates.
 | `gates_passed` | boolean | yes |  |  |
 | `failed_gates` | array of string | yes |  |  |
 
+### qt.selection_inputs
+
+File: `schemas/json/qt.selection_inputs.schema.json`.
+
+`selection_inputs`: the trial count and per-trial series a selection statistic consumes. Plain data; nothing is computed from the series. `n_trials` with the variance of the trials' Sharpe ratios is what the Deflated Sharpe Ratio needs; PBO, SPA and model confidence sets also need every trial's series on the same periods, which `aligned` reports.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.selection_inputs" | yes | `"qt.selection_inputs"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `ledger_id` | string | yes |  |  |
+| `head` | Head | yes |  |  |
+| `chain_verified` | boolean | yes |  |  |
+| `filter` | LedgerFilter | yes |  |  |
+| `series_kind` | one of "returns", "scores" | yes |  |  |
+| `n_trials` | integer | yes |  |  |
+| `n_configs` | integer | yes |  |  |
+| `by_kind` | map of integer | yes |  |  |
+| `studies` | array of string | yes |  |  |
+| `n_with_series` | integer | yes |  |  |
+| `conflicts` | array of string | yes |  |  |
+| `linked_run_ids` | array of string | yes |  |  |
+| `aligned` | boolean | yes |  |  |
+| `index` | array of integer or null | yes |  |  |
+| `trials` | array of SelectionTrial | yes |  |  |
+
+**`Head`** (in `qt.selection_inputs`)
+
+The last record of a ledger: anchor it outside the ledger (`seq:hash`) to detect a rewritten history.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `seq` | integer | yes |  |  |
+| `hash` | string | yes |  |  |
+
+**`LedgerFilter`** (in `qt.selection_inputs`)
+
+Record selection. Every set field must match; prefixes and globs are case-sensitive.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `kinds` | array of one of "genesis", "zoo", "calibrate", "calibrate-live", "fit-hazard", "score", "shadows-sample", "variant" or null | no | `null` |  |
+| `study` | string or null | no | `null` |  |
+| `name` | string or null | no | `null` |  |
+| `status` | one of "ok", "error", "all" | no | `"all"` |  |
+| `since_ns` | integer or null | no | `null` |  |
+| `until_ns` | integer or null | no | `null` |  |
+| `dataset` | string or null | no | `null` |  |
+| `run_id` | string or null | no | `null` |  |
+| `spec_hash` | string or null | no | `null` |  |
+
+**`SelectionTrial`** (in `qt.selection_inputs`)
+
+One entry of `selection_inputs`: a trial, or one of the different series of a conflicted trial.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `trial_id` | string | yes |  |  |
+| `kind` | one of "genesis", "zoo", "calibrate", "calibrate-live", "fit-hazard", "score", "shadows-sample", "variant" | yes |  |  |
+| `study` | string or null | yes |  |  |
+| `name` | string or null | yes |  |  |
+| `run_id` | string or null | yes |  |  |
+| `spec_hash` | string or null | yes |  |  |
+| `dataset_hash` | string or null | yes |  |  |
+| `n_records` | integer | yes |  |  |
+| `first_recorded_at_ns` | integer | yes |  |  |
+| `conflict` | boolean | yes |  |  |
+| `series_sha256` | string or null | yes |  |  |
+| `series` | array of number or null | yes |  |  |
+| `index` | array of integer or null | yes |  |  |
+| `n_obs` | integer | yes |  |  |
+| `periods_per_year` | number or null | yes |  |  |
+| `higher_is_better` | boolean or null | yes |  |  |
+
+### qt.shadow_impact_summary
+
+File: `schemas/json/qt.shadow_impact_summary.schema.json`.
+
+`qt.shadow_impact_summary`: counts, distributions and the warning line of one `qt.shadow_impact` table.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.shadow_impact_summary" | yes | `"qt.shadow_impact_summary"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `source` | one of "replay", "zoo" | yes |  |  |
+| `config` | ImpactConfig | yes |  |  |
+| `volume_source` | one of "venue_session", "user", "mixed" | yes |  |  |
+| `h_max_ns` | integer or null | yes |  |  |
+| `horizon_ns` | integer or null | yes |  |  |
+| `fills_in_tape` | boolean | yes |  |  |
+| `dataset` | string or null | yes |  |  |
+| `inputs` | array of FileEntry | yes |  |  |
+| `files` | array of FileEntry | yes |  |  |
+| `n_shadows` | integer | yes |  |  |
+| `n_rejected` | integer | yes |  |  |
+| `n_out_of_session` | integer | yes |  |  |
+| `n_assessed` | integer | yes |  |  |
+| `n_evaluable_impact` | integer | yes |  |  |
+| `n_evaluable_queue` | integer | yes |  |  |
+| `n_evaluable_volume` | integer | yes |  |  |
+| `n_flag_impact` | integer | yes |  |  |
+| `n_impact_venue_bound` | integer | yes |  |  |
+| `n_flag_queue` | integer | yes |  |  |
+| `n_queue_below_min_qty` | integer | yes |  |  |
+| `n_flag_volume` | integer | yes |  |  |
+| `n_alone_at_level` | integer | yes |  |  |
+| `n_material` | integer | yes |  |  |
+| `material_share` | number or null | yes |  |  |
+| `material` | boolean | yes |  |  |
+| `distributions` | map of ImpactDistribution | yes |  |  |
+| `sensitivity` | map of array of ImpactSensitivity | yes |  |  |
+| `by_instrument` | object | yes |  |  |
+| `days` | array of ImpactDay | yes |  |  |
+| `warning` | string or null | yes |  |  |
+
+**`FileEntry`** (in `qt.shadow_impact_summary`)
+
+One output file: name relative to the output directory, row count for tables, size and sha256.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `name` | string | yes |  |  |
+| `rows` | integer or null | no | `null` |  |
+| `bytes` | integer | yes |  |  |
+| `sha256` | string | yes |  |  |
+
+**`ImpactConfig`** (in `qt.shadow_impact_summary`)
+
+Coefficients and thresholds of `queuetruth.eval.impact` (defaults and references: docs/concepts/impact-warning.md). Flags are inclusive (`>=`).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `coefficient` | number | no | `1.0` |  |
+| `linear_below` | number | no | `1e-05` |  |
+| `rv_interval_ns` | integer | no | `300000000000` |  |
+| `min_returns` | integer | no | `12` |  |
+| `impact_ticks` | number | no | `1.0` |  |
+| `flag_venue_volume_impact` | boolean | no | `false` |  |
+| `queue_share` | number | no | `0.1` |  |
+| `queue_min_qty` | integer or null | no | `null` |  |
+| `volume_share` | number | no | `0.05` |  |
+| `warn_fraction` | number | no | `0.01` |  |
+
+**`ImpactDay`** (in `qt.shadow_impact_summary`)
+
+Daily figures of one instrument-day and its shadows.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `instrument_id` | integer | yes |  |  |
+| `session_date` | string | yes |  |  |
+| `daily_volume` | integer or null | yes |  |  |
+| `sigma_daily` | number or null | yes |  |  |
+| `volume_source` | one of "venue_session", "user" | yes |  |  |
+| `n_shadows` | integer | yes |  |  |
+| `n_material` | integer | yes |  |  |
+
+**`ImpactDistribution`** (in `qt.shadow_impact_summary`)
+
+Quantiles (numpy linear) of one per-shadow figure over the assessed shadows where it is defined.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `n` | integer | yes |  |  |
+| `p50` | number or null | yes |  |  |
+| `p90` | number or null | yes |  |  |
+| `p99` | number or null | yes |  |  |
+| `max` | number or null | yes |  |  |
+
+**`ImpactSensitivity`** (in `qt.shadow_impact_summary`)
+
+Assessed shadows at or above one threshold of a figure.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `threshold` | number | yes |  |  |
+| `n_flagged` | integer | yes |  |  |
+
 ### qt.shadow_sample_spec
 
 File: `schemas/json/qt.shadow_sample_spec.schema.json`.
@@ -3005,6 +5872,23 @@ One output file: name relative to the output directory, row count for tables, si
 | `rows` | integer or null | no | `null` |  |
 | `bytes` | integer | yes |  |  |
 | `sha256` | string | yes |  |  |
+
+### qt.signing_key
+
+File: `schemas/json/qt.signing_key.schema.json`.
+
+`qt.signing_key` (`queuetruth cert keygen` / `cert pubkey`): never carries private key material.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.signing_key" | yes | `"qt.signing_key"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `algorithm` | const "ed25519" | no | `"ed25519"` |  |
+| `public_key` | string | yes |  |  |
+| `key_fingerprint` | string | yes |  |  |
+| `private_key_path` | string or null | yes |  |  |
+| `public_key_path` | string or null | yes |  |  |
+| `encrypted` | boolean or null | yes |  |  |
 
 ### qt.tenant
 
@@ -3389,6 +6273,11 @@ One model's metrics vs exact truth (SPEC 5.6).
 | `mcnemar` | McNemarSmall | yes |  |  |
 | `exact_fill_rate` | object | no |  |  |
 | `model_fill_rate` | object | no |  |  |
+| `first_fill_error` | object | no |  |  |
+| `mcs_member` | object | no |  |  |
+| `mcs_p` | object | no |  |  |
+| `mcs_brier_member` | object | no |  |  |
+| `mcs_brier_p` | object | no |  |  |
 
 **`McNemarSmall`** (in `qt.zoo_summary`)
 
@@ -3400,9 +6289,178 @@ Discordant counts and exact McNemar p-value.
 | `c` | integer | yes |  |  |
 | `p_exact` | number or null | yes |  |  |
 
+### qt.zoo_toxicity
+
+File: `schemas/json/qt.zoo_toxicity.schema.json`.
+
+Summary of `zoo-toxicity`: fill-type tags, markouts and the adverse-selection ranking of the zoo's models (extension fill-toxicity; Python only).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.zoo_toxicity" | yes | `"qt.zoo_toxicity"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `run_id` | string | yes |  |  |
+| `engine_version` | string | yes |  |  |
+| `spec` | object | yes |  |  |
+| `zoo_run_id` | string or null | yes |  |  |
+| `zoo_mode` | string or null | yes |  |  |
+| `n_shadows` | integer | yes |  |  |
+| `n_excluded` | map of integer | yes |  |  |
+| `truth_mismatch_rate` | number or null | yes |  |  |
+| `window_ns` | integer | yes |  |  |
+| `horizons_ns` | array of integer | yes |  |  |
+| `ci_block` | one of "day", "30min" | yes |  |  |
+| `n_blocks` | integer | yes |  |  |
+| `bootstrap_b` | integer | yes |  |  |
+| `exact` | ToxicityExact | yes |  |  |
+| `models` | array of ToxicityModel | yes |  |  |
+| `by_type` | array of FillTypeStats | yes |  |  |
+| `rankings` | ToxicityRankings | yes |  |  |
+| `files` | array of FileEntry | yes |  |  |
+| `warnings` | array of string | yes |  |  |
+
+**`FileEntry`** (in `qt.zoo_toxicity`)
+
+One output file: name relative to the output directory, row count for tables, size and sha256.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `name` | string | yes |  |  |
+| `rows` | integer or null | no | `null` |  |
+| `bytes` | integer | yes |  |  |
+| `sha256` | string | yes |  |  |
+
+**`FillTypeStats`** (in `qt.zoo_toxicity`)
+
+Fill rows of one arm (`exact` or a model id), status and mechanism; `missed` rows are the exact arm's fills of the shadows the model did not fill (their mechanism is the exact one).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `arm` | string | yes |  |  |
+| `status` | one of "confirmed", "phantom", "missed" or null | yes |  |  |
+| `mechanism` | one of "queue", "swept", "cross_on_arrival", "crossed_resting", "hidden_print", "touch", "particle", "all" | yes |  |  |
+| `n_fills` | integer | yes |  |  |
+| `n_shadows` | integer | yes |  |  |
+| `qty` | number | yes |  |  |
+| `markouts` | object | yes |  |  |
+
+**`ToxGap`** (in `qt.zoo_toxicity`)
+
+Paired difference `|value| - |next value|` of two neighbouring places of a ranking, with its 95% percentile CI from the shared bootstrap replicates.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `value` | number | yes |  |  |
+| `ci_lo` | number or null | yes |  |  |
+| `ci_hi` | number or null | yes |  |  |
+
+**`ToxStat`** (in `qt.zoo_toxicity`)
+
+Ratio-of-sums estimate with its 95% block-bootstrap percentile CI; `n` = rows (shadows or fills) with weight in the denominator. `value` is null when the denominator is 0.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `value` | number or null | yes |  |  |
+| `ci_lo` | number or null | yes |  |  |
+| `ci_hi` | number or null | yes |  |  |
+| `n` | integer | yes |  |  |
+
+**`ToxicityExact`** (in `qt.zoo_toxicity`)
+
+The exact arm's fills in the window over the population.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `n_filled` | integer | yes |  |  |
+| `n_fills` | integer | yes |  |  |
+| `fills_by_mechanism` | map of integer | yes |  |  |
+
+**`ToxicityHorizon`** (in `qt.zoo_toxicity`)
+
+One model at one markout horizon: per-shadow first-fill markouts (unit quantity) over the `n` shadows whose first-fill markouts are defined in every arm that filled them. `*_ticks` / `*_bps` sums are per shadow of the population (`bias = grant + timing + deny = model_pnl - exact_pnl`, positive = the model overstates PnL); the `*_mo_*` / `*_mm_*` entries are means over the shadows of one status (fill-price and mid-to-mid markouts).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `n` | integer | yes |  |  |
+| `model_pnl_ticks` | ToxStat | yes |  |  |
+| `exact_pnl_ticks` | ToxStat | yes |  |  |
+| `grant_ticks` | ToxStat | yes |  |  |
+| `deny_ticks` | ToxStat | yes |  |  |
+| `timing_ticks` | ToxStat | yes |  |  |
+| `bias_ticks` | ToxStat | yes |  |  |
+| `grant_bps` | ToxStat | yes |  |  |
+| `deny_bps` | ToxStat | yes |  |  |
+| `timing_bps` | ToxStat | yes |  |  |
+| `bias_bps` | ToxStat | yes |  |  |
+| `phantom_mo_ticks` | ToxStat | yes |  |  |
+| `missed_mo_ticks` | ToxStat | yes |  |  |
+| `confirmed_mo_ticks` | ToxStat | yes |  |  |
+| `confirmed_exact_mo_ticks` | ToxStat | yes |  |  |
+| `phantom_mm_ticks` | ToxStat | yes |  |  |
+| `missed_mm_ticks` | ToxStat | yes |  |  |
+| `confirmed_mm_ticks` | ToxStat | yes |  |  |
+| `confirmed_exact_mm_ticks` | ToxStat | yes |  |  |
+
+**`ToxicityModel`** (in `qt.zoo_toxicity`)
+
+Shadow-level discordance of one model against the exact arm within the fill window, and its markouts.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `model_id` | string | yes |  |  |
+| `family` | string | yes |  |  |
+| `n_shadows` | integer | yes |  |  |
+| `n_model_filled` | integer | yes |  |  |
+| `n_exact_filled` | integer | yes |  |  |
+| `n_confirmed` | integer | yes |  |  |
+| `n_phantom` | integer | yes |  |  |
+| `n_missed` | integer | yes |  |  |
+| `n_inconsistent` | integer | yes |  |  |
+| `phantom_rate` | number or null | yes |  |  |
+| `missed_rate` | number or null | yes |  |  |
+| `horizons` | object | yes |  |  |
+
+**`ToxicityRank`** (in `qt.zoo_toxicity`)
+
+One place of a ranking: rank 1 = the largest |value| (the largest PnL distortion of that kind); `value` keeps its sign. `rank_lo`..`rank_hi` is the 95% rank interval over the bootstrap replicates (null when the value is undefined); `gap_to_next` is the paired gap to the next place and `separated_from_next` whether its CI lies above 0 (null on the last place or next to an undefined value).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `rank` | integer | yes |  |  |
+| `model_id` | string | yes |  |  |
+| `value` | number or null | yes |  |  |
+| `ci_lo` | number or null | yes |  |  |
+| `ci_hi` | number or null | yes |  |  |
+| `rank_lo` | integer or null | yes |  |  |
+| `rank_hi` | integer or null | yes |  |  |
+| `gap_to_next` | ToxGap or null | yes |  |  |
+| `separated_from_next` | boolean or null | yes |  |  |
+
+**`ToxicityRankings`** (in `qt.zoo_toxicity`)
+
+Models ranked at `horizon_ns` by `|grant_ticks|` (fills wrongly granted), `|deny_ticks|` (fills wrongly denied) and `|bias_ticks|`, largest first; undefined values last, ties in model order.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `horizon_ns` | integer | yes |  |  |
+| `grant` | array of ToxicityRank | yes |  |  |
+| `deny` | array of ToxicityRank | yes |  |  |
+| `bias` | array of ToxicityRank | yes |  |  |
+
+**`TypeMarkouts`** (in `qt.zoo_toxicity`)
+
+Quantity-weighted mean markouts of the fill rows of one type at one horizon.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `mo_ticks` | ToxStat | yes |  |  |
+| `mo_bps` | ToxStat | yes |  |  |
+| `mm_ticks` | ToxStat | yes |  |  |
+| `mm_bps` | ToxStat | yes |  |  |
+
 ## Arrow tables
 
-Tables: [`qt.alloc_events`](#qtalloc_events), [`qt.bbo`](#qtbbo), [`qt.depth`](#qtdepth), [`qt.features`](#qtfeatures), [`qt.hazard_predictions`](#qthazard_predictions), [`qt.instruments`](#qtinstruments), [`qt.l2`](#qtl2), [`qt.live_events`](#qtlive_events), [`qt.live_orders`](#qtlive_orders), [`qt.mbo`](#qtmbo), [`qt.queue_trajectory`](#qtqueue_trajectory), [`qt.rank_trace`](#qtrank_trace), [`qt.real_orders`](#qtreal_orders), [`qt.score_fills`](#qtscore_fills), [`qt.score_markouts`](#qtscore_markouts), [`qt.score_orders`](#qtscore_orders), [`qt.score_position`](#qtscore_position), [`qt.score_tests`](#qtscore_tests), [`qt.shadow_amend`](#qtshadow_amend), [`qt.shadow_fills`](#qtshadow_fills), [`qt.shadow_results`](#qtshadow_results), [`qt.shadow_spec`](#qtshadow_spec), [`qt.touch_records`](#qttouch_records), [`qt.trades`](#qttrades), [`qt.zoo_errors`](#qtzoo_errors), [`qt.zoo_fills`](#qtzoo_fills), [`qt.zoo_predictions`](#qtzoo_predictions), [`qt.zoo_shadows`](#qtzoo_shadows), [`qt.zoo_trajectory`](#qtzoo_trajectory).
+Tables: [`qt.alloc_events`](#qtalloc_events), [`qt.bbo`](#qtbbo), [`qt.conformal_calibrator`](#qtconformal_calibrator), [`qt.conformal_sets`](#qtconformal_sets), [`qt.depth`](#qtdepth), [`qt.features`](#qtfeatures), [`qt.hazard_predictions`](#qthazard_predictions), [`qt.instruments`](#qtinstruments), [`qt.l2`](#qtl2), [`qt.ledger`](#qtledger), [`qt.live_events`](#qtlive_events), [`qt.live_orders`](#qtlive_orders), [`qt.mbo`](#qtmbo), [`qt.queue_trajectory`](#qtqueue_trajectory), [`qt.rank_trace`](#qtrank_trace), [`qt.real_orders`](#qtreal_orders), [`qt.score_fills`](#qtscore_fills), [`qt.score_markouts`](#qtscore_markouts), [`qt.score_orders`](#qtscore_orders), [`qt.score_position`](#qtscore_position), [`qt.score_shortfall`](#qtscore_shortfall), [`qt.score_tests`](#qtscore_tests), [`qt.shadow_amend`](#qtshadow_amend), [`qt.shadow_fills`](#qtshadow_fills), [`qt.shadow_impact`](#qtshadow_impact), [`qt.shadow_results`](#qtshadow_results), [`qt.shadow_spec`](#qtshadow_spec), [`qt.touch_records`](#qttouch_records), [`qt.trades`](#qttrades), [`qt.zoo_errors`](#qtzoo_errors), [`qt.zoo_fills`](#qtzoo_fills), [`qt.zoo_predictions`](#qtzoo_predictions), [`qt.zoo_shadows`](#qtzoo_shadows), [`qt.zoo_toxicity_fills`](#qtzoo_toxicity_fills), [`qt.zoo_toxicity_markouts`](#qtzoo_toxicity_markouts), [`qt.zoo_toxicity_shadows`](#qtzoo_toxicity_shadows), [`qt.zoo_trajectory`](#qtzoo_trajectory).
 
 ### qt.alloc_events
 
@@ -3437,6 +6495,44 @@ File: `schemas/arrow/qt.bbo.json`, schema version `1.1`.
 | `ask_px` | `int64` | yes |  |
 | `ask_sz` | `uint64` | no |  |
 | `ask_ct` | `uint32` | no |  |
+
+### qt.conformal_calibrator
+
+File: `schemas/arrow/qt.conformal_calibrator.json`, schema version `1`.
+
+| Column | Type | Nullable | Values |
+|---|---|---|---|
+| `part` | `utf8` | no |  |
+| `horizon_ns` | `int64` | yes |  |
+| `landmark_ns` | `int64` | no |  |
+| `category` | `utf8` | no |  |
+| `label` | `int8` | no |  |
+| `value` | `float64` | no |  |
+| `weight` | `float64` | yes |  |
+| `label_sum` | `float64` | yes |  |
+
+### qt.conformal_sets
+
+File: `schemas/arrow/qt.conformal_sets.json`, schema version `1`.
+
+| Column | Type | Nullable | Values |
+|---|---|---|---|
+| `order_ref` | `utf8` | no |  |
+| `landmark_ns` | `int64` | no |  |
+| `horizon_ns` | `int64` | no |  |
+| `stratum` | `dictionary<int16, utf8>` | no |  |
+| `p` | `float64` | no |  |
+| `y_fill` | `bool` | yes |  |
+| `pvalue_nofill` | `float64` | no |  |
+| `pvalue_fill` | `float64` | no |  |
+| `set_nofill` | `bool` | no |  |
+| `set_fill` | `bool` | no |  |
+| `va_p0` | `float64` | no |  |
+| `va_p1` | `float64` | no |  |
+| `no_fill_within_ns` | `int64` | yes |  |
+| `fill_within_ns` | `int64` | yes |  |
+| `interval_no_fill_within_ns` | `int64` | yes |  |
+| `interval_fill_within_ns` | `int64` | yes |  |
 
 ### qt.depth
 
@@ -3532,6 +6628,44 @@ File: `schemas/arrow/qt.l2.json`, schema version `1.1`.
 | `aggressor` | `uint8` | no |  |
 | `level` | `uint8` | no |  |
 | `flags` | `uint8` | no |  |
+
+### qt.ledger
+
+File: `schemas/arrow/qt.ledger.json`, schema version `1`.
+
+| Column | Type | Nullable | Values |
+|---|---|---|---|
+| `seq` | `int64` | no |  |
+| `hash` | `utf8` | no |  |
+| `prev` | `utf8` | no |  |
+| `recorded_at` | `timestamp[ns, tz=UTC]` | no |  |
+| `started_at` | `timestamp[ns, tz=UTC]` | yes |  |
+| `kind` | `utf8` | no |  |
+| `status` | `utf8` | no |  |
+| `study` | `utf8` | yes |  |
+| `trial_id` | `utf8` | yes |  |
+| `run_id` | `utf8` | yes |  |
+| `spec_hash` | `utf8` | yes |  |
+| `dataset_hash` | `utf8` | yes |  |
+| `name` | `utf8` | yes |  |
+| `params_json` | `utf8` | yes |  |
+| `inputs_json` | `utf8` | no |  |
+| `metrics_json` | `utf8` | no |  |
+| `series_kind` | `utf8` | yes |  |
+| `series_sha256` | `utf8` | yes |  |
+| `series` | `list<float64>` | yes |  |
+| `series_index` | `list<int64>` | yes |  |
+| `periods_per_year` | `float64` | yes |  |
+| `higher_is_better` | `bool` | yes |  |
+| `run_ids` | `list<utf8>` | no |  |
+| `code_queuetruth` | `utf8` | yes |  |
+| `code_engine` | `utf8` | yes |  |
+| `code_core` | `utf8` | yes |  |
+| `code_git` | `utf8` | yes |  |
+| `code_user` | `utf8` | yes |  |
+| `error_code` | `utf8` | yes |  |
+| `error_message` | `utf8` | yes |  |
+| `note` | `utf8` | yes |  |
 
 ### qt.live_events
 
@@ -3760,6 +6894,39 @@ File: `schemas/arrow/qt.score_position.json`, schema version `1.1`.
 | `ts` | `timestamp[ns, tz=UTC]` | no |  |
 | `position` | `int64` | no |  |
 
+### qt.score_shortfall
+
+File: `schemas/arrow/qt.score_shortfall.json`, schema version `1.1`.
+
+| Column | Type | Nullable | Values |
+|---|---|---|---|
+| `scope` | `dictionary<int8, utf8>` | no | `order`, `total` |
+| `statistic` | `dictionary<int8, utf8>` | no | `value`, `sum`, `mean`, `ci_lo`, `ci_hi` |
+| `horizon_ns` | `int64` | no |  |
+| `order_key` | `utf8` | yes |  |
+| `instrument_id` | `uint32` | yes |  |
+| `session_date` | `date32` | yes |  |
+| `side` | `dictionary<int8, utf8>` | yes | `buy`, `sell` |
+| `class` | `dictionary<int8, utf8>` | yes | `both`, `neither`, `live_only`, `sim_only` |
+| `currency` | `utf8` | yes |  |
+| `qty` | `uint64` | yes |  |
+| `live_qty` | `uint64` | yes |  |
+| `sim_qty` | `uint64` | yes |  |
+| `matched_qty` | `uint64` | yes |  |
+| `valued` | `bool` | no |  |
+| `delay_ccy` | `float64` | yes |  |
+| `spread_ccy` | `float64` | yes |  |
+| `missed_fill_ccy` | `float64` | yes |  |
+| `adverse_selection_ccy` | `float64` | yes |  |
+| `partial_fill_ccy` | `float64` | yes |  |
+| `fees_ccy` | `float64` | yes |  |
+| `total_ccy` | `float64` | yes |  |
+| `notional_ccy` | `float64` | yes |  |
+| `live_notional_ccy` | `float64` | yes |  |
+| `sim_notional_ccy` | `float64` | yes |  |
+| `n` | `uint64` | no |  |
+| `note` | `utf8` | yes |  |
+
 ### qt.score_tests
 
 File: `schemas/arrow/qt.score_tests.json`, schema version `1.1`.
@@ -3810,6 +6977,43 @@ File: `schemas/arrow/qt.shadow_fills.json`, schema version `1.1`.
 | `trade_through_event` | `uint64` | no |  |
 | `behind_volume_executed` | `uint64` | no |  |
 | `liquidity` | `dictionary<int8, utf8>` | no | `maker`, `taker` |
+
+### qt.shadow_impact
+
+File: `schemas/arrow/qt.shadow_impact.json`, schema version `1.1`.
+
+| Column | Type | Nullable | Values |
+|---|---|---|---|
+| `shadow_id` | `utf8` | no |  |
+| `instrument_id` | `uint32` | no |  |
+| `session_date` | `date32` | no |  |
+| `status` | `dictionary<int8, utf8>` | no | `live`, `rejected`, `out_of_session` |
+| `qty` | `uint64` | no |  |
+| `filled_qty` | `uint64` | yes |  |
+| `fills_in_tape` | `bool` | no |  |
+| `ts_live` | `timestamp[ns, tz=UTC]` | no |  |
+| `ts_end` | `timestamp[ns, tz=UTC]` | no |  |
+| `end_source` | `dictionary<int8, utf8>` | no | `full_fill`, `trajectory_end`, `cancel`, `planned_end`, `admin_end`, `horizon`, `session_close`, `rejected` |
+| `ref_price` | `int64` | yes |  |
+| `ref_price_source` | `dictionary<int8, utf8>` | no | `order`, `last_trade`, `none` |
+| `tick_size` | `int64` | yes |  |
+| `daily_volume` | `uint64` | yes |  |
+| `volume_source` | `dictionary<int8, utf8>` | no | `venue_session`, `user` |
+| `sigma_daily` | `float64` | yes |  |
+| `daily_participation` | `float64` | yes |  |
+| `impact_frac` | `float64` | yes |  |
+| `impact_bps` | `float64` | yes |  |
+| `impact_ticks` | `float64` | yes |  |
+| `level_qty_at_live` | `uint64` | yes |  |
+| `queue_share_at_live` | `float64` | yes |  |
+| `queue_share_max` | `float64` | yes |  |
+| `queue_min_qty` | `uint64` | no |  |
+| `life_volume` | `uint64` | yes |  |
+| `volume_share` | `float64` | yes |  |
+| `flag_impact` | `bool` | no |  |
+| `flag_queue` | `bool` | no |  |
+| `flag_volume` | `bool` | no |  |
+| `material` | `bool` | no |  |
 
 ### qt.shadow_results
 
@@ -3969,6 +7173,57 @@ File: `schemas/arrow/qt.zoo_shadows.json`, schema version `1.1`.
 | `session_close` | `timestamp[ns, tz=UTC]` | no |  |
 | `exact_end_state` | `utf8` | yes |  |
 | `never_cancel` | `bool` | no |  |
+
+### qt.zoo_toxicity_fills
+
+File: `schemas/arrow/qt.zoo_toxicity_fills.json`, schema version `1.1`.
+
+| Column | Type | Nullable | Values |
+|---|---|---|---|
+| `arm` | `utf8` | no |  |
+| `shadow_id` | `utf8` | no |  |
+| `fill_seq` | `uint32` | no |  |
+| `instrument_id` | `uint32` | no |  |
+| `side` | `uint8` | no |  |
+| `ts_event` | `timestamp[ns, tz=UTC]` | no |  |
+| `px` | `int64` | yes |  |
+| `fill_qty` | `float64` | no |  |
+| `liquidity` | `dictionary<int8, utf8>` | no | `maker`, `taker` |
+| `mechanism` | `dictionary<int8, utf8>` | no | `queue`, `swept`, `cross_on_arrival`, `crossed_resting`, `hidden_print`, `touch`, `particle` |
+| `status` | `dictionary<int8, utf8>` | yes | `confirmed`, `phantom` |
+| `reason` | `utf8` | no |  |
+
+### qt.zoo_toxicity_markouts
+
+File: `schemas/arrow/qt.zoo_toxicity_markouts.json`, schema version `1.1`.
+
+| Column | Type | Nullable | Values |
+|---|---|---|---|
+| `arm` | `utf8` | no |  |
+| `shadow_id` | `utf8` | no |  |
+| `fill_seq` | `uint32` | no |  |
+| `horizon_ns` | `int64` | no |  |
+| `mo_ticks` | `float64` | yes |  |
+| `mo_bps` | `float64` | yes |  |
+| `mm_ticks` | `float64` | yes |  |
+| `mm_bps` | `float64` | yes |  |
+
+### qt.zoo_toxicity_shadows
+
+File: `schemas/arrow/qt.zoo_toxicity_shadows.json`, schema version `1.1`.
+
+| Column | Type | Nullable | Values |
+|---|---|---|---|
+| `model_id` | `utf8` | no |  |
+| `shadow_id` | `utf8` | no |  |
+| `instrument_id` | `uint32` | no |  |
+| `session_date` | `date32` | no |  |
+| `ts_live` | `timestamp[ns, tz=UTC]` | no |  |
+| `status` | `dictionary<int8, utf8>` | no | `confirmed`, `phantom`, `missed`, `neither` |
+| `model_ts_first_fill` | `timestamp[ns, tz=UTC]` | yes |  |
+| `exact_ts_first_fill` | `timestamp[ns, tz=UTC]` | yes |  |
+| `model_mechanism` | `dictionary<int8, utf8>` | yes | `queue`, `swept`, `cross_on_arrival`, `crossed_resting`, `hidden_print`, `touch`, `particle` |
+| `exact_mechanism` | `dictionary<int8, utf8>` | yes | `queue`, `swept`, `cross_on_arrival`, `crossed_resting`, `hidden_print`, `touch`, `particle` |
 
 ### qt.zoo_trajectory
 

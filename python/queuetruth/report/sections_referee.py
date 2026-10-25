@@ -38,7 +38,9 @@ _CLASS = re.compile(r"^\d\d_[a-z0-9_]+$")
 MAX_README = 1200
 
 
-def _class_dir(r: RefereeReport) -> tuple[str | None, Path | None]:
+def class_dir(r: RefereeReport) -> tuple[str | None, Path | None]:
+    """The bug class (`NN_<class>` directory name) and its directory, when the report's `dataset.path` (or its
+    parent) is a referee fixture directory; else (None, None)."""
     ds = r.spec.get("dataset") if isinstance(r.spec, dict) else None
     p = ds.get("path") if isinstance(ds, dict) else None
     if not isinstance(p, str):
@@ -63,16 +65,17 @@ def _readme(d: Path | None) -> str | None:
     return text
 
 
-def _pretty(name: str) -> str:
+def pretty_class(name: str) -> str:
+    """`02_level_shrink_caps_queue` -> `02. level shrink caps queue`."""
     num, _, rest = name.partition("_")
     return f"{num}. {rest.replace('_', ' ')}"
 
 
 def _one(run: RunDir, r: RefereeReport) -> list[str]:
-    cls, d = _class_dir(r)
+    cls, d = class_dir(r)
     sim = r.simulator.name + (f" {r.simulator.version}" if r.simulator.version else "")
     st = GOOD if r.pass_ else CRIT
-    title = _pretty(cls) if cls else run.label
+    title = pretty_class(cls) if cls else run.label
     out = [f"<h3>{F.esc(title)} · simulator {F.esc(sim)} {badge(st, 'pass' if r.pass_ else 'fail')}</h3>"]
     readme = _readme(d)
     if readme:
@@ -146,7 +149,7 @@ def referee(ctx: Ctx) -> Raw | None:
     body: list[str] = []
     by_class: dict[str, list[RefereeReport]] = {}
     for _, r in reps:
-        cls, _ = _class_dir(r)
+        cls, _ = class_dir(r)
         if cls:
             by_class.setdefault(cls, []).append(r)
     if by_class:
@@ -154,13 +157,15 @@ def referee(ctx: Ctx) -> Raw | None:
         for name in [*BUG_CLASSES, *sorted(set(by_class) - set(BUG_CLASSES))]:
             got = by_class.get(name, [])
             if not got:
-                rows.append((_pretty(name), "not run", F.DASH, F.DASH))
+                rows.append((pretty_class(name), "not run", F.DASH, F.DASH))
                 rc.append("")
                 continue
             ok = all(x.pass_ for x in got)
             sims = ", ".join(sorted({x.simulator.name for x in got}))
             disc = sum(x.discordant.sim_only + x.discordant.exact_only for x in got)
-            rows.append((_pretty(name), Raw(badge(GOOD if ok else CRIT, "pass" if ok else "fail")), sims, F.num(disc)))
+            rows.append(
+                (pretty_class(name), Raw(badge(GOOD if ok else CRIT, "pass" if ok else "fail")), sims, F.num(disc))
+            )
             rc.append("" if ok else "hl")
         n_run = sum(1 for n in BUG_CLASSES if n in by_class)
         n_fail = sum(1 for n, v in by_class.items() if not all(x.pass_ for x in v))

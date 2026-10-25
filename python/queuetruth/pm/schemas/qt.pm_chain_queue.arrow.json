@@ -1,0 +1,75 @@
+{
+  "name": "qt.pm_chain_queue",
+  "metadata": {
+    "qt.engine_version": "0.1.1",
+    "qt.schema": "qt.pm_chain_queue",
+    "qt.schema_version": "1.1"
+  },
+  "fields": [
+    {
+      "name": "order_key",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "order_hash",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "instrument_id",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "side",
+      "type": "uint8",
+      "nullable": false
+    },
+    {
+      "name": "price",
+      "type": "int64",
+      "nullable": false
+    },
+    {
+      "name": "seq",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "ts_event",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": false
+    },
+    {
+      "name": "tx",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "block",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "log_index",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "ahead_others",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "ahead_own",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "makers_ahead",
+      "type": "uint32",
+      "nullable": false
+    }
+  ]
+}

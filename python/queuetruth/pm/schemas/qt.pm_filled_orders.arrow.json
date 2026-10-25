@@ -1,0 +1,75 @@
+{
+  "name": "qt.pm_filled_orders",
+  "metadata": {
+    "qt.engine_version": "0.1.1",
+    "qt.schema": "qt.pm_filled_orders",
+    "qt.schema_version": "1.1"
+  },
+  "fields": [
+    {
+      "name": "order_hash",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "maker",
+      "type": "utf8",
+      "nullable": false
+    },
+    {
+      "name": "instrument_id",
+      "type": "uint32",
+      "nullable": true
+    },
+    {
+      "name": "canon_side",
+      "type": "uint8",
+      "nullable": true
+    },
+    {
+      "name": "price",
+      "type": "int64",
+      "nullable": true
+    },
+    {
+      "name": "n_fills",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "filled",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "first_block",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "first_log_index",
+      "type": "uint32",
+      "nullable": false
+    },
+    {
+      "name": "last_block",
+      "type": "uint64",
+      "nullable": false
+    },
+    {
+      "name": "ts_first_match",
+      "type": "timestamp[ns, tz=UTC]",
+      "nullable": true
+    },
+    {
+      "name": "own",
+      "type": "bool",
+      "nullable": false
+    },
+    {
+      "name": "price_consistent",
+      "type": "bool",
+      "nullable": false
+    }
+  ]
+}

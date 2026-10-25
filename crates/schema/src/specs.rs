@@ -345,6 +345,9 @@ pub enum IngestFormat {
     KrakenL3,
     /// Hyperliquid node order-status / fills output (`qt_crypto`; QT-CONFIG-001 until implemented).
     HyperliquidNode,
+    /// NYSE Group TAQ Integrated Feed (`EQY_US_<market>_IBF_<channel>_<date>` CSV, gzip or raw), order by order
+    /// (`qt_ingest::nyse`, rule set `nyse`).
+    NyseIbf,
 }
 
 /// Session time zone.

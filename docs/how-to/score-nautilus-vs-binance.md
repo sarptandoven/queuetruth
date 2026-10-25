@@ -387,10 +387,11 @@ time-to-fill comparison conditional on fill are still computed. Tests: `test_fil
 ## Reading the result
 
 `score` writes `summary.json` (`qt.scorecard_summary`, fields in
-[the schema reference](../reference/schemas.md#qtscorecard_summary)) and five tables: `score_orders.parquet` (one
+[the schema reference](../reference/schemas.md#qtscorecard_summary)) and six tables: `score_orders.parquet` (one
 row per matched order, with `class` = `both`, `neither`, `live_only` or `sim_only`), `score_fills.parquet`,
-`score_markouts.parquet`, `score_position.parquet`, `score_tests.parquet`, plus the instruction-sized
-`schedule.parquet`.
+`score_markouts.parquet`, `score_position.parquet`, `score_tests.parquet` and `score_shortfall.parquet` (the gap of
+each order split into delay, spread, missed fills, adverse selection, partial fills and fees; see
+[Decompose the sim-live gap](decompose-the-sim-live-gap.md)), plus the instruction-sized `schedule.parquet`.
 
 The headline (`verdict.headline`) states the direction and size of the fill-rate difference within the window with
 its 95% interval, the equivalence result, the exact McNemar p with the cluster-robust p and cluster count, the

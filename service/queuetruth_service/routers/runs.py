@@ -1,10 +1,16 @@
-"""Job-creating resources: `/v1/replays`, `/v1/calibrations`, `/v1/scorecards` (estimate, submit, list, get) and
-`/v1/reports` (submit, get). Specs are the SPEC 4.2 models; references must be tenant-owned ids (see `refs`) and the
-compute knobs (`threads`, `particles`, `bootstrap.b`, `bootstrap_b`, `perm_b`) stay within `QT_COMPUTE_LIMITS`
-(422 otherwise, security review M4)."""
+"""Job-creating resources: `/v1/replays`, `/v1/zoos`, `/v1/calibrations`, `/v1/scorecards` (estimate, submit, list,
+get) and `/v1/reports` (submit, get). Specs are the SPEC 4.2 models; references must be tenant-owned ids (see `refs`),
+the compute knobs (`threads`, `particles`, `bootstrap.b`, `bootstrap_b`, `perm_b`) stay within `QT_COMPUTE_LIMITS`
+(security review M4), and the zoo and calibration lists stay within `MAX_ZOO_MODELS` model ids and `MAX_HORIZONS`
+horizons; a zoo model id must have the engine's shape and a family of the engine's registry (`engine_models`, the list
+behind `queuetruth zoo --list-models`). Every violation of these bounds is listed in one 422 (`check_bounds`); the
+engine checks parameter values when the job runs."""
 
 from __future__ import annotations
 
+import functools
+import json
+import re
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Path, Query, Request
@@ -22,29 +28,166 @@ from queuetruth_service.api_models import (
     ScorecardPage,
     ScorecardRecord,
     Submitted,
+    ZooPage,
+    ZooRecord,
 )
 from queuetruth_service.auth import Auth, ReadAuth, SubmitAuth
 from queuetruth_service.context import ctx
 from queuetruth_service.db import tenant_tx
 from queuetruth_service.documents import fetch_one, page, page_doc, run_doc
-from queuetruth_service.estimate import estimate
+from queuetruth_service.estimate import QUEUE_OVERHEAD_S, REPLAY_RPS, ZOO_PAIR_S, estimate
 from queuetruth_service.ids import new_id
 from queuetruth_service.jobs import create_job, enqueue_hook
+from queuetruth_service.problems import ProblemError, validation
 from queuetruth_service.problems import not_found as nf
-from queuetruth_service.problems import validation
-from queuetruth_service.refs import check_compute, check_job_succeeded, check_spec
+from queuetruth_service.refs import check_job_succeeded, check_spec, compute_violations
 
 router = APIRouter(prefix="/v1")
 RunId = Annotated[str, Path(max_length=64)]
 Limit = Annotated[int, Query(ge=1, le=200)]
 LOCATION = {202: {"headers": {"Location": {"description": "URL of the job", "schema": {"type": "string"}}}}}
+#: At most this many entries in `ZooSpec.models` (`all` counts as one; the engine expands it).
+MAX_ZOO_MODELS = 64
+#: At most this many entries in `horizons_ns` of a zoo or calibration spec (each horizon multiplies the evaluation).
+MAX_HORIZONS = 32
+#: Shape of a zoo model id: a family name, optionally `[key=value;...]` parameters (`hbt_power3[n=3]`).
+MODEL_ID = re.compile(r"[A-Za-z0-9_.\-]{1,64}(\[[A-Za-z0-9_.=;,:+\-]{0,128}\])?")
+#: Models of `all` when the engine's registry cannot be read (a service built without `queuetruth._core`); a test in
+#: the default suite pins it to `engine_models()`.
+ZOO_ALL_MODELS = 16
+#: Families whose per-pair cost grows with `particles` (the engine's `Family::is_particle`; a test checks the names
+#: against the registry).
+PARTICLE_FAMILIES = frozenset({"databento_mc"})
+#: Estimate: a particle model's (model, shadow) pair costs `1 + particles / PARTICLES_PER_PAIR` pairs, and each
+#: leaderboard bootstrap draw costs `(models + 1) / BOOTSTRAP_DRAWS_PER_PAIR` pairs per shadow (measured on
+#: synth_small, docs/design/extensions/service-zoo-mcp.md).
+PARTICLES_PER_PAIR = 500
+BOOTSTRAP_DRAWS_PER_PAIR = 1000
+
+
+@functools.cache
+def engine_models() -> tuple[tuple[str, ...], frozenset[str]] | None:
+    """`(ids that "all" runs, every family name)` from the engine's model registry (`queuetruth zoo --list-models`
+    through `queuetruth._core`), or None when the engine is not available."""
+    try:
+        from queuetruth import _core
+    except ImportError:
+        return None
+    try:
+        _core.cli_parse(["queuetruth", "--format", "json", "zoo", "--list-models"])
+    except _core.CliExit as e:  # the listing is printed and the command exits 0
+        code, text = e.args[0], e.args[1]
+        if code != 0:
+            return None
+        doc = json.loads(text)
+        ids = tuple(str(r["id"]) for r in doc["all"])
+        return ids, frozenset(str(r["family"]) for r in (*doc["all"], *doc["other"]))
+    return None
+
+
+def _family(model: str) -> str:
+    return model.split("[", 1)[0]
+
+
+def list_violations(kind: str, spec: dict[str, Any], loc: list[str | int]) -> list[dict[str, Any]]:
+    """`errors` entries for every zoo model id or horizon list entry beyond this service's bounds."""
+    errors: list[dict[str, Any]] = []
+    horizons = spec.get("horizons_ns") or []
+    if len(horizons) > MAX_HORIZONS:
+        errors.append({"loc": [*loc, "horizons_ns"], "msg": f"at most {MAX_HORIZONS} horizons on this service"})
+    if kind == "zoo":
+        models = spec.get("models") or []
+        if not models:
+            errors.append({"loc": [*loc, "models"], "msg": 'at least one model id (or "all")'})
+        if len(models) > MAX_ZOO_MODELS:
+            errors.append({"loc": [*loc, "models"], "msg": f"at most {MAX_ZOO_MODELS} model ids on this service"})
+        registry = engine_models()
+        seen: set[str] = set()
+        for i, model in enumerate(models[: MAX_ZOO_MODELS + 1]):
+            if not isinstance(model, str) or not MODEL_ID.fullmatch(model):
+                errors.append({"loc": [*loc, "models", i], "msg": "not a model id (family[key=value;...])"})
+                continue
+            if model in seen:
+                errors.append({"loc": [*loc, "models", i], "msg": f"duplicate model id {model!r}"})
+            elif model != "all" and registry is not None and _family(model) not in registry[1]:
+                errors.append(
+                    {
+                        "loc": [*loc, "models", i],
+                        "msg": f"unknown model family {_family(model)!r} (`queuetruth zoo --list-models` lists them)",
+                    }
+                )
+            seen.add(model)
+    return errors
+
+
+def check_bounds(kind: str, spec: dict[str, Any], compute_limits: dict[str, int]) -> None:
+    """One 422 `validation-error` listing every compute knob above `QT_COMPUTE_LIMITS` and every list violation."""
+    compute = compute_violations(spec, compute_limits, ["body"])
+    lists = list_violations(kind, spec, ["body"])
+    if compute or lists:
+        what = [
+            *(["compute parameters exceed this service's limits (QT_COMPUTE_LIMITS)"] if compute else []),
+            *(["model or horizon lists are outside this service's bounds"] if lists else []),
+        ]
+        raise ProblemError(
+            422,
+            "validation-error",
+            "Request validation failed",
+            "QT-CONFIG-001",
+            "; ".join(what),
+            errors=compute + lists,
+        )
+
+
+def zoo_models_est(spec: dict[str, Any]) -> tuple[int, int]:
+    """`(models, particle models)` a zoo spec runs: `all` expands to the engine's list (`ZOO_ALL_MODELS`
+    deterministic models without the engine), and an explicit id the list already holds counts once, as the engine
+    dedupes it."""
+    registry = engine_models()
+    out: list[str] = []
+    for model in spec.get("models") or []:
+        ids = (
+            [model]
+            if model != "all"
+            else list(registry[0])
+            if registry
+            else [f"all#{i}" for i in range(ZOO_ALL_MODELS)]
+        )
+        out.extend(x for x in ids if x not in out)
+    return len(out), sum(1 for x in out if _family(x) in PARTICLE_FAMILIES)
+
+
+def zoo_estimate(base: dict[str, Any], spec: dict[str, Any]) -> dict[str, Any]:
+    """`qt.estimate` of a zoo from the generic one (records and shadows from the manifest and upload): two passes over
+    the records (exact truth and the L2 view) plus, per shadow, one model step per model (a particle model costs
+    `1 + particles / PARTICLES_PER_PAIR` steps) and the leaderboard bootstrap (`(models + 1) * bootstrap_b /
+    BOOTSTRAP_DRAWS_PER_PAIR` steps), each step `ZOO_PAIR_S`; output about 512 bytes per (model, shadow) pair, plus
+    the trajectory (24 bytes per record) when `write_trajectory`."""
+    records, shadows = int(base["records_est"]), int(base["shadows_est"])
+    n_models, n_particle = zoo_models_est(spec)
+    particles, draws = int(spec.get("particles", 100)), int(spec.get("bootstrap_b", 1000))
+    steps = (
+        (n_models - n_particle)
+        + n_particle * (1 + particles / PARTICLES_PER_PAIR)
+        + (n_models + 1) * draws / BOOTSTRAP_DRAWS_PER_PAIR
+    )
+    pairs = shadows * n_models
+    cpu = round(2 * records / REPLAY_RPS + shadows * steps * ZOO_PAIR_S, 3)
+    bytes_out = pairs * 512 + (records * 24 if spec.get("write_trajectory") else 0)
+    return base | {
+        "kind": "zoo",
+        "cpu_seconds_est": cpu,
+        "bytes_out_est": bytes_out,
+        "cost_units": cpu,
+        "eta_seconds": round(cpu + QUEUE_OVERHEAD_S, 3),
+    }
 
 
 async def _submit(
     request: Request, auth: Auth, idem: str, kind: str, prefix: str, table: str, spec: dict[str, Any]
 ) -> Any:
     c = ctx(request)
-    check_compute(spec, c.settings.compute_limits)
+    check_bounds(kind, spec, c.settings.compute_limits)
 
     def execute(conn: Any) -> idempotency.Outcome:
         if kind == "report":
@@ -68,10 +211,11 @@ async def _submit(
 
 def _estimate(request: Request, auth: Auth, kind: str, spec: dict[str, Any]) -> Any:
     c = ctx(request)
-    check_compute(spec, c.settings.compute_limits)
+    check_bounds(kind, spec, c.settings.compute_limits)
     with tenant_tx(c.db(), auth) as conn:
         check_spec(conn, auth.tenant_id, spec)
-        return estimate(conn, auth.tenant_id, kind, spec)
+        est = estimate(conn, auth.tenant_id, kind, spec)
+    return zoo_estimate(est, spec) if kind == "zoo" else est
 
 
 def _get(request: Request, auth: Auth, table: str, rid: str) -> Any:
@@ -117,6 +261,34 @@ def list_replays(request: Request, auth: ReadAuth, limit: Limit = 50, starting_a
 def get_replay(request: Request, replay_id: RunId, auth: ReadAuth) -> Any:
     """`{id, spec, job_id, summary?: qt.replay_summary}`."""
     return _get(request, auth, "replays", replay_id)
+
+
+# ---- zoos -------------------------------------------------------------------------------------------------------
+
+
+@router.post("/zoos/estimate", response_model=m.Estimate, summary="Estimate a zoo run")
+def estimate_zoo(request: Request, spec: sp.ZooSpec, auth: ReadAuth) -> Any:
+    """`qt.estimate`."""
+    return _estimate(request, auth, "zoo", _dump(spec))
+
+
+@router.post("/zoos", status_code=202, response_model=Submitted, responses=LOCATION, summary="Submit a zoo run")
+async def submit_zoo(request: Request, spec: sp.ZooSpec, idem: idempotency.IdemKey, auth: SubmitAuth) -> Any:
+    """`ZooSpec` (dataset and shadows as tenant ids) -> `{id, job}` + `Location`; the job runs every model on the L2
+    view and scores it against exact truth."""
+    return await _submit(request, auth, idem, "zoo", "zoo", "zoos", _dump(spec))
+
+
+@router.get("/zoos", response_model=ZooPage, summary="List zoo runs")
+def list_zoos(request: Request, auth: ReadAuth, limit: Limit = 50, starting_after: str | None = None) -> Any:
+    """`qt.page` of `{id, spec, job_id, summary?}`."""
+    return _list(request, auth, "zoos", limit, starting_after)
+
+
+@router.get("/zoos/{zoo_id}", response_model=ZooRecord, summary="Get a zoo run")
+def get_zoo(request: Request, zoo_id: RunId, auth: ReadAuth) -> Any:
+    """`{id, spec, job_id, summary?: qt.zoo_summary}`."""
+    return _get(request, auth, "zoos", zoo_id)
 
 
 # ---- calibrations -----------------------------------------------------------------------------------------------

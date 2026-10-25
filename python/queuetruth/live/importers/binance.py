@@ -34,7 +34,7 @@ from queuetruth.live._common import (
     text_or_none,
 )
 from queuetruth.live.builder import ImportResult, LogBuilder
-from queuetruth.live.importers._base import ImportOptions, json_records, new_builder, side_of
+from queuetruth.live.importers._base import ImportOptions, json_records, new_builder, obj_field, side_of
 
 VENUE = "binance"
 _TYPES = {
@@ -61,7 +61,7 @@ def _ts(m: dict[str, Any], rec: Record) -> tuple[int, str, str]:
     if m.get("T") is not None:
         ns, prec = epoch_ns(m["T"], "auto", "T", rec.location)
         return ns, prec, "match_time"
-    ns, prec = epoch_ns(m["E"], "auto", "E", rec.location)
+    ns, prec = epoch_ns(m.get("E"), "auto", "E", rec.location)
     return ns, prec, "record_time"
 
 
@@ -184,7 +184,7 @@ def _ws_api(b: LogBuilder, m: dict[str, Any], rec: Record, pending: dict[str, tu
     loc = rec.location
     if rec.direction == "out":
         method = str(m.get("method", ""))
-        params = m.get("params") or {}
+        params = obj_field(m.get("params"), "params", loc)
         req_id = text_or_none(m.get("id"))
         if req_id is not None:
             pending[req_id] = (method, params)
@@ -230,7 +230,7 @@ def _ws_api(b: LogBuilder, m: dict[str, Any], rec: Record, pending: dict[str, tu
             b.order(oid=text_or_none(res.get("orderId")), cid=text_or_none(res.get("clientOrderId")), rec=rec)
         b.skip("ws-api success response (lifecycle comes from the user data stream)")
         return
-    err = m.get("error") or {}
+    err = obj_field(m.get("error"), "error", loc)
     reason = f"{text_or_none(err.get('code'))} {text_or_none(err.get('msg'))}"
     common = {"rec": rec, "source": "ws", "kind": "unknown", "precision": "ms"}
     if method == "order.place":

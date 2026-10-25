@@ -39,7 +39,7 @@ pub struct FeedStats {
     pub duplicate_messages: u64,
     /// Forward jumps of the sequence number.
     pub sequence_gaps: u64,
-    /// Messages missing in those jumps.
+    /// Messages missing in those jumps (saturating: hostile captures can announce more than `u64::MAX`).
     pub sequence_gap_messages: u64,
     /// Segments with a negative First Message Sequence Number (skipped).
     pub bad_sequence: u64,
@@ -163,7 +163,7 @@ impl<R: Read> FeedReader<R> {
             let payload = &body[..plen.min(body.len())];
             if first > expected {
                 stats.sequence_gaps += 1;
-                stats.sequence_gap_messages += first - expected;
+                stats.sequence_gap_messages = stats.sequence_gap_messages.saturating_add(first - expected);
             }
             let mut blocks = Blocks::new(payload, h.message_count);
             let mut seq = first;
@@ -213,5 +213,46 @@ impl<R: Read> FeedReader<R> {
             ("iex_capture_bad_packets".to_owned(), self.cap.stats.bad_packets),
         ]);
         v
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::iex::synth::{Segment, frames, pcap};
+    use std::io::Cursor;
+
+    fn seg(channel: u32, session: u32, first_seq: i64) -> Segment {
+        Segment {
+            channel,
+            session,
+            first_seq,
+            send_time: 1,
+            capture_ns: 1,
+            messages: vec![vec![b'?']],
+        }
+    }
+
+    /// Fuzz regression (`fuzz/regressions/iex/gap_counter_overflow`): three sessions that each jump from sequence
+    /// 0 to `i64::MAX` add up to more than `u64::MAX` missing messages; the counter saturates instead of panicking.
+    #[test]
+    fn gap_message_counter_saturates() {
+        let mut segs = Vec::new();
+        for ch in 1..=3 {
+            segs.push(seg(ch, 7, 0));
+            segs.push(seg(ch, 7, i64::MAX - 1));
+        }
+        let mut feed = FeedReader::new(CaptureReader::new(Cursor::new(pcap(&frames(&segs)))));
+        let mut delivered = 0;
+        feed.for_each(|ev| {
+            if let FeedEvent::Message(_) = ev {
+                delivered += 1;
+            }
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(delivered, 6);
+        assert_eq!(feed.stats.sequence_gaps, 3);
+        assert_eq!(feed.stats.sequence_gap_messages, u64::MAX);
     }
 }

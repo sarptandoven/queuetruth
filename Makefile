@@ -13,7 +13,11 @@ PYTHON_BIN ?= /opt/homebrew/bin/python3.13
 VENV_PY := $(ROOT)/.venv/bin/python
 RUN := uv run --frozen --no-sync
 CARGO := cargo
-PY_DIRS := $(wildcard python service scripts tests benches)
+PY_DIRS := $(wildcard python service scripts tests benches tools integrations)
+# Test directories outside python/ and service/ (also in pyproject testpaths). Their optional dependencies
+# (the hftbacktest venvs, queuetruth._core, real data) skip with a reason when absent.
+EXTRA_TEST_DIRS := $(wildcard tools/livefill/tests scripts/nightly/tests scripts/scale/tests \
+	integrations/hftbacktest/tests)
 FIXTURE_DIRS := synth_small synth_small_nasdaq referee
 # Local checkout of the author's earlier private et prototype (its out/ and data/ artifacts). Needed only by
 # realdata, bench-et and the realdata bench suite; defaults to $QT_ET_ROOT, empty when unset.
@@ -21,6 +25,7 @@ ET_ROOT ?= $(QT_ET_ROOT)
 
 .PHONY: help env-check venv lock sync develop fmt lint test-rust test-py test-service test-e2e test schemas \
 	schemas-check fixtures openapi gate-0 gate-1 gate-2 gate-3 realdata bench bench-check compose-config \
+	lint-py test-extra test-nautilus fuzz-py fuzz-rust nightly nightly-reduced \
 	hbt-crosscheck clean-realdata check-placeholders check-docs docs-build examples wheel-smoke release-check compose-smoke dbn-samples bench-real bench-baseline bench-et test-bench reproduce reproduce-breadth
 
 help: ## list targets
@@ -59,6 +64,10 @@ lint: ## rustfmt check, clippy -D warnings, ruff check and format check
 	$(RUN) ruff check $(PY_DIRS)
 	$(RUN) ruff format --check $(PY_DIRS)
 
+lint-py: ## ruff check and format check only (the Python half of lint)
+	$(RUN) ruff check $(PY_DIRS)
+	$(RUN) ruff format --check $(PY_DIRS)
+
 test-rust: ## all Rust tests including the cross-crate gate tests
 	$(CARGO) test --workspace --locked --exclude queuetruth-py --features gate
 
@@ -68,11 +77,38 @@ test-py: ## Python package tests
 test-service: ## service tests
 	$(RUN) pytest service/tests
 
+test-extra: ## tests of tools/, integrations/ and scripts/ (livefill kit, nightly runner, scale tracing, hbt)
+	$(RUN) pytest $(EXTRA_TEST_DIRS)
+
+# A separate session under the plugin's own pytest config: its tests import their conftest by module name, which
+# resolves to another directory's conftest.py in the root session. Engine tests skip without nautilus_trader.
+test-nautilus: ## queuetruth-nautilus plugin tests (integrations/nautilus, its own pytest session)
+	$(RUN) pytest integrations/nautilus/tests
+
 test-e2e: ## end-to-end tests (integration included); builds queuetruth-core for the O-PARITY-1 binary arm
 	$(CARGO) build --locked -p queuetruth-cli --bin queuetruth-core
 	$(RUN) pytest tests/e2e -m "integration or not integration"
 
-test: lint test-rust develop test-py test-service ## everything except e2e
+test: lint test-rust develop test-py test-service test-extra test-nautilus ## everything except e2e
+
+FUZZ_EXAMPLES ?= 400
+FUZZ_STATS ?= .scratch/fuzz-py-stats.json
+
+fuzz-py: ## deep random campaign of the Python parser fuzz suite (FUZZ_EXAMPLES per property; stats to FUZZ_STATS)
+	mkdir -p $(dir $(FUZZ_STATS))
+	QT_FUZZ_PROFILE=deep QT_FUZZ_EXAMPLES=$(FUZZ_EXAMPLES) QT_FUZZ_STATS=$(FUZZ_STATS) \
+		$(RUN) pytest python/tests/fuzz -m fuzz
+
+fuzz-rust: ## Rust fuzz harness tests on stable: seeds, regressions and known crashes still reproduce (no libFuzzer)
+	cd fuzz && $(CARGO) +stable test --locked
+
+NIGHTLY_ARGS ?=
+
+nightly: ## local nightly cross-checks, full mode (hbt, NT, repro, bench; venvs and results in .scratch/nightly)
+	bash scripts/nightly/nightly.sh run --mode full $(NIGHTLY_ARGS)
+
+nightly-reduced: ## the nightly cross-checks in reduced mode (fewer shadows, one repro day, two bench cases)
+	bash scripts/nightly/nightly.sh run --mode reduced $(NIGHTLY_ARGS)
 
 schemas: ## regenerate schemas/json, schemas/arrow, schemas/samples, schemas/run_id_kat.json
 	$(RUN) python scripts/gen_schemas.py
@@ -114,6 +150,7 @@ gate-2: ## main-build gate (everything, integration tests, schemas)
 gate-3: ## integration gate (e2e, real data, benches, release, docs, compose)
 	$(MAKE) test
 	$(MAKE) test-e2e
+	$(MAKE) fuzz-rust
 	$(MAKE) realdata
 	$(MAKE) bench
 	$(MAKE) release-check
@@ -131,6 +168,8 @@ SMOKE_VENV := .scratch/smoke-venv
 check-docs: ## docs link and runnable-block check
 	@test -n "$(CHECK_DOCS)" || { echo "check_docs.py missing (scripts/ or docs/)"; exit 1; }
 	$(RUN) python $(CHECK_DOCS)
+	$(RUN) python docs/assets/readme_chart.py --self-test
+	$(RUN) python docs/assets/readme_chart.py --check
 
 check-placeholders: ## fail on unfilled {{PLACEHOLDERS}} in README.md and docs/ (docs/launch/ templates excepted)
 	@! grep -rnE --include="*.md" "\{\{[A-Z0-9_]+\}\}" README.md docs --exclude-dir=launch

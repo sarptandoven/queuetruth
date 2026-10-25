@@ -1,17 +1,20 @@
-"""pyarrow mirrors of the Arrow table schemas of SPEC 3.4 and 3.8.
+"""pyarrow mirrors of the Arrow table schemas of SPEC 3.4 and 3.8 and of the extension tables (`qt.zoo_toxicity_*`,
+`qt.conformal_*`, `qt.ledger`).
 
 `SCHEMAS[name]` must equal `qt_schema::schema(name)` exactly (field names, types, nullability, order and schema
-metadata). Dictionary columns are `dictionary<int8, utf8>`; their allowed values are listed in `DICT_VALUES`.
+metadata). Dictionary columns are `dictionary<int8, utf8>` with their allowed values listed in `DICT_VALUES`, except
+the open `qt.conformal_sets.stratum` (`dictionary<int16, utf8>`, any label).
 `qt.features` holds only the fixed columns; `features_schema(names)` inserts the float64 feature columns
 (`full=True`: also the 1.1 column `midnight_utc_ns` after `cause`).
 
-Schema 1.1 (SPEC 3.11) is additive. Every table carries `qt.schema_version = "1.1"`. Columns added in 1.1 are
-appended after the v0.1 columns and are optional per file: a 1.1 table file holds either the v0.1 columns
-(`SCHEMAS[name]`, unchanged so that existing writers and readers keep working) or all columns
-(`FULL_SCHEMAS[name]` = `qt_schema::full_schema(name)`); `ADDED_COLUMNS[name]` names the 1.1 columns, `conform`
-accepts both layouts and `upgrade` adds the 1.1 columns to a v0.1 table (derived where the v0.1 columns imply them,
-else null). Dictionary values added in 1.1 (`qt.live_orders.tif` `gtd`, `qt.live_orders.validation_status`
-`simulated`, `qt.live_events.source` `sim`) are appended, so v0.1 dictionary indices are unchanged.
+Schema 1.1 (SPEC 3.11) is additive. Every table carries `qt.schema_version = "1.1"`, except the version-1 extension
+tables of `TABLE_VERSIONS`. Columns added in 1.1 are appended after the v0.1 columns and are optional per file: a 1.1
+table file holds either the v0.1 columns (`SCHEMAS[name]`, unchanged so that existing writers and readers keep
+working) or all columns (`FULL_SCHEMAS[name]` = `qt_schema::full_schema(name)`); `ADDED_COLUMNS[name]` names the 1.1
+columns, `conform` accepts both layouts and `upgrade` adds the 1.1 columns to a v0.1 table (derived where the v0.1
+columns imply them, else null). Dictionary values added in 1.1 (`qt.live_orders.tif` `gtd`,
+`qt.live_orders.validation_status` `simulated`, `qt.live_events.source` `sim`) are appended, so v0.1 dictionary
+indices are unchanged.
 """
 
 from __future__ import annotations
@@ -49,7 +52,10 @@ _TYPES: dict[str, pa.DataType] = {
     "ts": TS,
     "date": pa.date32(),
     "dict": DICT,
+    "dict16": pa.dictionary(pa.int16(), pa.utf8()),
     "list_str": pa.list_(pa.utf8()),
+    "list_f64": pa.list_(pa.float64()),
+    "list_i64": pa.list_(pa.int64()),
 }
 
 # (column, type key, nullable, dictionary values or None, release that added it or None = v0.1); column order is
@@ -66,6 +72,8 @@ def _d(name: str, values: str, nullable: bool = False, since: str | None = None)
 
 
 N = True  # nullable marker
+#: `qt.zoo_toxicity_*` fill mechanisms (`queuetruth.eval.toxicity.MECHANISMS`).
+_TOX_MECHANISMS = "queue,swept,cross_on_arrival,crossed_resting,hidden_print,touch,particle"
 
 TABLES: dict[str, list[_Col]] = {
     "qt.instruments": [
@@ -501,6 +509,66 @@ TABLES: dict[str, list[_Col]] = {
         _c("n", "u64"),
         _c("note", "str", N),
     ],
+    "qt.shadow_impact": [
+        _c("shadow_id", "str"),
+        _c("instrument_id", "u32"),
+        _c("session_date", "date"),
+        _d("status", "live,rejected,out_of_session"),
+        _c("qty", "u64"),
+        _c("filled_qty", "u64", N),
+        _c("fills_in_tape", "bool"),
+        _c("ts_live", "ts"),
+        _c("ts_end", "ts"),
+        _d("end_source", "full_fill,trajectory_end,cancel,planned_end,admin_end,horizon,session_close,rejected"),
+        _c("ref_price", "i64", N),
+        _d("ref_price_source", "order,last_trade,none"),
+        _c("tick_size", "i64", N),
+        _c("daily_volume", "u64", N),
+        _d("volume_source", "venue_session,user"),
+        _c("sigma_daily", "f64", N),
+        _c("daily_participation", "f64", N),
+        _c("impact_frac", "f64", N),
+        _c("impact_bps", "f64", N),
+        _c("impact_ticks", "f64", N),
+        _c("level_qty_at_live", "u64", N),
+        _c("queue_share_at_live", "f64", N),
+        _c("queue_share_max", "f64", N),
+        _c("queue_min_qty", "u64"),
+        _c("life_volume", "u64", N),
+        _c("volume_share", "f64", N),
+        _c("flag_impact", "bool"),
+        _c("flag_queue", "bool"),
+        _c("flag_volume", "bool"),
+        _c("material", "bool"),
+    ],
+    "qt.score_shortfall": [
+        _d("scope", "order,total"),
+        _d("statistic", "value,sum,mean,ci_lo,ci_hi"),
+        _c("horizon_ns", "i64"),
+        _c("order_key", "str", N),
+        _c("instrument_id", "u32", N),
+        _c("session_date", "date", N),
+        _d("side", "buy,sell", N),
+        _d("class", "both,neither,live_only,sim_only", N),
+        _c("currency", "str", N),
+        _c("qty", "u64", N),
+        _c("live_qty", "u64", N),
+        _c("sim_qty", "u64", N),
+        _c("matched_qty", "u64", N),
+        _c("valued", "bool"),
+        _c("delay_ccy", "f64", N),
+        _c("spread_ccy", "f64", N),
+        _c("missed_fill_ccy", "f64", N),
+        _c("adverse_selection_ccy", "f64", N),
+        _c("partial_fill_ccy", "f64", N),
+        _c("fees_ccy", "f64", N),
+        _c("total_ccy", "f64", N),
+        _c("notional_ccy", "f64", N),
+        _c("live_notional_ccy", "f64", N),
+        _c("sim_notional_ccy", "f64", N),
+        _c("n", "u64"),
+        _c("note", "str", N),
+    ],
     "qt.hazard_predictions": [
         _c("order_ref", "str"),
         _c("landmark_ns", "i64"),
@@ -513,16 +581,127 @@ TABLES: dict[str, list[_Col]] = {
         _c("censored", "bool"),
         _d("split", "train,calib,test"),
     ],
+    # `zoo-toxicity` (queuetruth.eval.toxicity, docs/design/extensions/fill-toxicity.md)
+    "qt.zoo_toxicity_fills": [
+        _c("arm", "str"),
+        _c("shadow_id", "str"),
+        _c("fill_seq", "u32"),
+        _c("instrument_id", "u32"),
+        _c("side", "u8"),
+        _c("ts_event", "ts"),
+        _c("px", "i64", N),
+        _c("fill_qty", "f64"),
+        _d("liquidity", "maker,taker"),
+        _d("mechanism", _TOX_MECHANISMS),
+        _d("status", "confirmed,phantom", N),
+        _c("reason", "str"),
+    ],
+    "qt.zoo_toxicity_markouts": [
+        _c("arm", "str"),
+        _c("shadow_id", "str"),
+        _c("fill_seq", "u32"),
+        _c("horizon_ns", "i64"),
+        _c("mo_ticks", "f64", N),
+        _c("mo_bps", "f64", N),
+        _c("mm_ticks", "f64", N),
+        _c("mm_bps", "f64", N),
+    ],
+    "qt.zoo_toxicity_shadows": [
+        _c("model_id", "str"),
+        _c("shadow_id", "str"),
+        _c("instrument_id", "u32"),
+        _c("session_date", "date"),
+        _c("ts_live", "ts"),
+        _d("status", "confirmed,phantom,missed,neither"),
+        _c("model_ts_first_fill", "ts", N),
+        _c("exact_ts_first_fill", "ts", N),
+        _d("model_mechanism", _TOX_MECHANISMS, N),
+        _d("exact_mechanism", _TOX_MECHANISMS, N),
+    ],
+    # conformal fill probabilities (queuetruth.model.conformal, docs/design/extensions/conformal-fill.md); `stratum`
+    # is an open dictionary (the stratum labels of the run), so it has no fixed values.
+    "qt.conformal_sets": [
+        _c("order_ref", "str"),
+        _c("landmark_ns", "i64"),
+        _c("horizon_ns", "i64"),
+        _c("stratum", "dict16"),
+        _c("p", "f64"),
+        _c("y_fill", "bool", N),
+        _c("pvalue_nofill", "f64"),
+        _c("pvalue_fill", "f64"),
+        _c("set_nofill", "bool"),
+        _c("set_fill", "bool"),
+        _c("va_p0", "f64"),
+        _c("va_p1", "f64"),
+        _c("no_fill_within_ns", "i64", N),
+        _c("fill_within_ns", "i64", N),
+        _c("interval_no_fill_within_ns", "i64", N),
+        _c("interval_fill_within_ns", "i64", N),
+    ],
+    "qt.conformal_calibrator": [
+        _c("part", "str"),
+        _c("horizon_ns", "i64", N),
+        _c("landmark_ns", "i64"),
+        _c("category", "str"),
+        _c("label", "i8"),
+        _c("value", "f64"),
+        _c("weight", "f64", N),
+        _c("label_sum", "f64", N),
+    ],
+    # `ledger export --format parquet` (queuetruth.ledger, docs/concepts/trial-ledger.md)
+    "qt.ledger": [
+        _c("seq", "i64"),
+        _c("hash", "str"),
+        _c("prev", "str"),
+        _c("recorded_at", "ts"),
+        _c("started_at", "ts", N),
+        _c("kind", "str"),
+        _c("status", "str"),
+        _c("study", "str", N),
+        _c("trial_id", "str", N),
+        _c("run_id", "str", N),
+        _c("spec_hash", "str", N),
+        _c("dataset_hash", "str", N),
+        _c("name", "str", N),
+        _c("params_json", "str", N),
+        _c("inputs_json", "str"),
+        _c("metrics_json", "str"),
+        _c("series_kind", "str", N),
+        _c("series_sha256", "str", N),
+        _c("series", "list_f64", N),
+        _c("series_index", "list_i64", N),
+        _c("periods_per_year", "f64", N),
+        _c("higher_is_better", "bool", N),
+        _c("run_ids", "list_str"),
+        _c("code_queuetruth", "str", N),
+        _c("code_engine", "str", N),
+        _c("code_core", "str", N),
+        _c("code_git", "str", N),
+        _c("code_user", "str", N),
+        _c("error_code", "str", N),
+        _c("error_message", "str", N),
+        _c("note", "str", N),
+    ],
 }
 
 #: Index of the first outcome column of `qt.features`; feature columns are inserted before it.
 FEATURES_INSERT_AT = 7
 
 
+#: Tables whose writers declare their own `qt.schema_version` (new tables of version 1, without 1.1 columns); every
+#: other table carries `ARROW_SCHEMA_VERSION` (`qt_schema::tables::TABLE_VERSIONS`).
+TABLE_VERSIONS: dict[str, str] = {"qt.conformal_sets": "1", "qt.conformal_calibrator": "1", "qt.ledger": "1"}
+
+
+def table_version(name: str) -> str:
+    """`qt.schema_version` of a table's files (`qt_schema::table_version`)."""
+    return TABLE_VERSIONS.get(name, ARROW_SCHEMA_VERSION)
+
+
 def _metadata(name: str) -> dict[bytes, bytes]:
     return {
         b"qt.schema": name.encode(),
-        b"qt.schema_version": ARROW_SCHEMA_VERSION.encode(),
+        b"qt.schema_version": table_version(name).encode(),
         b"qt.engine_version": ENGINE_VERSION.encode(),
     }
 

@@ -23,8 +23,11 @@ ingest of a bucket gives the same partition files as an ingest of the symbol sub
 Outputs in `<out>/<date>/`: `<date>.bucket-<kk>-of-<KK>.itch50.gz` (gzip, `--level`, mtime 0, one member each),
 `split_manifest.json` (stream hashes and checks against the pinned public-day values, per bucket the file sha256,
 the sha256 of its framed content, messages and per symbol `[locate, messages, executions]`, where executions count
-`E`, `C` and `P` messages, the planner's cost and quota input) and `<date>.directory.json` (every directory symbol:
-`[locate, messages in the full file]`, as `itch_subset.py`). Exit codes as `itch_subset.py`: 0 ok, 1 a check
+`E`, `C` and `P` messages, the planner's cost and quota input; `routing.test_issues`, every directory symbol whose
+Authenticity is `T`, which `plan.py` excludes; `trading_state`, per symbol of the whole day the spans in which its
+`H` Stock Trading Action state was not T (halted, paused, quotation only), which `plan.py` copies into the
+universe and `atlas.py reduce-day` turns into the `trading_ok` label) and `<date>.directory.json` (every directory
+symbol: `[locate, messages in the full file]`, as `itch_subset.py`). Exit codes as `itch_subset.py`: 0 ok, 1 a check
 failed, 2 input error, 4 disk guard.
 """
 
@@ -48,7 +51,27 @@ sys.path.insert(0, str(HERE.parent / "realdata"))
 import itch_subset as S  # noqa: E402
 
 DROP, BROADCAST = -1, -2
-T_E, T_C = ord("E"), ord("C")
+T_E, T_C, T_H = ord("E"), ord("C"), ord("H")
+TRADING_STATE_RULE = (
+    "per symbol (from the Stock Trading Action `H` messages of the whole day, routed or not), every `H` whose state "
+    "is not T opens a span [its timestamp, the symbol's next `H` (null: the end of the day)] with that state and "
+    "reason; ns since midnight; a symbol whose every `H` says T is not listed"
+)
+
+
+def non_t_spans(actions: dict[str, list[tuple[int, str, str]]]) -> dict[str, list[list[Any]]]:
+    """`{symbol: [[start_ns, end_ns or None, state, reason], ...]}` for the symbols with any `H` state other than T
+    (`actions`: per symbol its `H` messages `(ts_ns, state, reason)` in file order; `TRADING_STATE_RULE`)."""
+    out: dict[str, list[list[Any]]] = {}
+    for sym, acts in sorted(actions.items()):
+        spans = [
+            [ts, acts[i + 1][0] if i + 1 < len(acts) else None, state, reason]
+            for i, (ts, state, reason) in enumerate(acts)
+            if state != "T"
+        ]
+        if spans:
+            out[sym] = spans
+    return out
 
 
 def bucket_of(symbol: str, k: int) -> int:
@@ -80,6 +103,10 @@ class SplitPipeline(S.Pipeline):
         self.paths = paths
         self.level = level
         self.only = None if symbols is None else set(self.want)
+        self.repeated_dir: list[dict[str, Any]] = []
+        self.test_issues: set[str] = set()
+        self.actions: dict[str, list[tuple[int, str, str]]] = {}
+        self.h_messages = 0
         self.route = [DROP] * 65536
         self.route[0] = BROADCAST
         self.exec_count = [0] * 65536
@@ -120,6 +147,8 @@ class SplitPipeline(S.Pipeline):
                 self._directory(b, pos, loc)
             elif t == T_E or t == T_C or t == S.T_P:
                 ex[loc] += 1
+            elif t == T_H and ln >= 25:
+                self._trading_action(b, pos)
             r = route[loc]
             if r >= 0:
                 kept_by_type[t] += 1
@@ -141,14 +170,28 @@ class SplitPipeline(S.Pipeline):
         raw = bytes(b[pos + 13 : pos + 21])
         sym = raw.decode("ascii", "replace").strip()
         self.directory.setdefault(loc, sym)
+        if ((b[pos] << 8) | b[pos + 1]) >= 30 and b[pos + 31] == 84:  # Authenticity 'T' (Stock Directory offset 29)
+            self.test_issues.add(sym)
         if self.only is not None and raw not in self.only:
             return
         if sym in self.locates:
-            self.dup_dir.append({"symbol": sym, "locate": loc, "first_locate": self.locates[sym]})
+            entry = {"symbol": sym, "locate": loc, "first_locate": self.locates[sym]}
+            # the same symbol re-sent on its own locate (seen in the 2020-01-30 file) changes nothing; only a symbol
+            # reappearing on another locate would split its messages
+            (self.repeated_dir if loc == self.locates[sym] else self.dup_dir).append(entry)
             return
         self.locates[sym] = loc
         self.before_dir[sym] = self.loc_count[loc] - 1
         self.route[loc] = bucket_of(sym, self.k)
+
+    def _trading_action(self, b: bytes, pos: int) -> None:
+        """An `H` (Stock Trading Action) of any symbol, routed or not: kept for `split_manifest.json`
+        `trading_state` (stock at offset 11, state at 19, reason at 21..24 of the message)."""
+        self.h_messages += 1
+        sym = bytes(b[pos + 13 : pos + 21]).decode("ascii", "replace").strip()
+        ts = int.from_bytes(b[pos + 7 : pos + 13], "big")
+        reason = bytes(b[pos + 23 : pos + 27]).decode("ascii", "replace").strip()
+        self.actions.setdefault(sym, []).append((ts, chr(b[pos + 21]), reason))
 
     def _emit(self, kept: list[list[bytes]]) -> None:  # type: ignore[override]
         chunks = [b"".join(o) for o in kept]
@@ -250,7 +293,7 @@ def run_split(a: argparse.Namespace) -> int:
     missing = sorted(set(symbols or []) - set(pipe.locates))
     chk("every requested symbol found", missing, None if a.allow_missing else [])
     chk("no symbol message before its R", {s: n for s, n in pipe.before_dir.items() if n}, {})
-    chk("no duplicate directory entry", pipe.dup_dir, [])
+    chk("no symbol on two locates", pipe.dup_dir, [])
     chk("zero-length frames", pipe.zero_frames, 0)
     chk("short frames (< 3 bytes)", pipe.short_frames, 0)
     loc0 = pipe.loc_count[0]
@@ -302,7 +345,15 @@ def run_split(a: argparse.Namespace) -> int:
             "its R on to its symbol's bucket; messages before a locate's R dropped",
             "symbols": symbols,
             "missing_symbols": missing,
+            "repeated_directory_entries": pipe.repeated_dir,
+            "test_issues": sorted(pipe.test_issues),
             "gzip": f"python gzip, compresslevel {a.level}, mtime 0, empty name, one member",
+        },
+        "trading_state": {
+            "rule": TRADING_STATE_RULE,
+            "h_messages": pipe.h_messages,
+            "symbols_with_h": len(pipe.actions),
+            "non_t_spans": non_t_spans(pipe.actions),
         },
         "buckets": buckets,
         "timings": {
@@ -320,8 +371,10 @@ def run_split(a: argparse.Namespace) -> int:
         "schema": "qt.realdata.itch_directory",
         "date": date,
         "source_sha256": pipe.sha_c.hexdigest(),
-        "note": "every Stock Directory symbol: [locate, messages with that locate in the full file]",
+        "note": "every Stock Directory symbol: [locate, messages with that locate in the full file]; test_issues: "
+        "the symbols whose Stock Directory Authenticity is T",
         "symbols": {sym: [loc, pipe.loc_count[loc]] for loc, sym in sorted(pipe.directory.items())},
+        "test_issues": sorted(pipe.test_issues),
     }
     (out / f"{date}.directory.json").write_text(json.dumps(directory, separators=(",", ":")) + "\n")
     bad = [k for k, c in checks.items() if c["ok"] is False]

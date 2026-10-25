@@ -1,0 +1,18 @@
+{
+  "sample": {
+    "schema": "qt.sandbox_verification",
+    "schema_version": 1,
+    "ok": true,
+    "run_id": "0123456789abcdef",
+    "log_root": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "chain_ok": true,
+    "header_ok": true,
+    "dataset_ok": true,
+    "reexecution_ok": true,
+    "scorecard_ok": true,
+    "first_divergence": 1,
+    "problems": [
+      "x"
+    ]
+  }
+}

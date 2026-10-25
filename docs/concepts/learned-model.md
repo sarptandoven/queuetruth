@@ -93,21 +93,29 @@ two measures what L2 data cannot tell you about fills on that venue.
 
 ## Using it
 
-`fit-hazard` writes `model.json` (the model card, `qt.hazard_model_card`: spec, splits, scores, warnings), `model.pkl`
-and `predictions.parquet`. Unpickling runs code, so loading needs an authenticity check you supply:
+`fit-hazard` writes `model.json` (the model card, `qt.hazard_model_card`: spec, splits, scores, warnings),
+`model.npz` and `predictions.parquet`. `model.npz` is a ZIP of a JSON header and numpy arrays (the trees and the
+isotonic layers); loading it parses those arrays and checks them before use, and never runs code from the file. Keep
+the digest `fit_hazard` returned and pass it when you load, so the load is authenticated:
 
 ```python
-from queuetruth.model.hazard import HazardModel, pickle_sha256
+from queuetruth.model import HazardModel, model_sha256
 
 card = qt.fit_hazard(spec)                 # the card fit_hazard returned
-digest = pickle_sha256(card)               # sha256 of model.pkl: keep it where the model directory's writer cannot change it
+digest = model_sha256(card)                # sha256 of model.npz: keep it where the model directory's writer cannot change it
 
 model = HazardModel.load("model-dir", sha256=digest)
 preds = model.predict(features)            # a qt.hazard_predictions table
 ```
 
-`HazardModel.load(path, *, sha256=None, trusted=False)` refuses to unpickle without `sha256` (`QT-CONFIG-001`)
-unless you pass `trusted=True` for a directory only you can write. A pickle whose bytes differ from the digest, or
-from the `model.json` beside it, is refused with `QT-INPUT-002`; the `model.json` check is integrity only, because
-whoever can write the pickle can also write the card. The file is read once, and the bytes hashed are the bytes
-unpickled. Never load a model directory you received from someone else with `trusted=True`.
+`HazardModel.load(path, *, sha256=None, trusted=False, allow_pickle=False)` checks `model.npz` against the sha256
+recorded in `model.json` (integrity) and against `sha256` when you give it (authenticity); a mismatch, or a crafted or
+damaged file, is `QT-INPUT-002`. Without `sha256` the load succeeds, but whoever can write the directory can replace
+the model and its card together, so the model's `warnings` then say it is not authenticated. A model fitted under
+another scikit-learn version than the installed one says so in its `warnings` too.
+
+A v0.1 directory holds `model.pkl` instead, and unpickling runs code: it is refused with `QT-CONFIG-001` unless you
+pass `allow_pickle=True`, and then it still needs its trusted `sha256` or `trusted=True` for a directory only you can
+write. Convert such a directory once, after checking its digest:
+`python -m queuetruth.model.migrate DIR --allow-pickle --sha256 <digest>`. Never load a model directory you received
+from someone else with `trusted=True`.

@@ -9,6 +9,14 @@ client: [Use queuetruth from an agent](../how-to/use-from-an-agent.md).
 - **Local mode** (`--local`, or no key): only the tools marked *local* are listed. They read output directories
   under `QT_MCP_ROOT` (default: the current directory) and never write.
 - **Submit tools** are listed only with `--allow-submit`. They return a `qt.job` handle to poll with `qt_get_job`.
+- **Zoo tools** (`qt_get_zoo`, and `qt_submit_zoo` with `--allow-submit`) are listed in remote mode after the
+  tools above.
+- **Run tools** are listed in either mode only with `--allow-run` (or `QT_MCP_ALLOW_RUN=1`). They sample shadows and
+  run replays and zoos on local datasets without the service, each in a sandboxed child process, and write only under
+  the run root (`QT_MCP_RUN_ROOT`, default `<QT_MCP_ROOT>/qt-mcp-runs`); inputs must lie under `QT_MCP_ROOT`,
+  `QT_MCP_DATA_ROOTS` or the run root.
+- The agent sandbox tools (`qt_sandbox_*`) are an optional module: see
+  [Give an agent a realistic exchange](../how-to/agent-sandbox.md).
 - There is no destructive tool: nothing deletes data or manages keys. Large files are returned as `resource_link`
   items (presigned URLs), never inline.
 - Every tool declares an input and an output JSON Schema and returns `structuredContent` plus a short text
@@ -21,7 +29,7 @@ Tools in the order the server lists them:
 | `qt_meta` | remote | (none) | `qt.meta` | Service version, schema versions, limits, input formats, zero-egress. |
 | `qt_list_datasets` | remote | `limit`?, `starting_after`? | `qt.page` | One page of the tenant's datasets (qt.page of qt.dataset); pass next_cursor as starting_after. |
 | `qt_describe_dataset` | remote | `dataset_id` | `qt.dataset` | One dataset: status, manifest (partitions, rows, validation status) and data-quality verdict. |
-| `qt_estimate` | remote | `kind`, `spec` | `qt.estimate` | Records, shadows, CPU seconds, output bytes, cost units and ETA of a replay, calibration or scorecard spec (HTTP specs reference datasets by dataset_id and leave out null). |
+| `qt_estimate` | remote | `kind`, `spec` | `qt.estimate` | Records, shadows, CPU seconds, output bytes, cost units and ETA of a replay, zoo, calibration or scorecard spec (HTTP specs reference datasets by dataset_id and leave out null). |
 | `qt_get_job` | remote | `job_id` | `qt.job` | State, progress, error problem and usage of a job. |
 | `qt_list_job_files` | remote | `job_id` | `qt.file_manifest` | Output files of a succeeded job with sizes and sha256; each file is also returned as a resource_link (presigned URL, TTL <= 15 min). |
 | `qt_get_replay` | remote | `id` | `qt.replay_summary` | qt.replay_summary of a finished replay (error with the job state while it runs). |
@@ -35,6 +43,11 @@ Tools in the order the server lists them:
 | `qt_local_read_summary` | local | `path` | `qt.summary` | Reads one qt.* summary JSON (a file, or the summary of an output directory) under QT_MCP_ROOT; read-only. |
 | `qt_local_list_outputs` | local | `path` | `OutputsListing` | Lists the qt.* JSON documents under a directory below QT_MCP_ROOT with their schema names; read-only. |
 | `qt_local_why` | local | `dataset_path`, `shadows_path`, `shadow_id` | `qt.why_trace` | Event-by-event why-trace (qt.why_trace) of one shadow order on a local dataset; read-only. |
+| `qt_get_zoo` | remote | `id` | `qt.zoo_summary` | qt.zoo_summary of a finished zoo run (leaderboard of L2 queue models against exact truth); error with the job state while it runs. |
+| `qt_submit_zoo` | remote, `--allow-submit` | `spec`, `idempotency_key`? | `qt.job` | Starts a zoo job (ZooSpec with dataset_id and shadows upload_id or job_file references, out null) and returns its qt.job handle; poll qt_get_job, then qt_get_zoo. |
+| `qt_local_sample_shadows` | run, `--allow-run` | `spec` | `qt.shadow_sample_summary` | Seeded random shadow orders on a local dataset (ShadowSampleSpec, out null); writes shadows.parquet under the run root and returns qt.shadow_sample_summary. Pass the file to qt_local_run_replay or qt_local_run_zoo. |
+| `qt_local_run_replay` | run, `--allow-run` | `spec` | `qt.replay_summary` | Exact replay of a local dataset with optional shadows (ReplaySpec, out null) in a sandboxed child process; outputs under the run root; returns qt.replay_summary. |
+| `qt_local_run_zoo` | run, `--allow-run` | `spec` | `qt.zoo_summary` | Runs L2 queue models on a local dataset's L2 view and scores them against exact truth (ZooSpec, out null) in a sandboxed child process; outputs under the run root; returns qt.zoo_summary with the leaderboard. |
 
 ## Metric glossary (`qt_explain_metric`)
 

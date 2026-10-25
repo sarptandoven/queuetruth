@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.sandbox_verification",
+  "additionalProperties": false,
+  "description": "`verify` result: the hash chain, the header (engine version and spec id, committed by the `open` entry), the\ndataset identity (`dataset_id` and the sha256 of every partition file), a deterministic re-execution of the log\non the dataset (every entry must reproduce with the same hash), plus the scorecard digest when one was given.",
+  "properties": {
+    "schema": {
+      "const": "qt.sandbox_verification",
+      "default": "qt.sandbox_verification",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "ok": {
+      "title": "Ok",
+      "type": "boolean"
+    },
+    "run_id": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{16}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Run Id"
+    },
+    "log_root": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Log Root",
+      "type": "string"
+    },
+    "chain_ok": {
+      "title": "Chain Ok",
+      "type": "boolean"
+    },
+    "header_ok": {
+      "title": "Header Ok",
+      "type": "boolean"
+    },
+    "dataset_ok": {
+      "title": "Dataset Ok",
+      "type": "boolean"
+    },
+    "reexecution_ok": {
+      "title": "Reexecution Ok",
+      "type": "boolean"
+    },
+    "scorecard_ok": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Scorecard Ok"
+    },
+    "first_divergence": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "First Divergence"
+    },
+    "problems": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Problems",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "ok",
+    "run_id",
+    "log_root",
+    "chain_ok",
+    "header_ok",
+    "dataset_ok",
+    "reexecution_ok",
+    "scorecard_ok",
+    "first_divergence",
+    "problems"
+  ],
+  "type": "object"
+}

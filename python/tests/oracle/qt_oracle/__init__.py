@@ -16,10 +16,13 @@ Modules:
 The limits below are part of the oracle's contract; every discrepancy report repeats them.
 """
 
-ORACLE_VERSION = "0.1.2"
+ORACLE_VERSION = "0.1.3"
 # 0.1.0 was frozen before any comparison with queuetruth. 0.1.1 (after the first real-day comparison) treats a
 # printed execution at a price better for the taker than the order's display price as trading at that price.
 # 0.1.2 models ruling A1 per shadow: an excluded order stays on the tape for every shadow except its own (twin).
+# 0.1.3 ranks a level by order reference on Nasdaq TotalView-ITCH data (receipt order: orders held until the open
+# are released with their original references and execute first; docs/design/extensions/oracle-disagreements.md);
+# a twin-linked shadow entering at its twin's A ranks at the twin's own reference.
 
 LIMITS = (
     "Static counterfactual: the taker flow is fixed (each execution's size and time; the limit is the worst "
@@ -40,8 +43,14 @@ LIMITS = (
     "Venue facts are restated from SPEC 3.2 and rulings A3/A6, not re-derived from venue documentation. On CME "
     "an M is compared with the order's remaining size after same-event F records, so an M that raises the size "
     "above that remaining loses priority even when it is below the last displayed size (A6 as worded keeps it).",
-    "Tapes that execute out of FIFO order make the fork diverge from the tape (reported as oracle_divergence); "
-    "match_mode 'directed' keeps the tape's choice of maker and only adds the shadow's own priority.",
+    "Time priority is arrival order, or order-reference (receipt) order on Nasdaq TotalView-ITCH data (a dbn "
+    "dataset with venue nasdaq is taken to be XNAS.ITCH). Tapes that execute out of that order make the fork "
+    "diverge from the tape (reported as oracle_divergence); match_mode 'directed' keeps the tape's choice of maker "
+    "and only adds the shadow's own priority. A shadow's receipt point is the largest reference added on its own "
+    "instrument before it went live (a twin-linked shadow entering at its twin's A: the twin's reference), a lower "
+    "bound on the reference counter the instrument shares with other symbols, so an order received after that "
+    "reference but before the shadow and released after it from the pre-open hold ranks behind the shadow "
+    "(optimistic); the tape check covers the ranking of real orders only.",
     "Lifecycle conventions are shared with SPEC 5.2 by design (activation at the first event with ts_event > "
     "ts_live, cancels/amends at the first event after their effective time, crossed-at-live fills stamped "
     "ts_live). Only latency_ns is applied (no LatencyModel components or jitter); there is no sequence-gap "

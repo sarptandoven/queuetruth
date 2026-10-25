@@ -1,0 +1,438 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.forecast_entry",
+  "$defs": {
+    "BinaryForecast": {
+      "additionalProperties": false,
+      "description": "P(outcome = 1).",
+      "properties": {
+        "kind": {
+          "const": "binary",
+          "default": "binary",
+          "title": "Kind",
+          "type": "string"
+        },
+        "p": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "P",
+          "type": "number"
+        }
+      },
+      "required": [
+        "p"
+      ],
+      "title": "BinaryForecast",
+      "type": "object"
+    },
+    "CategoricalForecast": {
+      "additionalProperties": false,
+      "description": "Probability per outcome label. `forecast commit` normalises them to sum to 1 (refusing a sum more than 1e-3\naway) and `score` re-checks the sum against `SUM_TOL` and the question's outcome set.",
+      "properties": {
+        "kind": {
+          "const": "categorical",
+          "default": "categorical",
+          "title": "Kind",
+          "type": "string"
+        },
+        "probs": {
+          "additionalProperties": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "title": "Probs",
+          "type": "object"
+        }
+      },
+      "required": [
+        "probs"
+      ],
+      "title": "CategoricalForecast",
+      "type": "object"
+    },
+    "ContinuousForecast": {
+      "additionalProperties": false,
+      "description": "A predictive distribution of a real-valued outcome.",
+      "properties": {
+        "kind": {
+          "const": "continuous",
+          "default": "continuous",
+          "title": "Kind",
+          "type": "string"
+        },
+        "dist": {
+          "discriminator": {
+            "mapping": {
+              "normal": "#/$defs/NormalDist",
+              "quantiles": "#/$defs/QuantileDist",
+              "samples": "#/$defs/SampleDist"
+            },
+            "propertyName": "family"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/NormalDist"
+            },
+            {
+              "$ref": "#/$defs/QuantileDist"
+            },
+            {
+              "$ref": "#/$defs/SampleDist"
+            }
+          ],
+          "title": "Dist"
+        }
+      },
+      "required": [
+        "dist"
+      ],
+      "title": "ContinuousForecast",
+      "type": "object"
+    },
+    "ForecastPayload": {
+      "additionalProperties": false,
+      "description": "One forecast: who, which question, what. `as_of_ns` is the forecaster's own information timestamp (optional;\nit may not be later than the commit). `nonce` (64 hex, 256 random bits) makes the payload digest unguessable, so\na published commitment does not reveal the forecast before it is opened.",
+      "properties": {
+        "type": {
+          "const": "forecast",
+          "default": "forecast",
+          "title": "Type",
+          "type": "string"
+        },
+        "question_id": {
+          "minLength": 1,
+          "title": "Question Id",
+          "type": "string"
+        },
+        "forecaster": {
+          "minLength": 1,
+          "title": "Forecaster",
+          "type": "string"
+        },
+        "forecast": {
+          "discriminator": {
+            "mapping": {
+              "binary": "#/$defs/BinaryForecast",
+              "categorical": "#/$defs/CategoricalForecast",
+              "continuous": "#/$defs/ContinuousForecast"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/BinaryForecast"
+            },
+            {
+              "$ref": "#/$defs/CategoricalForecast"
+            },
+            {
+              "$ref": "#/$defs/ContinuousForecast"
+            }
+          ],
+          "title": "Forecast"
+        },
+        "as_of_ns": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "As Of Ns"
+        },
+        "nonce": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Nonce",
+          "type": "string"
+        }
+      },
+      "required": [
+        "question_id",
+        "forecaster",
+        "forecast",
+        "nonce"
+      ],
+      "title": "ForecastPayload",
+      "type": "object"
+    },
+    "NormalDist": {
+      "additionalProperties": false,
+      "description": "Gaussian predictive distribution.",
+      "properties": {
+        "family": {
+          "const": "normal",
+          "default": "normal",
+          "title": "Family",
+          "type": "string"
+        },
+        "mean": {
+          "title": "Mean",
+          "type": "number"
+        },
+        "sd": {
+          "exclusiveMinimum": 0.0,
+          "title": "Sd",
+          "type": "number"
+        }
+      },
+      "required": [
+        "mean",
+        "sd"
+      ],
+      "title": "NormalDist",
+      "type": "object"
+    },
+    "QuantileDist": {
+      "additionalProperties": false,
+      "description": "Predictive quantiles: `values[i]` at probability level `levels[i]` (strictly increasing, in (0, 1));\n`values` non-decreasing.",
+      "properties": {
+        "family": {
+          "const": "quantiles",
+          "default": "quantiles",
+          "title": "Family",
+          "type": "string"
+        },
+        "levels": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Levels",
+          "type": "array"
+        },
+        "values": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Values",
+          "type": "array"
+        }
+      },
+      "required": [
+        "levels",
+        "values"
+      ],
+      "title": "QuantileDist",
+      "type": "object"
+    },
+    "ResolutionPayload": {
+      "additionalProperties": false,
+      "description": "How a question resolved. `outcome`: 0 or 1 (binary), a label of `outcomes` (categorical), a number\n(continuous); null only when `void`. `info_cutoff_ns`: when the outcome became knowable, if earlier than\n`resolved_at_ns`. `ordered`: categorical outcomes are ordinal in the listed order (enables RPS). `group`:\nrelated questions (shared climatology and, with `cluster: group`, one bootstrap cluster).",
+      "properties": {
+        "type": {
+          "const": "resolution",
+          "default": "resolution",
+          "title": "Type",
+          "type": "string"
+        },
+        "question_id": {
+          "minLength": 1,
+          "title": "Question Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "binary",
+            "categorical",
+            "continuous"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "outcome": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Outcome"
+        },
+        "outcomes": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Outcomes"
+        },
+        "ordered": {
+          "default": false,
+          "title": "Ordered",
+          "type": "boolean"
+        },
+        "resolved_at_ns": {
+          "title": "Resolved At Ns",
+          "type": "integer"
+        },
+        "info_cutoff_ns": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Info Cutoff Ns"
+        },
+        "void": {
+          "default": false,
+          "title": "Void",
+          "type": "boolean"
+        },
+        "group": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Group"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        }
+      },
+      "required": [
+        "question_id",
+        "kind",
+        "outcome",
+        "resolved_at_ns"
+      ],
+      "title": "ResolutionPayload",
+      "type": "object"
+    },
+    "SampleDist": {
+      "additionalProperties": false,
+      "description": "Ensemble or Monte Carlo samples of the predictive distribution (equal weights).",
+      "properties": {
+        "family": {
+          "const": "samples",
+          "default": "samples",
+          "title": "Family",
+          "type": "string"
+        },
+        "samples": {
+          "items": {
+            "type": "number"
+          },
+          "minItems": 1,
+          "title": "Samples",
+          "type": "array"
+        }
+      },
+      "required": [
+        "samples"
+      ],
+      "title": "SampleDist",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`qt.forecast_entry`: one line of a forecast ledger (`ledger.jsonl`). `entry_sha256` = sha256 of the RFC 8785\ncanonical JSON of the entry without `entry_sha256`; `prev_sha256` is the previous entry's hash (64 zeros for\nseq 0); `payload_sha256` = sha256 of the canonical JSON of `payload`. `clock`: `system` (the writer's UTC clock,\nnever earlier than the previous entry) or `declared` (a time the writer supplied; not trusted by `score`).",
+  "properties": {
+    "schema": {
+      "const": "qt.forecast_entry",
+      "default": "qt.forecast_entry",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "seq": {
+      "minimum": 0,
+      "title": "Seq",
+      "type": "integer"
+    },
+    "prev_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Prev Sha256",
+      "type": "string"
+    },
+    "recorded_at_ns": {
+      "title": "Recorded At Ns",
+      "type": "integer"
+    },
+    "clock": {
+      "enum": [
+        "system",
+        "declared"
+      ],
+      "title": "Clock",
+      "type": "string"
+    },
+    "payload_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Payload Sha256",
+      "type": "string"
+    },
+    "payload": {
+      "discriminator": {
+        "mapping": {
+          "forecast": "#/$defs/ForecastPayload",
+          "resolution": "#/$defs/ResolutionPayload"
+        },
+        "propertyName": "type"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ForecastPayload"
+        },
+        {
+          "$ref": "#/$defs/ResolutionPayload"
+        }
+      ],
+      "title": "Payload"
+    },
+    "entry_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Entry Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "seq",
+    "prev_sha256",
+    "recorded_at_ns",
+    "clock",
+    "payload_sha256",
+    "payload",
+    "entry_sha256"
+  ],
+  "type": "object"
+}

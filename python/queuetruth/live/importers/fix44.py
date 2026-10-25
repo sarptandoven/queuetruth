@@ -104,6 +104,7 @@ from queuetruth.live.importers.fixwire import (
     coarsest,
     display,
     first_values,
+    fix_int,
     parse_fields,
     utc_ts,
 )
@@ -125,8 +126,8 @@ _SESSION_TYPES = {"0", "1", "2", "4", "5", "A"}
 _TIF = {"0": "day", "1": "gtc", "3": "ioc", "4": "fok", "5": "gtx", "6": "gtd"}
 _ORD = {"1": "market", "2": "limit", "3": "stop", "4": "stop_limit"}
 _SIDE = {"1": "buy", "3": "buy", "2": "sell", "4": "sell", "5": "sell", "6": "sell"}
-_UTC = re.compile(r"^(\d{4})(\d{2})(\d{2})-(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?$")
-_GO = re.compile(r"^(\d{4})/(\d{2})/(\d{2}) (\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?$")
+_UTC = re.compile(r"^(\d{4})(\d{2})(\d{2})-(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?$", re.ASCII)
+_GO = re.compile(r"^(\d{4})/(\d{2})/(\d{2}) (\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?$", re.ASCII)
 _FIX_OPTION_KEYS = (
     "delimiter",
     "local_ts_regex",
@@ -273,7 +274,7 @@ def _regex_ts(text: str, loc: str, tz: str | None) -> tuple[int, str]:
             secs = local_to_utc_s(y, mo, d, h, mi, s, tz or "UTC", "log time", loc)
             prec = "s" if not frac else "ms" if len(frac) <= 3 else "us" if len(frac) <= 6 else "ns"
             return secs * 10**9 + int((frac + "000000000")[:9]), prec
-    if t.isdecimal():
+    if t.isascii() and t.isdecimal():
         return epoch_ns(t, "auto", "log time", loc)
     return rfc3339_ns(t, "log time", loc, default_tz=tz)
 
@@ -315,6 +316,59 @@ class _Msg:
     out: bool | None = None
 
 
+class _Gaps:
+    """Missing MsgSeqNums as sorted, disjoint, half-open ranges `[lo, hi)`: a gap of 10**18 numbers (a hostile or
+    corrupt MsgSeqNum) costs one entry, not 10**18 set members."""
+
+    def __init__(self) -> None:
+        self.lo: list[int] = []
+        self.hi: list[int] = []
+
+    def count(self) -> int:
+        """How many numbers are missing (may exceed `sys.maxsize`, so this is not `__len__`)."""
+        return sum(h - lo for lo, h in zip(self.lo, self.hi, strict=True))
+
+    def __bool__(self) -> bool:
+        return bool(self.lo)
+
+    def __contains__(self, x: int) -> bool:
+        i = bisect.bisect_right(self.lo, x) - 1
+        return i >= 0 and x < self.hi[i]
+
+    def add(self, a: int, b: int) -> None:
+        """Adds `[a, b)`, merging with the ranges it touches."""
+        if a >= b:
+            return
+        i = bisect.bisect_left(self.hi, a)  # first range ending at or after a
+        j = bisect.bisect_right(self.lo, b)  # ranges [i, j) touch [a, b)
+        if i < j:
+            a, b = min(a, self.lo[i]), max(b, self.hi[j - 1])
+        self.lo[i:j], self.hi[i:j] = [a], [b]
+
+    def remove(self, a: int, b: int) -> int:
+        """Removes `[a, b)`; returns how many numbers were missing in it."""
+        if a >= b:
+            return 0
+        i = bisect.bisect_right(self.hi, a)  # first range ending after a
+        j = bisect.bisect_left(self.lo, b)  # ranges [i, j) overlap [a, b)
+        if i >= j:
+            return 0
+        n = sum(min(h, b) - max(lo, a) for lo, h in zip(self.lo[i:j], self.hi[i:j], strict=True))
+        keep_lo: list[int] = []
+        keep_hi: list[int] = []
+        if self.lo[i] < a:
+            keep_lo.append(self.lo[i])
+            keep_hi.append(a)
+        if self.hi[j - 1] > b:
+            keep_lo.append(b)
+            keep_hi.append(self.hi[j - 1])
+        self.lo[i:j], self.hi[i:j] = keep_lo, keep_hi
+        return n
+
+    def discard(self, x: int) -> None:
+        self.remove(x, x + 1)
+
+
 @dataclass
 class _Stream:
     """Sequence state of the messages one CompID sends in one session."""
@@ -322,7 +376,7 @@ class _Stream:
     expected: int | None = None
     epoch: int = 0
     seen: set[int] = field(default_factory=set)
-    missing: set[int] = field(default_factory=set)
+    missing: _Gaps = field(default_factory=_Gaps)
     count: int = 0
     max_seq: int | None = None
 
@@ -366,16 +420,16 @@ class _Session:
         for sender, st in self.streams.items():
             self._close(sender, st)
             st.expected, st.epoch, st.count, st.max_seq = None, self.epoch, 0, None
-            st.seen, st.missing = set(), set()
+            st.seen, st.missing = set(), _Gaps()
 
     def _close(self, sender: str, st: _Stream) -> None:
         if st.missing:
-            self.count(f"unrecovered_from:{sender}", len(st.missing))
+            self.count(f"unrecovered_from:{sender}", st.missing.count())
 
     def close(self) -> None:
         for sender, st in self.streams.items():
             self._close(sender, st)
-            st.missing = set()
+            st.missing = _Gaps()
 
 
 class _Tracker:
@@ -417,7 +471,7 @@ class _Tracker:
             n = seq - st.expected
             s.count(f"gaps_from:{m.sender}")
             s.count(f"gap_msgs_from:{m.sender}", n)
-            st.missing.update(range(st.expected, seq))
+            st.missing.add(st.expected, seq)
             st.expected = seq + 1
         elif seq in st.seen:
             if m.possdup:
@@ -439,19 +493,16 @@ class _Tracker:
         st.max_seq = seq if st.max_seq is None else max(st.max_seq, seq)
         if m.mt == "4":
             new = f.get("36", "")
-            if new.isdecimal():
-                nv = int(new)
+            nv = fix_int(new)
+            if nv is not None:
                 if f.get("123") == "Y":
-                    filled = {x for x in st.missing if seq <= x < nv}
-                    st.missing -= filled
-                    s.count("gap_filled_admin", len(filled))
+                    s.count("gap_filled_admin", st.missing.remove(seq, nv))
                     if st.expected < nv:
                         st.expected = nv
                 else:
-                    lost = {x for x in st.missing if x < nv}
+                    lost = st.missing.remove(-(2**63), nv)
                     if lost:
-                        s.count(f"unrecovered_from:{m.sender}", len(lost))
-                        st.missing -= lost
+                        s.count(f"unrecovered_from:{m.sender}", lost)
                     if nv < (st.expected or 0):
                         s.count("seq_reset_backward")
                         st.seen = {x for x in st.seen if x < nv}
@@ -1190,7 +1241,9 @@ def import_fix44(paths: list[str], opts: ImportOptions) -> ImportResult:
         sender, target = f.get("49", ""), f.get("56", "")
         begin = f.get("8", "")
         seq_txt = f.get("34", "")
-        seq = int(seq_txt) if seq_txt.isdecimal() else seq_hint
+        seq = fix_int(seq_txt)
+        if seq is None:  # missing or malformed MsgSeqNum: the store index's number, if any
+            seq = seq_hint
         key = _session_key(begin, sender, target, hint)
         s = sessions.get(key)
         if s is None:
@@ -1373,15 +1426,15 @@ def import_fix44(paths: list[str], opts: ImportOptions) -> ImportResult:
                     fx.cancel_reject(m, rec, scope)
                 else:
                     ref = None
-                    ref_seq = m.f.get(tags.RefSeqNum, "")
-                    if ref_seq.isdecimal():
-                        ref = s.by_seq.get((m.target, m.epoch, int(ref_seq)))
+                    ref_seq = fix_int(m.f.get(tags.RefSeqNum, ""))
+                    if ref_seq is not None:
+                        ref = s.by_seq.get((m.target, m.epoch, ref_seq))
                     fx.request_reject(m, rec, scope, ref, m.f.get(tags.RefMsgType))
             elif mt == "3":
-                ref_seq = m.f.get(tags.RefSeqNum, "")
+                ref_seq = fix_int(m.f.get(tags.RefSeqNum, ""))
                 ref = None
-                if ref_seq.isdecimal():
-                    ref = s.by_seq.get((m.target, m.epoch, int(ref_seq)))
+                if ref_seq is not None:
+                    ref = s.by_seq.get((m.target, m.epoch, ref_seq))
                 if m.out:
                     if ref is not None and ref.mt == "8":
                         engine_rejected += 1
@@ -1460,7 +1513,7 @@ def import_fix44(paths: list[str], opts: ImportOptions) -> ImportResult:
         n_fields = len(dictionary.names)
         first_b.warn(f"{first_b.venue}: data dictionary {', '.join(dictionary.versions)} ({n_fields} fields)")
         if unknown_tags:
-            top = sorted(unknown_tags.items(), key=lambda kv: (-kv[1], int(kv[0])))[:20]
+            top = sorted(unknown_tags.items(), key=lambda kv: (-kv[1], len(kv[0]), kv[0]))[:20]
             first_b.warn(
                 f"{first_b.venue}: {len(unknown_tags)} tag(s) not in the data dictionary (kept in raw): "
                 + ", ".join(f"{t}x{n}" for t, n in top)

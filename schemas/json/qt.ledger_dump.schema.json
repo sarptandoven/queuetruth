@@ -1,0 +1,661 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.ledger_dump",
+  "$defs": {
+    "CodeVersion": {
+      "additionalProperties": false,
+      "description": "What code produced the trial.",
+      "properties": {
+        "queuetruth": {
+          "title": "Queuetruth",
+          "type": "string"
+        },
+        "engine": {
+          "title": "Engine",
+          "type": "string"
+        },
+        "core": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Core"
+        },
+        "git": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Git"
+        },
+        "project_git": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Project Git"
+        },
+        "user": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "User"
+        }
+      },
+      "required": [
+        "queuetruth",
+        "engine"
+      ],
+      "title": "CodeVersion",
+      "type": "object"
+    },
+    "Envelope": {
+      "additionalProperties": false,
+      "description": "A ledger line as data: the record and its stored hash.",
+      "properties": {
+        "hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Hash",
+          "type": "string"
+        },
+        "record": {
+          "$ref": "#/$defs/LedgerRecord"
+        }
+      },
+      "required": [
+        "hash",
+        "record"
+      ],
+      "title": "Envelope",
+      "type": "object"
+    },
+    "ErrorInfo": {
+      "additionalProperties": false,
+      "description": "The `QT-*` error of a run that failed.",
+      "properties": {
+        "code": {
+          "pattern": "^QT-[A-Z]+-[0-9]{3}$",
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "maxLength": 4096,
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "title": "ErrorInfo",
+      "type": "object"
+    },
+    "Head": {
+      "additionalProperties": false,
+      "description": "The last record of a ledger: anchor it outside the ledger (`seq:hash`) to detect a rewritten history.",
+      "properties": {
+        "seq": {
+          "title": "Seq",
+          "type": "integer"
+        },
+        "hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "seq",
+        "hash"
+      ],
+      "title": "Head",
+      "type": "object"
+    },
+    "LedgerFilter": {
+      "additionalProperties": false,
+      "description": "Record selection. Every set field must match; prefixes and globs are case-sensitive.",
+      "properties": {
+        "kinds": {
+          "anyOf": [
+            {
+              "items": {
+                "enum": [
+                  "genesis",
+                  "zoo",
+                  "calibrate",
+                  "calibrate-live",
+                  "fit-hazard",
+                  "score",
+                  "shadows-sample",
+                  "variant"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Kinds"
+        },
+        "study": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Study"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "status": {
+          "default": "all",
+          "enum": [
+            "ok",
+            "error",
+            "all"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "since_ns": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Since Ns"
+        },
+        "until_ns": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Until Ns"
+        },
+        "dataset": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dataset"
+        },
+        "run_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Run Id"
+        },
+        "spec_hash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Spec Hash"
+        }
+      },
+      "title": "LedgerFilter",
+      "type": "object"
+    },
+    "LedgerRecord": {
+      "additionalProperties": false,
+      "description": "One ledger record (the `record` of a ledger line).",
+      "properties": {
+        "schema": {
+          "const": "qt.ledger_record",
+          "default": "qt.ledger_record",
+          "title": "Schema",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "ledger_id": {
+          "pattern": "^[0-9a-f]{32}$",
+          "title": "Ledger Id",
+          "type": "string"
+        },
+        "seq": {
+          "minimum": 0,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "prev": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Prev",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "genesis",
+            "zoo",
+            "calibrate",
+            "calibrate-live",
+            "fit-hazard",
+            "score",
+            "shadows-sample",
+            "variant"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "error"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "study": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9_.:\\-]{1,128}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Study"
+        },
+        "trial_id": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{16}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trial Id"
+        },
+        "run_id": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{16}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Run Id"
+        },
+        "spec_hash": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{16}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Spec Hash"
+        },
+        "dataset_hash": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dataset Hash"
+        },
+        "inputs": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Inputs",
+          "type": "object"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9_.:\\-]{1,128}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "params": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Params"
+        },
+        "metrics": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Metrics",
+          "type": "object"
+        },
+        "series": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SeriesRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "run_ids": {
+          "items": {
+            "pattern": "^[0-9a-f]{16}$",
+            "type": "string"
+          },
+          "title": "Run Ids",
+          "type": "array"
+        },
+        "code": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CodeVersion"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ErrorInfo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "note": {
+          "anyOf": [
+            {
+              "maxLength": 4096,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "started_at_ns": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Started At Ns"
+        },
+        "recorded_at_ns": {
+          "title": "Recorded At Ns",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema",
+        "schema_version",
+        "ledger_id",
+        "seq",
+        "prev",
+        "kind",
+        "status",
+        "recorded_at_ns"
+      ],
+      "title": "LedgerRecord",
+      "type": "object"
+    },
+    "SeriesData": {
+      "additionalProperties": false,
+      "description": "The values (and index) of a stored series, checked against its sha256.",
+      "properties": {
+        "values": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Values",
+          "type": "array"
+        },
+        "index": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Index"
+        }
+      },
+      "required": [
+        "values"
+      ],
+      "title": "SeriesData",
+      "type": "object"
+    },
+    "SeriesRef": {
+      "additionalProperties": false,
+      "description": "A record's series, stored out of line: the values (and index) live in `<ledger dir>/series/<sha256>.qts`,\ncontent-addressed, and the record keeps their sha256, so the hash chain covers them and counting, listing and\nstatistics never read them.",
+      "properties": {
+        "kind": {
+          "enum": [
+            "returns",
+            "scores"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "n_obs": {
+          "maximum": 1000000,
+          "minimum": 1,
+          "title": "N Obs",
+          "type": "integer"
+        },
+        "indexed": {
+          "title": "Indexed",
+          "type": "boolean"
+        },
+        "periods_per_year": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Periods Per Year"
+        },
+        "higher_is_better": {
+          "default": true,
+          "title": "Higher Is Better",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "kind",
+        "sha256",
+        "n_obs",
+        "indexed"
+      ],
+      "title": "SeriesRef",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The `.json` export: the selected records with their hashes, the series they reference (by sha256, checked),\nand the head they were read at.",
+  "properties": {
+    "schema": {
+      "const": "qt.ledger_dump",
+      "default": "qt.ledger_dump",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "ledger_id": {
+      "pattern": "^[0-9a-f]{32}$",
+      "title": "Ledger Id",
+      "type": "string"
+    },
+    "head": {
+      "$ref": "#/$defs/Head"
+    },
+    "filter": {
+      "$ref": "#/$defs/LedgerFilter"
+    },
+    "entries": {
+      "items": {
+        "$ref": "#/$defs/Envelope"
+      },
+      "title": "Entries",
+      "type": "array"
+    },
+    "series": {
+      "additionalProperties": {
+        "$ref": "#/$defs/SeriesData"
+      },
+      "title": "Series",
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "ledger_id",
+    "head",
+    "filter",
+    "entries"
+  ],
+  "type": "object"
+}

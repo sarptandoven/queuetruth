@@ -50,12 +50,19 @@ from queuetruth_service.problems import PROBLEM_BASE
 from queuetruth_service.queue import JobQueue
 from queuetruth_service.refs import compute_violations
 from queuetruth_service.retention import delete_dataset
+from queuetruth_service.routers.runs import list_violations
 from queuetruth_service.runners import TARGETS, content_type, extraction_token, is_archive, list_outputs, usage_meters
 from queuetruth_service.settings import Settings
 from queuetruth_service.store import ObjectStore, dataset_prefix, job_key, job_prefix, safe_filename
 
 log = logging.getLogger("queuetruth_service.worker")
-RUN_TABLES = {"replay": "replays", "calibration": "calibrations", "scorecard": "scorecards", "report": "reports"}
+RUN_TABLES = {
+    "replay": "replays",
+    "calibration": "calibrations",
+    "scorecard": "scorecards",
+    "report": "reports",
+    "zoo": "zoos",
+}
 CLAIM_FIELDS = ("id", "tenant_id", "kind", "spec", "attempts", "resource_type", "resource_id")
 
 
@@ -410,11 +417,13 @@ class Worker:
 
     async def _prepare(self, job: ClaimedJob, workdir: Path) -> Prepared:
         """Resolves references to paths relative to `workdir`, plans archive extraction for the child and sets the
-        output location. Compute knobs above `QT_COMPUTE_LIMITS` fail the job (`QT-CONFIG-001`)."""
+        output location. Compute knobs above `QT_COMPUTE_LIMITS` and zoo model or horizon lists outside the service's
+        bounds (checked at submit too) fail the job (`QT-CONFIG-001`)."""
         errors = compute_violations(job.spec, self.settings.compute_limits, ["spec"])
+        errors += list_violations(job.kind, job.spec, ["spec"])
         if errors:
             detail = "; ".join(f"{'.'.join(str(x) for x in e['loc'])} {e['msg']}" for e in errors)
-            raise JobInputError(f"compute parameters exceed this service's limits: {detail}", "QT-CONFIG-001")
+            raise JobInputError(f"spec exceeds this service's limits: {detail}", "QT-CONFIG-001")
         plan: list[dict[str, str]] = []
         if job.kind == "report":
             spec = dict(job.spec)

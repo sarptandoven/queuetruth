@@ -223,7 +223,8 @@
                 "cme",
                 "coinbase",
                 "crypto_l3",
-                "iex"
+                "iex",
+                "nyse"
               ],
               "type": "string"
             },

@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 #: SPEC 4.5 id grammar: resource prefixes, `del` for tombstones (deletion records), and the internal row prefixes
 #: `use` (usage events) and `aud` (audit rows), which no endpoint takes as a path parameter.
-PREFIXES = ("ten", "key", "up", "ds", "job", "rp", "cal", "sc", "rpt", "del", "use", "aud")
+PREFIXES = ("ten", "key", "up", "ds", "job", "rp", "cal", "sc", "rpt", "zoo", "del", "use", "aud")
 #: The prefix of tombstone ids (`qt` tombstones, `/v1/tombstones`).
 TOMBSTONE_PREFIX = "del"
 ID_RE = re.compile(r"^[a-z]{2,4}_[0-9A-HJKMNP-TV-Z]{26}$")

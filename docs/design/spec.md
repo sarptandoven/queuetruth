@@ -151,7 +151,9 @@ Logs and progress go to stderr only.
   the scorer reports how many live orders overlapped at the same price and side.
 - No hidden-liquidity modelling (Nasdaq price-slid orders, icebergs, CME implied): flagged and counted only.
 - FIFO venues only. Pro-rata books are rejected at ingest (`QT-CONFIG-001`).
-- No auction modelling: shadows resting through an auction or halt are censored (`end_state = censored_gap`).
+- No auction modelling: shadows resting through an auction or halt are censored (`end_state = censored_gap`). As
+  built, the engine censors at halt spans its caller supplies (5.2.7); ingest does not record the trading state yet,
+  so replays from a dataset still fill through halts (finding F2, design extension halt-censoring).
 - No exact truth from L2-only data. L2-only datasets support simulation and markouts only.
 - DBN/CME: the reader ships, but its validation label stays `synthetic_only` until a real Databento parity run is
   done by the author (no Databento key is used by the project).
@@ -1838,8 +1840,10 @@ the record):
   `F` of such an order -> `ev_filled_behind[id] += size`.
 
 5.2.4a **Fill rule `exact`** (verified
-against the O-SH-5 oracle: 0 disagreements on `synth_small` and `synth_small_nasdaq`, 2,942-2,958 of 3,000 on the
-real ITCH days, 6.8). Per event, for each live shadow:
+against the O-SH-5 oracle: 0 disagreements on `synth_small` and `synth_small_nasdaq`; on the real ITCH days, with
+rules D1 to D3 below, 3,000 of 3,000 mirror shadows per day from the raw bytes and 2,997 and 3,000 of 3,000 on the
+CSV conversion, where the 3 are the oracle's 1 s cross window on a CSV without cross flags; 6.8 and design extension
+oracle-disagreements O.7). Per event, for each live shadow:
 - Queue ahead is maintained from order-level events of the orders in `ahead_set` only: their executions (`F`),
   cancels and deletes (`C`), and priority-losing modifies (`Replace`, including the 5.1.1 CME rules) reduce it by
   the removed quantity; prints (`T`) never change it, and off-price prints never shrink it (A4). A duplicate
@@ -1862,6 +1866,32 @@ real ITCH days, 6.8). Per event, for each live shadow:
   `trade_through`. Declined prints at a shadow's price count `hidden_at_px_with_display_ahead`; fills from hidden
   prints count `hidden_print_fills`. ITCH cross prints (`Q`, trades_source kind `cross`) are never hidden prints
   (E48).
+- Nasdaq ITCH receipt order and sweeps (rules D1 to D3; design extension oracle-disagreements O.3, O.4).
+  `order_ref_priority(inst)` holds when `inst.venue` is Nasdaq and `inst.source` is `itch`, `etcsv` or `dbn` (for
+  `dbn` the dataset is taken to be XNAS.ITCH). Other venues, sources, synthetic data and the `et` rule keep arrival
+  order and the A3d print side.
+  - D1 (receipt-order priority). Orders Nasdaq holds until the open are released 0.27 s to 40 s after it with their
+    original, smaller references and keep their receipt priority. At activation a shadow records `prio_ref`, the
+    largest order reference added on its instrument (in its partition) before it went live. A later `A` (not a
+    duplicate add, not a priority-losing modify) at the shadow's price with a reference below `prio_ref` joins the
+    shadow's queue ahead (`exact_qa`, `ahead_set`), and its cancels and executions are queue-ahead changes; a
+    reference above `prio_ref` stays behind however late it arrives. A twin-linked shadow (A1) takes its twin's
+    reference as `prio_ref`, so resting orders with a larger reference leave its queue ahead. The `why` tracer labels
+    such an `A` as ahead. `prio_ref` is a per-instrument lower bound on the venue's shared counter, so an order held
+    and released after the instrument's last add can rank behind the shadow when Nasdaq ranks it ahead (an optimistic
+    bias, not observed on the published days).
+  - D2 (hidden print continuing a sweep). Per resting side, an execution sweep is open from an `F` on that side until
+    another record changes that side (an `A` or `M` there, a `C` there that is not the removal of an execution of the
+    sweep, a clear) or the `ts_event` changes. A side-`N` print at the `ts_event` of exactly one open sweep is the
+    sweeping aggressor reaching hidden interest on that side, so it reaches only shadows on that side; otherwise the
+    A3d inference applies.
+  - D3 (off-grid continuation). A side-`N` print that continues a sweep may be off the tick grid (a midpoint
+    execution), and under `behind_and_through` it trades through a shadow on the swept side that it passes. Without
+    a sweep an off-grid print is still never used.
+  The independent oracle (`qt_oracle` 0.1.3, rule O1) applies the same receipt order; it already took the side of a
+  side-`N` print from the open sweep. Outputs on Nasdaq ITCH data change for shadows live in the first 40 s after the
+  open, twin-linked shadows there and shadows reached by such prints, so the release that ships D1 to D3 bumps
+  `ENGINE_VERSION`.
 - Crosses (A5 as refined by E48/E57; 36(a)): when the opposite best is at or through the shadow's price, the
   available quantity is the opposite displayed size at or through the price, best level first and FIFO within a
   level, after the first `prio` units go to the real same-side orders with priority over the shadow (every
@@ -1924,7 +1954,13 @@ leg (section 5.7.2).
 
 5.2.7 **Termination.** On an `R` record the instrument's live shadows end `censored_clear` at that record's
 `ts_event` and their per-event scratch is discarded. A sequence gap (when meaningful) or a `MAYBE_BAD_BOOK` record
-on the instrument ends live shadows `censored_gap`. At end of partition input, live shadows end
+on the instrument ends live shadows `censored_gap`. Trading halts (`qt_replay::TradingHalt` spans `[ts_start,
+ts_end)` per instrument, `Engine::set_trading_halts`, `ReplayOptions::trading_halts`; an empty span is
+`QT-CONFIG-001`): a shadow live when a halt starts ends `censored_gap` at the halt start (an event at exactly that
+instant still trades); a shadow whose `ts_live` falls inside a halt never goes live and ends `censored_gap` at its
+`ts_live` unless its cancel is effective at or before `ts_live`; a shadow arriving exactly at the resumption trades
+normally. Without spans nothing changes, and no ingest path records them yet (design extension halt-censoring). At
+end of partition input, live shadows end
 `censored_session_end` if the partition's last `ts_event >= midnight_utc_ns + close_s * 1e9`, else `open_at_end`.
 `out_of_session = ts_submit` outside `[midnight_utc_ns + open_s * 1e9, midnight_utc_ns + close_s * 1e9)` (i64
 arithmetic). `ambiguous_race = race_window_ns > 0` and (`ts_activated_event - ts_live <=
@@ -2372,11 +2408,12 @@ comparable when the shadow's `never_cancel` flag is set and `ts_admin_end` is nu
 to all zoo models; warnings give the row counts and policy-cancelled rows. Time of day in climatology and
 baselines is DST-safe (`midnight_utc_ns`, review F8).
 
-5.5.8 **Persistence.** `<out>/model.json` (qt.hazard_model_card), `model.pkl` (pickled estimator + isotonic layers;
-its sha256 is recorded in the card; `HazardModel.load` requires the caller's trusted digest (`sha256=`, e.g.
-`pickle_sha256(card)` kept from `fit_hazard`) or an explicit `trusted=True` and never trusts a card from the same
-directory; the service never unpickles user data), `predictions.parquet`
-(qt.hazard_predictions for all splits).
+5.5.8 **Persistence.** `<out>/model.json` (qt.hazard_model_card), `model.npz` (a deterministic ZIP of a JSON header
+and `.npy` arrays for the trees and isotonic layers, parsed without executing code and checked structurally before
+use; its sha256 is recorded in the card and checked on load, against the caller's `sha256=` when given), and
+`predictions.parquet` (qt.hazard_predictions for all splits). A v0.1 `model.pkl` is refused unless
+`allow_pickle=True`, and then still needs the caller's trusted digest or `trusted=True`; the service never unpickles
+user data. Format and loader: design extension model-perf M.1.
 
 ### 5.6 Zoo evaluation (Python `queuetruth.eval`)
 
@@ -2602,8 +2639,9 @@ live orders scored (<count> <reason>; ...)" and exits 2; the report shows a NOT 
 - Position series: per arm and instrument, cumulative signed filled qty at each fill timestamp.
 - Output directory: `summary.json` (qt.scorecard_summary), `score_orders.parquet`,
   `score_fills.parquet` (1.1 layout), `score_markouts.parquet` and `score_orders.parquet` (v0.1 layout),
-  `score_position.parquet`, `score_tests.parquet`, `schedule.parquet` (the scheduled legs) and, for a zoo arm on
-  MBO, `zoo_trajectory.parquet`. `live import` writes the 3.8 directory; `shadows from-live` writes
+  `score_position.parquet`, `score_tests.parquet`, `score_shortfall.parquet` (qt.score_shortfall, the per-order
+  shortfall decomposition of design extension cost-decomposition), `schedule.parquet` (the scheduled legs) and, for
+  a zoo arm on MBO, `zoo_trajectory.parquet`. `live import` writes the 3.8 directory; `shadows from-live` writes
   `--out` plus `<stem>_amends.parquet` when there are amends; `calibrate latency` writes `calibration.json` and
   `latency.npz`.
 
@@ -2682,13 +2720,18 @@ Monte Carlo, noted), log -> `log_prob_queue_model()`, log2 -> `log_prob_queue_mo
 `risk_adverse_queue_model()`. `exchange`: `partial_fill_exchange` or `no_partial_fill_exchange` per the fit's
 exchange. `latency_line`: `.intp_order_latency("{npz}")` when a latency calibration exists, else omitted. Notes
 always include hbt #316/#312 (partial-fill accounting in released versions) and the conflated-L2 caveat.
-NautilusTrader (`nautilus_snippet`), exact layout:
+NautilusTrader (`nautilus_snippet`), layout for an NT touch-family fit with every latency component fitted (a
+line that is not fitted is emitted as a comment instead; `queuetruth.export.nautilus`):
 ```python
-# queuetruth {version} | calibration {run_id} | NautilusTrader API as documented at develop 5247ad5 (verify names
-# for your version; newer builds expose FillModel under nautilus_trader.execution)
-from nautilus_trader.backtest.models import FillModel, LatencyModel
-fill_model = FillModel(prob_fill_on_limit={p:.6g}, prob_slippage=0.0, random_seed=42)
-latency_model = LatencyModel(base_latency_nanos=0, insert_latency_nanos={insert}, update_latency_nanos={update}, delete_latency_nanos={delete})
+# queuetruth {version} | calibration {run_id} | NautilusTrader 1.x and 2.x (names checked on 1.231.0 and 2.0.0rc7;
+# 2.x renamed FillModel to DefaultFillModel and LatencyModel to StaticLatencyModel; the import picks either)
+try:  # nautilus_trader 2.x
+    from nautilus_trader.execution import DefaultFillModel as FillModel, StaticLatencyModel as LatencyModel
+except ImportError:  # nautilus_trader 1.x
+    from nautilus_trader.backtest.models import FillModel, LatencyModel
+fill_model = FillModel(prob_fill_on_limit={p:.6g})
+# not fitted: prob_slippage, random_seed (set them as in your current FillModel)
+latency_model = LatencyModel(base_latency_nanos=0, insert_latency_nanos={insert}, update_latency_nanos={update}, cancel_latency_nanos={cancel})
 # queue_position=True and trade_execution=True on the venue config when the fit was queue-gated ({gated})
 ```
 Export refusal (`queuetruth.export.trust`): `export hftbacktest|nautilus` assesses
@@ -3256,7 +3299,7 @@ anywhere in this repo.
 ### 8.10 General hardening
 
 JSON bodies <= 1 MiB; uploads <= `MAX_UPLOAD_BYTES`; decompression guard (inflated/compressed ratio <= 200 and
-absolute <= 64 GiB) in ingest; all parsers are Rust with bounds checks (fuzz targets are a v0.2 item); no shell
+absolute <= 64 GiB) in ingest; all parsers are Rust with bounds checks and fuzzed (below); no shell
 invocation with user input; workers resolve ids to their own temp paths (no user-supplied paths server-side);
 problems never contain stack traces; structured JSON logs with `request_id`, `tenant_id`, `job_id` and no secrets or
 data rows; responses carry `X-Content-Type-Options: nosniff` and `Cache-Control: no-store`; CORS disabled by
@@ -3265,6 +3308,21 @@ pinned by `uv.lock`/`Cargo.lock`; CI job `supply-chain` runs `cargo audit --deny
 over the locked export (blocking; empty allow-lists in `.cargo/audit.toml`, `.github/pip-audit-allowlist.txt`); the
 Dockerfile pins base images by digest and installs only the hashed locked set (`--require-hashes`, then `pip check`)
 .
+
+Fuzzing (design extensions rust-fuzz and python-fuzz). The Rust parsers that read user-supplied bytes (ITCH 5.0,
+IEX DEEP+, DBN, `qt_ingest::ingest` end to end, etcsv, Parquet and the dataset reader, the seven `qt_crypto`
+converters, the exact-decimal JSON reader, `qt_crypto::prepare` and `write`) have libFuzzer targets in `fuzz/`, a
+standalone Cargo workspace. Every target enforces: no panic, abort or run above 10 s and no single allocation above
+512 MiB (64 MiB for `dbn` and `ingest`); an error caused by input bytes is `QT-INPUT-*`, `QT-CONFIG-*` or `QT-DATA-*`,
+never `QT-ENGINE-001`; ITCH and DEEP+ messages round-trip through `encode`; datasets an ingest path wrote read back.
+Committed seeds are synthetic or copies of test fixtures; every finding is minimized into `fuzz/regressions/` with a
+regression test, and `cargo test` in `fuzz/` replays seeds, regressions and known crashes on stable (`make
+fuzz-rust`, local `make gate-3`). Arithmetic on input values is checked or saturating, and readers grow buffers with
+the bytes received, never with a length a header announces. The Python parsers that uploads reach (live-log
+importers, FIX and QuickFIX readers, the instrument map, the simulator importers and the `dq` loader) have a
+Hypothesis suite in `python/tests/fuzz/` (marker `fuzz`, `make fuzz-py`) whose contract is: return or raise
+`QtError` with a `QT-*` code, within 20 s and 256 MiB of traced allocations. Open: the pinned `dbn` decoder and the
+`arrow-ipc` / `parquet` metadata readers can still panic on crafted files (`fuzz/known-crashes/`).
 
 ### 8.11 Security model as built (regression tests in `service/tests/security/`)
 
@@ -3350,6 +3408,44 @@ documentation; no NautilusTrader source code is included.
 
 Databento's queue-position tutorial estimator is re-implemented from its documented behaviour.
 ```
+
+## 10. Design extensions
+
+The changes below were designed and built after the v0.1 text of this file. Each has a design note in
+`docs/design/extensions/`, which is the contract its code was built against; where a note changes behaviour that a
+section above describes, the note describes the code as built until its text is merged here. Only 5.2.4a (rules D1
+to D3), 5.2.7 (halts), 5.5.8, the 5.7 output directory, the 5.10 NautilusTrader snippet and 8.10 (fuzzing) have been
+merged so far. The "Open conflicts" list below predates every note.
+
+| Note | What it adds | Sections it amends or adds to |
+|---|---|---|
+| [agent-sandbox](extensions/agent-sandbox.md) | Agent sandbox: a simulated exchange over one replayed instrument-day, with MCP sandbox tools | 1.1, 3.10, 4.3, 4.6 |
+| [atlas-trace](extensions/atlas-trace.md) | Per-symbol exactness, trading-state labels and flag tracing in the W1 scale pipeline | none (the `scripts/scale/` manifest contract); its finding F2 concerns 1.2 |
+| [certificates](extensions/certificates.md) | Run certificates, `verify-cert`, hash commitments and signing keys | 0.2, 3.10, 4.3, 4.4, 7.2, 7.3 |
+| [conformal-fill](extensions/conformal-fill.md) | Conformal fill probabilities, `fit-hazard --conformal-alpha` | new 5.5.9; 3.4 and 3.10 (`qt.conformal_*`); 4.4 |
+| [cost-decomposition](extensions/cost-decomposition.md) | Implementation-shortfall decomposition of the sim-live gap | new 5.7.6; 3.4 (`qt.score_shortfall`); 5.7 output directory |
+| [databento](extensions/databento.md) | DBN definitions, symbology, multiplier and currency, the XNAS.ITCH re-issue | 1.2 (non-FIFO books rejected), 2 (`qt_ingest` modules), 3 (DBN input), `qt.data_quality` |
+| [demo-command](extensions/demo-command.md) | `queuetruth demo` | 4.4 (new subsection), 3.10 (`qt.demo_*`) |
+| [fill-toxicity](extensions/fill-toxicity.md) | `zoo-toxicity`: fill mechanisms, markouts and the PnL split of each model's error | 3.4, 3.10, 4.4, 5.6 |
+| [forecast-referee](extensions/forecast-referee.md) | `queuetruth forecast`: forecast ledger, scoring and Kelly PnL | 3.10, 4.3, 4.4; a new section after 5.7 |
+| [freqtrade-hummingbot](extensions/freqtrade-hummingbot.md) | Freqtrade and Hummingbot importers, reconciliation and the candle-fill audit | 5.7.1, 5.7.5, 3.10 (`qt.bot_reconcile`) |
+| [halt-censoring](extensions/halt-censoring.md) | Halt spans censor shadows in the engine (fix of F2) | 1.2, 5.2.7 |
+| [hftbacktest-integration](extensions/hftbacktest-integration.md) | hftbacktest queue-model config and order-by-order reconciliation (repository tooling) | 5.3.5, 5.10 |
+| [impact-flag](extensions/impact-flag.md) | Impact and queue-share warnings for independent shadows | 1.2, 3.4 (`qt.shadow_impact`), 3.10, new 5.6a |
+| [livefill-kit](extensions/livefill-kit.md) | Own-account live-fill kit for Bitstamp (repository tool on the public API) | none |
+| [model-perf](extensions/model-perf.md) | `model.npz` instead of pickle, fit threads and fit-hazard performance | 5.5.6, 5.5.8, 7.1 |
+| [nautilus-plugin](extensions/nautilus-plugin.md) | `queuetruth-nautilus`, a separate package for NautilusTrader | new 5.10.1 |
+| [nightly-checks](extensions/nightly-checks.md) | Local nightly cross-checks (maintenance tooling) | 7.1 (benchmark gating); no package change |
+| [notebooks](extensions/notebooks.md) | `queuetruth.frames` and the example notebooks | 4.3 |
+| [nyse-reader](extensions/nyse-reader.md) | NYSE TAQ Integrated Feed reader and the `nyse` rule set | 3.1, 3.2, 3.12 (new 3.12.3), 4.4, 6, 9 |
+| [oracle-disagreements](extensions/oracle-disagreements.md) | Receipt-order and sweep rules D1 to D3 on Nasdaq ITCH, oracle rule O1 | 5.2.4a (folded in above), 6.2 O-SH-5, 6.8 |
+| [pm-kit](extensions/pm-kit.md) | Prediction-market kit for Kalshi and Polymarket (`queuetruth pm`) | self-contained; reuses 3.3, 3.4, 3.8, 5.3.2 |
+| [python-fuzz](extensions/python-fuzz.md) | Parser hardening contract and the Python fuzz suite | 3.3 (`dq` dataset contract), 3.8 and 5.7.1 (live-import inputs), 6 |
+| [report-redesign](extensions/report-redesign.md) | Answer-first HTML report | 5.9 |
+| [rust-fuzz](extensions/rust-fuzz.md) | Fuzz targets for the Rust parsers | 8.10 (folded in above) |
+| [selection-stats](extensions/selection-stats.md) | Selection-aware statistics and the leaderboard model confidence set | 3.10 (`qt.zoo_summary`), 4.3, 5.6, 6; a new subsection of 5.7 (proposed as 5.7.6, merged as 5.7.7) |
+| [service-zoo-mcp](extensions/service-zoo-mcp.md) | Zoo and calibration over HTTP, MCP run mode, optional MCP tool modules | 4.5, 4.6, 8.2, 8.8 |
+| [trial-ledger](extensions/trial-ledger.md) | Trial ledger | 0.2, 4.3, 4.4, 7.2, 8.8 |
 
 ## Open conflicts (snapshot of 2026-10-19)
 

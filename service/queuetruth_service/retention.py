@@ -14,7 +14,7 @@ from psycopg.rows import dict_row
 from queuetruth_service.ids import TOMBSTONE_PREFIX, new_id
 from queuetruth_service.store import ObjectStore, dataset_prefix, job_prefix, upload_prefix
 
-RUN_TABLES = ("replays", "calibrations", "scorecards", "reports")
+RUN_TABLES = ("replays", "calibrations", "scorecards", "reports", "zoos")
 
 
 @dataclass

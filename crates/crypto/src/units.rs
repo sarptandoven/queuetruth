@@ -208,13 +208,26 @@ pub enum SessionClock {
     Eastern,
 }
 
-/// UTC ns of local midnight of `date` (days since epoch).
-pub fn midnight_ns(clock: SessionClock, date: i32) -> Ts {
-    let base = i64::from(date) * NS_PER_DAY;
+/// UTC ns of local midnight of `date` (days since epoch), exact in `i128` for every `i32` date.
+fn midnight_wide(clock: SessionClock, date: i32) -> i128 {
+    let base = i128::from(date) * i128::from(NS_PER_DAY);
     match clock {
         SessionClock::Utc => base,
-        SessionClock::Eastern => base + eastern_offset_h(date) * 3_600_000_000_000,
+        SessionClock::Eastern => base + i128::from(eastern_offset_h(date)) * 3_600_000_000_000,
     }
+}
+
+/// UTC ns of local midnight of `date` (days since epoch); `None` when that instant does not fit in `i64` (outside
+/// 1677-09-21T00:12:43Z..2262-04-11T23:47:16Z: in UTC the first representable midnight is 1677-09-22's, in US
+/// Eastern 1677-09-21's; in both the last is 2262-04-11's).
+pub fn checked_midnight_ns(clock: SessionClock, date: i32) -> Option<Ts> {
+    Ts::try_from(midnight_wide(clock, date)).ok()
+}
+
+/// UTC ns of local midnight of `date` (days since epoch), saturating at `i64::MIN` / `i64::MAX` outside the
+/// representable range (use [`checked_midnight_ns`] to reject such dates).
+pub fn midnight_ns(clock: SessionClock, date: i32) -> Ts {
+    checked_midnight_ns(clock, date).unwrap_or(if date < 0 { Ts::MIN } else { Ts::MAX })
 }
 
 /// Hours behind UTC at local midnight of `date` in US Eastern: DST from the second Sunday of March to the first
@@ -236,10 +249,12 @@ pub fn session_date_of(clock: SessionClock, ts: Ts) -> i32 {
     let guess = ts.div_euclid(NS_PER_DAY);
     let mut d = i32::try_from(guess).unwrap_or(if guess < 0 { i32::MIN } else { i32::MAX });
     // Eastern midnight is 4-5 h after UTC midnight: step back at most one day, forward never needed.
-    while d > i32::MIN && midnight_ns(clock, d) > ts {
+    // Compared in i128: near `i64::MAX` / `i64::MIN` the neighbouring midnights do not fit in `i64`.
+    let t = i128::from(ts);
+    while d > i32::MIN && midnight_wide(clock, d) > t {
         d -= 1;
     }
-    while d < i32::MAX && midnight_ns(clock, d + 1) <= ts {
+    while d < i32::MAX && midnight_wide(clock, d + 1) <= t {
         d += 1;
     }
     d
@@ -347,5 +362,34 @@ mod tests {
         );
         assert_eq!(session_date_of(SessionClock::Utc, 0), 0);
         assert_eq!(gcd(10_000_000, 25_000_000), 5_000_000);
+    }
+
+    /// Fuzz regression (`fuzz/regressions/crypto_prepare/tardis_trade_in_last_i64_day`): the session date of a
+    /// timestamp within a day of `i64::MAX` / `i64::MIN` needs a midnight that `i64` cannot hold; it used to overflow.
+    #[test]
+    fn extreme_timestamps_have_a_session_date() {
+        let last = i32::try_from(i64::MAX / NS_PER_DAY).unwrap();
+        for clock in [SessionClock::Utc, SessionClock::Eastern] {
+            let d = session_date_of(clock, i64::MAX);
+            assert_eq!(checked_midnight_ns(clock, d + 1), None, "{clock:?}");
+            assert!(checked_midnight_ns(clock, d).is_some(), "{clock:?}");
+            let d = session_date_of(clock, i64::MIN);
+            assert!(checked_midnight_ns(clock, d).is_none_or(|m| m == i64::MIN), "{clock:?}");
+            assert!(checked_midnight_ns(clock, d + 1).is_some(), "{clock:?}");
+        }
+        assert_eq!(session_date_of(SessionClock::Utc, i64::MAX), last);
+        assert_eq!(
+            checked_midnight_ns(SessionClock::Utc, last),
+            Some(i64::from(last) * NS_PER_DAY)
+        );
+        // midnight_ns saturates outside the representable range.
+        assert_eq!(midnight_ns(SessionClock::Utc, last + 1), i64::MAX);
+        assert_eq!(midnight_ns(SessionClock::Eastern, i32::MAX), i64::MAX);
+        assert_eq!(midnight_ns(SessionClock::Utc, i32::MIN), i64::MIN);
+        // A year-9999 session date (accepted by parse_date) has no representable midnight.
+        assert_eq!(
+            checked_midnight_ns(SessionClock::Utc, parse_date("9999-12-31").unwrap()),
+            None
+        );
     }
 }

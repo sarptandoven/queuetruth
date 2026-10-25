@@ -3,27 +3,26 @@ leaderboard at the spec's horizon; the `leaderboard_sort_horizon_ns` keyword ove
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 import pytest
 
 from queuetruth.errors import QtError
 from queuetruth.report import render
+from report import pageparse as pp
 from report import synth as rc
 
 S = 1_000_000_000
 
 
 def _zoo_section(html: str) -> str:
-    m = re.search(r'<section id="zoo">(.*?)</section>', html, re.S)
-    assert m, "zoo section missing"
-    return m.group(1)
+    """The leaderboard section (answer-first layout: the leaderboard is its own section, not part of the zoo)."""
+    return pp.section(html, "leaderboard")
 
 
-def _first_row(section: str) -> str:
-    """The first model row of the leaderboard table (after the exact fill-rate row, 0.1.1)."""
-    rows = re.findall(r"<tr><td>([^<]+)</td>", section.split("<tbody>", 1)[1])
+def _first_row(html: str) -> str:
+    """The first model row of the compact leaderboard (after the exact fill-rate row, 0.1.1)."""
+    rows = pp.leaderboard_rows(html)
     assert rows and rows[0] == "exact fill rate (truth)"
     return rows[1]
 
@@ -47,8 +46,9 @@ def test_spec_sort_horizon_is_used_and_the_keyword_wins(tmp_path: Path) -> None:
         )
         return out.read_text(encoding="utf-8")
 
-    s = _zoo_section(html("spec", leaderboard_sort_horizon_ns=10 * S))
-    assert "sorted by absolute fill-rate bias at 10 s" in s and _first_row(s) == rc.esc(best(10 * S))
+    page = html("spec", leaderboard_sort_horizon_ns=10 * S)
+    s = _zoo_section(page)
+    assert "sorted by absolute fill-rate bias at 10 s" in s and _first_row(page) == rc.esc(best(10 * S))
     s = _zoo_section(html("default"))
     assert "sorted by absolute fill-rate bias at 60 s" in s
     s = _zoo_section(html("kw", leaderboard_sort_horizon_ns=60 * S, keyword=10 * S))

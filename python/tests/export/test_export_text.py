@@ -103,18 +103,21 @@ NT_GOOD = dict(
 )
 NT_GOLDEN = "\n".join(
     [
-        f"# queuetruth {V} | calibration 0123456789abcdef | NautilusTrader API as documented at develop 5247ad5 "
-        "(verify names",
-        "# for your version; newer builds expose FillModel under nautilus_trader.execution)",
+        f"# queuetruth {V} | calibration 0123456789abcdef | NautilusTrader 1.x and 2.x (names checked on 1.231.0 "
+        "and 2.0.0rc7;",
+        "# 2.x renamed FillModel to DefaultFillModel and LatencyModel to StaticLatencyModel; the import picks either)",
         "# nt_queue_l2_prob_touch fitted on 2019-12-30; held-out blocks 3-4/5; data: nasdaq (real_data, dataset "
         "abababababab)",
         "# fit: p = 0.222222 (nt_touch); 1000 events from 50 shadows; bootstrap CI [2, 2.7]; profile CI [2.1, 2.6]",
         "# held-out: beats the default nt_queue_l2_prob_touch[p=1] out of sample: better at 1s, 10s",
-        "from nautilus_trader.backtest.models import FillModel, LatencyModel",
+        "try:  # nautilus_trader 2.x",
+        "    from nautilus_trader.execution import DefaultFillModel as FillModel, StaticLatencyModel as LatencyModel",
+        "except ImportError:  # nautilus_trader 1.x",
+        "    from nautilus_trader.backtest.models import FillModel, LatencyModel",
         "fill_model = FillModel(prob_fill_on_limit=0.222222)",
         "# not fitted: prob_slippage, random_seed (set them as in your current FillModel)",
         "latency_model = LatencyModel(base_latency_nanos=0, insert_latency_nanos=1500000, "
-        "update_latency_nanos=900000, delete_latency_nanos=700000)",
+        "update_latency_nanos=900000, cancel_latency_nanos=700000)",
         "# queue_position=True and trade_execution=True on the venue config when the fit was queue-gated (yes)",
         "",
     ]
@@ -189,6 +192,86 @@ def test_nautilus_golden():
     compile(nautilus_snippet(c), "nt", "exec")
 
 
+#: The constructors of each NautilusTrader release line, by module (keywords checked on 1.231.0 and 2.0.0rc7). The
+#: 2.x `nautilus_trader.execution` has no `FillModel`; 1.x has no `DefaultFillModel` and 2.x no `backtest.models`.
+NT_LAYOUTS = {
+    1: {
+        "nautilus_trader.backtest.models": {"FillModel": "fill", "LatencyModel": "latency"},
+        "nautilus_trader.execution": {},
+    },
+    2: {"nautilus_trader.execution": {"DefaultFillModel": "fill", "StaticLatencyModel": "latency"}},
+}
+NT_KWARGS = {
+    "fill": {"prob_fill_on_limit", "prob_slippage", "random_seed"},
+    "latency": {"base_latency_nanos", "insert_latency_nanos", "update_latency_nanos", "cancel_latency_nanos"},
+}
+
+
+def _fake_nautilus(monkeypatch, major):
+    """Stand-in `nautilus_trader` modules of release line `major` whose constructors reject unknown keywords."""
+    import sys
+    import types
+
+    def model(kind, name):
+        def __init__(self, **kw):
+            bad = set(kw) - NT_KWARGS[kind]
+            if bad:
+                raise TypeError(f"{name}() got an unexpected keyword argument {sorted(bad)[0]!r}")
+            self.kind, self.kw = kind, kw
+
+        return type(name, (), {"__init__": __init__})
+
+    for mod in [k for k in sys.modules if k == "nautilus_trader" or k.startswith("nautilus_trader.")]:
+        monkeypatch.delitem(sys.modules, mod)
+    monkeypatch.setitem(sys.modules, "nautilus_trader", types.ModuleType("nautilus_trader"))
+    for path, classes in NT_LAYOUTS[major].items():
+        m = types.ModuleType(path)
+        for name, kind in classes.items():
+            setattr(m, name, model(kind, name))
+        monkeypatch.setitem(sys.modules, path, m)
+
+
+@pytest.mark.parametrize("major", [1, 2])
+def test_nautilus_snippet_runs_on_both_release_lines(monkeypatch, major):
+    """The nautilus-plugin finding: 0.1.1 wrote `delete_latency_nanos` and imported `nautilus_trader.backtest.models`,
+    which 2.x lacks. The snippet now binds the release line's own classes and keywords."""
+    _fake_nautilus(monkeypatch, major)
+    ns: dict = {}
+    exec(nautilus_snippet(nt_cal(latency={**NT_LAT, "clock_sync_assumed": True})), ns)
+    assert ns["fill_model"].kw == {"prob_fill_on_limit": 0.222222}
+    assert ns["latency_model"].kw == {
+        "base_latency_nanos": 0,
+        "insert_latency_nanos": 1500000,
+        "update_latency_nanos": 900000,
+        "cancel_latency_nanos": 700000,
+    }
+    assert type(ns["fill_model"]).__name__ == ("DefaultFillModel" if major == 2 else "FillModel")
+    # Fill model only: the import names one class per line.
+    ns = {}
+    exec(nautilus_snippet(nt_cal()), ns)
+    assert ns["fill_model"].kind == "fill" and "latency_model" not in ns and "LatencyModel" not in ns
+
+
+#: Interpreters with nautilus_trader installed: QT_NT_PYTHON (several joined with os.pathsep, e.g. a 1.x and a 2.x
+#: venv), as for the cross-check in tests/nt_crosscheck.
+NT_PYTHONS = [p for p in os.environ.get("QT_NT_PYTHON", "").split(os.pathsep) if p and Path(p).exists()]
+
+
+@pytest.mark.parametrize("py", NT_PYTHONS or [None])
+def test_nautilus_snippet_runs_on_installed_nautilus_trader(py, tmp_path):
+    """Run the snippet in a real nautilus_trader (checked with 1.231.0 and 2.0.0rc7 venvs)."""
+    if py is None:
+        pytest.skip("QT_NT_PYTHON names no interpreter with nautilus_trader")
+    script = tmp_path / "snippet.py"
+    script.write_text(
+        nautilus_snippet(nt_cal(latency={**NT_LAT, "clock_sync_assumed": True}))
+        + "print(type(fill_model).__name__, type(latency_model).__name__)\n"
+    )
+    out = subprocess.run([str(py), "-I", str(script)], capture_output=True, text=True, timeout=120, cwd=tmp_path)
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.split() in (["FillModel", "LatencyModel"], ["DefaultFillModel", "StaticLatencyModel"])
+
+
 def test_nautilus_emits_no_unfitted_lines_for_non_nt_family():
     """Trader review D4: a power-family fit must not overwrite the user's FillModel or LatencyModel."""
     text = nautilus_snippet(cal())
@@ -215,7 +298,7 @@ def test_nautilus_latency_without_exchange_timestamps_is_not_emitted():
     text = nautilus_snippet(nt_cal(latency={**part, "clock_sync_assumed": True}))
     assert (
         "latency_model = LatencyModel(base_latency_nanos=0, insert_latency_nanos=1500000, "
-        "delete_latency_nanos=700000)" in text
+        "cancel_latency_nanos=700000)" in text
     )
     assert "# not fitted (no samples): update_latency_nanos" in text
 

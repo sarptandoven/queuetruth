@@ -17,6 +17,9 @@ use crate::guard::{GuardLimits, io_error, open_maybe_gzip};
 /// Largest pcapng block or pcap record accepted.
 pub const MAX_BLOCK: usize = 16 << 20;
 
+/// Largest step the read buffer grows by ahead of the bytes received.
+const FILL_CHUNK: usize = 64 << 10;
+
 /// One captured frame.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Packet<'a> {
@@ -140,11 +143,23 @@ impl<R: Read> CaptureReader<R> {
 
     /// Reads exactly `n` bytes into `self.buf[at..at + n]`; with `eof_ok`, `Ok(false)` on a clean end before the
     /// first byte (every other short read is an error).
+    ///
+    /// The buffer grows with the bytes that actually arrive (at most `FILL_CHUNK` ahead of them), so a header that
+    /// announces a `MAX_BLOCK` record on a short stream costs what the stream holds, not 16 MiB.
     fn fill_at(&mut self, at: usize, n: usize, what: &str, eof_ok: bool) -> QtResult<bool> {
-        if self.buf.len() < at + n {
-            self.buf.resize(at + n, 0);
+        let mut got = 0;
+        while got < n {
+            let end = at + got + (n - got).min(FILL_CHUNK);
+            if self.buf.len() < end {
+                self.buf.resize(end, 0);
+            }
+            let want = end - (at + got);
+            let k = read_full(&mut self.inner, &mut self.buf[at + got..end]).map_err(|e| self.io_err(&e))?;
+            got += k;
+            if k < want {
+                break;
+            }
         }
-        let got = read_full(&mut self.inner, &mut self.buf[at..at + n]).map_err(|e| self.io_err(&e))?;
         if got == 0 && eof_ok && n > 0 {
             return Ok(false);
         }
@@ -422,6 +437,44 @@ mod tests {
         assert_eq!(ticks_to_ns(3, 1 << 30, 0), Some(2));
         assert_eq!(ticks_to_ns(1, 1, 2), Some(3_000_000_000));
         assert_eq!(ticks_to_ns(u64::MAX, 1, 0), None);
+    }
+
+    /// Fuzz finding (`fuzz/regressions/iex/pcap_record_announces_16mib`): a 40-byte pcap whose record header
+    /// announces a 16 MiB record used to allocate (and zero) 16 MiB before finding the stream truncated.
+    #[test]
+    fn truncated_large_record_allocates_what_arrives() {
+        let mut b = Vec::new();
+        b.extend_from_slice(&0xa1b2_c3d4u32.to_le_bytes());
+        b.extend_from_slice(&[2, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 0, 0, 1, 0, 0, 0]);
+        let len = u32::try_from(MAX_BLOCK).unwrap();
+        for v in [1u32, 0, len, len] {
+            b.extend_from_slice(&v.to_le_bytes());
+        }
+        b.extend_from_slice(&[0xab; 100]);
+        let mut r = CaptureReader::new(Cursor::new(b));
+        let e = r.next_packet().unwrap_err();
+        assert_eq!(e.code(), "QT-INPUT-002");
+        assert!(e.to_string().contains("stream ends inside a pcap record"), "{e}");
+        assert_eq!(r.stats.bytes, 24 + 16 + 100);
+        assert!(
+            r.buf.capacity() <= 2 * FILL_CHUNK,
+            "buffer grew to {}",
+            r.buf.capacity()
+        );
+    }
+
+    /// Records larger than one fill chunk still arrive whole and byte-exact.
+    #[test]
+    fn records_larger_than_a_fill_chunk() {
+        let frame: Vec<u8> = (0..(3 * FILL_CHUNK + 5)).map(|i| (i % 251) as u8).collect();
+        for bytes in [
+            crate::iex::synth::pcap(&[(7, frame.clone())]),
+            crate::iex::synth::pcapng(&[(7_000, frame.clone())]),
+        ] {
+            let mut r = CaptureReader::new(Cursor::new(bytes));
+            assert_eq!(r.next_packet().unwrap().unwrap().data, &frame[..]);
+            assert!(r.next_packet().unwrap().is_none());
+        }
     }
 
     #[test]

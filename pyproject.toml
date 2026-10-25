@@ -101,7 +101,15 @@ queuetruth = { workspace = true }
 
 [tool.pytest.ini_options]
 minversion = "8.0"
-testpaths = ["python/tests", "service/tests", "tests/e2e"]
+testpaths = [
+    "python/tests",
+    "service/tests",
+    "tests/e2e",
+    "tools/livefill/tests",
+    "scripts/nightly/tests",
+    "scripts/scale/tests",
+    "integrations/hftbacktest/tests",
+]
 addopts = "-q -m 'not integration' --import-mode=importlib"
 pythonpath = ["python", "python/tests"]
 asyncio_mode = "strict"
@@ -114,6 +122,7 @@ markers = [
     "requires_gray_reference: needs tests/fixtures/reference/gray_cmprsk.json",
     "integration: gate / cross-component test (deselected by default)",
     "realdata: reads real market data under .realdata (never in CI)",
+    "fuzz: parser fuzz properties and their regression tests (python/tests/fuzz; QT_FUZZ_PROFILE=deep for long runs)",
 ]
 filterwarnings = ["error::pytest.PytestUnknownMarkWarning"]
 

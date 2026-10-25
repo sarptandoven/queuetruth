@@ -1,0 +1,286 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.sandbox_ack",
+  "$defs": {
+    "OrderView": {
+      "additionalProperties": false,
+      "description": "An order as the agent knows it at the visible cut. `pending` = sent, not yet confirmed at the venue (the\nfirst market event after its arrival confirms it, SPEC 5.2.1); `working` = resting (queue fields set);\n`expired` = still open at the end of the data; `censored` = the venue cleared the book or the feed had a gap.",
+      "properties": {
+        "order_id": {
+          "pattern": "^o[1-9][0-9]*$",
+          "title": "Order Id",
+          "type": "string"
+        },
+        "client_order_id": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.:\\-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Client Order Id"
+        },
+        "side": {
+          "enum": [
+            "buy",
+            "sell"
+          ],
+          "title": "Side",
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "limit",
+            "market"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "tif": {
+          "enum": [
+            "day",
+            "ioc"
+          ],
+          "title": "Tif",
+          "type": "string"
+        },
+        "price": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Price"
+        },
+        "peg_offset_ticks": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Peg Offset Ticks"
+        },
+        "qty": {
+          "title": "Qty",
+          "type": "integer"
+        },
+        "filled_qty": {
+          "title": "Filled Qty",
+          "type": "integer"
+        },
+        "leaves_qty": {
+          "title": "Leaves Qty",
+          "type": "integer"
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "working",
+            "filled",
+            "cancelled",
+            "rejected",
+            "expired",
+            "censored"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reason"
+        },
+        "ts_submit": {
+          "title": "Ts Submit",
+          "type": "integer"
+        },
+        "ts_activated": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ts Activated"
+        },
+        "ts_done": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ts Done"
+        },
+        "queue_ahead": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Queue Ahead"
+        },
+        "rank": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Rank"
+        },
+        "level_qty": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Level Qty"
+        },
+        "cancel_sent_ns": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Cancel Sent Ns"
+        },
+        "n_fills": {
+          "title": "N Fills",
+          "type": "integer"
+        },
+        "avg_fill_price": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Avg Fill Price"
+        }
+      },
+      "required": [
+        "order_id",
+        "client_order_id",
+        "side",
+        "type",
+        "tif",
+        "price",
+        "peg_offset_ticks",
+        "qty",
+        "filled_qty",
+        "leaves_qty",
+        "status",
+        "reason",
+        "ts_submit",
+        "ts_activated",
+        "ts_done",
+        "queue_ahead",
+        "rank",
+        "level_qty",
+        "cancel_sent_ns",
+        "n_fills",
+        "avg_fill_price"
+      ],
+      "title": "OrderView",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`submit` / `cancel` result: the order as now known and the receipt of the committed log entry.",
+  "properties": {
+    "schema": {
+      "const": "qt.sandbox_ack",
+      "default": "qt.sandbox_ack",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "action": {
+      "enum": [
+        "submit",
+        "cancel"
+      ],
+      "title": "Action",
+      "type": "string"
+    },
+    "clock_ns": {
+      "title": "Clock Ns",
+      "type": "integer"
+    },
+    "order": {
+      "$ref": "#/$defs/OrderView"
+    },
+    "duplicate": {
+      "title": "Duplicate",
+      "type": "boolean"
+    },
+    "log_seq": {
+      "title": "Log Seq",
+      "type": "integer"
+    },
+    "log_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Log Hash",
+      "type": "string"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "action",
+    "clock_ns",
+    "order",
+    "duplicate",
+    "log_seq",
+    "log_hash",
+    "warnings"
+  ],
+  "type": "object"
+}

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import datetime
 import math
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -25,7 +26,7 @@ from queuetruth.report.compute import (
     reliability_bins,
     strata,
 )
-from queuetruth.report.ctx import FULL_RELIABILITY_MODELS, Ctx
+from queuetruth.report.ctx import OPEN_RELIABILITY_MODELS, Ctx
 from queuetruth.report.load import FileRec, RunDir
 from queuetruth.report.page import (
     CRIT,
@@ -35,6 +36,7 @@ from queuetruth.report.page import (
     Raw,
     callout,
     code_block,
+    details,
     figure,
     kv,
     section,
@@ -128,28 +130,32 @@ def _reliability_from_predictions(
             else table(["horizon", "bin", "n", "mean forecast", "observed", "95% Wilson CI"], rows, numeric=(2, 3, 4))
         )
         det = f"<details><summary>Data table</summary>{data}</details>" if data else ""
-        blocks.append(f'<h4>{F.esc(m)}</h4><div class="relgrid">{"".join(panels)}</div>{det}')
-    if len(blocks) > FULL_RELIABILITY_MODELS:
-        rest = len(blocks) - FULL_RELIABILITY_MODELS
-        blocks = [
-            *blocks[:FULL_RELIABILITY_MODELS],
-            f"<details><summary>Reliability of the remaining {rest} models</summary>",
-            *blocks[FULL_RELIABILITY_MODELS:],
-            "</details>",
-        ]
+        blocks.append(
+            details(
+                m,
+                f'<div class="relgrid">{"".join(panels)}</div>{det}',
+                cls="item",
+                note=f"{len(panels)} horizon(s)",
+                is_open=len(blocks) < OPEN_RELIABILITY_MODELS,
+                summary_html=f"<h4>{F.esc(m)}</h4>",
+            )
+        )
     out.append("<h3>Reliability diagrams</h3>")
     out.append(
         '<p class="lead">Never-cancel shadows only. Each point is a bin of forecasts (10 equal-width bins); '
         "whiskers are 95% Wilson intervals of the observed exact fill frequency; the strip shows how many forecasts "
-        "fall in each bin (square-root scale). Deterministic models forecast 0 or 1 only. Label eligibility: "
-        f"{F.esc(rule)}.</p>"
+        "fall in each bin (square-root scale). Deterministic models forecast 0 or 1 only. Models are in leaderboard "
+        f"order; the first is open, the others expand on click. Label eligibility: {F.esc(rule)}.</p>"
     )
     out += blocks
     return out
 
 
-def _decile_bias(ctx: Ctx, run: RunDir, models: list[str], horizons: list[int], h_max: int | None) -> list[str]:
-    """Fill-rate bias by queue decile: from qt.zoo_errors when present, else computed from qt.zoo_predictions."""
+def _decile_bias(
+    ctx: Ctx, run: RunDir, models: list[str], horizons: list[int], h_max: int | None, h_open: int | None = None
+) -> list[str]:
+    """Fill-rate bias by queue decile: from qt.zoo_errors when present, else computed from qt.zoo_predictions. The
+    heatmap at `h_open` (the leaderboard's sort horizon; else the first) is shown, the others are collapsed."""
     vals: dict[tuple[str, int, int], tuple[float, float | None, float | None, int]] = {}
     source = ""
     et = run.table("qt.zoo_errors")
@@ -212,6 +218,7 @@ def _decile_bias(ctx: Ctx, run: RunDir, models: list[str], horizons: list[int], 
         f"Red = the model fills too often, blue = too rarely; full color = ±{F.fixed(100 * vmax, 1)} pp, shared by "
         f"every horizon. Source: {F.esc(source)}.</p>",
     ]
+    figs: list[tuple[int, str]] = []
     for h in hs:
         grid, tips, trows = [], [], []
         for m in rows_m:
@@ -239,8 +246,8 @@ def _decile_bias(ctx: Ctx, run: RunDir, models: list[str], horizons: list[int], 
             vmax=vmax,
         )
         data = "" if ctx.compact else table(["model", "decile", "bias", "95% CI", "n"], trows, numeric=(1, 2, 4))
-        out.append(figure(svg, f"Horizon {F.dur(h)}: values in percentage points.", data=data))
-    return out
+        figs.append((h, figure(svg, f"Horizon {F.dur(h)}: values in percentage points.", data=data)))
+    return out + _open_one(figs, h_open, "Queue-decile heatmaps at the other horizons")
 
 
 def _bias_forest(
@@ -392,22 +399,313 @@ def _taker_table(run: RunDir) -> list[str]:
     ]
 
 
+@dataclass
+class ZooView:
+    """What the leaderboard, the zoo drill-down and the answer block share for one zoo run: the 5.6 ranking at the
+    report's sort horizon and the per-metric index of `qt.zoo_errors`."""
+
+    run: RunDir
+    z: ZooSummary
+    idx: dict[zi.ErrKey, zi.ErrVal]
+    horizons: list[int]
+    href: int | None
+    hsort: int | None
+    h_max: int | None
+    ordered: list[Any]
+    models: list[str]
+
+
+def zoo_view(ctx: Ctx, run: RunDir, z: ZooSummary) -> ZooView:
+    """The shared view of one zoo run (deterministic: the ranking ties break on Brier, then model id)."""
+    h_max = z.spec.get("h_max_ns") if isinstance(z.spec.get("h_max_ns"), int) else None
+    lb = z.leaderboard
+    horizons = lbm.horizons_of(lb) if lb else []
+    href = _ref_horizon([h for h in horizons if h_max is None or h < h_max] or horizons)
+    hsort = lbm.sort_horizon(horizons, ctx.sort_horizon_ns)
+    ordered = lbm.rank_leaderboard(lb, hsort)
+    models = [e.model_id for e in ordered] or list(z.models)
+    return ZooView(run, z, zi.errors_index(run), horizons, href, hsort, h_max, ordered, models)
+
+
+def _sorted_by(v: ZooView) -> str:
+    return F.esc(lbm.duration_text(v.hsort) if v.hsort else F.DASH)
+
+
+def _excluded_312(z: ZooSummary) -> str:
+    return (
+        f" ({z.n_excluded_hbt_312:,} shadows on which a faithful hftbacktest model hit its bug #312 are left out of "
+        "every model)"
+        if z.n_excluded_hbt_312
+        else ""
+    )
+
+
+def _breakable(model_id: str) -> Raw:
+    """A model id that wraps only at its parameter boundaries (`[`, `;`), never inside a name or value."""
+    return Raw(F.esc(model_id).replace("[", "<wbr>[").replace(";", ";<wbr>"))
+
+
+def _pp_digits(x: float | None, lo: float | None, hi: float | None) -> int:
+    """Decimals for a bias shown in pp: two when its 95% CI excludes 0 but one decimal would print `+0.0` (a
+    significant bias must not read as zero), else one."""
+    sig = x is not None and lo is not None and hi is not None and (lo > 0 or hi < 0)
+    return 2 if sig and abs(100.0 * x) < 0.05 else 1
+
+
+def _lb_compact(v: ZooView) -> Raw:
+    """The answer-sized leaderboard: model fill rate and bias with its 95% CI at the sort horizon, then the bias at
+    every other horizon (`*` where the 95% CI excludes 0); the first row is the exact fill rate (the base rate),
+    labelled `exact` in the bias columns."""
+    hsort = v.hsort
+    others = [h for h in v.horizons if h != hsort]
+    rates = [lbm.rates_at(e, hsort)[0] for e in v.ordered]
+    with_rate = any(r is not None for r in rates)
+    heads = ["model"]
+    if with_rate:
+        heads.append(f"fill rate {_sorted_by(v)}")
+    heads += [f"fill-rate bias {_sorted_by(v)} (95% CI)", *(f"fill-rate bias {F.dur(h)}" for h in others)]
+    exact = {h: next((r for e in v.ordered if (r := lbm.rates_at(e, h)[1]) is not None), None) for h in v.horizons}
+    rows: list[list[object]] = []
+    rcls: list[str] = []
+
+    def ex(h: int | None) -> str:
+        x = exact.get(h) if h is not None else None
+        return f"exact {F.pct(x)}" if x is not None else F.DASH
+
+    if any(x is not None for x in exact.values()):
+        base: list[object] = ["exact fill rate (truth)"]
+        if with_rate:
+            base.append(F.pct(exact.get(hsort)))
+        base += [ex(hsort) if not with_rate else "", *(ex(h) for h in others)]
+        rows.append(base)
+        rcls.append("base")
+    for e, rate in zip(v.ordered, rates, strict=True):
+        b, lo, hi = lbm.bias_at(e, hsort)
+        row: list[object] = [_breakable(e.model_id)]
+        if with_rate:
+            row.append(F.pct(rate))
+        dg = _pp_digits(b, lo, hi)
+        ci = F.ci(lo, hi, lambda x, d=dg: F.pp(x, d)) if b is not None else ""
+        row.append(f"{F.pp(b, dg)} {ci}".strip())
+        for h in others:
+            x, xlo, xhi = lbm.bias_at(e, h)
+            sig = _excludes_zero(xlo, xhi) and x is not None
+            row.append(f"{F.pp(x, _pp_digits(x, xlo, xhi))}{' *' if sig else ''}")
+        rows.append(row)
+        rcls.append("")
+    return table(
+        heads,
+        rows,
+        numeric=tuple(range(1, len(heads))),
+        cls="lb",
+        row_cls=rcls,
+        row_header=True,
+        caption="Bias = model minus exact fill rate in percentage points; positive = the model fills too often "
+        "(fill-rate optimism); * = the 95% block-bootstrap CI excludes 0. The first row is the exact fill rate each "
+        "bias is measured against.",
+    )
+
+
+def _excludes_zero(lo: float | None, hi: float | None) -> bool:
+    return lo is not None and hi is not None and (lo > 0 or hi < 0)
+
+
+def _lb_full(v: ZooView) -> list[str]:
+    """Every horizon with its CI, the eligible-row bias, overfill bias and the discordance tests (A2, A10), the
+    proper scores, the reading guide and one sentence per model: collapsed under the compact table."""
+    ordered, horizons, hsort, idx, h_max = v.ordered, v.horizons, v.hsort, v.idx, v.h_max
+    heads = (
+        ["model"]
+        + [f"fill-rate bias {F.dur(h)}" for h in horizons]
+        + [
+            f"bias on eligible rows {F.dur(hsort)}" if hsort else "bias on eligible rows",
+            "overfill bias at h_max",
+            "discordance p (cluster-robust)",
+            "clusters",
+            "McNemar b / c (secondary)",
+            "McNemar p (secondary)",
+        ]
+    )
+    rows = []
+    exact = [next((r for e in ordered if (r := lbm.rates_at(e, h)[1]) is not None), None) for h in horizons]
+    if any(x is not None for x in exact):
+        # the base rate of every bias in its column: the truth AJ CIF, the same for every model (0.1.1)
+        rows.append(["exact fill rate (truth)", *(F.pct(x) for x in exact), *([""] * 6)])
+    for e in ordered:
+        # the leaderboard bias is the AJ figure (A2); this column is the eligible-row diagnostic
+        aj = _err(idx, e.model_id, "fill_rate_bias", hsort)
+        dp = _err(idx, e.model_id, "discordance_p_primary", h_max)
+        k = _err(idx, e.model_id, "n_clusters", h_max)
+        mcn = e.mcnemar
+        computable = mcn.p_exact is not None or mcn.b + mcn.c > 0
+        cells = []
+        for h in horizons:
+            b, lo, hi = lbm.bias_at(e, h)
+            cells.append(f"{F.pp(b)} {F.ci(lo, hi, F.pp) if b is not None else ''}".strip())
+        rows.append(
+            [
+                e.model_id,
+                *cells,
+                F.pp(aj[0] if aj else None),
+                f"{F.pp(e.overfill_bias.value)} {F.ci(e.overfill_bias.ci_lo, e.overfill_bias.ci_hi, F.pp)}",
+                F.pval(dp[0] if dp else None),
+                F.num(int(k[0]) if k else None),
+                f"{mcn.b:,} / {mcn.c:,}" if computable else NOT_COMPUTABLE,
+                F.pval(mcn.p_exact) if computable else NOT_COMPUTABLE,
+            ]
+        )
+    nh = len(horizons)
+    full = table(
+        heads,
+        rows,
+        numeric=(*range(1, nh + 1), nh + 1, nh + 3, nh + 4, nh + 6),
+        row_header=True,
+        caption="95% block-bootstrap CIs at every horizon; overfill bias and the discordance tests at h_max",
+    )
+    srows = [
+        [e.model_id]
+        + [F.fixed(e.brier.get(str(h)), 4) for h in horizons]
+        + [
+            F.pct(e.qty_bias, 1),
+            F.num(e.ttf_log_ratio_median, 3),
+            F.num(e.ttf_iad, 3),
+            F.num(e.qtrack_mae, 3),
+        ]
+        for e in ordered
+    ]
+    scores = table(
+        ["model"]
+        + [f"Brier {F.dur(h)}" for h in horizons]
+        + ["qty bias", "ttf log-ratio median", "ttf IAD (vs AJ CIF)", "queue MAE"],
+        srows,
+        numeric=tuple(range(1, nh + 5)),
+        row_header=True,
+        caption="Proper scores and timing on the same never-cancel shadows (same model order)",
+    )
+    guide = (
+        '<p class="lead">Bias = mean forecast minus exact fill rate (positive = optimistic), with its 95% '
+        "block-bootstrap CI at every horizon; the first row gives the exact fill rate itself. The table is "
+        f"sorted by the absolute bias at {_sorted_by(v)} (the horizon is a report setting, default 60 s, or the "
+        "longest horizon below it); Brier is only a tie-break, because models that never fill at short "
+        "horizons all score 0 there. Truth labels at horizon h exist iff the shadow's planned (exogenous) life "
+        "reaches entry + h, whatever its outcome; the truth fill rate is the Aalen-Johansen cumulative "
+        'incidence ("bias vs AJ CIF", ttf IAD), compared with the mean forecast over the same label-eligible '
+        "shadows. Overfill bias and the discordance tests compare model-filled (p ≥ 0.5) with exact at h_max; "
+        "the cluster-robust test is primary (orders on one day are not independent), plain McNemar is "
+        "secondary and is not computable when no shadow has an exact label at h_max.</p>"
+    )
+    return [
+        details(
+            "One sentence per model",
+            [ul([lbm.bias_sentence(e, hsort) for e in ordered], "sentences")],
+            note=f"{len(ordered)} models at {lbm.duration_text(hsort) if hsort else F.DASH}",
+        ),
+        details(
+            "Full leaderboard",
+            [full, scores, guide],
+            note="CIs at every horizon, discordance tests, Brier, timing, how to read it",
+        ),
+    ]
+
+
+def leaderboard(ctx: Ctx) -> Raw | None:
+    """The zoo leaderboard (SPEC 5.6 ranking) right after the answer: never-cancel shadows only (A2), sorted by
+    absolute fill-rate bias vs the Aalen-Johansen truth CIF at the sort horizon, with the exact fill rate as the base
+    rate; the full table, the proper scores and the sentences are collapsed under it."""
+    views = [zoo_view(ctx, run, z) for run, z in ctx.runs_with(ZooSummary) if z.leaderboard]
+    if not views:
+        return None
+    body: list[str] = []
+    for v in views:
+        z = v.z
+        if len(views) > 1:
+            body.append(f"<h3>{F.esc(_label(v.run, z))}</h3>")
+        hx = "h4" if len(views) > 1 else "h3"  # under the run's h3 when several zoo runs share the section
+        body.append(
+            f"<{hx}>Leaderboard: never-cancel shadows (planned life ≥ h_max), sorted by absolute fill-rate bias at "
+            f"{_sorted_by(v)} (bias vs the Aalen-Johansen truth CIF); closer to zero is better</{hx}>"
+        )
+        if z.n_leaderboard is not None:
+            body.append(
+                f'<p class="lead">Every model is scored on the same {z.n_leaderboard:,} never-cancel shadows'
+                + _excluded_312(z)
+                + '. Charts, reliability and per-decile bias are in the <a href="#zoo">zoo drill-down</a>.</p>'
+            )
+        body.append(_lb_compact(v))
+        body += _lb_full(v)
+    return section(
+        "leaderboard",
+        "Leaderboard",
+        body,
+        lead="Which L2 queue model fills like the exact FIFO replay of the same orders.",
+    )
+
+
+def _bias_forests(ctx: Ctx, v: ZooView) -> list[str]:
+    """Signed-bias forest plots: the sort horizon open, the other horizons collapsed."""
+    figs: list[tuple[int, str]] = []
+    for h in v.horizons:
+        fig = _bias_forest(ctx, v.idx, v.models, h, "", "never-cancel shadows")
+        if fig is None:
+            frows = [
+                (e.model_id, fb.value, fb.ci_lo, fb.ci_hi, f"{e.model_id}: {F.pp(fb.value)}")
+                for e in v.ordered
+                if (fb := e.fill_rate_bias.get(str(h))) is not None
+            ]
+            if not frows:
+                continue
+            svg = forest_chart(
+                ctx.uid(),
+                f"Signed fill-rate bias by model at {F.dur(h)}",
+                f"Model minus exact fill rate with 95% block-bootstrap CI at horizon {F.dur(h)}.",
+                frows,
+                x_fmt=lambda x: F.fixed(100 * x, 1),
+                x_label="fill-rate bias (pp, positive = model fills too often)",
+                slot=2,
+            )
+            fig = figure(
+                svg,
+                f"Horizon {F.dur(h)}: points right of zero are optimistic queue models.",
+                data=table(
+                    ["model", "bias", "95% CI"],
+                    [(r[0], F.pp(r[1]), F.ci(r[2], r[3], F.pp)) for r in frows],
+                    numeric=(1,),
+                ),
+            )
+        figs.append((h, fig))
+    return _open_one(figs, v.hsort, "Signed fill-rate bias at the other horizons")
+
+
+def _open_one(figs: list[tuple[int, str]], keep: int | None, what: str) -> list[str]:
+    """The figure at `keep` (else the first) shown, the rest in one collapsed block."""
+    if not figs:
+        return []
+    i = next((k for k, (h, _) in enumerate(figs) if h == keep), 0)
+    first = figs[i][1]
+    rest = [f for k, (_, f) in enumerate(figs) if k != i]
+    if not rest:
+        return [first]
+    return [first, details(what, rest, note=f"{len(rest)} chart(s)")]
+
+
 def zoo(ctx: Ctx) -> Raw | None:
-    """Zoo leaderboard on never-cancel shadows (A2), Aalen-Johansen truth, cluster-robust discordance (A10),
-    cancel-bearing results separately, taker fills (A5), reliability and bias by queue decile."""
+    """Zoo drill-down: run facts and warnings, signed-bias forest plots (A2: never-cancel; Aalen-Johansen truth),
+    cancel-bearing results separately, taker fills (A5), reliability and bias by queue decile. The leaderboard table
+    itself is its own section (`leaderboard`)."""
     runs = ctx.runs_with(ZooSummary)
     if not runs:
         return None
     body: list[str] = []
     for run, z in runs:
+        v = zoo_view(ctx, run, z)
         spec = z.spec
         body.append(f"<h3>{F.esc(_label(run, z))}</h3>")
         l2 = spec.get("l2") if isinstance(spec.get("l2"), dict) else {}
         pl = zi.planned_life(run)
-        h_max = spec.get("h_max_ns") if isinstance(spec.get("h_max_ns"), int) else None
+        h_max = v.h_max
         pop = F.DASH
         if pl is not None:
-            nn = sum(1 for v in pl.values() if v[2] is True or (v[2] is None and v[0] is None))
+            nn = sum(1 for x in pl.values() if x[2] is True or (x[2] is None and x[0] is None))
             pop = f"{nn:,} never-cancel / {len(pl) - nn:,} cancel-bearing"
         body.append(
             kv(
@@ -439,137 +737,14 @@ def zoo(ctx: Ctx) -> Raw | None:
                     "scored on the same population",
                 )
             body.append(callout(WARN, "Zoo warnings", ul(items)))
-        idx = zi.errors_index(run)
-        lb = z.leaderboard
-        horizons = lbm.horizons_of(lb) if lb else []
-        href = _ref_horizon([h for h in horizons if h_max is None or h < h_max] or horizons)
-        hsort = lbm.sort_horizon(horizons, ctx.sort_horizon_ns)
-        ordered = lbm.rank_leaderboard(lb, hsort)
-        models = [e.model_id for e in ordered] or list(z.models)
-        if lb:
+        if z.leaderboard:
             body.append(
-                "<h4>Leaderboard: never-cancel shadows (planned life ≥ h_max), sorted by absolute fill-rate bias at "
-                f"{F.esc(lbm.duration_text(hsort) if hsort else F.DASH)} (bias vs the Aalen-Johansen truth CIF); "
-                "closer to zero is better</h4>"
+                f'<p class="lead">The leaderboard table is in the <a href="#leaderboard">Leaderboard</a> section '
+                f"(sorted at {_sorted_by(v)}). Below: the same bias as forest plots, then calibration and bias by "
+                "queue position.</p>"
             )
-            if z.n_leaderboard is not None:
-                body.append(
-                    f'<p class="lead">Every model is scored on the same {z.n_leaderboard:,} never-cancel shadows'
-                    + (
-                        f" ({z.n_excluded_hbt_312:,} shadows on which a faithful hftbacktest model hit its bug #312 "
-                        "are left out of every model)"
-                        if z.n_excluded_hbt_312
-                        else ""
-                    )
-                    + ".</p>"
-                )
-            body.append(ul([lbm.bias_sentence(e, hsort) for e in ordered], "sentences"))
-            heads = (
-                ["model"]
-                + [f"fill-rate bias {F.dur(h)}" for h in horizons]
-                + [
-                    f"bias on eligible rows {F.dur(hsort)}" if hsort else "bias on eligible rows",
-                    "overfill bias at h_max",
-                    "discordance p (cluster-robust)",
-                    "clusters",
-                    "McNemar b / c (secondary)",
-                    "McNemar p (secondary)",
-                ]
-            )
-            rows = []
-            exact = [next((r for e in ordered if (r := lbm.rates_at(e, h)[1]) is not None), None) for h in horizons]
-            if any(x is not None for x in exact):
-                # the base rate of every bias in its column: the truth AJ CIF, the same for every model (0.1.1)
-                rows.append(["exact fill rate (truth)", *(F.pct(x) for x in exact), *([""] * 6)])
-            for e in ordered:
-                # the leaderboard bias is the AJ figure (A2); this column is the eligible-row diagnostic
-                aj = _err(idx, e.model_id, "fill_rate_bias", hsort)
-                dp = _err(idx, e.model_id, "discordance_p_primary", h_max)
-                k = _err(idx, e.model_id, "n_clusters", h_max)
-                mcn = e.mcnemar
-                computable = mcn.p_exact is not None or mcn.b + mcn.c > 0
-                cells = []
-                for h in horizons:
-                    v, lo, hi = lbm.bias_at(e, h)
-                    cells.append(f"{F.pp(v)} {F.ci(lo, hi, F.pp) if v is not None else ''}".strip())
-                rows.append(
-                    [
-                        e.model_id,
-                        *cells,
-                        F.pp(aj[0] if aj else None),
-                        f"{F.pp(e.overfill_bias.value)} {F.ci(e.overfill_bias.ci_lo, e.overfill_bias.ci_hi, F.pp)}",
-                        F.pval(dp[0] if dp else None),
-                        F.num(int(k[0]) if k else None),
-                        f"{mcn.b:,} / {mcn.c:,}" if computable else NOT_COMPUTABLE,
-                        F.pval(mcn.p_exact) if computable else NOT_COMPUTABLE,
-                    ]
-                )
-            nh = len(horizons)
-            body.append(table(heads, rows, numeric=(*range(1, nh + 1), nh + 1, nh + 3, nh + 4, nh + 6)))
-            srows = [
-                [e.model_id]
-                + [F.fixed(e.brier.get(str(h)), 4) for h in horizons]
-                + [
-                    F.pct(e.qty_bias, 1),
-                    F.num(e.ttf_log_ratio_median, 3),
-                    F.num(e.ttf_iad, 3),
-                    F.num(e.qtrack_mae, 3),
-                ]
-                for e in ordered
-            ]
-            body.append(
-                table(
-                    ["model"]
-                    + [f"Brier {F.dur(h)}" for h in horizons]
-                    + ["qty bias", "ttf log-ratio median", "ttf IAD (vs AJ CIF)", "queue MAE"],
-                    srows,
-                    numeric=tuple(range(1, nh + 5)),
-                    caption="Proper scores and timing on the same never-cancel shadows (same model order)",
-                )
-            )
-            body.append(
-                '<p class="lead">Bias = mean forecast minus exact fill rate (positive = optimistic), with its 95% '
-                "block-bootstrap CI at every horizon; the first row gives the exact fill rate itself. The table is "
-                "sorted by the absolute bias at "
-                f"{F.esc(lbm.duration_text(hsort) if hsort else F.DASH)} (the horizon is a report setting, default "
-                "60 s, or the "
-                "longest horizon below it); Brier is only a tie-break, because models that never fill at short "
-                "horizons all score 0 there. Truth labels at horizon h exist iff the shadow's planned (exogenous) life "
-                "reaches entry + h, whatever its outcome; the truth fill rate is the Aalen-Johansen cumulative "
-                'incidence ("bias vs AJ CIF", ttf IAD), compared with the mean forecast over the same label-eligible '
-                "shadows. Overfill bias and the discordance tests compare model-filled (p ≥ 0.5) with exact at h_max; "
-                "the cluster-robust test is primary (orders on one day are not independent), plain McNemar is "
-                "secondary and is not computable when no shadow has an exact label at h_max.</p>"
-            )
-            for h in horizons:
-                fig = _bias_forest(ctx, idx, models, h, "", "never-cancel shadows")
-                if fig is None:
-                    frows = [
-                        (e.model_id, fb.value, fb.ci_lo, fb.ci_hi, f"{e.model_id}: {F.pp(fb.value)}")
-                        for e in ordered
-                        if (fb := e.fill_rate_bias.get(str(h))) is not None
-                    ]
-                    if not frows:
-                        continue
-                    svg = forest_chart(
-                        ctx.uid(),
-                        f"Signed fill-rate bias by model at {F.dur(h)}",
-                        f"Model minus exact fill rate with 95% block-bootstrap CI at horizon {F.dur(h)}.",
-                        frows,
-                        x_fmt=lambda v: F.fixed(100 * v, 1),
-                        x_label="fill-rate bias (pp, positive = model fills too often)",
-                        slot=2,
-                    )
-                    fig = figure(
-                        svg,
-                        f"Horizon {F.dur(h)}: points right of zero are optimistic queue models.",
-                        data=table(
-                            ["model", "bias", "95% CI"],
-                            [(r[0], F.pp(r[1]), F.ci(r[2], r[3], F.pp)) for r in frows],
-                            numeric=(1,),
-                        ),
-                    )
-                body.append(fig)
+            body.append(f"<h4>Signed fill-rate bias by model, never-cancel shadows{_excluded_312(z)}</h4>")
+            body += _bias_forests(ctx, v)
         else:
             body.append(
                 callout(
@@ -580,39 +755,44 @@ def zoo(ctx: Ctx) -> Raw | None:
                     "</p>",
                 )
             )
-        body += _cancel_bearing(ctx, idx, models, horizons, href, h_max)
+        body += _cancel_bearing(ctx, v.idx, v.models, v.horizons, v.href, h_max)
         body += _taker_table(run)
+        horizons = v.horizons
         if not horizons:
             pt = run.table("qt.zoo_predictions")
             if pt is not None:
                 hz, _ = cols.i64(pt.read(), "horizon_ns")
                 horizons = sorted(set(hz.tolist()))
-        body += _reliability_from_predictions(ctx, run, models, horizons, h_max)
-        body += _decile_bias(ctx, run, models, horizons, h_max)
+        body += _reliability_from_predictions(ctx, run, v.models, horizons, h_max)
+        body += _decile_bias(ctx, run, v.models, horizons, h_max, v.hsort)
         et = run.table("qt.zoo_errors")
         if et is not None and not ctx.compact:
             rs = [r for r in cols.pylist(et.read()) if r["stratum_kind"] == "all"]
             rs.sort(key=lambda r: (r["model_id"], r["metric"], r["horizon_ns"] if r["horizon_ns"] is not None else -1))
             if rs:
-                body.append("<details><summary>All overall metrics (qt.zoo_errors, stratum all)</summary>")
                 body.append(
-                    table(
-                        ["model", "metric", "horizon", "value", "95% CI", "n"],
+                    details(
+                        "All overall metrics (qt.zoo_errors, stratum all)",
                         [
-                            (
-                                r["model_id"],
-                                r["metric"],
-                                F.dur(r["horizon_ns"]),
-                                F.num(r["value"]),
-                                F.ci(r["ci_lo"], r["ci_hi"]),
-                                F.num(r["n"]),
+                            table(
+                                ["model", "metric", "horizon", "value", "95% CI", "n"],
+                                [
+                                    (
+                                        r["model_id"],
+                                        r["metric"],
+                                        F.dur(r["horizon_ns"]),
+                                        F.num(r["value"]),
+                                        F.ci(r["ci_lo"], r["ci_hi"]),
+                                        F.num(r["n"]),
+                                    )
+                                    for r in rs
+                                ],
+                                numeric=(3, 5),
                             )
-                            for r in rs
                         ],
-                        numeric=(3, 5),
+                        note=f"{len(rs):,} rows",
                     )
                 )
-                body.append("</details>")
     return section(
         "zoo",
         "Queue-model zoo vs exact truth",
@@ -908,20 +1088,34 @@ def _live_held_out(c: CalibrationResult, doc: dict[str, Any] | None) -> list[str
     ]
 
 
+def trust_assessment(c: CalibrationResult) -> tuple[Any, str | None]:
+    """`queuetruth.export.trust.assess(c)` and its one-line held-out summary; (None, None) when the assessor is
+    unavailable or fails (the verdict decorates the report; a failing assessor must not break it)."""
+    try:
+        from queuetruth.export.trust import assess, held_out_summary
+
+        t = assess(c)
+        return t, held_out_summary(t)
+    except Exception:
+        return None, None
+
+
+def exportable(c: CalibrationResult) -> tuple[bool | None, str | None]:
+    """(exportable?, held-out summary): the 1.1 `trust` field when present, else the assessor; None when neither."""
+    t, summary = trust_assessment(c)
+    if c.trust is not None:
+        return c.trust.verdict == "exportable", summary
+    if t is not None:
+        return bool(t.ok), summary
+    return None, summary
+
+
 def _verdict(c: CalibrationResult) -> list[str]:
     """Exportability verdict (trader review D1, D2, E1): the 1.1 field `trust` (verdict, refusing reasons,
     flags, per-horizon `beats_default`) when present, else `queuetruth.export.trust.assess` (the `trust:` warning lines
     plus the held-out comparison with the library default). Reason texts and the held-out numbers come from
     `assess` when it is available."""
-    t = None
-    summary = None
-    try:
-        from queuetruth.export.trust import assess, held_out_summary
-
-        t = assess(c)
-        summary = held_out_summary(t)
-    except Exception:  # the verdict decorates the section; a failing assessor must not break it
-        t = None
+    t, summary = trust_assessment(c)
     native = c.trust
     if native is None and t is None:
         return []
@@ -1093,15 +1287,22 @@ def calibration(ctx: Ctx) -> Raw | None:
                 )
         strat = [x for x in c.stratified if x.stratum_kind != "held_out_test"]
         if strat:
-            body.append("<h4>Stratified estimates</h4>")
             body.append(
-                table(
-                    ["stratum kind", "stratum", "estimate", "95% CI", "n"],
+                details(
+                    "",
                     [
-                        (s.stratum_kind, s.stratum, F.num(s.estimate, 5), F.ci(s.ci_lo, s.ci_hi), F.num(s.n))
-                        for s in strat
+                        table(
+                            ["stratum kind", "stratum", "estimate", "95% CI", "n"],
+                            [
+                                (s.stratum_kind, s.stratum, F.num(s.estimate, 5), F.ci(s.ci_lo, s.ci_hi), F.num(s.n))
+                                for s in strat
+                            ],
+                            numeric=(2, 4),
+                        )
                     ],
-                    numeric=(2, 4),
+                    cls="item",
+                    note=f"{len(strat)} strata",
+                    summary_html="<h4>Stratified estimates</h4>",
                 )
             )
         if c.latency is not None:
@@ -1126,10 +1327,15 @@ def calibration(ctx: Ctx) -> Raw | None:
         for name, snip in (("hftbacktest", ex.hftbacktest), ("NautilusTrader", ex.nautilus)):
             if snip is None:
                 continue
-            body.append(f"<h4>Export: {name}</h4>")
-            body.append(code_block(snip.python, f"{name} config (paste-ready)"))
-            if snip.notes:
-                body.append(ul(snip.notes))
+            body.append(
+                details(
+                    "",
+                    [code_block(snip.python, f"{name} config (paste-ready)"), ul(snip.notes) if snip.notes else ""],
+                    cls="item",
+                    note="paste-ready config",
+                    summary_html=f"<h4>Export: {F.esc(name)}</h4>",
+                )
+            )
         if ex.latency_npz:
             body.append(kv([("IntpOrderLatency .npz", ex.latency_npz)]))
         if c.data_sources:

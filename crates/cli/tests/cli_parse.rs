@@ -692,3 +692,90 @@ fn fail_abs_bias_is_a_fraction_or_pp() {
     let help = parse(&["queuetruth", "score", "--help"].map(String::from)).expect_err("help");
     assert!(help.text.contains("e.g. 0.02 = 2 pp"), "{}", help.text);
 }
+
+/// The Python-only groups (run by `queuetruth.cli.main` before the grammar) are in the grammar for `--help`, the
+/// command table and the reference docs; `queuetruth-core` refuses them like every Python command.
+#[test]
+fn python_only_groups_are_listed_and_documented() {
+    let help = exit_of(&["queuetruth", "--help"]).text;
+    for word in [
+        "demo",
+        "forecast",
+        "ledger",
+        "pm",
+        "certify",
+        "verify-cert",
+        "commit",
+        "reveal",
+        "cert",
+        "zoo-toxicity",
+    ] {
+        assert!(
+            help.lines().any(|l| l.trim_start().starts_with(&format!("{word} "))),
+            "{word} missing from --help:\n{help}"
+        );
+    }
+    let table = command_table();
+    let python = |p: &[&str]| {
+        table
+            .iter()
+            .find(|c| c.path == p)
+            .is_some_and(|c| c.implementation == Implementation::Python)
+    };
+    assert!(python(&["demo"]) && python(&["forecast", "score"]) && python(&["cert", "partial-opening"]));
+    // `help X` and `X --help` print the same clap help, with the argparse flags, value names and descriptions
+    let a = exit_of(&["queuetruth", "help", "forecast", "score"]);
+    let b = exit_of(&["queuetruth", "forecast", "score", "--help"]);
+    assert_eq!((a.code, &a.text), (0, &b.text));
+    assert!(b.text.contains("--kelly-fraction <KELLY_FRACTION>"), "{}", b.text);
+    let demo = exit_of(&["queuetruth", "demo", "--help"]).text;
+    assert!(
+        demo.contains("-y, --yes") && demo.contains("Writes <out>/demo.html"),
+        "{demo}"
+    );
+    let certify = exit_of(&["queuetruth", "certify", "--help"]).text;
+    assert!(certify.contains("<RUN_DIR>..."), "{certify}");
+    let kinds = exit_of(&["queuetruth", "ledger", "list", "--kind", "nope"]);
+    assert_eq!(kinds.code, 2);
+    assert!(kinds.text.contains("possible values"), "{}", kinds.text);
+    let argv: Vec<String> = ["queuetruth-core", "ledger", "verify"].map(String::from).to_vec();
+    let (out, err, code) = qt_cli::main_with(&argv);
+    assert_eq!((out.as_str(), code), ("", 2));
+    assert!(err.contains("`ledger verify` requires the Python package"), "{err}");
+}
+
+/// `mcp serve --allow-run` is the flag form of `QT_MCP_ALLOW_RUN=1`; absent, the variable decides.
+#[test]
+fn mcp_serve_allow_run() {
+    let on = parse_ok(&["queuetruth", "mcp", "serve", "--allow-run"].map(String::from));
+    assert_eq!(on.args, serde_json::json!({"allow_run": true}));
+    let off = parse_ok(&["queuetruth", "mcp", "serve"].map(String::from));
+    assert_eq!(off.args, serde_json::json!({}));
+}
+
+/// Enum values are hyphenated on the command line: `--allocation per-partition` is `per_partition`.
+#[test]
+fn allocation_per_partition_is_hyphenated() {
+    let argv = |x: &str| -> Vec<String> {
+        [
+            "queuetruth",
+            "shadows",
+            "sample",
+            "--data",
+            "d",
+            "--n",
+            "3",
+            "--out",
+            "o",
+            "--allocation",
+            x,
+        ]
+        .map(String::from)
+        .to_vec()
+    };
+    assert_eq!(parse_ok(&argv("per-partition")).args["allocation"], "per_partition");
+    assert_eq!(
+        exit_of(&argv("per_partition").iter().map(String::as_str).collect::<Vec<_>>()).code,
+        2
+    );
+}

@@ -1,0 +1,35 @@
+{
+  "sample": {
+    "schema": "qt.demo_plan",
+    "schema_version": 1,
+    "source": {
+      "id": "x",
+      "title": "x",
+      "format": "itch",
+      "session_date": "x",
+      "location": "x",
+      "attribution": "x",
+      "terms_url": "x",
+      "note": "x"
+    },
+    "window": {
+      "timezone": "America/New_York",
+      "placement_start": "x",
+      "placement_end": "x",
+      "cut": "x",
+      "minutes": 1,
+      "h_max_s": 1
+    },
+    "symbols": [
+      "x"
+    ],
+    "cache_dir": "x",
+    "cache_hit": true,
+    "download_needed": true,
+    "estimated_download_bytes": 1,
+    "estimate_extrapolated": true,
+    "max_download_bytes": 1,
+    "file_bytes": 1,
+    "out": "x"
+  }
+}

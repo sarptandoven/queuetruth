@@ -105,6 +105,7 @@ from queuetruth.score.selfexclude import (
     twin_display_prices,
     twin_entry_points,
 )
+from queuetruth.score.shortfall import score_shortfall
 from queuetruth.score.statistics import assemble, assign_strata, classify
 from queuetruth.score.units import UnitMap, dataset_exps, live_scales
 
@@ -542,6 +543,8 @@ def build_scorecard(
     n_unmatched_sim = 0
     with tempfile.TemporaryDirectory(prefix="qt-score-") as tmp:
         work = Path(tmp)
+        from queuetruth.eval import impact as qt_impact  # lazy: `python -m queuetruth.eval.impact` imports score
+
         sched_path = amend_path = None
         if schedule:
             sched_path = work / "schedule.parquet"
@@ -635,6 +638,8 @@ def build_scorecard(
             )
             bbo = find_table(work / "exact", "qt.bbo")
             trades = find_table(work / "exact", "qt.trades")
+            tw = set(twins.by_key) if twins is not None and mode == "native" else set()
+            warnings += qt_impact.score_warnings(res, trades, ds.instruments, schedule=schedule, twin_keys=tw)
             if sim_kind == "exact":
                 sim_oc = ex_oc
         if ds is not None and ds.kind == "l2":
@@ -666,13 +671,19 @@ def build_scorecard(
                     "exclude_order_ids": zoo_excl,
                 }
             )
-            rn.run_zoo(zs)
+            with qt_impact.suppressed():
+                rn.run_zoo(zs)
             if sim_kind == "zoo":
                 zoo_arm_spec = zs
             if zoo_excl and sim_kind == "zoo":
                 warnings.append("self_exclusion: zoo arm applies exclude_order_ids natively")
             pr = find_table(work / "zoo", "qt.zoo_predictions")
             zf = find_table(work / "zoo", "qt.zoo_fills")
+            if ds.kind == "l2":
+                zsh = find_table(work / "zoo", "qt.zoo_shadows")
+                warnings += qt_impact.score_zoo_warnings(
+                    pr, zsh, trades, ds.instruments, h_max_ns=zs.h_max_ns, schedule=schedule
+                )
             pr_rows = rows(pr) if pr is not None else []
             mids = sorted({str(r["model_id"]) for r in pr_rows})
             mid = mids[0] if mids else model
@@ -724,6 +735,7 @@ def build_scorecard(
     live_end_ts = max([int(e[k]) for e in live_events for k in ("ts_exchange", "ts_local_recv") if e.get(k)] + [0])
     order_rows: list[Row] = []
     fills_ext: list[Row] = []
+    unpriced: dict[tuple[str, str], int] = {}  # (order_key, arm) -> unpriced fill qty (qt.score_shortfall)
     taker: set[tuple[str, str, int]] = set()
     n_unmatched_live = 0
     for key in sorted(legs):
@@ -776,6 +788,7 @@ def build_scorecard(
             seq = 0
             for f in sorted(maker + tk, key=lambda f: f.ts):
                 if f.px is None:  # quantity counted above; no price for score_fills / markouts (review F13)
+                    unpriced[(key, arm)] = unpriced.get((key, arm), 0) + f.qty
                     continue
                 seq += 1
                 liq = "taker" if f.liquidity == "taker" else (f.liquidity if f.liquidity == "maker" else "unknown")
@@ -918,6 +931,10 @@ def build_scorecard(
         files.append(write(markouts, out / "score_markouts.parquet"))
         files.append(write(position, out / "score_position.parquet"))
         files.append(write(tests, out / "score_tests.parquet"))
+        shortfall = score_shortfall(
+            order_rows, fills_ext, bbo, ds, s, unpriced_qty=unpriced, n_unmatched_live=n_unmatched_live
+        )
+        files.append(write(shortfall, out / "score_shortfall.parquet"))
         if schedule:
             files.append(write(make_table("qt.shadow_spec", schedule), out / "schedule.parquet"))
         if zoo_arm_spec is not None and ds is not None and ds.kind != "l2":

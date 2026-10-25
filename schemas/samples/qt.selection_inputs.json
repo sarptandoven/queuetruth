@@ -1,0 +1,69 @@
+{
+  "sample": {
+    "schema": "qt.selection_inputs",
+    "schema_version": 1,
+    "ledger_id": "0123456789abcdef0123456789abcdef",
+    "head": {
+      "seq": 1,
+      "hash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    },
+    "chain_verified": true,
+    "filter": {
+      "kinds": [
+        "genesis"
+      ],
+      "study": "x",
+      "name": "x",
+      "status": "ok",
+      "since_ns": 1,
+      "until_ns": 1,
+      "dataset": "x",
+      "run_id": "x",
+      "spec_hash": "x"
+    },
+    "series_kind": "returns",
+    "n_trials": 1,
+    "n_configs": 1,
+    "by_kind": {
+      "k": 1
+    },
+    "studies": [
+      "x"
+    ],
+    "n_with_series": 1,
+    "conflicts": [
+      "0123456789abcdef"
+    ],
+    "linked_run_ids": [
+      "0123456789abcdef"
+    ],
+    "aligned": true,
+    "index": [
+      1
+    ],
+    "trials": [
+      {
+        "trial_id": "0123456789abcdef",
+        "kind": "genesis",
+        "study": "x",
+        "name": "x",
+        "run_id": "x",
+        "spec_hash": "x",
+        "dataset_hash": "x",
+        "n_records": 1,
+        "first_recorded_at_ns": 1,
+        "conflict": true,
+        "series_sha256": "x",
+        "series": [
+          0.5
+        ],
+        "index": [
+          1
+        ],
+        "n_obs": 1,
+        "periods_per_year": 0.5,
+        "higher_is_better": true
+      }
+    ]
+  }
+}

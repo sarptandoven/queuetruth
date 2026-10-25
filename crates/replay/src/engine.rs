@@ -19,7 +19,7 @@ use crate::util::{DAY_NS, InstrumentTable, SEC_NS, utc_days};
 use crate::why::Tracer;
 use crate::{
     BboMode, EngineConfig, EngineReport, EventEnd, EventObserver, FillRule, HiddenPrintPolicy, PlannedEnd,
-    ShadowDiagnostics, ShadowState, Sink, Stats,
+    ShadowDiagnostics, ShadowState, Sink, Stats, TradingHalt,
 };
 
 type BboKey = (Option<Px>, Qty, u32, Option<Px>, Qty, u32);
@@ -171,6 +171,27 @@ impl Engine {
             self.shadows.add_gap(g.instrument_id, g.ts_start);
             self.feed_gaps.push(g.clone());
         }
+    }
+
+    /// Trading halts (SPEC 1.2: shadows resting through an auction or halt are censored): no shadow is live while its
+    /// instrument is not in continuous trading. A shadow live when a halt starts ends `censored_gap` at `ts_start`
+    /// (at the start of the instrument's first event after it, so an event at `ts_start` itself still trades; its
+    /// own cancel or amend effective before `ts_start` still applies, one at `ts_start` loses as it does to a feed
+    /// gap); a shadow whose `ts_live` falls in `[ts_start, ts_end)` never goes live and ends `censored_gap` at its
+    /// `ts_live` (a cancel or amend to zero effective at or before `ts_live` still ends it `cancelled`), also when it
+    /// would be a twin's shadow (A1: the twin stays on the tape). Spans may overlap; an empty span (`ts_end <=
+    /// ts_start`) is `QT-CONFIG-001`. Call before the first record; calls add up.
+    pub fn set_trading_halts(&mut self, halts: &[TradingHalt]) -> QtResult<()> {
+        if let Some(h) = halts.iter().find(|h| h.ts_end <= h.ts_start) {
+            return Err(QtError::Config(format!(
+                "trading halt of instrument {}: ts_end {} must be > ts_start {}",
+                h.instrument_id, h.ts_end, h.ts_start
+            )));
+        }
+        for h in halts {
+            self.shadows.add_halt(h.instrument_id, h.ts_start, h.ts_end);
+        }
+        Ok(())
     }
 
     /// Selects the shadow fill rule (default `Exact`; `Et` for et parity). Call before the first record.

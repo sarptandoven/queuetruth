@@ -1,0 +1,50 @@
+{
+  "sample": {
+    "schema": "qt.ledger_stats",
+    "schema_version": 1,
+    "ledger": "x",
+    "ledger_id": "0123456789abcdef0123456789abcdef",
+    "head": {
+      "seq": 1,
+      "hash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    },
+    "filter": {
+      "kinds": [
+        "genesis"
+      ],
+      "study": "x",
+      "name": "x",
+      "status": "ok",
+      "since_ns": 1,
+      "until_ns": 1,
+      "dataset": "x",
+      "run_id": "x",
+      "spec_hash": "x"
+    },
+    "n_records": 1,
+    "n_trials": 1,
+    "n_configs": 1,
+    "n_errors": 1,
+    "n_with_series": 1,
+    "n_conflicts": 1,
+    "n_linked": 1,
+    "by_kind": {
+      "k": {
+        "records": 1,
+        "trials": 1,
+        "configs": 1,
+        "errors": 1
+      }
+    },
+    "by_study": {
+      "k": {
+        "records": 1,
+        "trials": 1,
+        "configs": 1,
+        "errors": 1
+      }
+    },
+    "first_recorded_at_ns": 1,
+    "last_recorded_at_ns": 1
+  }
+}

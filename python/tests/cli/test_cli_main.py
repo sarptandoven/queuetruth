@@ -164,7 +164,9 @@ def test_mcp_serve_dispatch(run: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     seen: dict[str, Any] = {}
     monkeypatch.setattr(srv, "serve", lambda **kw: seen.update(kw))
     code, out, _ = run("mcp", "serve", "--local")
-    assert (code, out, seen) == (0, "", {"allow_submit": False, "local": True})
+    assert (code, out, seen) == (0, "", {"allow_submit": False, "local": True, "allow_run": None})  # None: env decides
+    code, out, _ = run("mcp", "serve", "--local", "--allow-run")
+    assert (code, out, seen) == (0, "", {"allow_submit": False, "local": True, "allow_run": True})
 
 
 # ---- hybrid and Python commands end to end (gate-2) -------------------------------------------------------------

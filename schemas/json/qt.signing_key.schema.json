@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.signing_key",
+  "additionalProperties": false,
+  "description": "`qt.signing_key` (`queuetruth cert keygen` / `cert pubkey`): never carries private key material.",
+  "properties": {
+    "schema": {
+      "const": "qt.signing_key",
+      "default": "qt.signing_key",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "algorithm": {
+      "const": "ed25519",
+      "default": "ed25519",
+      "title": "Algorithm",
+      "type": "string"
+    },
+    "public_key": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Public Key",
+      "type": "string"
+    },
+    "key_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Key Fingerprint",
+      "type": "string"
+    },
+    "private_key_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Private Key Path"
+    },
+    "public_key_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Public Key Path"
+    },
+    "encrypted": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Encrypted"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "public_key",
+    "key_fingerprint",
+    "private_key_path",
+    "public_key_path",
+    "encrypted"
+  ],
+  "type": "object"
+}

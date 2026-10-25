@@ -1,0 +1,257 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.forecast_ledger_summary",
+  "$defs": {
+    "ForecastCommitment": {
+      "additionalProperties": false,
+      "description": "`qt.forecast_commitment`: a plain-JSON commitment to a ledger head. It names the head entry's hash, which\ncommits to every earlier entry through the chain, and carries no forecast content, so it can be published,\nanchored or wrapped by a certificate (a timestamp authority signs `sha256(canonical_json(commitment))`) before\nthe questions resolve. `ledger_id` is the hash of entry 0.",
+      "properties": {
+        "schema": {
+          "const": "qt.forecast_commitment",
+          "default": "qt.forecast_commitment",
+          "title": "Schema",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "ledger_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Ledger Id",
+          "type": "string"
+        },
+        "head_seq": {
+          "minimum": 0,
+          "title": "Head Seq",
+          "type": "integer"
+        },
+        "head_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Head Sha256",
+          "type": "string"
+        },
+        "head_recorded_at_ns": {
+          "title": "Head Recorded At Ns",
+          "type": "integer"
+        },
+        "n_entries": {
+          "minimum": 1,
+          "title": "N Entries",
+          "type": "integer"
+        },
+        "n_forecasts": {
+          "minimum": 0,
+          "title": "N Forecasts",
+          "type": "integer"
+        },
+        "n_resolutions": {
+          "minimum": 0,
+          "title": "N Resolutions",
+          "type": "integer"
+        },
+        "hash_alg": {
+          "const": "sha256",
+          "default": "sha256",
+          "title": "Hash Alg",
+          "type": "string"
+        },
+        "chain_rule": {
+          "title": "Chain Rule",
+          "type": "string"
+        },
+        "engine_version": {
+          "title": "Engine Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema",
+        "schema_version",
+        "ledger_id",
+        "head_seq",
+        "head_sha256",
+        "head_recorded_at_ns",
+        "n_entries",
+        "n_forecasts",
+        "n_resolutions",
+        "chain_rule",
+        "engine_version"
+      ],
+      "title": "ForecastCommitment",
+      "type": "object"
+    },
+    "LedgerEntryRef": {
+      "additionalProperties": false,
+      "description": "One appended entry, as the commit and resolve summaries list it.",
+      "properties": {
+        "seq": {
+          "title": "Seq",
+          "type": "integer"
+        },
+        "type": {
+          "enum": [
+            "forecast",
+            "resolution"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "question_id": {
+          "title": "Question Id",
+          "type": "string"
+        },
+        "forecaster": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Forecaster"
+        },
+        "entry_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Entry Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "seq",
+        "type",
+        "question_id",
+        "forecaster",
+        "entry_sha256"
+      ],
+      "title": "LedgerEntryRef",
+      "type": "object"
+    },
+    "LedgerProblem": {
+      "additionalProperties": false,
+      "description": "One integrity problem found by `verify_ledger`.",
+      "properties": {
+        "seq": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Seq"
+        },
+        "line": {
+          "title": "Line",
+          "type": "integer"
+        },
+        "problem": {
+          "title": "Problem",
+          "type": "string"
+        }
+      },
+      "required": [
+        "seq",
+        "line",
+        "problem"
+      ],
+      "title": "LedgerProblem",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`qt.forecast_ledger_summary` (`forecast commit`, `forecast resolve`, `forecast verify`): what was appended,\nthe head commitment and the chain verification (`verified` false lists `problems`).",
+  "properties": {
+    "schema": {
+      "const": "qt.forecast_ledger_summary",
+      "default": "qt.forecast_ledger_summary",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "action": {
+      "enum": [
+        "commit",
+        "resolve",
+        "verify"
+      ],
+      "title": "Action",
+      "type": "string"
+    },
+    "ledger": {
+      "title": "Ledger",
+      "type": "string"
+    },
+    "engine_version": {
+      "title": "Engine Version",
+      "type": "string"
+    },
+    "appended": {
+      "title": "Appended",
+      "type": "integer"
+    },
+    "entries": {
+      "items": {
+        "$ref": "#/$defs/LedgerEntryRef"
+      },
+      "title": "Entries",
+      "type": "array"
+    },
+    "entries_truncated": {
+      "title": "Entries Truncated",
+      "type": "boolean"
+    },
+    "commitment": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ForecastCommitment"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "verified": {
+      "title": "Verified",
+      "type": "boolean"
+    },
+    "problems": {
+      "items": {
+        "$ref": "#/$defs/LedgerProblem"
+      },
+      "title": "Problems",
+      "type": "array"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "action",
+    "ledger",
+    "engine_version",
+    "appended",
+    "entries",
+    "entries_truncated",
+    "commitment",
+    "verified",
+    "problems",
+    "warnings"
+  ],
+  "type": "object"
+}

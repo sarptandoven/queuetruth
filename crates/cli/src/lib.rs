@@ -13,6 +13,7 @@ mod grammar;
 mod human;
 mod native;
 pub mod ops;
+mod python_commands;
 mod schemas;
 
 use clap::error::ErrorKind;
@@ -306,10 +307,9 @@ pub struct CommandInfo {
     pub positional: Vec<&'static str>,
 }
 
-/// Every command of the grammar with its flags.
+/// Every command of the grammar with its flags (the Python-only groups last).
 pub fn command_table() -> Vec<CommandInfo> {
-    grammar::COMMANDS
-        .iter()
+    grammar::all_commands()
         .map(|c| CommandInfo {
             path: c.path.to_vec(),
             implementation: c.imp,

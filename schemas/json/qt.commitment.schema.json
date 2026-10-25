@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.commitment",
+  "$defs": {
+    "Signature": {
+      "additionalProperties": false,
+      "description": "An Ed25519 signature over `domain + \"\\n\" + canonical_json(body)` (RFC 8032, pure Ed25519).",
+      "properties": {
+        "algorithm": {
+          "const": "ed25519",
+          "default": "ed25519",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "public_key": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Public Key",
+          "type": "string"
+        },
+        "key_fingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Key Fingerprint",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "public_key",
+        "key_fingerprint",
+        "value"
+      ],
+      "title": "Signature",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`qt.commitment` (`queuetruth commit`): public, reveals nothing about the files but their number.\n\nLeaf i = sha256(`\"qt-commit-v1\\0leaf\\0\"` + nonce_i (32 bytes) + name_i (UTF-8) + `\"\\0\"` + sha256(file_i) (32\nbytes)); root = sha256(`\"qt-commit-v1\\0root\\0\"` + leaf_0 + ... + leaf_n-1). The nonces stay in the private\n`qt.commitment_opening` until reveal. `committed_at` is asserted by whoever ran `commit`; anchor `root`\nelsewhere (RFC 3161, a public post, a counterparty) to make it more than that.",
+  "properties": {
+    "schema": {
+      "const": "qt.commitment",
+      "default": "qt.commitment",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "scheme": {
+      "const": "qt-commit-v1",
+      "default": "qt-commit-v1",
+      "title": "Scheme",
+      "type": "string"
+    },
+    "label": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Label"
+    },
+    "committed_at": {
+      "title": "Committed At",
+      "type": "integer"
+    },
+    "n_items": {
+      "title": "N Items",
+      "type": "integer"
+    },
+    "leaves": {
+      "items": {
+        "pattern": "^[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "title": "Leaves",
+      "type": "array"
+    },
+    "root": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Root",
+      "type": "string"
+    },
+    "signature": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Signature"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "committed_at",
+    "n_items",
+    "leaves",
+    "root"
+  ],
+  "type": "object"
+}

@@ -134,7 +134,7 @@ services:
       QT_TENANT_MAX_RUNNING: ${QT_TENANT_MAX_RUNNING:-1}
       # Child-process wall-clock limit for job kinds without a per-kind entry. Per-kind limits are read from
       # QT_JOB_TIMEOUTS_S, a JSON object {kind: seconds} (kinds: replay, calibration, scorecard, report,
-      # dataset_validate, ingest), for example '{"calibration": 14400}'. Unset or {} means every kind uses
+      # dataset_validate, ingest, zoo), for example '{"calibration": 14400}'. Unset or {} means every kind uses
       # QT_JOB_TIMEOUT_S.
       QT_JOB_TIMEOUT_S: ${QT_JOB_TIMEOUT_S:-7200}
       QT_JOB_TIMEOUTS_S: ${QT_JOB_TIMEOUTS_S:-{}}

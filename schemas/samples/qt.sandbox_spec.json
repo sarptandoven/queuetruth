@@ -1,0 +1,73 @@
+{
+  "sample": {
+    "dataset": {
+      "path": "x"
+    },
+    "instrument_id": 1,
+    "symbol": "x",
+    "session_date": "2020-01-02",
+    "start_ns": 1,
+    "end_ns": 2,
+    "latency_ns": 1,
+    "jitter_ns": 1,
+    "feed_latency_ns": 1,
+    "seed": 1,
+    "depth_levels": 1,
+    "max_trades": 1,
+    "fees": {
+      "maker_per_unit": 0.5,
+      "taker_per_unit": 0.5,
+      "maker_bps": 0.5,
+      "taker_bps": 0.5
+    },
+    "markout_horizons_ns": [
+      1
+    ],
+    "market_collar_bps": 0.5,
+    "max_order_qty": 1,
+    "max_position": 1,
+    "max_open_orders": 1,
+    "self_trade_prevention": "reject_new",
+    "hidden_print_policy": "ignore",
+    "max_steps": 1
+  },
+  "minimal": {
+    "dataset": {
+      "path": "x"
+    }
+  },
+  "defaults": {
+    "dataset": {
+      "path": "x"
+    },
+    "instrument_id": null,
+    "symbol": null,
+    "session_date": null,
+    "start_ns": null,
+    "end_ns": null,
+    "latency_ns": 0,
+    "jitter_ns": 0,
+    "feed_latency_ns": 0,
+    "seed": 0,
+    "depth_levels": 5,
+    "max_trades": 20,
+    "fees": {
+      "maker_per_unit": 0.0,
+      "taker_per_unit": 0.0,
+      "maker_bps": 0.0,
+      "taker_bps": 0.0
+    },
+    "markout_horizons_ns": [
+      1000000000,
+      10000000000,
+      60000000000
+    ],
+    "market_collar_bps": 100.0,
+    "max_order_qty": null,
+    "max_position": null,
+    "max_open_orders": 100,
+    "self_trade_prevention": "reject_new",
+    "hidden_print_policy": null,
+    "max_steps": 100000
+  }
+}

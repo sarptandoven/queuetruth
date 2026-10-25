@@ -39,14 +39,17 @@ field contains a newline continues on the next lines and is re-joined by its Bod
 from __future__ import annotations
 
 import gzip
+import io
 import re
 import struct
+import zlib
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from queuetruth.errors import QtError
-from queuetruth.live.importers.fixwire import SOH, Framed, detect_delimiter, frame, normalise, utc_ts
+from queuetruth.live.importers._parquet import MAX_RATIO, SLACK
+from queuetruth.live.importers.fixwire import SOH, Framed, detect_delimiter, fix_int, frame, normalise, utc_ts
 
 #: File kinds recognised by name.
 LOG_KINDS = ("messages_log", "event_log")
@@ -123,7 +126,7 @@ def classify(path: str) -> SourceFile:
         m = rx.match(name)
         if m:
             n = m.groupdict().get("n")
-            return SourceFile(path, kind, naming, parse_stem(m.group("stem")), int(n) if n else None)
+            return SourceFile(path, kind, naming, parse_stem(m.group("stem")), fix_int(n) if n else None)
     return SourceFile(path, "messages", "generic", None, None)
 
 
@@ -162,13 +165,39 @@ def expand_inputs(paths: list[str]) -> list[str]:
     return uniq
 
 
-def read_bytes(path: str) -> bytes:
-    """File bytes, gunzipped when the file is gzip-compressed (magic 1f 8b); `QT-INPUT-001` when unreadable."""
+#: A gzip-compressed input may expand to at most this many times its compressed size (plus `GZIP_SLACK` bytes):
+#: the policy of `_parquet.MAX_RATIO`. Synthetic QuickFIX logs compress about 10.5x (gzip level 6) to 11.8x (level
+#: 9), heartbeat-only and order flow alike (`test_gzip_limit_leaves_room_for_real_logs`); deflate's ceiling is about
+#: 1032x, which a decompression bomb uses. There is no absolute cap: a 100 MB file may expand to 20 GB, and the
+#: memory limit of the process (the service's import child) is the backstop for that.
+GZIP_MAX_RATIO = MAX_RATIO
+GZIP_SLACK = SLACK
+
+
+def read_bytes(path: str) -> bytes | bytearray:
+    """File bytes, gunzipped when the file is gzip-compressed (magic 1f 8b); `QT-INPUT-001` when unreadable or not
+    valid gzip, `QT-INPUT-002` when it decompresses past `GZIP_MAX_RATIO` (a decompression bomb). Decompressed data
+    is accumulated in one buffer and returned as is (no joined copy), so the peak is the decompressed size plus one
+    chunk."""
+    data: bytes | bytearray
     try:
         data = Path(path).read_bytes()
         if data[:2] == b"\x1f\x8b":
-            data = gzip.decompress(data)
-    except (OSError, EOFError, gzip.BadGzipFile) as e:
+            limit = GZIP_MAX_RATIO * len(data) + GZIP_SLACK
+            buf = bytearray()
+            with gzip.GzipFile(fileobj=io.BytesIO(data)) as g:
+                while len(buf) <= limit:  # chunked: `read(limit)` would allocate the whole limit up front
+                    chunk = g.read(1 << 20)
+                    if not chunk:
+                        break
+                    buf += chunk
+            if len(buf) > limit:
+                raise QtError(
+                    "QT-INPUT-002",
+                    f"{path}: gzip input expands to more than {limit} bytes ({GZIP_MAX_RATIO}x its size): refused",
+                )
+            data = buf
+    except (OSError, EOFError, zlib.error) as e:  # gzip.BadGzipFile is an OSError
         raise QtError("QT-INPUT-001", f"{path}: {e}") from e
     return data
 
@@ -324,15 +353,30 @@ class StoreRead:
     index_mismatches: int = 0
 
 
-def _parse_header(data: bytes) -> tuple[str, list[tuple[int, int, int]]]:
+#: Store index and sequence-number records. A match starts only where a digit run starts (the lookbehind): from
+#: inside a run, the engine would rescan the rest of the run at every position, quadratic in a long digit run with
+#: no separator (a 40 000-digit `.header` took 13 s).
+_INDEX_RECORD = re.compile(rb"(?<![0-9])([0-9]+),([0-9]+),([0-9]+)")
+_SEQNUMS = re.compile(rb"(?<![0-9])([0-9]+)[ \t\r\n\f\v]*:[ \t\r\n\f\v]*([0-9]+)")
+
+
+def _parse_header(data: bytes | bytearray) -> tuple[str, list[tuple[int, int, int]], int]:
+    """(format, `(seq, offset, size)` records, unusable records) of a FileStore index."""
     if not data:
-        return "none", []
+        return "none", [], 0
     if all(c in b"0123456789,\r\n\t " for c in data):
-        recs = [(int(a), int(b), int(c)) for a, b, c in re.findall(rb"(\d+),(\d+),(\d+)", data)]
-        return ("text_lines" if b"\n" in data else "text_space"), recs
+        recs = []
+        bad = 0
+        for a, b, c in _INDEX_RECORD.findall(data):
+            seq, off, size = (fix_int(x.decode("ascii")) for x in (a, b, c))
+            if seq is None or off is None or size is None:
+                bad += 1  # a number of 21+ digits points at no message: counted as an index mismatch
+            else:
+                recs.append((seq, off, size))
+        return ("text_lines" if b"\n" in data else "text_space"), recs, bad
     if len(data) % 16 == 0:
-        return "binary", [(s, o, z) for s, o, z in struct.iter_unpack(">iqi", data)]
-    return "unparseable", []
+        return "binary", [(s, o, z) for s, o, z in struct.iter_unpack(">iqi", data)], 0
+    return "unparseable", [], 0
 
 
 def read_store(body_path: str, header_path: str | None) -> StoreRead:
@@ -340,17 +384,16 @@ def read_store(body_path: str, header_path: str | None) -> StoreRead:
     byte range; later index records for a sequence number win (resends overwrite). Without a usable index the
     body is scanned by BodyLength."""
     body = read_bytes(body_path).decode("latin-1")
-    fmt, recs = ("none", [])
+    fmt, recs, mismatches = ("none", [], 0)
     if header_path is not None and Path(header_path).is_file():
-        fmt, recs = _parse_header(read_bytes(header_path))
+        fmt, recs, mismatches = _parse_header(read_bytes(header_path))
     out: list[tuple[int | None, Framed, int]] = []
-    mismatches = 0
     if recs:
         by_seq: dict[int, tuple[int, int]] = {}
         for seq, off, size in recs:
             by_seq[seq] = (off, size)
         for seq, (off, size) in sorted(by_seq.items(), key=lambda kv: kv[1][0]):
-            chunk = body[off : off + size]
+            chunk = body[off : off + size] if off >= 0 and size > 0 and seq >= 0 else ""  # never a slice from the end
             if not chunk.startswith("8=") or len(chunk) != size:
                 mismatches += 1
                 continue
@@ -373,10 +416,10 @@ def read_seqnums(path: str, kind: str) -> tuple[int | None, int | None]:
     both; `.senderseqnums` / `.targetseqnums` one each)."""
     data = read_bytes(path)
     if kind == "store_seqnums":
-        m = re.search(rb"(\d+)\s*:\s*(\d+)", data)
-        return (int(m.group(1)), int(m.group(2))) if m else (None, None)
+        m = _SEQNUMS.search(data)
+        return (fix_int(m.group(1).decode("ascii")), fix_int(m.group(2).decode("ascii"))) if m else (None, None)
     m = re.search(rb"\d+", data)
-    v = int(m.group(0)) if m else None
+    v = fix_int(m.group(0).decode("ascii")) if m else None
     return (v, None) if kind == "store_senderseqnums" else (None, v)
 
 

@@ -45,7 +45,15 @@ from queuetruth.live._common import (
     text_or_none,
 )
 from queuetruth.live.builder import ImportResult, LogBuilder
-from queuetruth.live.importers._base import ImportOptions, json_records, new_builder, side_of, sub_records
+from queuetruth.live.importers._base import (
+    ImportOptions,
+    json_records,
+    list_field,
+    new_builder,
+    obj_field,
+    side_of,
+    sub_records,
+)
 
 VENUE = "coinbase"
 _TIF = {
@@ -400,9 +408,9 @@ def _list_order(b: LogBuilder, m: dict[str, Any], rec: Record, ex: _Excluded) ->
     loc = rec.location
     if ex.drop(text_or_none(m.get("order_id"))):
         return
-    cfg = m.get("order_configuration") or {}
-    name = next(iter(cfg), None) if isinstance(cfg, dict) else None
-    body = cfg.get(name) if name else {}
+    cfg = obj_field(m.get("order_configuration"), "order_configuration", loc)
+    name = next(iter(cfg), None)
+    body = obj_field(cfg.get(name), f"order_configuration.{name}", loc) if name else {}
     ot, tif = _CONFIG_TIF.get(name or "", ("other", "other"))
     po = as_bool((body or {}).get("post_only"))
     size_raw = (body or {}).get("base_size")
@@ -458,17 +466,27 @@ def import_coinbase(paths: list[str], opts: ImportOptions) -> ImportResult:
             if ts_text is None:
                 raise QtError("QT-INPUT-002", f"{rec.location}: user message without timestamp")
             msg_ts = rfc3339_ns(ts_text, "timestamp", rec.location)
-            for ev in obj.get("events") or []:
-                for i, o in enumerate(ev.get("orders") or []):
+            for k, ev in enumerate(list_field(obj.get("events"), "events", rec.location)):
+                ev = obj_field(ev, f"events[{k}]", rec.location)
+                for i, o in enumerate(list_field(ev.get("orders"), f"events[{k}].orders", rec.location)):
                     sub = Record(o, rec.raw, f"{rec.location}/{i}", rec.file_idx, rec.line_idx, recv_ns=rec.recv_ns)
+                    if not isinstance(o, dict):
+                        b.skip("non-object record")
+                        continue
                     _ws_order(b, o, sub, str(ev.get("type", "update")), msg_ts, states, ex)
             continue
         if isinstance(obj, dict) and "fills" in obj:
             for sub in sub_records(rec, "fills"):
+                if not isinstance(sub.obj, dict):
+                    b.skip("non-object record")
+                    continue
                 _list_fill(b, sub.obj, sub, adjustments, fills_by_trade, ex)
             continue
         if isinstance(obj, dict) and "orders" in obj:
             for sub in sub_records(rec, "orders"):
+                if not isinstance(sub.obj, dict):
+                    b.skip("non-object record")
+                    continue
                 _list_order(b, sub.obj, sub, ex)
             continue
         if isinstance(obj, dict) and "entry_id" in obj:
