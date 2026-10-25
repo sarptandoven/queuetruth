@@ -123,7 +123,7 @@ from the first changed entry onward and re-chain the rest. `commitment.json` clo
   "n_resolutions": 0,
   "hash_alg": "sha256",
   "chain_rule": "entry_sha256 = sha256(canonical_json(entry - entry_sha256)); ...",
-  "engine_version": "0.1.1"
+  "engine_version": "0.2.0"
 }
 ```
 

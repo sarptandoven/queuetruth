@@ -1,7 +1,7 @@
 {
   "name": "qt.zoo_errors",
   "metadata": {
-    "qt.engine_version": "0.1.1",
+    "qt.engine_version": "0.2.0",
     "qt.schema": "qt.zoo_errors",
     "qt.schema_version": "1.1"
   },

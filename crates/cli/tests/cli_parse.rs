@@ -456,7 +456,10 @@ fn usage_errors_and_help() {
     let sub = exit_of(&["queuetruth", "replay", "--help"]);
     assert_eq!((sub.code, sub.to_stderr), (0, false));
     let v = exit_of(&["queuetruth", "--version"]);
-    assert_eq!((v.code, v.text.trim()), (0, "queuetruth 0.1.1"));
+    assert_eq!(
+        (v.code, v.text.trim()),
+        (0, format!("queuetruth {}", env!("CARGO_PKG_VERSION")).as_str())
+    );
     for bad in [
         vec!["queuetruth", "replay", "--out", "o"],
         vec![

@@ -1,7 +1,7 @@
 {
   "name": "qt.conformal_sets",
   "metadata": {
-    "qt.engine_version": "0.1.1",
+    "qt.engine_version": "0.2.0",
     "qt.schema": "qt.conformal_sets",
     "qt.schema_version": "1"
   },

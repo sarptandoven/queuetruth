@@ -7,6 +7,7 @@ the whole set of equal models about 90% of the time at the real day's 13 blocks,
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import os
 from collections.abc import Callable
@@ -17,6 +18,7 @@ import numpy as np
 import pyarrow as pa
 import pytest
 
+from queuetruth import __version__ as qt_version
 from queuetruth import cli
 from queuetruth.errors import QtError
 from queuetruth.eval import evaluate_zoo, planned_life_table
@@ -35,6 +37,7 @@ from queuetruth.eval.leaderboard import (
     mcs_sentence,
     mcs_table,
 )
+from queuetruth.schemas import runid, specs
 from queuetruth.schemas.models import LeaderboardEntry, ZooSummary
 from queuetruth.stats.selection import model_confidence_set
 
@@ -434,8 +437,38 @@ def test_mcs_mark_and_the_cli_table() -> None:
 # ---- end to end and real data ---------------------------------------------------------------------------------------
 
 
-#: run_id of the spec below as computed by main before the MCS existed (queuetruth 0.1.1, `api.run_id`).
-GOLDEN_RUN_ID = "d4af291438a76697"
+#: ZooSpec's fields before the MCS existed (queuetruth 0.1.1). The MCS adds no spec field, so it cannot change any
+#: run_id; freezing the field set guards that without a version-specific golden run_id (run_id hashes the engine
+#: version, and the fixture files carry it in their Parquet metadata, so a pinned hash breaks at every release).
+PRE_MCS_ZOO_SPEC_FIELDS = [
+    "amends",
+    "bootstrap_b",
+    "dataset",
+    "exchange",
+    "exclude_order_ids",
+    "h_max_ns",
+    "horizons_ns",
+    "l2",
+    "latency",
+    "mode",
+    "models",
+    "out",
+    "particles",
+    "seed",
+    "shadows",
+    "threads",
+    "write_fills",
+    "write_trajectory",
+]
+
+
+def _resolve_ref(ref: dict[str, Any]) -> str:
+    """An input reference as the core resolves it for run_id: a dataset directory's `dataset_id`, else the file's
+    sha256."""
+    p = Path(ref["path"])
+    if (p / "manifest.json").is_file():
+        return str(json.loads((p / "manifest.json").read_text())["dataset_id"])
+    return hashlib.sha256(p.read_bytes()).hexdigest()
 
 
 @pytest.mark.requires_core
@@ -443,8 +476,7 @@ def test_run_zoo_writes_the_mcs_fields(repo_root: Path, tmp_path: Path) -> None:
     from queuetruth import api
 
     ds = str(repo_root / "tests" / "fixtures" / "synth_small")
-    sh = tmp_path / "sh.parquet"
-    api.sample_shadows({"dataset": {"path": ds}, "n": 120, "seed": 3, "out": str(sh)})
+    sh = repo_root / "tests" / "fixtures" / "synth_small" / "truth" / "shadows.parquet"
     spec = {
         "dataset": {"path": ds},
         "shadows": {"path": str(sh)},
@@ -453,8 +485,12 @@ def test_run_zoo_writes_the_mcs_fields(repo_root: Path, tmp_path: Path) -> None:
     }
     a = api.run_zoo({**spec, "out": str(tmp_path / "a")})
     b = api.run_zoo({**spec, "out": str(tmp_path / "b")})
-    # the spec, hence the run_id, is unchanged by the MCS: the value main (before the MCS) computes for this spec
-    assert a.run_id == b.run_id == GOLDEN_RUN_ID
+    # The MCS adds no spec field, so the run_id is the one the spec alone determines: the Python and Rust run_id
+    # agree on the echoed spec, and the spec's fields are those of 0.1.1.
+    assert sorted(specs.ZooSpec.model_fields) == PRE_MCS_ZOO_SPEC_FIELDS
+    assert a.run_id == b.run_id
+    echo = a.model_dump(mode="json")["spec"]
+    assert runid.run_id(echo, qt_version, _resolve_ref) == a.run_id == api.run_id(echo)
     assert [e.model_dump(mode="json") for e in a.leaderboard] == [e.model_dump(mode="json") for e in b.leaderboard]
     keys = {k for e in a.leaderboard for k in e.fill_rate_bias}
     for e in a.leaderboard:

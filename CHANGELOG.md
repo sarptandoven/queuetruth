@@ -6,6 +6,8 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-25
+
 Data schema 1.2: every new document and table is additive and registered with the others (`queuetruth schema list`,
 `schemas/`); the changes older code or clients notice are the Migration and Upgrade notes under Changed. Design notes
 for each change are listed in [spec section 10](docs/design/spec.md#10-design-extensions).

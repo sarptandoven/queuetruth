@@ -693,7 +693,7 @@ dependencies = [
 
 [[package]]
 name = "queuetruth-crypto"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "arrow-array",
  "arrow-buffer",
@@ -731,7 +731,7 @@ dependencies = [
 
 [[package]]
 name = "queuetruth-ingest"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "arrow-array",
  "arrow-buffer",
@@ -753,7 +753,7 @@ dependencies = [
 
 [[package]]
 name = "queuetruth-schema"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "arrow-array",
  "arrow-buffer",
@@ -772,7 +772,7 @@ dependencies = [
 
 [[package]]
 name = "queuetruth-types"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "serde",
  "thiserror",

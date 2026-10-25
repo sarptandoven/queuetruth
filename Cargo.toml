@@ -17,7 +17,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 license = "Apache-2.0"
 authors = ["Sarp Tandoven"]
@@ -27,18 +27,18 @@ publish = false
 
 [workspace.dependencies]
 # Internal crates (edges fixed by SPEC section 2).
-queuetruth-types = { path = "crates/types", version = "0.1.1" }
-queuetruth-schema = { path = "crates/schema", version = "0.1.1" }
-queuetruth-book = { path = "crates/book", version = "0.1.1" }
-queuetruth-replay = { path = "crates/replay", version = "0.1.1" }
-queuetruth-ingest = { path = "crates/ingest", version = "0.1.1" }
-queuetruth-crypto = { path = "crates/crypto", version = "0.1.1" }
-queuetruth-l2 = { path = "crates/l2", version = "0.1.1" }
-queuetruth-zoo = { path = "crates/zoo", version = "0.1.1" }
-queuetruth-calib = { path = "crates/calib", version = "0.1.1" }
-queuetruth-features = { path = "crates/features", version = "0.1.1" }
-queuetruth-testkit = { path = "crates/testkit", version = "0.1.1" }
-queuetruth-cli = { path = "crates/cli", version = "0.1.1" }
+queuetruth-types = { path = "crates/types", version = "0.2.0" }
+queuetruth-schema = { path = "crates/schema", version = "0.2.0" }
+queuetruth-book = { path = "crates/book", version = "0.2.0" }
+queuetruth-replay = { path = "crates/replay", version = "0.2.0" }
+queuetruth-ingest = { path = "crates/ingest", version = "0.2.0" }
+queuetruth-crypto = { path = "crates/crypto", version = "0.2.0" }
+queuetruth-l2 = { path = "crates/l2", version = "0.2.0" }
+queuetruth-zoo = { path = "crates/zoo", version = "0.2.0" }
+queuetruth-calib = { path = "crates/calib", version = "0.2.0" }
+queuetruth-features = { path = "crates/features", version = "0.2.0" }
+queuetruth-testkit = { path = "crates/testkit", version = "0.2.0" }
+queuetruth-cli = { path = "crates/cli", version = "0.2.0" }
 
 # External crates: exact pins, every release dated on or before 2026-10-04.
 arrow-array = "=59.3.0"
