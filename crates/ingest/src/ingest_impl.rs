@@ -731,6 +731,8 @@ fn ingest_itch(spec: &IngestSpec, inputs: &[PathBuf], out: &Path) -> QtResult<In
             }
         }
         scan.add_source("itch_symbols_not_found", stats.symbols_not_found.len() as u64);
+        // Trading-halt spans of the file's selected instruments (SPEC 1.2): replay censors shadows there.
+        scan.counters_mut().trading_halts.extend(mapper.take_trading_halts());
         let mut have = vec![false; 65_536];
         for (locate, dir) in &mapper.directory {
             let i = usize::from(*locate);
@@ -759,7 +761,9 @@ fn ingest_itch(spec: &IngestSpec, inputs: &[PathBuf], out: &Path) -> QtResult<In
     }
     w.set_instruments(instruments);
     job.join(&mut w)?;
-    w.finish(scan.finish())
+    let mut dq = scan.finish();
+    crate::halts::sort(&mut dq.trading_halts);
+    w.finish(dq)
 }
 
 // ---- IEX DEEP+ --------------------------------------------------------------------------------------------------
@@ -971,7 +975,17 @@ fn ingest_iex(spec: &IngestSpec, inputs: &[PathBuf], out: &Path) -> QtResult<Ing
     }
     tpl.apply(&c, &mut scan, &mut w)?;
     job.join(&mut w)?;
+    // Trading-halt spans (SPEC 1.2): one still open at the end ends at the end of the last message's session day.
+    let end_of_input = match stats.last_ts {
+        Some(t) if t > 0 => {
+            let d = dates.of(&c, t)?;
+            midnight_utc_ns(d + 1, c.tz)?
+        }
+        _ => Ts::MAX,
+    };
+    let halts = mapper.take_trading_halts(end_of_input);
     let mut dq = scan.finish();
+    dq.trading_halts = halts;
     gaps.finish(&mut dq);
     w.finish(dq)
 }

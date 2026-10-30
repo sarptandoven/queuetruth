@@ -20,7 +20,7 @@ use qt_schema::specs::{
     BboModeName, DatasetRef, FillRuleName, HiddenPrintPolicyName, ReplaySpec, TradePositionName, TrajectoryModeName,
 };
 use qt_schema::{ENGINE_VERSION, run_id, spec_echo};
-use qt_types::{QtError, QtResult, Venue, rules};
+use qt_types::{QtError, QtResult, Ts, Venue, rules};
 use serde_json::Value;
 
 use crate::dq::merge as merge_dq;
@@ -128,7 +128,7 @@ impl ReplayOptions {
         Ok(())
     }
 
-    fn configure(&self, eng: &mut Engine, part: &Partition) -> QtResult<()> {
+    fn configure(&self, eng: &mut Engine, part: &Partition, midnight_utc_ns: Option<Ts>) -> QtResult<()> {
         eng.set_fill_rule(self.fill_rule);
         if let Some(p) = self.hidden_print_policy {
             eng.set_hidden_print_policy(p);
@@ -148,13 +148,7 @@ impl ReplayOptions {
             eng.set_excluded_orders(ids);
             eng.set_twin_linking(true);
         }
-        let halts: Vec<TradingHalt> = self
-            .trading_halts
-            .iter()
-            .copied()
-            .filter(|h| h.instrument_id == part.instrument_id)
-            .collect();
-        eng.set_trading_halts(&halts)
+        eng.set_trading_halts(&partition_halts(&self.trading_halts, part, midnight_utc_ns))
     }
 }
 
@@ -220,6 +214,38 @@ pub fn partition_gaps(gaps: &[FeedGap], part: &Partition) -> Vec<FeedGap> {
         .collect()
 }
 
+/// The ingest-recorded trading halts of a dataset (`qt.data_quality.trading_halts`, SPEC 1.2) as engine spans.
+/// `ReplayOptions::configure` gives each partition engine those of its instrument.
+pub fn halts_of(dq: &DataQuality) -> Vec<TradingHalt> {
+    dq.trading_halts
+        .iter()
+        .map(|h| TradingHalt {
+            instrument_id: h.instrument_id,
+            ts_start: h.ts_start,
+            ts_end: h.ts_end,
+        })
+        .collect()
+}
+
+/// Trading halts of one partition: those of its instrument that overlap its records `[ts_min, ts_max]` or its
+/// session day (`midnight_utc_ns` of its instrument row, 24 h; a halt before the first record still censors a
+/// shadow that would go live in it). Instrument ids of some sources are per day (ITCH locates), so a span of
+/// another day never reaches the partition.
+pub fn partition_halts(halts: &[TradingHalt], part: &Partition, midnight_utc_ns: Option<Ts>) -> Vec<TradingHalt> {
+    let overlaps = |h: &TradingHalt, lo: Ts, hi: Ts| h.ts_end > lo && h.ts_start <= hi;
+    halts
+        .iter()
+        .filter(|h| {
+            h.instrument_id == part.instrument_id
+                && (overlaps(h, part.ts_min, part.ts_max)
+                    || midnight_utc_ns.is_some_and(|m| overlaps(h, m, m.saturating_add(DAY_NS - 1))))
+        })
+        .copied()
+        .collect()
+}
+
+const DAY_NS: Ts = 86_400 * 1_000_000_000;
+
 /// `date=YYYY-MM-DD/instrument_id=N` of a partition.
 pub(crate) fn partition_label(part: &Partition) -> String {
     format!(
@@ -247,9 +273,10 @@ pub(crate) fn partition_engine(
         .cloned()
         .into_iter()
         .collect();
+    let midnight = inst.first().map(|i| i.midnight_utc_ns);
     let mut eng = Engine::new(cfg.clone(), &inst, shadows, amends)?;
     eng.set_sequence_gap_detection(false);
-    opts.configure(&mut eng, part)?;
+    opts.configure(&mut eng, part, midnight)?;
     eng.set_feed_gaps(&partition_gaps(gaps, part));
     if cfg.rules.supports_hidden_orders {
         // OC-28: side-N prints the source marks as crosses are not hidden prints.
@@ -305,20 +332,13 @@ pub fn run_partition(
     observers: Vec<Box<dyn EventObserver>>,
     sink: &mut dyn Sink,
 ) -> QtResult<EngineReport> {
-    let gaps = ingest_dq(ds).map(|d| d.feed_gaps).unwrap_or_default();
-    replay_part(
-        part,
-        ds,
-        cfg,
-        shadows,
-        amends,
-        observers,
-        &gaps,
-        &ReplayOptions::default(),
-        sink,
-        None,
-    )
-    .map(|r| r.0)
+    let dq = ingest_dq(ds);
+    let gaps = dq.as_ref().map(|d| d.feed_gaps.clone()).unwrap_or_default();
+    let opts = ReplayOptions {
+        trading_halts: dq.as_ref().map(halts_of).unwrap_or_default(),
+        ..ReplayOptions::default()
+    };
+    replay_part(part, ds, cfg, shadows, amends, observers, &gaps, &opts, sink, None).map(|r| r.0)
 }
 
 /// Runs `f` over partitions on `threads` threads; results in partition order (the first error in that order wins).
@@ -612,9 +632,8 @@ pub fn run_dataset_with(spec: &ReplaySpec, over: &ReplayOptions) -> QtResult<jso
         ));
     }
     let cfg = engine_config(spec, &ds)?;
-    let resolved = ReplayOptions::resolve(spec, over)?;
+    let mut resolved = ReplayOptions::resolve(spec, over)?;
     resolved.check_honoured(&cfg.rules)?;
-    let opts = &resolved;
     let shadows = match file_path(&spec.shadows, "shadows")? {
         Some(p) => read_shadow_specs(&p)?,
         None => Vec::new(),
@@ -640,6 +659,20 @@ pub fn run_dataset_with(spec: &ReplaySpec, over: &ReplayOptions) -> QtResult<jso
         }
     };
     let gaps = ingest.as_ref().map(|d| d.feed_gaps.clone()).unwrap_or_default();
+    // SPEC 1.2: the ingest-recorded trading halts censor shadows, unless the caller supplied its own spans.
+    if resolved.trading_halts.is_empty() {
+        resolved.trading_halts = ingest.as_ref().map(halts_of).unwrap_or_default();
+    }
+    if have_shadows && !resolved.trading_halts.is_empty() {
+        let instruments: BTreeSet<u32> = resolved.trading_halts.iter().map(|h| h.instrument_id).collect();
+        warnings_pre.push(format!(
+            "trading halts: {} spans on {} instruments applied; a shadow live at a halt or going live in one ends \
+             censored_gap (SPEC 1.2)",
+            resolved.trading_halts.len(),
+            instruments.len()
+        ));
+    }
+    let opts = &resolved;
     let (mut by_part, unmatched) = split(&ds, shadows);
     let mut amends_by_id: BTreeMap<String, Vec<ShadowAmend>> = BTreeMap::new();
     for a in amends {

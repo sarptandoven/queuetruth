@@ -23,8 +23,11 @@ to its symbol, its ITCH messages and its cause. Short version:
   so a shadow on a crossed halted book is filled at once. 1,125 of the 8,000 shadows of ANPC, BDTX, RKDA and DTSS
   (14.1%) were first filled while their symbol was not trading. A halt needs no crossed book to do harm, and the replay
   checks flag only halts whose display crossed: on 2020-01-30 every symbol of the universe that was out of state T in
-  the session was also flagged or had no shadows, but nothing makes that true on other days. Failing reproduction:
-  `repro_halt_shadow_fill.py`; the atlas now labels these symbol-days by trading state (`trading_ok`).
+  the session was also flagged or had no shadows, but nothing makes that true on other days. Reproduction:
+  `repro_halt_shadow_fill.py`; the atlas labels these symbol-days by trading state (`trading_ok`). **Fixed after
+  0.2.0:** ingest records each instrument's non-`T` spans (`qt.data_quality.trading_halts`) and replay, `why`, the
+  zoo (both model arms), calibration and features censor shadows there, so the reproduction exits 0
+  (`docs/design/extensions/halt-censoring.md` H.6). Datasets ingested before the fix carry no spans: re-ingest them.
 - **Test issues were in the universe.** Five Stock Directory test issues (Authenticity `T`) passed the prefix rule in
   the 7 re-streamed buckets alone; they had no executions and no shadows. `itch_split.py` now records test issues and
   `plan.py` excludes them (F3).

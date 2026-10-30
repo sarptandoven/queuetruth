@@ -345,6 +345,23 @@ pub fn extract_events_with_gaps(
     cfg: &ExtractConfig,
     feed_gaps: &[FeedGap],
 ) -> QtResult<Vec<FeatureRow>> {
+    extract_events_with_spans(events, inst, rules, population, models, cfg, feed_gaps, &[])
+}
+
+/// `extract_events_with_gaps` with the ingest-recorded trading halts of the partition too
+/// (`qt_replay::partition_halts`, SPEC 1.2), set on the exact engine exactly as `replay` does: a shadow live at a
+/// halt ends `censored_gap` there (label censor), one going live in a halt never goes live.
+#[allow(clippy::too_many_arguments)]
+pub fn extract_events_with_spans(
+    events: impl Iterator<Item = QtResult<MboEvent>>,
+    inst: &Instrument,
+    rules: VenueRules,
+    population: Vec<PopOrder>,
+    models: &[Box<dyn QueueModel>],
+    cfg: &ExtractConfig,
+    feed_gaps: &[FeedGap],
+    trading_halts: &[qt_replay::TradingHalt],
+) -> QtResult<Vec<FeatureRow>> {
     let shadows: Vec<ShadowSpec> = population
         .iter()
         .filter_map(|p| match p {
@@ -362,6 +379,7 @@ pub fn extract_events_with_gaps(
     // the partition's ingest-recorded gaps censor the shadows live across them
     engine.set_sequence_gap_detection(false);
     engine.set_feed_gaps(feed_gaps);
+    engine.set_trading_halts(trading_halts)?;
     let mut d = Driver {
         inst,
         models,
