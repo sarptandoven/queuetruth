@@ -19,6 +19,7 @@ itch_split.py ─▶ split/<date>/ (K buckets) ─▶ plan.py ─▶ units ─�
 | `unit.py` | one unit: bucket sha256 check, ingest of its symbols, replay exactness checks, `per_partition` shadow sample, native zoo per population and mode, `block_stats`, 1% audit sample of predictions, `shard_manifest.json` with telemetry |
 | `aggregate.py` | verifies every shard (leaf hash, unit spec hash, output content digests), Merkle root, `zoo_errors_by_group`, `leaderboard` (two-way dates x symbols cluster bootstrap, BH), `per_symbol` (day-cluster CI, empirical-Bayes shrinkage, BH), summed exactness |
 | `atlas.py` | multi-day atlas: `reduce-day` streams a day's verified shards into per-symbol-day cells and per-tier strata with the day's Merkle root; `combine` builds tier leaderboards (two-way dates x symbols bootstrap, BH), per-symbol cross-day estimates (day bootstrap, shrinkage toward the tier, BH), tier x stratum maps, and the root over the day roots |
+| `atlas_site.py` | the public site from a `combine` directory: per tier, every fill model's bias against the exact replay at every horizon with its interval, the plain-words headline, the atlas and day Merkle roots with the verify command, `data/leaderboard.json`; static, no script, byte-identical for the same inputs; `--source iex` adds IEX's attribution to every page |
 | `verify_unit.py` | re-runs one unit and checks its leaf against the published root (a run's or a day's manifest) |
 | `symbol_exactness.py` | per-symbol exactness: when a unit's replay checks flag anything, replays each symbol alone (one-partition dataset views) and checks that the per-symbol counters add up to the unit's |
 | `itch_ref.py` | an independent Python reading of ITCH 5.0: rebuilds the displayed book of chosen symbols, counts crossed events and price-priority violations as the engine does, and keeps the trading-state timeline (`H`, `K`, `J`, `h`), `Q` crosses and crossed episodes that explain them |
@@ -149,6 +150,9 @@ v0.1 contract, `docs/design/spec.md` 1.2, censors them instead). A symbol-day is
   `flagged_share`. `--flag-policy exclude` drops them from every table; it refuses a day reduced without per-symbol
   exactness or without a known trading state unless `--allow-legacy-days`. `local_day.py` and `modal_app.py`
   (`combine`, `combine_days`) default to `exclude`. `atlas_manifest.json` lists every flagged symbol-day either way.
+  Since the halt fix (after 0.2.0) the engine censors shadows of a halted symbol from units ingested with it (F2),
+  so a `trading_ok` label no longer means wrong fills there; `exclude` still keeps tables to the symbol-days whose
+  replay checks are clean (F1).
 - **Tracing.** Re-stream the flagged units' buckets (`trace_flags.py --restream-command
   SPLIT/<date>/split_manifest.json --out NEW_SPLIT` prints the `itch_split.py` command and each bucket's expected
   sha256) and run
