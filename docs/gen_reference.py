@@ -259,13 +259,13 @@ which the service exports (`make openapi`) and a test keeps current. The service
   give 404, never 403. Every response carries `X-Request-Id`.
 - **Lists** take `?limit=` (1 to 200, default 50) and `&starting_after=<id>` and return `qt.page`
   (`data`, `has_more`, `next_cursor`).
-- **Ids** are `<prefix>_<26-character ULID>`: `ten_`, `key_`, `up_`, `ds_`, `job_`, `rp_`, `cal_`, `sc_`, `rpt_`,
-  `del_`.
+- **Ids** are `<prefix>_<26-character ULID>`: `ten_`, `key_`, `up_`, `ds_`, `job_`, `rp_`, `zoo_`, `cal_`, `sc_`,
+  `rpt_`, `del_`.
 - **Times** in service documents are RFC 3339 UTC strings; inside analysis documents they are integer
   nanoseconds.
 - **Specs** are the same objects as in the CLI and Python API, except that datasets and files are referenced by
   `dataset_id`, `upload_id` or `job_file`, and `out` must be null (the worker picks a private directory).
-- **Rate limits** are per key; responses carry `RateLimit-Policy` and `RateLimit` headers (draft-based), and 429
+- **Rate limits** are per tenant (every key of a tenant draws on the same buckets); responses carry `RateLimit-Policy` and `RateLimit` headers (draft-based), and 429
   responses carry `Retry-After`.
 - **Job flow.** Estimate (`POST /v1/<kind>/estimate`), submit (`POST /v1/<kind>`, 202 with `Location` of the job),
   poll `GET /v1/jobs/{id}`, list files (`GET /v1/jobs/{id}/files`, presigned URLs valid at most 15 minutes),

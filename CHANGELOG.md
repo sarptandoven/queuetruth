@@ -6,6 +6,60 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ## [Unreleased]
 
+### Added
+
+- `ROADMAP.md`: what is being worked on and in what order (the Fill-Realism Atlas is `W1`).
+- **`referee` GitHub Action** (`actions/referee`, `uses: sarptandoven/queuetruth/actions/referee@<ref>`): runs a
+  simulator's command on every referee bug-class fixture (`$QT_DATASET`, `$QT_SCHEDULE` in, `$QT_FILLS` out),
+  referees each class against the exact FIFO engine with the usual tolerances, writes a table to the job summary,
+  `summary.json` and a shields.io endpoint `badge.json`, and fails the step when a class fails. The runner,
+  `actions/referee/run.py`, also works outside GitHub. Guide: [Referee my simulator](docs/how-to/referee-your-simulator.md)
+  section 4.
+- **Fill-Realism Atlas site** (`scripts/scale/atlas_site.py`, ROADMAP W1): a static site from an `atlas.py combine`
+  directory. For each liquidity tier it shows every fill model's fill-rate bias against the exact replay at every
+  horizon with its 95% interval, sorted by size, and leads with one plain-words sentence. It also shows the atlas and
+  day Merkle roots with the verify command, and writes `data/leaderboard.json` and the manifest. Pages run no
+  script and load nothing from the network, and the output is byte-identical for the same inputs. `--source iex`
+  puts IEX's required attribution on every page; `--per-symbol` adds a per-symbol page.
+- `.github/workflows/fuzz.yml`: the fuzz crate's seed, regression and known-crash tests on every change to a parser,
+  and a weekly libFuzzer campaign over every target (`fuzz/run.sh`, crashes uploaded as artifacts).
+- `.github/workflows/release-nautilus.yml`: releases the `queuetruth-nautilus` plugin to PyPI on a
+  `queuetruth-nautilus-vX.Y.Z` release (version checks, sdist and wheel, the plugin's tests on the built wheel with
+  nautilus_trader 1.231.0 and the newest 2.x, Trusted Publishing with attestations; a dry run on manual dispatch).
+  `release.yml` now runs only for `vX.Y.Z` tags.
+
+### Changed
+
+- README rewritten to fit one screen: the one-command demo first, the findings, a "pick your path" table and the
+  evidence in short; the full tables stay in `docs/RESULTS.md` and `docs/testing.md`. The docs entry page lists the
+  0.2 workflows (certificates, agent sandbox, prediction markets, forecasts, Freqtrade and Hummingbot).
+- Docs: the service reference names the `zoo_` id prefix and says rate limits are per tenant; the self-hosting guide
+  lists `zoo` among the `jobs submit` kinds and names the commands that stay local.
+
+### Fixed
+
+- **DBN files that crashed or exhausted the pinned decoder are input errors.** A DBN prelude announcing 100 to 103
+  metadata bytes made `dbn` 0.71.0 panic, and one announcing up to 256 MiB made it allocate that much before reading
+  any of it (a 24-byte file was enough). `qt_ingest::dbn::FrameCheck` now rejects a metadata block shorter than its
+  fixed fields (`MIN_METADATA_BYTES`, 104) or longer than the file can hold (its size for an uncompressed file, the
+  decompression guard's limit for a compressed one) as `QT-INPUT-002` before the decoder runs. The fuzz
+  reproducers moved from `fuzz/known-crashes/` to `fuzz/regressions/dbn/`, and the `dbn` and `ingest` fuzz targets
+  no longer skip them. The Parquet panics in `fuzz/known-crashes/parquet/` are still open.
+- **Trading halts censor shadows end to end (finding F2).** Ingest records the spans in which each instrument is
+  not in continuous trading in `data_quality.json` (`trading_halts`: `instrument_id`, `ts_start`, `ts_end`,
+  `state`, `reason`; schema 1.2, additive, omitted when empty, never part of the verdict): Nasdaq ITCH Stock
+  Trading Action `H` states `H`, `P` and `Q` and Operational Halt `h` of market `Q`, and IEX DEEP+ Trading Status
+  `H`, `O` and `P` and Operational Halt `O`. `replay`, `why`, the zoo, calibration, features and the agent sandbox
+  apply them: a shadow live when a halt starts ends `censored_gap` there, one whose `ts_live` falls in a halt never
+  goes live. In the zoo both model arms follow (a halt start ends every live model pair, and no model activates a
+  shadow inside a halt), so no model books a fill while an instrument is halted. `replay` adds one warning line
+  when a run with shadows applies halts. `scripts/scale/findings/repro_halt_shadow_fill.py` now exits 0. Nothing
+  changes for datasets without halts (the published Nasdaq tables included) or for datasets ingested before this
+  release, which carry no spans: re-ingest those. DBN, NYSE and crypto sources record no spans yet. Rust API:
+  `qt_ingest::halts`, `qt_replay::{halts_of, partition_halts}`, `qt_zoo::runner::StreamOptions::trading_halts`,
+  `qt_calib::collect::collect_events_with_spans`, `qt_features::extract::extract_events_with_spans`. Design note:
+  [halt censoring](docs/design/extensions/halt-censoring.md) H.6.
+
 ## [0.2.0] - 2026-10-25
 
 Data schema 1.2: every new document and table is additive and registered with the others (`queuetruth schema list`,
