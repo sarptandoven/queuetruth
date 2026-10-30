@@ -3438,7 +3438,7 @@ File: `schemas/json/qt.live_import_spec.schema.json`.
 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `venue` | one of "binance", "bybit", "okx", "coinbase", "kraken", "deribit", "hyperliquid", "ibkr_flex", "fix44", "sim_hftbacktest", "sim_nautilus" | yes |  |  |
+| `venue` | one of "binance", "bybit", "okx", "coinbase", "kraken", "deribit", "hyperliquid", "ibkr_flex", "fix44", "sim_hftbacktest", "sim_nautilus", "freqtrade", "hummingbot", "sim_freqtrade", "sim_hummingbot" | yes |  |  |
 | `inputs` | array of PathRef or UploadRef or JobFileRef | yes |  |  |
 | `out` | string or null | no | `null` |  |
 | `account` | string or null | no | `null` |  |

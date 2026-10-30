@@ -4676,5 +4676,133 @@
       },
       "implementation": "native"
     }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "live",
+      "import",
+      "--venue",
+      "freqtrade",
+      "--in",
+      "tradesv3.sqlite",
+      "--in",
+      "freqtrade.log",
+      "--out",
+      "live",
+      "--instrument-map",
+      "map.csv",
+      "--option",
+      "dry_run=true",
+      "--option",
+      "log_tz=Europe/Berlin"
+    ],
+    "command": {
+      "path": [
+        "live",
+        "import"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "venue": "freqtrade",
+        "inputs": [
+          {
+            "path": "tradesv3.sqlite"
+          },
+          {
+            "path": "freqtrade.log"
+          }
+        ],
+        "out": "live",
+        "instrument_map": {
+          "path": "map.csv"
+        },
+        "_cli": {
+          "options": {
+            "dry_run": true,
+            "log_tz": "Europe/Berlin"
+          }
+        }
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "reconcile",
+      "--kind",
+      "freqtrade",
+      "--sim",
+      "backtest.zip",
+      "--sim",
+      "dryrun.sqlite",
+      "--live",
+      "tradesv3.sqlite",
+      "--live",
+      "freqtrade.log",
+      "--out",
+      "rec",
+      "--account",
+      "main",
+      "--instrument-map",
+      "map.csv",
+      "--window",
+      "1h",
+      "--price-tol-bps",
+      "0.5",
+      "--time-tol",
+      "5s",
+      "--no-score",
+      "--arms-as-given",
+      "--option",
+      "timeframe=5m",
+      "--max-rows",
+      "20"
+    ],
+    "command": {
+      "path": [
+        "reconcile"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "kind": "freqtrade",
+          "sim": [
+            "backtest.zip",
+            "dryrun.sqlite"
+          ],
+          "live": [
+            "tradesv3.sqlite",
+            "freqtrade.log"
+          ],
+          "out": "rec",
+          "account": "main",
+          "instrument_map": "map.csv",
+          "window": "1h",
+          "price_tol_bps": 0.5,
+          "time_tol": "5s",
+          "no_score": true,
+          "arms_as_given": true,
+          "option": [
+            "timeframe=5m"
+          ],
+          "max_rows": 20
+        }
+      },
+      "implementation": "python"
+    }
   }
 ]

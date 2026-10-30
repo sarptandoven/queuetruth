@@ -21,6 +21,12 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   day Merkle roots with the verify command, and writes `data/leaderboard.json` and the manifest. Pages run no
   script and load nothing from the network, and the output is byte-identical for the same inputs. `--source iex`
   puts IEX's required attribution on every page; `--per-symbol` adds a per-symbol page.
+- **Freqtrade and Hummingbot from the command line.** `queuetruth reconcile --kind freqtrade|hummingbot --sim PATH
+  --live PATH --out DIR` pairs a bot's simulator arm (Freqtrade backtest or dry run, Hummingbot paper bot) with its
+  live run, explains every difference and runs the scorecard, writing `reconcile.json` (`qt.bot_reconcile`),
+  `reconcile_orders.csv` and both logs; `--format json` prints the report. `live import` takes `--venue freqtrade`,
+  `hummingbot`, `sim-freqtrade` and `sim-hummingbot`, with importer options through `--option KEY=VALUE`
+  (`LiveImportSpec.venue`, schema 1.2, additive; Python `queuetruth.live.import_bot`).
 - `.github/workflows/fuzz.yml`: the fuzz crate's seed, regression and known-crash tests on every change to a parser,
   and a weekly libFuzzer campaign over every target (`fuzz/run.sh`, crashes uploaded as artifacts).
 - `.github/workflows/release-nautilus.yml`: releases the `queuetruth-nautilus` plugin to PyPI on a

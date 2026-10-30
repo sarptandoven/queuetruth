@@ -75,6 +75,7 @@ Every term (shadow, zoo, exact arm, faithful and corrected) is in the
 | An L2-only tape (Tardis `incremental_book_L2` and trades) | the queue models, markouts and a parameter fitted to your fills; never exact truth | `ingest --format tardis-l2` |
 | Your live orders and fills: Binance, Bybit, OKX, Coinbase, Kraken, Deribit, Hyperliquid, IBKR Flex, FIX 4.4 drop copies, QuickFIX logs | the sim-vs-live scorecard, `calibrate-live`, a latency fit | `queuetruth live import --venue <venue>` |
 | Your backtest's output: hftbacktest or NautilusTrader | your simulator scored order by order against your live fills | `live import --venue sim-hftbacktest` or `sim-nautilus`, then `score --sim-log` |
+| A Freqtrade backtest or dry run, or a Hummingbot paper bot, next to the bot's live run | each order paired with its twin, why it differs, and the scorecard | `queuetruth reconcile --kind freqtrade` or `hummingbot` |
 
 queuetruth ships no market data and fetches none except `demo`'s public sample day, after you agree. You need a
 licence for the data you process: [Data and licensing](https://github.com/sarptandoven/queuetruth/blob/main/docs/data-and-licensing.md).

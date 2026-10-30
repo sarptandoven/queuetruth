@@ -661,15 +661,18 @@ def fit_hazard(spec: s.HazardFitSpec | dict[str, Any]) -> m.HazardModelCard:
 def import_live(
     spec: s.LiveImportSpec | dict[str, Any], *, tz: str | None = None, **options: Any
 ) -> m.LiveImportSummary:
-    """`live import`: venue exports (`queuetruth.live.import_venue`) or simulator reports (venues `sim_hftbacktest`
-    / `sim_nautilus`: `queuetruth.live.import_sim`, log venue `sim:<name>`, for `score --sim-log`). `tz` (default:
-    the spec's `tz`) is the account time zone of venue-local times (IBKR Flex). `options` go to the simulator
-    importer (`venue` = live venue of the instrument-map rows, `size_exp`, `key_from_client_id`,
-    `order_key_map`)."""
+    """`live import`: venue exports (`queuetruth.live.import_venue`), simulator reports (venues `sim_hftbacktest`,
+    `sim_nautilus`, `sim_freqtrade`, `sim_hummingbot`: `queuetruth.live.import_sim`, log venue `sim:<name>`, for
+    `score --sim-log`) or a trading bot's live run (`freqtrade`, `hummingbot`: `queuetruth.live.import_bot`). `tz`
+    (default: the spec's `tz`) is the account time zone of venue-local times (IBKR Flex). `options` go to the
+    simulator or bot importer (`venue` = live venue of the instrument-map rows, `size_exp`, `key_from_client_id`,
+    `order_key_map`; for bots `dry_run`, `log_tz`, `timeframe`, `pair_with`, ...)."""
     from queuetruth import live as qlive
 
     sp = _validate(s.LiveImportSpec, spec)
     tz = tz if tz is not None else sp.tz
+    if sp.venue in qlive.BOT_VENUES:
+        return qlive.import_bot(sp, tz=tz, **options)
     if sp.venue.startswith("sim_") and sp.venue not in qlive.IMPORTERS:
         if not sp.out:
             raise QtError("QT-CONFIG-001", "out: an output directory is required")
@@ -688,7 +691,8 @@ def import_live(
         )
     if options:
         raise QtError(
-            "QT-CONFIG-001", f"options {sorted(options)}: apply to simulator imports (sim_hftbacktest, sim_nautilus)"
+            "QT-CONFIG-001",
+            f"options {sorted(options)}: apply to simulator imports (sim_*) and trading bots (freqtrade, hummingbot)",
         )
     return qlive.import_venue(sp, tz=tz)
 

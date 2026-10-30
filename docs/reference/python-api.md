@@ -73,7 +73,7 @@ fixtures_synth(out: str, venue: str = cme, sessions: int = 2) -> m.FixturesSumma
 import_live(spec: s.LiveImportSpec | dict[str, Any], *, tz: str | None = None, **options: Any) -> m.LiveImportSummary
 ```
 
-`live import`: venue exports (`queuetruth.live.import_venue`) or simulator reports (venues `sim_hftbacktest` / `sim_nautilus`: `queuetruth.live.import_sim`, log venue `sim:<name>`, for `score --sim-log`). `tz` (default: the spec's `tz`) is the account time zone of venue-local times (IBKR Flex). `options` go to the simulator importer (`venue` = live venue of the instrument-map rows, `size_exp`, `key_from_client_id`, `order_key_map`).
+`live import`: venue exports (`queuetruth.live.import_venue`), simulator reports (venues `sim_hftbacktest`, `sim_nautilus`, `sim_freqtrade`, `sim_hummingbot`: `queuetruth.live.import_sim`, log venue `sim:<name>`, for `score --sim-log`) or a trading bot's live run (`freqtrade`, `hummingbot`: `queuetruth.live.import_bot`). `tz` (default: the spec's `tz`) is the account time zone of venue-local times (IBKR Flex). `options` go to the simulator or bot importer (`venue` = live venue of the instrument-map rows, `size_exp`, `key_from_client_id`, `order_key_map`; for bots `dry_run`, `log_tz`, `timeframe`, `pair_with`, ...).
 
 ### `ingest` **SPEC 4.3**
 

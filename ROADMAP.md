@@ -17,8 +17,8 @@ an issue to argue for one. Ids (`W1`, ...) are referenced from code and scripts.
   fixtures only; this is the most important missing proof.
 - **Upstream fixes.** Submit the prepared hftbacktest #312 fix (`integrations/hftbacktest/upstream/`) and the
   NautilusTrader documentation change (`integrations/nautilus/UPSTREAM.md`); publish `queuetruth-nautilus` to PyPI.
-- **Freqtrade and Hummingbot from the CLI.** `live import --venue freqtrade | hummingbot` and `queuetruth reconcile`
-  ([design](docs/design/extensions/freqtrade-hummingbot.md)).
+- **Freqtrade and Hummingbot from the CLI.** Done after 0.2.0: `live import --venue freqtrade | hummingbot` and
+  `queuetruth reconcile` ([design](docs/design/extensions/freqtrade-hummingbot.md)). Next: real bot exports.
 - **Untrusted-input hardening.** The `dbn` decoder faults are kept out by our reader and the fuzz targets run weekly
   in CI (done after 0.2.0); the Parquet and Arrow panics in `fuzz/known-crashes/parquet/` are still open.
 
