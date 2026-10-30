@@ -27,6 +27,15 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   `reconcile_orders.csv` and both logs; `--format json` prints the report. `live import` takes `--venue freqtrade`,
   `hummingbot`, `sim-freqtrade` and `sim-hummingbot`, with importer options through `--option KEY=VALUE`
   (`LiveImportSpec.venue`, schema 1.2, additive; Python `queuetruth.live.import_bot`).
+- **IEX DEEP+ in the atlas pipeline** (`scripts/scale/iex_split.py`): one IEX DEEP+ day (pcap or pcapng, gzip or
+  raw, from a file or streamed from a URL, never stored) is split into K symbol buckets by the ITCH splitter's rule.
+  System Events go to every bucket, and each bucket is renumbered per channel and session with the source's gaps
+  carried, so it is byte-identical to the `IexCutFilter` subset of its symbols. The manifest gives the unit ingest
+  spec (`iex_deep_plus`, venue `iex`), per-symbol instrument ids, messages and executions, test securities and the
+  Trading Status spans. `plan.py` reads it like an ITCH manifest, without changing the run ids of ITCH plans.
+  `local_day.py --source iex --site` runs a whole IEX day from capture to atlas site. Tested end to end on a
+  synthetic DEEP+ day: bucket = filter subset, bucket ingest = subset ingest, the manifest's ids = the ingest's,
+  and split, plan, units, reduce, combine and the site.
 - `.github/workflows/fuzz.yml`: the fuzz crate's seed, regression and known-crash tests on every change to a parser,
   and a weekly libFuzzer campaign over every target (`fuzz/run.sh`, crashes uploaded as artifacts).
 - `.github/workflows/release-nautilus.yml`: releases the `queuetruth-nautilus` plugin to PyPI on a

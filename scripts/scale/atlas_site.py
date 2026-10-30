@@ -2,7 +2,7 @@
 """The Fill-Realism Atlas site (ROADMAP W1): a static, self-contained site from an `atlas.py combine` directory.
 
     uv run --frozen --no-sync python scripts/scale/atlas_site.py --atlas ATLAS_DIR --out SITE_DIR \
-        [--source nasdaq|iex] [--mode faithful] [--population never_cancel] [--horizon 1s] [--per-symbol]
+        [--source nasdaq|iex] [--mode faithful] [--population standard] [--horizon 1s] [--per-symbol]
 
 Reads `atlas_manifest.json` and `leaderboard_by_tier.parquet` (and `per_symbol.parquet` with `--per-symbol`) and
 writes:
@@ -88,15 +88,20 @@ def pp(x: float | None, signed: bool = True) -> str:
     return f"{100 * x:+.2f}" if signed else f"{100 * x:.2f}"
 
 
-def _rows(atlas: Path, mode: str, population: str) -> list[dict[str, Any]]:
+def _rows(atlas: Path, mode: str, population: str | None) -> tuple[list[dict[str, Any]], str]:
+    """The leaderboard rows of (mode, population) and the population used: `None` = `standard` when the atlas has
+    it, else the first population in name order (the plan's populations, `common.SCALE_POPULATIONS`)."""
     import pyarrow.parquet as pq
 
     rows = pq.read_table(atlas / "leaderboard_by_tier.parquet").to_pylist()
+    if population is None:
+        pops = sorted({r["shadow_pop"] for r in rows if r["mode"] == mode})
+        population = "standard" if "standard" in pops else (pops[0] if pops else "standard")
     keep = [r for r in rows if r["mode"] == mode and r["shadow_pop"] == population]
     if not keep:
         have = sorted({(r["mode"], r["shadow_pop"]) for r in rows})
         raise SystemExit(f"site: no leaderboard rows for mode {mode!r}, population {population!r} (have {have})")
-    return keep
+    return keep, population
 
 
 def _tier_order(tiers: set[str]) -> list[str]:
@@ -176,7 +181,7 @@ def build(
     *,
     source: str = "nasdaq",
     mode: str = "faithful",
-    population: str = "never_cancel",
+    population: str | None = None,
     horizon: str = "1s",
     per_symbol: bool = False,
 ) -> dict[str, Any]:
@@ -184,7 +189,7 @@ def build(
     if source not in ("nasdaq", "iex"):
         raise SystemExit(f"site: source must be nasdaq or iex, got {source!r}")
     manifest = json.loads((atlas / "atlas_manifest.json").read_text(encoding="utf-8"))
-    rows = _rows(atlas, mode, population)
+    rows, population = _rows(atlas, mode, population)
     horizons = sorted({r["horizon_ns"] for r in rows})
     h = parse_duration(horizon)
     if h not in horizons:
@@ -200,7 +205,7 @@ def build(
         f'<p class="muted">How far each backtester\'s fill model is from the exact replay of the real queue: '
         f"{html.escape(venue)}, {len(days)} day(s) from {html.escape(first)} to {html.escape(last)}, "
         f"{manifest.get('symbol_days', 0):,} symbol-days, {manifest.get('distinct_symbols', 0):,} symbols; "
-        f"{html.escape(mode)} mode, {html.escape(population.replace('_', '-'))} orders.</p>",
+        f"{html.escape(mode)} mode, shadow population {html.escape(population)}.</p>",
     ]
     line = headline(rows, h)
     if line:
@@ -332,7 +337,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--source", choices=("nasdaq", "iex"), default="nasdaq")
     ap.add_argument("--mode", default="faithful")
-    ap.add_argument("--population", default="never_cancel")
+    ap.add_argument("--population", help="shadow population of the plan (default standard, else the first)")
     ap.add_argument("--horizon", default="1s", help="sort and headline horizon, e.g. 1s, 100ms, 1min")
     ap.add_argument("--per-symbol", action="store_true", help="also write symbols.html from per_symbol.parquet")
     a = ap.parse_args(argv)

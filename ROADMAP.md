@@ -28,9 +28,9 @@ an issue to argue for one. Ids (`W1`, ...) are referenced from code and scripts.
   venue, and which parameter fixes it?": bias by simulator, venue, liquidity tier and horizon with intervals,
   calibrated parameters to paste with their trust verdict, Merkle roots and a verify command on every table. Built
   only on data that may be republished: IEX DEEP+ (with IEX's attribution), on-chain venues, and aggregate
-  statistics. The pipeline (`scripts/scale/`) and the site generator (`scripts/scale/atlas_site.py`) exist; next
-  are the cloud run over the 19 public Nasdaq days, an IEX DEEP+ splitter so the same pipeline runs nightly on IEX,
-  and hosting.
+  statistics. The pipeline (`scripts/scale/`), the site generator (`scripts/scale/atlas_site.py`) and the IEX DEEP+
+  splitter (`scripts/scale/iex_split.py`; `local_day.py --source iex --site` runs a day from capture to site) exist;
+  next are the cloud run over the 19 public Nasdaq days, a scheduled IEX run on Modal, and hosting.
 - **Upstream compatibility dashboard.** `scripts/nightly` made public: every new hftbacktest and NautilusTrader
   release checked against the exact queue within a day.
 - **`referee` as a GitHub Action**: done after 0.2.0 (`actions/referee`); next is getting simulator maintainers to

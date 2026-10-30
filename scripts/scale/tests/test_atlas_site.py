@@ -19,7 +19,7 @@ S1, S10 = 1_000_000_000, 10_000_000_000
 
 def _row(tier: str, model: str, h: int, bias: float, lo: float, hi: float, exact: float = 0.11) -> dict:
     return {
-        "mode": "faithful", "shadow_pop": "never_cancel", "tier": tier, "model_id": model, "horizon_ns": h,
+        "mode": "faithful", "shadow_pop": "standard", "tier": tier, "model_id": model, "horizon_ns": h,
         "n": 3000, "n_dates": 2, "n_symbols": 4,
         "fill_rate_bias_value": bias, "fill_rate_bias_ci_lo": lo, "fill_rate_bias_ci_hi": hi,
         "fill_rate_bias_se": 0.003,
@@ -46,7 +46,7 @@ def atlas(tmp_path: Path) -> Path:
     rows.append({**_row("ALL", "x<script>", S1, 0.0, -0.001, 0.001), "mode": "corrected"})
     pq.write_table(pa.Table.from_pylist(rows), d / "leaderboard_by_tier.parquet")
     per = [
-        {"mode": "faithful", "shadow_pop": "never_cancel", "model_id": "nt_prob_touch[mode=faithful;p=1]",
+        {"mode": "faithful", "shadow_pop": "standard", "model_id": "nt_prob_touch[mode=faithful;p=1]",
          "horizon_ns": S1, "symbol": "AAPL", "tier": "T1_top100", "n": 1500, "n_days": 2, "bias": 0.03,
          "ci_lo": 0.02, "ci_hi": 0.04, "se": 0.005, "bias_shrunk": 0.031, "p_normal": 0.01, "p_bh": 0.02,
          "n_flagged_days": 0, "flags": None},
@@ -110,7 +110,7 @@ def test_attribution_matches_the_package_and_options_are_checked(atlas: Path, tm
     with pytest.raises(SystemExit, match="horizon"):
         S.build(atlas, tmp_path / "x", horizon="60s")
     with pytest.raises(SystemExit, match="no leaderboard rows"):
-        S.build(atlas, tmp_path / "y", population="cancel")
+        S.build(atlas, tmp_path / "y", population="deep")
     assert (
         S.duration(100_000_000) == "100 ms" and S.duration(300 * S1) == "5 min" and S.parse_duration("1min") == 60 * S1
     )

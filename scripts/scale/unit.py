@@ -7,7 +7,8 @@ A unit spec (`qt.scale.unit`, written by `plan.py`) names the bucket file of `it
 symbols (with their locates), per-population shadow quotas per symbol, the populations, modes, horizons, models
 and seed. The unit:
 
-1. checks the bucket's sha256 and ingests the unit's symbols from it (`qt.ingest`, format itch);
+1. checks the bucket's sha256 and ingests the unit's symbols from it (`qt.ingest`, format itch, or the unit's
+   `ingest.format`, `iex_deep_plus` for an `iex_split.py` bucket);
 2. runs the replay exactness checks (`qt.replay` with the rank oracle and trade parity) and keeps the summable
    counts (records, events, trades, the invariants, executions checked, price-priority violations, FIFO rank
    histograms, parity counts) and the data-quality verdict; when any flag is non-zero, replays each symbol on its

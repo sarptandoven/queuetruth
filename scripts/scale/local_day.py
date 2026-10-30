@@ -2,6 +2,8 @@
 """One full-market day of the W1 atlas on this machine: split, plan, every unit, reduce, single-day combine.
 
     uv run --frozen --no-sync python scripts/scale/local_day.py --date 01302020 --workers 4 --threads 2
+    uv run --frozen --no-sync python scripts/scale/local_day.py --source iex --date 2026-10-09 \
+        --input 20261009_IEXTP1_DPLS1.0.pcap.gz --site                    # an IEX DEEP+ day, with the site
 
 The same stages as `modal_app.py::days`, with a local process pool instead of Modal containers, so a day can be
 measured for free: wall time per stage, the units' CPU core-hours (process CPU time, all threads), peak disk used under
@@ -11,6 +13,10 @@ their reserved resources). Bucket files are deleted after the units unless `--ke
 buckets) when free space falls below `--min-free-gib`. The single-day atlas uses `--flag-policy exclude` unless told
 otherwise (symbol-days whose replay checks flagged or that were not trading in the session are left out; the
 combine stage of `local_day.json` records the policy). Writes `<out>/local_day.json`.
+
+`--source iex` splits an IEX DEEP+ capture with `iex_split.py` (`--input FILE` or `--url URL`; `--date` is the
+session date YYYY-MM-DD, the day's directory is its MMDDYYYY form as for ITCH). `--site` builds the Fill-Realism
+Atlas site of the day into `<out>/site` (`atlas_site.py`; IEX's attribution on every page for an IEX day).
 """
 
 from __future__ import annotations
@@ -80,12 +86,16 @@ def usd(core_h: float, mem_gib_h: float) -> float:
 
 def main(argv: list[str] | None = None) -> int:
     import atlas
+    import iex_split
     import itch_split
     import plan as P
 
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--date", required=True)
-    ap.add_argument("--url", help="for a day not pinned in itch_subset.PUBLIC_DAYS")
+    ap.add_argument("--date", required=True, help="MMDDYYYY (itch) or YYYY-MM-DD (iex)")
+    ap.add_argument("--source", choices=["itch", "iex"], default="itch")
+    ap.add_argument("--url", help="for a day not pinned in itch_subset.PUBLIC_DAYS, or the IEX capture to stream")
+    ap.add_argument("--input", help="with --source iex: a local IEX DEEP+ capture (pcap or pcapng, gzip or raw)")
+    ap.add_argument("--site", action="store_true", help="build the atlas site of the day into <out>/site")
     ap.add_argument("--out", type=Path, default=K.REPO / ".realdata" / "scale" / "local")
     ap.add_argument("--buckets", type=int, default=32)
     ap.add_argument("--workers", type=int, default=4)
@@ -101,6 +111,11 @@ def main(argv: list[str] | None = None) -> int:
         "flagged, or not trading in the session: findings/README.md)",
     )
     a = ap.parse_args(argv)
+    if a.source == "iex":
+        import datetime as dt
+
+        iso = a.date
+        a.date = dt.date.fromisoformat(iso).strftime("%m%d%Y")
     out = a.out / a.date
     out.mkdir(parents=True, exist_ok=True)
     watch = DiskWatch(a.out, a.min_free_gib)
@@ -116,7 +131,16 @@ def main(argv: list[str] | None = None) -> int:
     try:
         t0 = time.perf_counter()
         mp = split_dir / "split_manifest.json"
-        if not (mp.exists() and json.loads(mp.read_text())["ok"]):
+        if a.source == "iex" and not (mp.exists() and json.loads(mp.read_text())["ok"]):
+            if bool(a.input) == bool(a.url):
+                raise SystemExit("--source iex needs exactly one of --input FILE and --url URL")
+            args = ["--date", iso, "--buckets", str(a.buckets), "--out", str(out / "split")]
+            args += ["--min-free-gib", str(a.min_free_gib)]
+            args += ["--input", a.input] if a.input else ["--url", a.url]
+            rc = iex_split.main(args)
+            if rc != 0:
+                raise SystemExit(f"split failed: exit {rc}")
+        elif not (mp.exists() and json.loads(mp.read_text())["ok"]):
             args = [
                 "--date",
                 a.date,
@@ -139,7 +163,7 @@ def main(argv: list[str] | None = None) -> int:
             "split",
             t0,
             messages=sm["stream"]["messages"],
-            scan_cpu_s=sm["timings"]["scan_cpu_s"],
+            scan_cpu_s=sm["timings"].get("scan_cpu_s"),
             bucket_bytes=sum(b["file_bytes"] for b in sm["buckets"]),
             checks_ok=sm["ok"],
         )
@@ -209,9 +233,15 @@ def main(argv: list[str] | None = None) -> int:
         t0 = time.perf_counter()
         r = atlas.combine([out / "day"], out / "atlas", flag_policy=a.flag_policy)
         stage("combine", t0, **r)
+        if a.site:
+            import atlas_site
+
+            t0 = time.perf_counter()
+            r = atlas_site.build(out / "atlas", out / "site", source="iex" if a.source == "iex" else "nasdaq")
+            stage("site", t0, **r)
     finally:
         if not a.keep_buckets:
-            for p in split_dir.glob("*.itch50.gz"):
+            for p in [*split_dir.glob("*.itch50.gz"), *split_dir.glob("*.pcap.gz")]:
                 p.unlink()
         watch.stop.set()
         watch.join()

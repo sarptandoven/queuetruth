@@ -5,9 +5,11 @@
     uv run --frozen --no-sync python scripts/scale/plan.py --split DIR1 --split DIR2 --quota-rule breadth \\
         --one-symbol-per-unit --out plan.json                                  # the P0 breadth equivalence run
 
-Input: one or more `itch_split.py` output directories (one per day); each bucket lists its symbols with
-`[locate, messages, executions]`. A universe entry carries `non_t_spans` (the split's `trading_state`: the spans in
-which the symbol's `H` state was not T) when it has any; a source records `trading_state_recorded` (false for a split
+Input: one or more `itch_split.py` or `iex_split.py` output directories (one per day); each bucket lists its symbols
+with `[locate, messages, executions]` (for IEX the instrument id the bucket's ingest assigns instead of the locate).
+An IEX split also names its unit ingest spec (`ingest`: format `iex_deep_plus`, venue `iex`) and session codes. A
+universe entry carries `non_t_spans` (the split's `trading_state`: the spans in which the symbol's `H` state was not
+T) when it has any; a source records `trading_state_recorded` (false for a split
 made before the split recorded it) and `exclusions_sha256` (the day's exclusions, so a different universe of the same
 day gets a different `run_id`). Output: one `qt.scale.plan` document holding the run spec (populations, modes,
 horizons, models, seed, quota rule, cost constants), its `run_id` (first 16 hex of the sha256 of the canonical run
@@ -83,12 +85,14 @@ def tier_of(rank: int) -> str:
 
 
 def session_hours(sm: dict[str, Any]) -> dict[str, int]:
-    """`open_s` / `close_s` from the day's system events (`Q` start, `M` end of market hours) when they differ from
-    09:30-16:00 (half days); empty otherwise, so a regular day's ingest spec stays the default."""
+    """`open_s` / `close_s` from the day's system events (ITCH `Q` start, `M` end of market hours; an IEX split names
+    its own codes in `session_events`, `R` and `M`) when they differ from 09:30-16:00 (half days); empty otherwise, so
+    a regular day's ingest spec stays the default."""
     ev = sm["stream"].get("system_events_ns_since_midnight") or {}
-    if "Q" not in ev or "M" not in ev:
+    codes = sm.get("session_events") or {"open": "Q", "close": "M"}
+    if codes["open"] not in ev or codes["close"] not in ev:
         return {}
-    hours = (ev["Q"] // 1_000_000_000, ev["M"] // 1_000_000_000)
+    hours = (ev[codes["open"]] // 1_000_000_000, ev[codes["close"]] // 1_000_000_000)
     return {} if hours == DEFAULT_HOURS else {"open_s": hours[0], "close_s": hours[1]}
 
 
@@ -187,6 +191,8 @@ def make_plan(a: argparse.Namespace) -> dict[str, Any]:
                 # run id: a different universe of the same day gets a different run id
                 "exclusions_sha256": K.sha256_hex(K.canonical_json(sorted(day_exclusions, key=lambda e: e["symbol"]))),
                 "trading_state_recorded": trading is not None,
+                # an IEX DEEP+ split (iex_split.py); ITCH splits carry no format, so their run ids are unchanged
+                **({"format": sm["format"]} if "format" in sm else {}),
             }
         )
         quotas = quotas_for(a.quota_rule, pops, day)
@@ -228,7 +234,7 @@ def make_plan(a: argparse.Namespace) -> dict[str, Any]:
                         "quotas": {p: {s: quotas[p].get(s, 0) for s in syms} for p in pops},
                         "predicted_core_s": round(sum(c for n, c in items if n in syms), 3),
                         **run_spec,
-                        "ingest": {**K.INGEST_DEFAULTS, **hours},
+                        "ingest": {**K.INGEST_DEFAULTS, **(sm.get("ingest") or {}), **hours},
                     }
                 )
     run_id = K.sha256_hex(K.canonical_json({"run": run_spec, "sources": sources}))[:16]
@@ -258,7 +264,9 @@ def make_plan(a: argparse.Namespace) -> dict[str, Any]:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--split", type=Path, action="append", required=True, help="itch_split.py output dir (per day)")
+    ap.add_argument(
+        "--split", type=Path, action="append", required=True, help="itch_split.py or iex_split.py output dir (per day)"
+    )
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--quota-rule", choices=["scale", "fixed", "breadth"], default="scale")
     ap.add_argument("--fixed-n", type=int, default=None, help="with --quota-rule fixed: shadows per population")
