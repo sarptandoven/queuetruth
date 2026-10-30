@@ -372,62 +372,10 @@ fn iex_drive<R: Read>(
 /// DBN (plain or zstd, inferred from content): `[selector][file]`. Selector bits 0-1: price exponent. Reads the file
 /// as `ingest_dbn` does for its schema (definitions, MBO or trades) and resolves the dated symbology.
 ///
-/// Inputs that reach a known fault of the pinned `dbn` 0.71.0 decoder are skipped (see [`dbn_known_issue`]); they
-/// are reported with reproducers in `known-crashes/dbn/` and `known-crashes/dbn-alloc/`, and skipping them lets the
-/// target look for other faults. [`dbn_unfiltered`] runs them.
+/// The two faults of the pinned `dbn` 0.71.0 decoder this target found (a panic on 100 to 103 metadata bytes and an
+/// up-front allocation of the announced metadata length) are kept out by `qt_ingest::dbn::FrameCheck` (fixed after
+/// 0.2.0); their reproducers are in `regressions/dbn/`.
 pub fn dbn(data: &[u8]) {
-    if data.len() > 1 && dbn_known_issue(&data[1..]) {
-        return;
-    }
-    dbn_unfiltered(data);
-}
-
-/// The 8-byte DBN prelude (`DBN`, version, u32 LE metadata length) of a file, plain or at the start of a zstd stream
-/// (`DbnReader` infers zstd from the frame magic, as `dbn::DynReader` does): `(version, metadata length)`.
-fn dbn_prelude(file: &[u8]) -> Option<(u8, u32)> {
-    const ZSTD_MAGIC: [u8; 4] = 0xFD2F_B528u32.to_le_bytes();
-    let mut prelude = [0u8; 8];
-    if file.starts_with(&ZSTD_MAGIC) {
-        // A truncated or corrupt stream that does not yield 8 bytes never reaches the metadata decoder.
-        let mut z = zstd::stream::read::Decoder::with_buffer(file).ok()?;
-        z.read_exact(&mut prelude).ok()?;
-    } else {
-        prelude.copy_from_slice(file.get(..8)?);
-    }
-    (&prelude[..3] == b"DBN").then(|| {
-        (
-            prelude[3],
-            u32::from_le_bytes([prelude[4], prelude[5], prelude[6], prelude[7]]),
-        )
-    })
-}
-
-/// True for a DBN prelude announcing 100 to 103 metadata bytes: `dbn` 0.71.0 `DbnFsm::decode_metadata` accepts any
-/// length from `METADATA_FIXED_LEN` (100), then reads the u32 schema-definition length at metadata offset 100, past
-/// the end of the metadata, and panics (`mid > len` in `FromLittleEndianSlice::from_le_slice`), in every DBN version.
-pub fn dbn_known_metadata_panic(file: &[u8]) -> bool {
-    dbn_prelude(file).is_some_and(|(_, len)| (100..=103).contains(&len))
-}
-
-/// Metadata lengths above this are skipped by the `dbn` and `ingest` targets (see [`dbn_known_metadata_alloc`]); it
-/// sits below the 64 MiB `-malloc_limit_mb` those targets run with, so any other large allocation still fails.
-pub const DBN_KNOWN_ALLOC_BYTES: u32 = 16 << 20;
-
-/// True for a DBN prelude announcing more than [`DBN_KNOWN_ALLOC_BYTES`] of metadata: `dbn` 0.71.0
-/// `DbnFsm::decode_prelude` grows its buffer to the announced length + 8 before reading any of it, and
-/// `qt_ingest::dbn::FrameCheck` accepts lengths up to `MAX_METADATA_BYTES` (256 MiB), so a 29-byte file allocates
-/// 256 MiB.
-pub fn dbn_known_metadata_alloc(file: &[u8]) -> bool {
-    dbn_prelude(file).is_some_and(|(_, len)| len > DBN_KNOWN_ALLOC_BYTES)
-}
-
-/// [`dbn_known_metadata_panic`] or [`dbn_known_metadata_alloc`].
-pub fn dbn_known_issue(file: &[u8]) -> bool {
-    dbn_known_metadata_panic(file) || dbn_known_metadata_alloc(file)
-}
-
-/// [`dbn`] without the known-issue filter.
-pub fn dbn_unfiltered(data: &[u8]) {
     use ::dbn::Schema;
     use qt_ingest::dbn::{DbnReader, Symbology, symbol_map, utc_day, vintage_of};
     let Some((&sel, body)) = data.split_first() else { return };
@@ -480,13 +428,9 @@ pub fn dbn_unfiltered(data: &[u8]) {
 // ---- whole ingest --------------------------------------------------------------------------------------------------
 
 /// `qt_ingest::ingest` end to end (reader thread, routing, data quality, Parquet writer):
-/// `[selector][input file]`. Selector bits 0-1: format (ITCH, IEX DEEP+, DBN, ITCH with a symbol filter). DBN inputs
-/// matching [`dbn_known_issue`] are skipped, as in [`dbn`].
+/// `[selector][input file]`. Selector bits 0-1: format (ITCH, IEX DEEP+, DBN, ITCH with a symbol filter).
 pub fn ingest(data: &[u8]) {
     let Some((&sel, body)) = data.split_first() else { return };
-    if sel & 3 == 2 && dbn_known_issue(body) {
-        return;
-    }
     let (format, venue, name, extra) = match sel & 3 {
         0 => ("itch", "nasdaq", "12302019.NASDAQ_ITCH50", serde_json::json!({})),
         1 => ("iex_deep_plus", "iex", "deep.pcap", serde_json::json!({})),

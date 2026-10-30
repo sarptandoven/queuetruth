@@ -57,8 +57,11 @@ it after each target and removes it on exit; `cargo test` removes each test's di
 - `known-crashes/<kind>/` holds findings in code outside this workstream's fixes. The harnesses skip those inputs
   so fuzzing continues past them, and `cargo test` checks that every one still reproduces; once the code is fixed,
   the test fails, the inputs move to `regressions/` and the filter goes.
-  - `dbn/`: the `dbn` 0.71.0 decoder panics on a prelude announcing 100 to 103 metadata bytes (plain or zstd).
-  - `dbn-alloc/`: a 24-byte DBN file announcing 256 MiB of metadata makes the decoder allocate 256 MiB.
+  - Fixed after 0.2.0 and moved to `regressions/dbn/`: the `dbn` 0.71.0 decoder panics on a prelude announcing 100
+    to 103 metadata bytes, and allocates the announced metadata length up front (a 24-byte file announcing 256 MiB).
+    `qt_ingest::dbn::FrameCheck` now rejects both as `QT-INPUT-002` before the decoder runs (a block shorter than
+    `MIN_METADATA_BYTES`, or longer than the file can hold), tested in `crates/ingest/tests/dbn_metadata_guard.rs`
+    and `tests/dbn_alloc.rs`.
   - `parquet/`: corrupt Parquet metadata panics inside the `arrow-ipc` and `parquet` crates. With
     `QT_FUZZ_KNOWN_DIR=<dir>`, the `parquet` target saves one input per distinct panic site there.
 

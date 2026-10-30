@@ -108,30 +108,7 @@ fn every_target_has_a_binary_and_seeds() {
 /// Every `known-crashes/<kind>/` has a test below that keeps it honest.
 #[test]
 fn known_crash_directories_are_tested() {
-    assert_eq!(subdirs("known-crashes"), ["dbn", "dbn-alloc", "parquet"]);
-}
-
-/// The `dbn` 0.71.0 metadata panic (reported, not fixed here): every reproducer still panics without the harness
-/// filter and is skipped with it. When this test fails because an input no longer panics, `DbnReader::open` (or the
-/// decoder) was fixed: move the inputs to `regressions/dbn/` and drop `dbn_known_metadata_panic`.
-#[test]
-fn known_dbn_crashes_still_reproduce() {
-    let _s = Scratch;
-    let fs = files(&root().join("known-crashes/dbn"));
-    assert!(fs.len() >= 4, "{} reproducers", fs.len());
-    for f in fs {
-        let data = std::fs::read(&f).unwrap();
-        assert!(qt_fuzz::dbn_known_metadata_panic(&data[1..]), "{}", f.display());
-        assert!(
-            std::panic::catch_unwind(|| qt_fuzz::dbn_unfiltered(&data)).is_err(),
-            "{} no longer panics",
-            f.display()
-        );
-        qt_fuzz::dbn(&data);
-        let mut ingest_input = data.clone();
-        ingest_input[0] = 2;
-        qt_fuzz::ingest(&ingest_input);
-    }
+    assert_eq!(subdirs("known-crashes"), ["parquet"]);
 }
 
 /// The Parquet decode panics (reported, not fixed here): every reproducer still panics inside the `parquet` / `arrow`

@@ -95,7 +95,7 @@ length at metadata offset 100, past the end of the metadata slice: `mid > len` a
 Every DBN version (1 to 3) and both encodings (plain, and zstd, which `DbnReader::open` infers from the frame magic)
 reach it, on the calling thread, before any record is read. Lengths of 104 and more are bounds-checked by the decoder.
 
-Reproducers: `fuzz/known-crashes/dbn/` `fuzz_metadata_len_100` (the minimized fuzzer find, DBN v3),
+Reproducers (fixed after 0.2.0, now in `fuzz/regressions/dbn/`): `fuzz_metadata_len_100` (the minimized fuzzer find, DBN v3),
 `v3_metadata_len_100_zeros`, `v1_metadata_len_103` and `zstd_v3_metadata_len_100`; test
 `fuzz/tests/replay.rs::known_dbn_crashes_still_reproduce`; filter `qt_fuzz::dbn_known_metadata_panic`.
 
@@ -114,7 +114,7 @@ length 268,435,456, 16 zero bytes) or its 24-byte zstd frame makes one 256 MiB a
 the first runs because the 512 MiB `-malloc_limit_mb` sat above the 256 MiB cap; the `dbn` and `ingest` targets now
 run with 64 MiB and skip announced lengths above 16 MiB (`qt_fuzz::dbn_known_metadata_alloc`).
 
-Reproducers: `fuzz/known-crashes/dbn-alloc/` `v3_metadata_len_256mib` and `zstd_v3_metadata_len_256mib`; test
+Reproducers (fixed after 0.2.0, now in `fuzz/regressions/dbn/` as `alloc_v3_metadata_len_256mib` and `alloc_zstd_v3_metadata_len_256mib`): test
 `fuzz/tests/dbn_alloc.rs` (a counting global allocator asserts the 256 MiB request).
 
 Suggested fix in `crates/ingest/src/dbn.rs`: bound the announced length by what can arrive. For a plain file,
