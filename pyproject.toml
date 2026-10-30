@@ -110,6 +110,7 @@ testpaths = [
     "scripts/nightly/tests",
     "scripts/scale/tests",
     "integrations/hftbacktest/tests",
+    "actions/referee/tests",
 ]
 addopts = "-q -m 'not integration' --import-mode=importlib"
 pythonpath = ["python", "python/tests"]
