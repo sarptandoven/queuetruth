@@ -36,6 +36,8 @@ IEX_ATTRIBUTION = (
     "Terms of Use."
 )
 IEX_TERMS_URL = "https://iextrading.com/iex-historical-data-terms/"
+#: The guides the page links to (docs on GitHub).
+DOCS = "https://github.com/sarptandoven/queuetruth/blob/main/docs"
 
 #: Model id prefix -> (library, plain-words name).
 LIBRARIES = (
@@ -260,6 +262,19 @@ def build(
             f'<div class="wrap"><table><thead><tr><th>library</th><th>model</th>{head}<th>flagged</th></tr></thead>'
             f"<tbody>{''.join(body_rows)}</tbody></table></div>"
         )
+    parts.append(
+        "<h2>Check your own backtester</h2><ul>"
+        f"<li>See it in a minute: <code>pipx run queuetruth demo --yes</code> places small orders in the real queue "
+        f'of a public day and prints the same comparison (<a href="{DOCS}/getting-started.md">getting started</a>).'
+        "</li>"
+        "<li>Your simulator against your live fills, order by order: "
+        f'<a href="{DOCS}/how-to/import-live-logs.md">import the live log</a>, then <code>queuetruth score</code> '
+        f'(<a href="{DOCS}/how-to/decompose-the-sim-live-gap.md">where the gap comes from</a>).</li>'
+        "<li>Your simulator in CI: the <code>referee</code> GitHub Action runs it on 16 known fill-bug fixtures "
+        f'(<a href="{DOCS}/how-to/referee-your-simulator.md">guide</a>).</li>'
+        "<li>A fitted fill model to paste back into hftbacktest or NautilusTrader: "
+        f'<a href="{DOCS}/how-to/calibrate-hftbacktest.md">calibrate</a>.</li></ul>'
+    )
     root = manifest.get("atlas_root", "")
     day_rows = "".join(
         f"<tr><td>{html.escape(str(d['date']))}</td><td><code>{html.escape(str(d['merkle_root']))}</code></td>"
