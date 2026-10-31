@@ -178,10 +178,9 @@ pub fn guess_currency(symbol: &str) -> String {
         .rsplit(['-', '/', ':', '_'])
         .next()
         .filter(|_| up.contains(['-', '/', ':', '_']))
+        && QUOTES.contains(&last)
     {
-        if QUOTES.contains(&last) {
-            return last.to_string();
-        }
+        return last.to_string();
     }
     QUOTES
         .iter()
@@ -589,13 +588,13 @@ pub fn prepare(spec: &specs::IngestSpec) -> QtResult<Prepared> {
         }
         (None, None) => None,
     };
-    if let Some((d, m)) = fixed {
-        if m.checked_add(86_400_000_000_000).is_none() {
-            return Err(unrepresentable(match &spec.session_date {
-                Some(sd) if spec.midnight_utc_ns.is_none() => format!("the {clock_name} session day {sd}"),
-                _ => format!("the session day {} starting at {m} ns", qt_ingest::time::format_date(d)),
-            }));
-        }
+    if let Some((d, m)) = fixed
+        && m.checked_add(86_400_000_000_000).is_none()
+    {
+        return Err(unrepresentable(match &spec.session_date {
+            Some(sd) if spec.midnight_utc_ns.is_none() => format!("the {clock_name} session day {sd}"),
+            _ => format!("the session day {} starting at {m} ns", qt_ingest::time::format_date(d)),
+        }));
     }
     // Without a fixed session, a record's local day must end at a representable instant (instrument rows carry the
     // day's length): reject records on or after the midnight starting the last local day that `i64` ns can start.

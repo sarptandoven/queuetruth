@@ -273,16 +273,16 @@ pub fn convert_full(lines: impl Iterator<Item = QtResult<String>>, cfg: &Config)
             }
             J::Obj(m) => {
                 let ty = f.msg.get("type").and_then(J::as_str).unwrap_or("").to_string();
-                if ty == "level3" {
-                    if let Some(s) = f.msg.get("schema") {
-                        let s = read_schema(s, no)?;
-                        if schema.as_ref().is_some_and(|old| *old != s) {
-                            bump(&mut st, "schema_changes");
-                        }
-                        bump(&mut st, "schema_messages");
-                        schema = Some(s);
-                        continue;
+                if ty == "level3"
+                    && let Some(s) = f.msg.get("schema")
+                {
+                    let s = read_schema(s, no)?;
+                    if schema.as_ref().is_some_and(|old| *old != s) {
+                        bump(&mut st, "schema_changes");
                     }
+                    bump(&mut st, "schema_messages");
+                    schema = Some(s);
+                    continue;
                 }
                 if ty == "heartbeat" {
                     if let (Some(p), Some(q)) = (
@@ -462,12 +462,12 @@ pub fn convert_full(lines: impl Iterator<Item = QtResult<String>>, cfg: &Config)
                         *st.entry("superseded_by_snapshot".into()).or_insert(0) += 1;
                         continue;
                     }
-                    if let Some(p) = last_seq {
-                        if p.checked_add(1) != Some(m.seq) {
-                            gaps += 1;
-                            let a = last_ts.unwrap_or(m.ts);
-                            gap_open.get_or_insert((a, format!("sequence gap {p} -> {}", m.seq)));
-                        }
+                    if let Some(p) = last_seq
+                        && p.checked_add(1) != Some(m.seq)
+                    {
+                        gaps += 1;
+                        let a = last_ts.unwrap_or(m.ts);
+                        gap_open.get_or_insert((a, format!("sequence gap {p} -> {}", m.seq)));
                     }
                     last_seq = Some(m.seq);
                     let (ts, seq) = (m.ts, m.seq as u64);
@@ -599,29 +599,27 @@ pub fn convert_full(lines: impl Iterator<Item = QtResult<String>>, cfg: &Config)
                 reason: format!("{why}; no later snapshot"),
             });
         }
-        if let (Some(&(q, hts)), Some(l)) = (hb.get(product), last_seq) {
-            if q > l {
-                bump(&mut st, "heartbeat_trailing_gaps");
-                let a = final_ts.unwrap_or(0);
-                let b = hts.unwrap_or(a);
-                feed_gaps.push(FeedGap {
-                    instrument_id: inst,
-                    ts_start: a.min(b),
-                    ts_end: a.max(b),
-                    reason: format!("heartbeat sequence {q} beyond the last message {l}"),
-                });
-            }
+        if let (Some(&(q, hts)), Some(l)) = (hb.get(product), last_seq)
+            && q > l
+        {
+            bump(&mut st, "heartbeat_trailing_gaps");
+            let a = final_ts.unwrap_or(0);
+            let b = hts.unwrap_or(a);
+            feed_gaps.push(FeedGap {
+                instrument_id: inst,
+                ts_start: a.min(b),
+                ts_end: a.max(b),
+                reason: format!("heartbeat sequence {q} beyond the last message {l}"),
+            });
         }
-        if !has_snapshot {
-            if let (Some(a), Some(b)) = (first_ts, final_ts) {
-                bump(&mut st, "unseeded_products");
-                feed_gaps.push(FeedGap {
-                    instrument_id: inst,
-                    ts_start: a,
-                    ts_end: b,
-                    reason: "no level3 REST snapshot: orders resting before the capture are invisible".into(),
-                });
-            }
+        if !has_snapshot && let (Some(a), Some(b)) = (first_ts, final_ts) {
+            bump(&mut st, "unseeded_products");
+            feed_gaps.push(FeedGap {
+                instrument_id: inst,
+                ts_start: a,
+                ts_end: b,
+                reason: "no level3 REST snapshot: orders resting before the capture are invisible".into(),
+            });
         }
         open_at_end += book.len() as u64;
     }

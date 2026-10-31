@@ -322,10 +322,10 @@ fn coverage(out: &SynthOutput) -> Coverage {
                 .iter()
                 .find(|x| x.action == b'F')
                 .map(|x| BookSide::from_byte(x.side));
-            if let Some(Some(s)) = side {
-                if book.level(s, p).1 == 0 {
-                    cov.exact_level_clears += 1;
-                }
+            if let Some(Some(s)) = side
+                && book.level(s, p).1 == 0
+            {
+                cov.exact_level_clears += 1;
             }
         }
         if book.best(BookSide::Bid).is_none() || book.best(BookSide::Ask).is_none() {

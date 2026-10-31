@@ -128,10 +128,10 @@ impl Family {
             return None;
         }
         let names = Family::ALL.iter().map(|f| f.name());
-        if n.len() >= 3 {
-            if let Some(hit) = names.clone().find(|f| f.contains(n.as_str())) {
-                return Some(hit);
-            }
+        if n.len() >= 3
+            && let Some(hit) = names.clone().find(|f| f.contains(n.as_str()))
+        {
+            return Some(hit);
         }
         if let Some(hit) = names.clone().filter(|f| n.starts_with(f)).max_by_key(|f| f.len()) {
             return Some(hit);

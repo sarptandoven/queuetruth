@@ -133,11 +133,10 @@ pub(crate) fn convert_full(lines: impl Iterator<Item = QtResult<String>>, cfg: &
             if let (Some(p), Some(q)) = (
                 m.get("product_id").and_then(J::as_str),
                 m.get("sequence").and_then(J::as_i64),
-            ) {
-                if !seen.insert((p.to_string(), q)) {
-                    bump(&mut st, "duplicates_dropped", 1);
-                    continue;
-                }
+            ) && !seen.insert((p.to_string(), q))
+            {
+                bump(&mut st, "duplicates_dropped", 1);
+                continue;
             }
             full.push((no, m));
         } else if ty == "snapshot" || ty == "l2update" {
@@ -322,18 +321,18 @@ pub(crate) fn convert_full(lines: impl Iterator<Item = QtResult<String>>, cfg: &
         let p = m.get("product_id").and_then(J::as_str).unwrap_or("").to_string();
         let ts = m.get("time").and_then(J::as_str).and_then(|t| units::iso_ns(t).ok());
         checked += 1;
-        if let Some(&(prev, prev_ts)) = last.get(&p) {
-            if prev.checked_add(1) != Some(q) {
-                gaps += 1;
-                if let (Some(&inst), Some(a), Some(b)) = (instruments.get(&p), prev_ts, ts) {
-                    // feed times are not monotone in sequence (a `received` can carry an earlier time)
-                    feed_gaps.push(FeedGap {
-                        instrument_id: inst,
-                        ts_start: a.min(b),
-                        ts_end: a.max(b),
-                        reason: format!("sequence gap {prev} -> {q}"),
-                    });
-                }
+        if let Some(&(prev, prev_ts)) = last.get(&p)
+            && prev.checked_add(1) != Some(q)
+        {
+            gaps += 1;
+            if let (Some(&inst), Some(a), Some(b)) = (instruments.get(&p), prev_ts, ts) {
+                // feed times are not monotone in sequence (a `received` can carry an earlier time)
+                feed_gaps.push(FeedGap {
+                    instrument_id: inst,
+                    ts_start: a.min(b),
+                    ts_end: a.max(b),
+                    reason: format!("sequence gap {prev} -> {q}"),
+                });
             }
         }
         last.insert(p, (q, ts));

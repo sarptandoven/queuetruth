@@ -21,7 +21,7 @@ version = "0.2.0"
 edition = "2024"
 license = "Apache-2.0"
 authors = ["Sarp Tandoven"]
-rust-version = "1.85"
+rust-version = "1.88"
 repository = "https://github.com/sarptandoven/queuetruth"
 publish = false
 
