@@ -123,7 +123,9 @@ is identical, and all 50 Parquet outputs the two runs wrote are byte-identical. 
   it (a change between halted states, such as ITCH `H` to `Q` before an IPO cross, keeps the span and its first
   state). Nasdaq ITCH: `H` states `H`, `P`, `Q` and `h` of market `Q`; `T` closes (`K` and `W` only announce times
   and levels). IEX DEEP+: Trading Status `H`, `O`, `P` and Operational Halt `O`; `T` and `N` close. Only selected
-  instruments are tracked. A span still open at the end of an ITCH file ends at the next midnight of its day (ITCH
+  instruments are tracked, and a span always names an instrument of `instruments.parquet` (IEX writes rows for
+  instruments with records only, so the spans of a symbol without records, halted all session, are dropped). A span
+  still open at the end of an ITCH file ends at the next midnight of its day (ITCH
   locates are per day); IEX ids are shared across inputs, so an IEX span may run from one day file into the next and
   one still open ends at the end of the last message's session day.
 - **Contract** (schema 1.2, additive): `qt.data_quality.trading_halts`, a list of

@@ -983,7 +983,11 @@ fn ingest_iex(spec: &IngestSpec, inputs: &[PathBuf], out: &Path) -> QtResult<Ing
         }
         _ => Ts::MAX,
     };
-    let halts = mapper.take_trading_halts(end_of_input);
+    // A span names an instrument of `instruments.parquet`: rows are written for instruments with records only, so
+    // the spans of a symbol without records (halted all session) are dropped.
+    let mut halts = mapper.take_trading_halts(end_of_input);
+    let with_rows: BTreeSet<u32> = tpl.seen.iter().map(|&(_, iid)| iid).collect();
+    halts.retain(|h| with_rows.contains(&h.instrument_id));
     let mut dq = scan.finish();
     dq.trading_halts = halts;
     gaps.finish(&mut dq);

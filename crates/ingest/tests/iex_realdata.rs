@@ -83,4 +83,8 @@ fn ingest_real_iex_subset() {
         checks[0], checks[1], checks[2], checks[3], checks[4]
     );
     assert_eq!(checks[..3], [0, 0, 0]);
+    // Trading-halt spans (SPEC 1.2) name instruments of the dataset.
+    let ids: std::collections::BTreeSet<u32> = ds.partitions().iter().map(|p| p.instrument_id).collect();
+    eprintln!("trading halts: {} spans", dq.trading_halts.len());
+    assert!(dq.trading_halts.iter().all(|h| ids.contains(&h.instrument_id)));
 }

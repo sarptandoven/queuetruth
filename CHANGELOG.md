@@ -64,11 +64,12 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   not in continuous trading in `data_quality.json` (`trading_halts`: `instrument_id`, `ts_start`, `ts_end`,
   `state`, `reason`; schema 1.2, additive, omitted when empty, never part of the verdict): Nasdaq ITCH Stock
   Trading Action `H` states `H`, `P` and `Q` and Operational Halt `h` of market `Q`, and IEX DEEP+ Trading Status
-  `H`, `O` and `P` and Operational Halt `O`. `replay`, `why`, the zoo, calibration, features and the agent sandbox
-  apply them: a shadow live when a halt starts ends `censored_gap` there, one whose `ts_live` falls in a halt never
-  goes live. In the zoo both model arms follow (a halt start ends every live model pair, and no model activates a
-  shadow inside a halt), so no model books a fill while an instrument is halted. `replay` adds one warning line
-  when a run with shadows applies halts. `scripts/scale/findings/repro_halt_shadow_fill.py` now exits 0. Nothing
+  `H`, `O` and `P` and Operational Halt `O`; every span names an instrument of the dataset. `replay`, `why`, the
+  zoo, calibration, features and the agent sandbox apply them: a shadow live when a halt starts ends `censored_gap`
+  there, one whose `ts_live` falls in a halt never goes live. In the zoo both model arms follow (a halt start ends
+  every live model pair, and no model activates a shadow inside a halt), so no model books a fill while an
+  instrument is halted. `replay` adds one warning line when a run with shadows applies halts.
+  `scripts/scale/findings/repro_halt_shadow_fill.py` now exits 0. Nothing
   changes for datasets without halts (the published Nasdaq tables included) or for datasets ingested before this
   release, which carry no spans: re-ingest those. DBN, NYSE and crypto sources record no spans yet. Rust API:
   `qt_ingest::halts`, `qt_replay::{halts_of, partition_halts}`, `qt_zoo::runner::StreamOptions::trading_halts`,

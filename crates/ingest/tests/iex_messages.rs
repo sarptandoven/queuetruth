@@ -440,7 +440,8 @@ fn old_formats_keep_their_spec_values() {
 
 /// SPEC 1.2 halt censoring: Trading Status `H`, `O` and `P` and Operational Halt `O` open a trading-halt span of a
 /// selected symbol, `T` and `N` close it; a span still open at the end of the feed ends at the next midnight of the
-/// last message's session day; a filtered symbol's halts are not recorded, and halts never change the verdict.
+/// last message's session day; a filtered symbol's halts are not recorded, nor those of a selected symbol without
+/// records (it has no instrument row), and halts never change the verdict.
 #[test]
 fn trading_status_and_operational_halts_become_trading_halt_spans() {
     let dir = scratch("halts");
@@ -466,22 +467,26 @@ fn trading_status_and_operational_halts_become_trading_halt_spans() {
             vec![
                 directory("SPY"),
                 directory("QQQ"),
+                directory("IWM"),
                 status(0, "SPY", b'T', b"    "),
                 add(1, "SPY", 1, true, 100, 50_000),
                 status(2, "SPY", b'P', b"LUDP"),
                 status(3, "QQQ", b'H', b"T1  "),
+                status(3, "IWM", b'H', b"T1  "),
                 status(4, "SPY", b'H', b"LUDP"),
                 status(5, "SPY", b'T', b"    "),
                 op(6, "SPY", b'O'),
                 add(7, "SPY", 2, true, 100, 50_000),
             ],
         ),
-        seg(11, 8, vec![op(8, "SPY", b'N'), op(9, "SPY", b'O')]),
+        seg(13, 8, vec![op(8, "SPY", b'N'), op(9, "SPY", b'O')]),
     ];
     let input = dir.join("halts.pcap");
     write_file(&pcap(&frames(&segs)), &input, false).unwrap();
     let out = dir.join("ds");
-    let s = ingest(&spec(&input, &out)).unwrap();
+    let mut sp = spec(&input, &out);
+    sp.symbols = Some(vec!["spy".into(), "iwm".into()]);
+    let s = ingest(&sp).unwrap();
     let dq = &s.data_quality;
     let spans: Vec<_> = dq
         .trading_halts
@@ -506,6 +511,9 @@ fn trading_status_and_operational_halts_become_trading_halt_spans() {
         ]
     );
     assert_eq!(dq.verdict, Verdict::Clean, "{:?}", dq.reasons);
+    // IWM is selected and halted but has no records: no instrument row, so no span.
+    let ds = Dataset::open(&out).unwrap();
+    assert!(ds.partitions().iter().all(|p| p.instrument_id == 1));
     // The document on disk carries the spans; the synthetic day without halts writes none (unchanged bytes).
     let doc: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(out.join("data_quality.json")).unwrap()).unwrap();
