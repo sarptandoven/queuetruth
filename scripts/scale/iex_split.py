@@ -14,7 +14,9 @@ routed instead of kept or dropped:
   bucket on every day and in both pipelines;
 - every message of a known DEEP+ type that carries a symbol (`D H I O P E a M R L T B C`) goes to its symbol's bucket;
   System Events (`S`) go to every bucket; unknown types are counted and dropped;
-- with `--symbols`, only those symbols are routed (the rest dropped), for local proofs on a few names.
+- with `--symbols`, only those symbols are routed (the rest dropped), for local proofs on a few names; a segment
+  holding none of them and no System Event is then skipped after one regex search (as `IexCutFilter` does), so a
+  few names of a full day split in minutes instead of parsing every message.
 
 Each bucket is renumbered exactly as `queuetruth.demo.iex.IexCutFilter` renumbers a symbol subset: kept messages are
 numbered contiguously per (channel, session), every gap of the source is carried over as a jump of the same size,
@@ -60,6 +62,7 @@ from queuetruth.demo.iex import (  # noqa: E402
     DEEP_PLUS_PROTOCOL,
     SYMBOL_TYPES,
     SYSTEM_EVENT,
+    SYSTEM_EVENT_PATTERN,
     TP_HEADER,
     Capture,
     CaptureError,
@@ -78,7 +81,7 @@ TEST_SECURITY_FLAG = 0x80
 #: The unit ingest spec of an IEX bucket (merged over `common.INGEST_DEFAULTS` by `plan.py`).
 INGEST = {"format": "iex_deep_plus", "venue": "iex"}
 TRADING_STATE_RULE = (
-    "per symbol (from the DEEP+ Trading Status `H` messages of the whole day, routed or not), every `H` whose status "
+    "per routed symbol (from its DEEP+ Trading Status `H` messages of the whole day), every `H` whose status "
     "is not T (H halted, O order acceptance period, P paused) opens a span [its timestamp, the symbol's next `H` "
     "(null: the end of the day)] with that status and reason; ns since midnight New York; a symbol whose every `H` "
     "says T is not listed"
@@ -124,6 +127,15 @@ class IexSplitter:
         self.k = k
         self.midnight = midnight_utc_ns
         self.only = {s.upper() for s in symbols} if symbols else None
+        # with a symbol filter, a segment holding none of the symbols and no System Event is not parsed (one regex
+        # search per segment, as `IexCutFilter`): it only advances the sequence bookkeeping
+        self.rx = (
+            re.compile(
+                b"|".join(re.escape(x) for x in [*sorted(s.ljust(8).encode() for s in self.only), SYSTEM_EVENT_PATTERN])
+            )
+            if self.only
+            else None
+        )
         self.writers = [PcapWriter(f) for f in outs]
         self.capture = Capture()
         self.route: dict[bytes, int] = {}
@@ -198,6 +210,9 @@ class IexSplitter:
         skip = expected - seq if seq < expected else 0
         self.c["duplicate_messages"] += skip
         self.src[key] = seq + count
+        if self.rx is not None and self.rx.search(p, 40) is None:
+            self.c["prefiltered"] += count - skip
+            return
         kept: dict[int, list[bytes]] = {}
         body = memoryview(p)[40 : 40 + plen]
         i = n = 0
@@ -375,6 +390,11 @@ def run_split(a: argparse.Namespace) -> int:
         c["parsed"],
         c["system"] + c["routed"] + c["dropped"] + c["unknown_type"] + c["malformed"],
     )
+    chk(
+        "every message parsed, prefiltered or a duplicate",
+        c["messages"] - c["duplicate_messages"],
+        c["parsed"] + c["prefiltered"],
+    )
     chk("bucket messages == routed + K x system events", sum(sp.bucket_msgs), c["routed"] + k * c["system"])
     first_day = (
         dt.datetime.fromtimestamp(sp.first_send_ns / NS, ET).date().isoformat()
@@ -433,6 +453,7 @@ def run_split(a: argparse.Namespace) -> int:
             "symbols": sorted(symbols) if symbols else None,
             "routed_messages": c["routed"],
             "dropped_messages": c["dropped"],
+            "prefiltered_messages": c["prefiltered"],
             "system_messages": c["system"],
             "test_issues": sorted(sp.test_issues),
             "gzip": f"python gzip, compresslevel {a.level}, mtime 0, empty name, one member",
