@@ -47,6 +47,15 @@ Liquidity tiers (`plan.py`) rank a day's symbols by executions (E, C and P messa
 `T3_501_1500`, `T4_1501_4000`, `T5_rest`. A day whose system events put the close away from 16:00 (2025-11-28 closes
 at 13:00) gets that session in its ingest spec.
 
+**The scheduled public atlas** (`.github/workflows/atlas.yml`). Tuesday to Saturday morning (UTC) the workflow asks
+`iex_latest.py` for the newest day IEX has published (IEX's files sit at a fixed address per date,
+`https://storage.googleapis.com/iex/data/feeds/<YYYYMMDD>/<YYYYMMDD>_IEXTP1_DPLS1.0.pcap.gz`; a holiday has none),
+runs it with `local_day.py --url` on one runner, keeps the reduced day (`<out>/<MMDDYYYY>/day`, a few MB) as the
+asset `day-<YYYY-MM-DD>.tar.gz` of the `atlas-days` release, combines the newest 20 days with `atlas.py combine
+--flag-policy exclude` and deploys `atlas_site.py`'s site with GitHub Pages. A day already in the release is not run
+again (a manual run can force it, or pick a date). A maintainer turns Pages on once: Settings > Pages > Source:
+GitHub Actions.
+
 ## Why splitting does not change the numbers
 
 - **Records.** A bucket holds exactly the messages a symbol-subset stream of its symbols keeps, in file order, so an
