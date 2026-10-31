@@ -231,9 +231,10 @@ class DataQuality(QtDoc):
     reasons: list[str]
 
     @model_serializer(mode="wrap")
-    def _omit_empty_halts(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+    def _omit_empty_halts(self, handler: SerializerFunctionWrapHandler):
         """As the engine writes it: `trading_halts` is left out when empty, so a document without halts dumps the
-        same keys as before schema 1.2 and as `data_quality.json` on disk."""
+        same keys as before schema 1.2 and as `data_quality.json` on disk. No return annotation: pydantic then keeps
+        the model's own schema in serialization mode (the HTTP API's OpenAPI document), not a generic object."""
         out = handler(self)
         if not out.get("trading_halts"):
             out.pop("trading_halts", None)
