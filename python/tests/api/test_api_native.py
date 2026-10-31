@@ -178,6 +178,72 @@ def test_session(synth: Path) -> None:
         qt.Session(str(synth), venue="nowhere")
 
 
+def test_session_with_orders_matches_replay(synth: Path, shadows: Path, tmp_path: Path) -> None:
+    """`Session.with_orders`: the sampled shadows sent one by one at their submit time (each cancel at its own send
+    time) give the fills and results of one `replay` of the same file."""
+    spec = {"dataset": {"path": str(synth)}, "latency": {"feed_ns": 2000, "gateway_ns": 1000, "jitter_ns": 30000}}
+    qt.replay({**spec, "out": str(tmp_path / "r"), "shadows": {"path": str(shadows)}})
+    want_fills = pq.read_table(tmp_path / "r" / "shadow_fills.parquet").sort_by(
+        [("shadow_id", "ascending"), ("fill_seq", "ascending")]
+    )
+    want_results = pq.read_table(tmp_path / "r" / "shadow_results.parquet").sort_by("shadow_id")
+
+    rows = pq.read_table(shadows).sort_by("ts_submit")
+    sends: list[tuple[int, int, str, pa.Table | None]] = []
+    for i in range(rows.num_rows):
+        row = rows.slice(i, 1)
+        cancel = row["ts_cancel"].cast(pa.int64())[0].as_py()
+        row = row.set_column(row.schema.get_field_index("ts_cancel"), "ts_cancel", pa.nulls(1, row["ts_cancel"].type))
+        sid = row["shadow_id"][0].as_py()
+        sends.append((row["ts_submit"].cast(pa.int64())[0].as_py(), 0, sid, row))
+        if cancel is not None:
+            sends.append((cancel, 1, sid, None))
+    sess = qt.Session.with_orders(spec)
+    fills, results = [], []
+    for ts, _kind, sid, row in sorted(sends, key=lambda x: (x[0], x[1])):
+        sess.advance_to(ts)
+        assert sess.position == ts
+        if row is not None:
+            sess.submit(row)
+        else:
+            sess.cancel(sid, ts)
+        fills.append(sess.take_fills())
+    sess.finish()
+    fills.append(sess.take_fills())
+    results.append(sess.take_results())
+    got_fills = pa.concat_tables(fills).sort_by([("shadow_id", "ascending"), ("fill_seq", "ascending")])
+    got_results = pa.concat_tables(results).sort_by("shadow_id")
+    assert got_fills.num_rows > 0 and got_results.num_rows == rows.num_rows
+    assert got_fills.to_pylist() == want_fills.to_pylist()
+    assert got_results.to_pylist() == want_results.to_pylist()
+    with pytest.raises(qt.QtError, match="already finished"):
+        sess.advance_to(ts + 1)
+
+
+def test_session_orders_from_dicts_and_refusals(synth: Path) -> None:
+    sess = qt.Session.with_orders({"dataset": {"path": str(synth)}})
+    t = 1_781_540_000_000_000_000
+    sess.advance_to(t)
+    bid = sess.bbo(1)["bid"]
+    sess.submit([{"shadow_id": "o1", "instrument_id": 1, "side": "B", "price": bid[0], "qty": 1, "ts_submit": t}])
+    sess.submit([{"shadow_id": "o2", "instrument_id": 1, "side": "A", "offset_ticks": 0, "qty": 2, "ts_submit": t}])
+    sess.amend("o2", t + 10, 1)
+    with pytest.raises(qt.QtError, match="before the session position"):
+        sess.submit(
+            [{"shadow_id": "o3", "instrument_id": 1, "side": "B", "price": bid[0], "qty": 1, "ts_submit": t - 1}]
+        )
+    with pytest.raises(qt.QtError):
+        sess.submit([{"shadow_id": "o1", "instrument_id": 1, "side": "B", "price": bid[0], "qty": 1, "ts_submit": t}])
+    with pytest.raises(qt.QtError, match="unknown shadow_id"):
+        sess.cancel("nope", t)
+    with pytest.raises(qt.QtError, match="book queries only"):
+        qt.Session(str(synth)).submit(
+            [{"shadow_id": "x", "instrument_id": 1, "side": "B", "price": 1, "qty": 1, "ts_submit": t}]
+        )
+    sess.finish()
+    assert sorted(sess.take_results()["shadow_id"].to_pylist()) == ["o1", "o2"]
+
+
 def test_export_l2_npz(synth: Path, tmp_path: Path) -> None:
     s = qt.export(
         {

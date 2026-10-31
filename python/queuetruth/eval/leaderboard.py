@@ -203,6 +203,23 @@ def bias_sentence(entry: Any, horizon_ns: int | None, aborts: dict[str, tuple[in
     return _bias_sentence(entry, horizon_ns, m)
 
 
+def reality_gap_line(ranked: Sequence[Any], horizon_ns: int | None) -> str | None:
+    """The zoo's answer in one line, first: the closest and the furthest model from the exact replay at the horizon
+    (fill-rate bias, model minus exact, in pp; `ranked` as `rank_leaderboard` orders it). None without a bias."""
+    rows = [(str(_field(e, "model_id")), bias_at(e, horizon_ns)[0]) for e in ranked]
+    rows = [(m, v) for m, v in rows if v is not None]
+    if horizon_ns is None or not rows:
+        return None
+    when = duration_text(int(horizon_ns))
+    (m0, v0), (m1, v1) = rows[0], rows[-1]
+    if len(rows) == 1:
+        return f"reality gap at {when}: {m0} {_pp(v0)} pp (model minus exact fill rate)"
+    return (
+        f"reality gap at {when}: from {_pp(v0)} pp ({m0}, the closest) to {_pp(v1)} pp ({m1}, the furthest), "
+        "model minus exact fill rate"
+    )
+
+
 def _bias_sentence(entry: Any, horizon_ns: int | None, m: str) -> str:
     if horizon_ns is None:
         return f"{m}: no horizon with an exact label."

@@ -29,8 +29,10 @@ an issue to argue for one. Ids (`W1`, ...) are referenced from code and scripts.
   calibrated parameters to paste with their trust verdict, Merkle roots and a verify command on every table. Built
   only on data that may be republished: IEX DEEP+ (with IEX's attribution), on-chain venues, and aggregate
   statistics. The pipeline (`scripts/scale/`), the site generator (`scripts/scale/atlas_site.py`) and the IEX DEEP+
-  splitter (`scripts/scale/iex_split.py`; `local_day.py --source iex --site` runs a day from capture to site) exist;
-  next are the cloud run over the 19 public Nasdaq days, a scheduled IEX run on Modal, and hosting.
+  splitter (`scripts/scale/iex_split.py`; `local_day.py --source iex --site` runs a day from capture to site) exist,
+  and `.github/workflows/atlas.yml` runs each new IEX day and publishes the site over the newest 20 days with
+  GitHub Pages; next are turning Pages on, P&L error next to the fill-rate bias, and the cloud run over the 19 public
+  Nasdaq days.
 - **Upstream compatibility dashboard.** `scripts/nightly` made public: every new hftbacktest and NautilusTrader
   release checked against the exact queue within a day.
 - **`referee` as a GitHub Action**: done after 0.2.0 (`actions/referee`); next is getting simulator maintainers to
@@ -38,12 +40,16 @@ an issue to argue for one. Ids (`W1`, ...) are referenced from code and scripts.
 - **Plugins for more backtesters**: hftbacktest packaged like the NautilusTrader plugin, then Hummingbot, Freqtrade,
   LEAN, VectorBT and Backtrader adapters.
 - **A one-line "reality gap"** in every report: how much a simulator overstates fills and P&L, in plain words, first.
+  In fill rates it is there (the `zoo` view's first line, `score`'s RESULT line, the report's answer block, the
+  atlas headline); next is the P&L error (`zoo-toxicity`'s `bias_ticks`) beside it, and the sandbox on the one-pass
+  sessions.
 
 ## Later
 
-- **Agent arena.** The agent sandbox as a repeatable, look-ahead-free benchmark for trading agents: incremental
-  replay sessions (linear rather than quadratic in episode length), a blind mode that hides instrument and date,
-  event-driven wake-ups, multi-instrument episodes and certified results on days after the agents' training data.
+- **Agent arena.** The agent sandbox as a repeatable, look-ahead-free benchmark for trading agents: the sandbox on
+  the one-pass sessions that take orders (`qt.Session.with_orders`, done after 0.2.0; linear rather than quadratic
+  in episode length), a blind mode that hides instrument and date, event-driven wake-ups, multi-instrument
+  episodes and certified results on days after the agents' training data.
 - **Hosted service.** Accounts, a web interface and a hosted MCP endpoint on top of the existing multi-tenant
   service, with the same rules as the self-hosted one: customers' data only, no pooling, no vendor credentials.
 - **Verified results.** Public verification pages for certificates, commitments anchored with a timestamp

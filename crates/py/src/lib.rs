@@ -354,6 +354,73 @@ impl Session {
         let side = book_side(side)?;
         self.with(|s| s.queue_ahead(instrument_id, side, price))
     }
+
+    /// A session that also takes shadow orders, from a replay spec (JSON; its `shadows` and `amends` must be unset):
+    /// every partition engine is configured as `replay` configures it.
+    #[staticmethod]
+    fn from_spec(py: Python<'_>, spec_json: &str) -> PyResult<Self> {
+        let s = to_py(py.detach(|| {
+            let spec: ReplaySpec =
+                serde_json::from_str(spec_json).map_err(|e| QtError::Config(format!("session spec: {e}")))?;
+            qt_replay::Session::open_replay(&spec)
+        }))?;
+        Ok(Self { inner: Mutex::new(s) })
+    }
+
+    /// Every record with `ts_event` at or before this was applied.
+    #[getter]
+    fn position(&self) -> PyResult<i64> {
+        self.with(|s| s.position())
+    }
+
+    /// Sends the shadows of a `qt.shadow_spec` table (any `__arrow_c_stream__` object), each with `ts_submit` at or
+    /// after the position, in row order.
+    fn submit(&self, py: Python<'_>, shadows: PyTable) -> PyResult<()> {
+        let (batches, _) = shadows.into_inner();
+        let r = py.detach(|| {
+            self.with(|s| -> QtResult<()> {
+                for b in &batches {
+                    for spec in qt_schema::codec::batch_to_shadow_specs(b)? {
+                        s.submit(spec)?;
+                    }
+                }
+                Ok(())
+            })
+        })?;
+        to_py(r)
+    }
+
+    /// Sends a cancel at `ts` (at or after the position) for a shadow without one.
+    fn cancel(&self, py: Python<'_>, shadow_id: &str, ts: i64) -> PyResult<()> {
+        let r = py.detach(|| self.with(|s| s.cancel(shadow_id, ts)))?;
+        to_py(r)
+    }
+
+    /// Sends a priority-keeping reduction to `new_qty` at `ts` (at or after the position).
+    fn amend(&self, py: Python<'_>, shadow_id: &str, ts: i64, new_qty: u64) -> PyResult<()> {
+        let r = py.detach(|| self.with(|s| s.amend(shadow_id, ts, new_qty)))?;
+        to_py(r)
+    }
+
+    /// The shadow fills since the last call, as a `qt.shadow_fills` pyarrow.Table.
+    fn take_fills(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let b = to_py(self.with(qt_replay::Session::take_fills)?)?;
+        let schema = b.schema();
+        Ok(PyTable::try_new(vec![b], schema)?.into_pyarrow(py)?.unbind())
+    }
+
+    /// The results of the shadows that ended since the last call, as a `qt.shadow_results` pyarrow.Table.
+    fn take_results(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let b = to_py(self.with(qt_replay::Session::take_results)?)?;
+        let schema = b.schema();
+        Ok(PyTable::try_new(vec![b], schema)?.into_pyarrow(py)?.unbind())
+    }
+
+    /// Replays to the end of the data and ends the shadows still open (their results join `take_results`).
+    fn finish(&self, py: Python<'_>) -> PyResult<()> {
+        let r = py.detach(|| self.with(qt_replay::Session::finish))?;
+        to_py(r)
+    }
 }
 
 /// The `queuetruth._core` module.

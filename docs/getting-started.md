@@ -375,6 +375,30 @@ print(s.queue_ahead(inst, "B", bbo["bid"][0]))  # (qty, orders) a new bid at the
 
 Prices are fixed point: real price = `price * 10^price_exp` (`price_exp` is in `instruments.parquet`, `-9` here).
 
+`qt.Session.with_orders(spec)` also takes your own orders while it runs, decided from what it has shown you so far.
+Each order joins the real queue as in `replay` with the same spec (latency model, fill rule, feed gaps and halts),
+the session reads the data once however many orders you send, and its fills equal one `replay` with every order in
+its input:
+
+<!-- check-docs: run -->
+```python
+import json
+
+import queuetruth as qt
+
+part = json.load(open("synth/manifest.json"))["partitions"][0]
+inst, t = part["instrument_id"], (part["ts_min"] + part["ts_max"]) // 2
+s = qt.Session.with_orders({"dataset": {"path": "synth"}, "latency": {"gateway_ns": 50_000}})
+s.advance_to(t)
+bid = s.bbo(inst)["bid"][0]
+s.submit([{"shadow_id": "my-bid", "instrument_id": inst, "side": "B", "price": bid, "qty": 1, "ts_submit": t}])
+s.advance_to(t + 60_000_000_000)  # one minute later
+print(s.take_fills().to_pylist())  # this order's fills so far (qt.shadow_fills rows)
+s.cancel("my-bid", s.position)
+s.finish()
+print(s.take_results().select(["shadow_id", "end_state", "filled_qty"]).to_pylist())
+```
+
 ## 7. Scripting and CI
 
 - `--format json` prints exactly one JSON document to stdout: the command's summary, or a `qt.error` document.

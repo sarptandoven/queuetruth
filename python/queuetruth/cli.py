@@ -189,6 +189,7 @@ def _render_zoo(doc: Doc, args: Doc, extra: Doc) -> str | None:
         pct,
         rank_leaderboard,
         rates_at,
+        reality_gap_line,
         sort_horizon,
     )
 
@@ -209,6 +210,8 @@ def _render_zoo(doc: Doc, args: Doc, extra: Doc) -> str | None:
     h_max = (doc.get("spec") or {}).get("h_max_ns") or args.get("h_max_ns") or max(horizons)
     ranked = rank_leaderboard(board, sort_h)
     lines = [f"zoo: {doc.get('n_shadows')} shadows, {len(doc.get('models') or [])} models (run {doc.get('run_id')})"]
+    if (gap := reality_gap_line(ranked, sort_h)) is not None:
+        lines.append(gap)
     pop = (
         f"{nc} never-cancel shadows (planned life >= h_max {_hz(h_max)})" + (f" of {total}" if total else "")
         if nc is not None

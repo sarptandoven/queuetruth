@@ -21,12 +21,13 @@ use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet, BinaryHeap};
 
 use qt_book::{Book, Effect, IdMap};
+use qt_schema::codec::validate_id;
 use qt_schema::json::ShadowCounts;
 use qt_schema::rows::{
     EndState, FillReason, Liquidity, PriceSpec, ShadowAmend, ShadowFillRow, ShadowResultRow, ShadowSpec,
     TrajectoryKind, TrajectoryRow,
 };
-use qt_types::{Action, BookSide, MboEvent, Px, QtResult, Qty, Side, Ts};
+use qt_types::{Action, BookSide, MboEvent, Px, QtError, QtResult, Qty, Side, Ts};
 
 use crate::util::{InstrumentTable, SEC_NS};
 use crate::why::Tracer;
@@ -197,6 +198,10 @@ pub(crate) struct ShadowEngine {
     by_live: std::collections::HashMap<(u32, Ts), Vec<u32>>,
     /// Some shadow replaces a twin (enables the per-record twin checks).
     has_twins: bool,
+    /// Latency model and seed (delays of shadows, cancels and amends added after construction).
+    cfg: EngineConfig,
+    /// Per shadow: send time and quantity of its latest amend (else its submit and qty), to check the next amend.
+    last_amend: Vec<(Ts, Qty)>,
 }
 
 /// Book facts a shadow needs at event end.
@@ -212,36 +217,16 @@ impl ShadowEngine {
         instruments: &InstrumentTable,
     ) -> QtResult<Self> {
         let (st, by_id) = timing::build(&specs, &amends, cfg, instruments)?;
-        let mut inst: Vec<InstShadows> = Vec::new();
-        let mut slots: IdMap<u32, usize> = IdMap::default();
-        let mut by_live: std::collections::HashMap<(u32, Ts), Vec<u32>> = std::collections::HashMap::new();
-        for (i, s) in st.iter().enumerate() {
-            let i = i as u32;
-            if matches!(s.price_spec, PriceSpec::Abs(_)) {
-                by_live.entry((s.instrument_id, s.ts_live)).or_default().push(i);
-            }
-            let k = *slots.entry(s.instrument_id).or_insert_with(|| {
-                inst.push(InstShadows {
-                    itch: instruments.any(s.instrument_id).is_some_and(order_ref_priority),
-                    ..InstShadows::default()
-                });
-                inst.len() - 1
-            });
-            let a = &mut inst[k].agenda;
-            a.push(Reverse((s.ts_live, K_ITEM, i, 0)));
-            if let Some(c) = s.cancel_eff {
-                a.push(Reverse((c, K_ITEM, i, 0)));
-            }
-            for (k, &(t, _)) in s.amends.iter().enumerate() {
-                a.push(Reverse((t, K_ITEM, i, k as u32)));
-            }
+        let mut last_amend: Vec<(Ts, Qty)> = specs.iter().map(|s| (s.ts_submit, s.qty)).collect();
+        for a in &amends {
+            last_amend[by_id[&a.shadow_id] as usize] = (a.ts_send, a.new_qty);
         }
-        Ok(Self {
+        let mut eng = Self {
             specs,
             st,
             by_id,
-            inst,
-            slots,
+            inst: Vec::new(),
+            slots: IdMap::default(),
             last_slot: std::cell::Cell::new((0, usize::MAX)),
             by_sequence: cfg.rules.fill_removal_shares_sequence,
             snapshot_flagged: cfg.rules.snapshot_records_flagged,
@@ -259,9 +244,109 @@ impl ShadowEngine {
             fills_buf: Vec::new(),
             work: Vec::new(),
             why: None,
-            by_live,
+            by_live: std::collections::HashMap::new(),
             has_twins: false,
+            cfg: cfg.clone(),
+            last_amend,
+        };
+        for i in 0..eng.st.len() as u32 {
+            eng.schedule(i);
+        }
+        Ok(eng)
+    }
+
+    /// The per-instrument state of `instrument_id`, created on first use.
+    pub(crate) fn ensure_instrument(&mut self, instrument_id: u32) -> usize {
+        if let Some(k) = self.slots.get(&instrument_id) {
+            return *k;
+        }
+        self.inst.push(InstShadows {
+            itch: self.instruments.any(instrument_id).is_some_and(order_ref_priority),
+            ..InstShadows::default()
+        });
+        self.slots.insert(instrument_id, self.inst.len() - 1);
+        self.inst.len() - 1
+    }
+
+    /// Puts shadow `i`'s work on its instrument's agenda: activation at `ts_live`, cancel, amends.
+    fn schedule(&mut self, i: u32) {
+        let (id, ts_live, abs) = {
+            let s = &self.st[i as usize];
+            (s.instrument_id, s.ts_live, matches!(s.price_spec, PriceSpec::Abs(_)))
+        };
+        if abs {
+            self.by_live.entry((id, ts_live)).or_default().push(i);
+        }
+        let k = self.ensure_instrument(id);
+        let s = &self.st[i as usize];
+        let a = &mut self.inst[k].agenda;
+        a.push(Reverse((s.ts_live, K_ITEM, i, 0)));
+        if let Some(c) = s.cancel_eff {
+            a.push(Reverse((c, K_ITEM, i, 0)));
+        }
+        for (k, &(t, _)) in s.amends.iter().enumerate() {
+            a.push(Reverse((t, K_ITEM, i, k as u32)));
+        }
+    }
+
+    /// Adds a shadow after construction (`Engine::add_shadow`): built and scheduled as at construction, appended to
+    /// the input order. The caller keeps the replay at or before `ts_submit`.
+    pub(crate) fn add(&mut self, spec: ShadowSpec) -> QtResult<u32> {
+        validate_id("shadow_id", &spec.shadow_id, &format!("shadow {}", self.st.len()))?;
+        if self.by_id.contains_key(&spec.shadow_id) {
+            return Err(QtError::Duplicate {
+                what: "shadow_id".into(),
+                id: spec.shadow_id,
+            });
+        }
+        let i = u32::try_from(self.st.len()).map_err(|_| QtError::Config("more than 2^32 - 1 shadows".into()))?;
+        let s = timing::build_one(&spec, &[], &self.cfg, &self.instruments)?;
+        self.by_id.insert(spec.shadow_id.clone(), i);
+        self.last_amend.push((spec.ts_submit, spec.qty));
+        self.specs.push(spec);
+        self.st.push(s);
+        self.schedule(i);
+        Ok(i)
+    }
+
+    fn known(&self, shadow_id: &str) -> QtResult<u32> {
+        self.index(shadow_id).ok_or_else(|| QtError::InputFormat {
+            location: format!("shadow {shadow_id}"),
+            msg: "unknown shadow_id".into(),
         })
+    }
+
+    /// A cancel sent at `ts_cancel` for a shadow that has none (`Engine::cancel_shadow`): effective after the cancel
+    /// delay with the shadow's own `J_cancel` draw, as if its spec had carried `ts_cancel`.
+    pub(crate) fn cancel(&mut self, shadow_id: &str, ts_cancel: Ts) -> QtResult<u32> {
+        let i = self.known(shadow_id)?;
+        let spec = &self.specs[i as usize];
+        if spec.ts_cancel.is_some() {
+            return Err(QtError::InputFormat {
+                location: format!("shadow {shadow_id}"),
+                msg: "already has a cancel".into(),
+            });
+        }
+        let eff = timing::cancel_effective(spec, ts_cancel, &self.cfg)?;
+        self.specs[i as usize].ts_cancel = Some(ts_cancel);
+        self.st[i as usize].cancel_eff = Some(eff);
+        let k = self.ensure_instrument(self.specs[i as usize].instrument_id);
+        self.inst[k].agenda.push(Reverse((eff, K_ITEM, i, 0)));
+        Ok(i)
+    }
+
+    /// A priority-keeping reduction to `new_qty` sent at `ts_send` (`Engine::amend_shadow`): checked against the
+    /// shadow's previous amend (or its submit) and effective as the next amend row would be.
+    pub(crate) fn amend(&mut self, shadow_id: &str, ts_send: Ts, new_qty: Qty) -> QtResult<u32> {
+        let i = self.known(shadow_id)?;
+        let k_amend = self.st[i as usize].amends.len();
+        let prev = self.last_amend[i as usize];
+        let eff = timing::amend_effective(&self.specs[i as usize], k_amend, prev, ts_send, new_qty, &self.cfg)?;
+        self.last_amend[i as usize] = (ts_send, new_qty);
+        self.st[i as usize].amends.push((eff, new_qty));
+        let k = self.ensure_instrument(self.specs[i as usize].instrument_id);
+        self.inst[k].agenda.push(Reverse((eff, K_ITEM, i, k_amend as u32)));
+        Ok(i)
     }
 
     pub(crate) fn set_rule(&mut self, rule: FillRule, hidden: HiddenPrintPolicy) {

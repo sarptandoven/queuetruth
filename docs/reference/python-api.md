@@ -232,9 +232,16 @@ Interactive replay session: `.advance_to(ts)`, `.bbo(inst)`, `.depth(inst, n)`, 
 | Method | Signature | Description |
 |---|---|---|
 | `advance_to` | `(self, ts: int) -> None` | Replays every record with `ts_event <= ts` (GIL released). |
+| `amend` | `(self, shadow_id: str, ts: int, new_qty: int) -> None` | Sends a priority-keeping reduction to `new_qty` at `ts` (at or after `position`). |
 | `bbo` | `(self, instrument_id: int) -> dict[str, tuple[int, int, int] \| None] \| None` | Best bid and ask. |
+| `cancel` | `(self, shadow_id: str, ts: int) -> None` | Sends a cancel at `ts` (at or after `position`); it takes effect after the cancel latency. |
 | `depth` | `(self, instrument_id: int, n: int) -> tuple[list[tuple[int, int, int]], list[tuple[int, int, int]]]` | Top `n` levels per side. |
+| `finish` | `(self) -> None` | Replays to the end of the data; the shadows still open end as at the end of a `replay`. |
 | `queue_ahead` | `(self, instrument_id: int, side: str, price: int) -> tuple[int, int] \| None` | Displayed quantity and order count at a price. |
+| `submit` | `(self, shadows: Any) -> None` | Sends shadows, each with `ts_submit` at or after `position`: a `qt.shadow_spec` table (any Arrow stream) or a list of row dicts (`shadow_id`, `instrument_id`, `side` `"B"` or `"A"`, `qty`, `ts_submit` in ns, and `price` for an absolute price or `offset_ticks` for a touch-relative one; optional `latency_ns`, `group`, `order_key`). A cancel or amend is sent later with `cancel` / `amend`. |
+| `take_fills` | `(self) -> pa.Table` | Shadow fills since the last call (`qt.shadow_fills`). |
+| `take_results` | `(self) -> pa.Table` | Results of the shadows that ended since the last call (`qt.shadow_results`). |
+| `with_orders` | `(spec: s.ReplaySpec \| dict[str, Any]) -> Session` | A session that also takes shadow orders while it runs. Every partition replays as `replay` would replay it with this spec (latency model and seed, fill rule, hidden-print policy, exclusions, the dataset's feed gaps and trading halts); `shadows` and `amends` stay unset, orders come from `submit`, `cancel` and `amend`, each at or after `position`. The session reads the data once however many orders it takes, and its fills and results equal those of one `replay` with every order in its input. |
 
 ## `queuetruth.stats`
 

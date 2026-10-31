@@ -9,6 +9,18 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 ### Added
 
 - `ROADMAP.md`: what is being worked on and in what order (the Fill-Realism Atlas is `W1`).
+- **Sessions that take orders while they run** (`qt.Session.with_orders(spec)`; Rust `Session::open_replay`,
+  `Engine::new_interactive`, `add_shadow`, `cancel_shadow`, `amend_shadow`): `submit` (a `qt.shadow_spec` table or
+  row dicts), `cancel` and `amend` at or after the session's `position`, `take_fills` / `take_results`
+  (`qt.shadow_fills` / `qt.shadow_results` tables), `finish`. Partitions replay as `replay` replays them with the
+  spec, the session reads the data once however many orders it takes, and its fills and results equal one `replay`
+  with every order in its input (`crates/replay/tests/incremental.rs` checks this on random streams under both fill
+  rules, with jitter, a feed gap and a halt, and on a dataset against `run_dataset`). This is the engine an agent
+  benchmark needs: an episode costs one pass instead of a replay of its prefix per step.
+- **The scheduled public atlas** (`.github/workflows/atlas.yml`, `scripts/scale/iex_latest.py`): each new IEX
+  DEEP+ day runs through the scale pipeline on one runner, its reduced tables are kept as an asset of the
+  `atlas-days` release, and the site over the newest 20 days is published with GitHub Pages (a maintainer turns
+  Pages on once).
 - **`referee` GitHub Action** (`actions/referee`, `uses: sarptandoven/queuetruth/actions/referee@<ref>`): runs a
   simulator's command on every referee bug-class fixture (`$QT_DATASET`, `$QT_SCHEDULE` in, `$QT_FILLS` out),
   referees each class against the exact FIFO engine with the usual tolerances, writes a table to the job summary,
@@ -45,6 +57,8 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ### Changed
 
+- **`queuetruth zoo` leads with the reality gap**: the view's second line names the closest and the furthest model
+  from the exact replay at the sort horizon (`reality gap at 60 s: from +0.1 pp (...) to +13.3 pp (...)`).
 - README rewritten to fit one screen: the one-command demo first, the findings, a "pick your path" table and the
   evidence in short; the full tables stay in `docs/RESULTS.md` and `docs/testing.md`. The docs entry page lists the
   0.2 workflows (certificates, agent sandbox, prediction markets, forecasts, Freqtrade and Hummingbot).

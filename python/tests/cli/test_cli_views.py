@@ -78,6 +78,11 @@ def test_zoo_view_prints_the_leaderboard_sorted_by_bias_at_60s() -> None:
     )
     assert "At 60 s, hbt_power3[n=2] fills 0.7 pp less often than the exact replay" in out
     assert "At 60 s, hbt_log fills 0.1 pp more often than the exact replay, within noise (95% CI -0.2" in out
+    # The answer first: the closest and the furthest model at the sort horizon.
+    assert lines[1] == (
+        "reality gap at 60 s: from +0.1 pp (hbt_log, the closest) to +13.3 pp (front_of_queue[mode=faithful], "
+        "the furthest), model minus exact fill rate"
+    )
     # Another sort horizon on request (`sort_horizon`: the horizon itself when evaluated, else the nearest below).
     out10 = cli.render(["zoo"], doc, extra={"sort_horizon_ns": 10_000_000_000})
     assert "sorted by |fill-rate bias| at 10s" in out10

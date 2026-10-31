@@ -268,13 +268,40 @@ pub(crate) fn partition_engine(
     gaps: &[FeedGap],
     opts: &ReplayOptions,
 ) -> QtResult<Engine> {
-    let inst: Vec<_> = ds
-        .instrument(part.instrument_id, part.session_date)
+    let inst = partition_instruments(part, ds);
+    let eng = Engine::new(cfg.clone(), &inst, shadows, amends)?;
+    configure_partition_engine(eng, part, &inst, cfg, gaps, opts)
+}
+
+/// `partition_engine` without shadows, ready for `Engine::add_shadow` (interactive sessions).
+pub(crate) fn interactive_partition_engine(
+    part: &Partition,
+    ds: &Dataset,
+    cfg: &EngineConfig,
+    gaps: &[FeedGap],
+    opts: &ReplayOptions,
+) -> QtResult<Engine> {
+    let inst = partition_instruments(part, ds);
+    let eng = Engine::new_interactive(cfg.clone(), &inst)?;
+    configure_partition_engine(eng, part, &inst, cfg, gaps, opts)
+}
+
+fn partition_instruments(part: &Partition, ds: &Dataset) -> Vec<qt_types::Instrument> {
+    ds.instrument(part.instrument_id, part.session_date)
         .cloned()
         .into_iter()
-        .collect();
+        .collect()
+}
+
+fn configure_partition_engine(
+    mut eng: Engine,
+    part: &Partition,
+    inst: &[qt_types::Instrument],
+    cfg: &EngineConfig,
+    gaps: &[FeedGap],
+    opts: &ReplayOptions,
+) -> QtResult<Engine> {
     let midnight = inst.first().map(|i| i.midnight_utc_ns);
-    let mut eng = Engine::new(cfg.clone(), &inst, shadows, amends)?;
     eng.set_sequence_gap_detection(false);
     opts.configure(&mut eng, part, midnight)?;
     eng.set_feed_gaps(&partition_gaps(gaps, part));
@@ -564,7 +591,7 @@ pub(crate) fn dataset_rules(ds: &Dataset) -> qt_types::VenueRules {
     qt_types::rules_for(ds.manifest.effective_rule_set())
 }
 
-fn engine_config(spec: &ReplaySpec, ds: &Dataset) -> QtResult<EngineConfig> {
+pub(crate) fn engine_config(spec: &ReplaySpec, ds: &Dataset) -> QtResult<EngineConfig> {
     let r = match &spec.venue {
         Some(v) => rules(v.parse::<Venue>()?),
         None => dataset_rules(ds),
