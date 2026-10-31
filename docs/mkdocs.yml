@@ -38,6 +38,7 @@ nav:
       - The learned fill model: concepts/learned-model.md
       - Scorecard statistics: concepts/scorecard.md
       - Fill toxicity: concepts/fill-toxicity.md
+      - The Fill-Realism Atlas: concepts/fill-realism-atlas.md
       - The impact warning: concepts/impact-warning.md
       - Conformal fill probabilities: concepts/conformal-fill-probability.md
       - Selection bias: concepts/selection-bias.md

@@ -276,11 +276,14 @@ pub fn why(spec: &WhySpec) -> QtResult<WhyTrace> {
     excluded.dedup();
     let trace = match ds.partition_for(shadow.instrument_id, shadow.ts_submit) {
         Some(part) => {
-            // Exactly replay's partition engine (review M3): gap detection off, ingest feed gaps, exclusions.
-            let gaps = ingest_dq(&ds).map(|d| d.feed_gaps).unwrap_or_default();
+            // Exactly replay's partition engine (review M3): gap detection off, ingest feed gaps and trading
+            // halts, exclusions.
+            let dq = ingest_dq(&ds);
+            let gaps = dq.as_ref().map(|d| d.feed_gaps.clone()).unwrap_or_default();
             let opts = ReplayOptions {
                 exclude_order_ids: excluded,
                 exclude_order_ids_dated: excluded_dated,
+                trading_halts: dq.as_ref().map(crate::halts_of).unwrap_or_default(),
                 ..ReplayOptions::default()
             };
             let mut eng = partition_engine(part, &ds, &cfg, vec![shadow], Vec::new(), &gaps, &opts)?;

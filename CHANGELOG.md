@@ -6,6 +6,110 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ## [Unreleased]
 
+### Added
+
+- `ROADMAP.md`: what is being worked on and in what order (the Fill-Realism Atlas is `W1`).
+- **Sessions that take orders while they run** (`qt.Session.with_orders(spec)`; Rust `Session::open_replay`,
+  `Engine::new_interactive`, `add_shadow`, `cancel_shadow`, `amend_shadow`): `submit` (a `qt.shadow_spec` table or
+  row dicts), `cancel` and `amend` at or after the session's `position`, `take_fills` / `take_results`
+  (`qt.shadow_fills` / `qt.shadow_results` tables), `finish`. Partitions replay as `replay` replays them with the
+  spec, the session reads the data once however many orders it takes, and its fills and results equal one `replay`
+  with every order in its input (`crates/replay/tests/incremental.rs` checks this on random streams under both fill
+  rules, with jitter, a feed gap and a halt, and on a dataset against `run_dataset`). This is the engine an agent
+  benchmark needs: an episode costs one pass instead of a replay of its prefix per step.
+- **The scheduled public atlas** (`.github/workflows/atlas.yml`, `scripts/scale/iex_latest.py`): each new IEX
+  DEEP+ day runs through the scale pipeline on one runner, its reduced tables are kept as an asset of the
+  `atlas-days` release, and the site over the newest 20 days is published with GitHub Pages (a maintainer turns
+  Pages on once).
+- **`referee` GitHub Action** (`actions/referee`, `uses: sarptandoven/queuetruth/actions/referee@<ref>`): runs a
+  simulator's command on every referee bug-class fixture (`$QT_DATASET`, `$QT_SCHEDULE` in, `$QT_FILLS` out),
+  referees each class against the exact FIFO engine with the usual tolerances, writes a table to the job summary,
+  `summary.json` and a shields.io endpoint `badge.json`, and fails the step when a class fails. The runner,
+  `actions/referee/run.py`, also works outside GitHub. Guide: [Referee my simulator](docs/how-to/referee-your-simulator.md)
+  section 4.
+- **P&L error in the atlas** (ROADMAP W1, the reality gap in money): units compute the `zoo-toxicity` P&L terms of
+  every zoo run (one exact replay with quotes per shadow population, `evaluate_toxicity` per mode) and sum them per
+  symbol-day (`pnl_stats.parquet`, `queuetruth.eval.blocks.pnl_block_stats`); `atlas.py reduce-day` writes
+  `pnl_cells.parquet`, `combine` writes `pnl_by_tier.parquet` (simulated minus exact P&L per order in ticks and bps,
+  the model's and the exact P&L, the grant / deny / timing parts, with the two-way dates x symbols bootstrap), and
+  the site adds a P&L column and a second plain-words sentence on the model furthest from the real queue in P&L.
+  An atlas row equals `zoo-toxicity` on the same shadows (tested against the command). `plan.py --no-pnl` leaves it
+  out and keeps the plan's run id as before. `evaluate_toxicity` returns the per-shadow terms (`PnlTerms`).
+  [The Fill-Realism Atlas](docs/concepts/fill-realism-atlas.md) explains how to read the site, how a number is
+  made and checked, and its limits; the site links to it and carries a description and link-preview tags.
+- **Fill-Realism Atlas site** (`scripts/scale/atlas_site.py`, ROADMAP W1): a static site from an `atlas.py combine`
+  directory. For each liquidity tier it shows every fill model's fill-rate bias against the exact replay at every
+  horizon with its 95% interval, sorted by size, and leads with one plain-words sentence. It also shows the atlas and
+  day Merkle roots with the verify command, and writes `data/leaderboard.json` and the manifest. Pages run no
+  script and load nothing from the network, and the output is byte-identical for the same inputs. `--source iex`
+  puts IEX's required attribution on every page; `--per-symbol` adds a per-symbol page.
+- **Freqtrade and Hummingbot from the command line.** `queuetruth reconcile --kind freqtrade|hummingbot --sim PATH
+  --live PATH --out DIR` pairs a bot's simulator arm (Freqtrade backtest or dry run, Hummingbot paper bot) with its
+  live run, explains every difference and runs the scorecard, writing `reconcile.json` (`qt.bot_reconcile`),
+  `reconcile_orders.csv` and both logs; `--format json` prints the report. `live import` takes `--venue freqtrade`,
+  `hummingbot`, `sim-freqtrade` and `sim-hummingbot`, with importer options through `--option KEY=VALUE`
+  (`LiveImportSpec.venue`, schema 1.2, additive; Python `queuetruth.live.import_bot`).
+- **IEX DEEP+ in the atlas pipeline** (`scripts/scale/iex_split.py`): one IEX DEEP+ day (pcap or pcapng, gzip or
+  raw, from a file or streamed from a URL, never stored) is split into K symbol buckets by the ITCH splitter's rule.
+  System Events go to every bucket, and each bucket is renumbered per channel and session with the source's gaps
+  carried, so it is byte-identical to the `IexCutFilter` subset of its symbols. The manifest gives the unit ingest
+  spec (`iex_deep_plus`, venue `iex`), per-symbol instrument ids, messages and executions, test securities and the
+  Trading Status spans. `plan.py` reads it like an ITCH manifest, without changing the run ids of ITCH plans.
+  `local_day.py --source iex --site` runs a whole IEX day from capture to atlas site. Tested end to end on a
+  synthetic DEEP+ day: bucket = filter subset, bucket ingest = subset ingest, the manifest's ids = the ingest's,
+  and split, plan, units, reduce, combine and the site.
+  A URL day survives dropped connections (the stream resumes with HTTP ranges), and `local_day.py` runs only as
+  many units at once as the machine's memory holds at 6 GiB each (`--unit-mem-gib`): three units on a 16 GB
+  machine ran it out of memory on the real 2026-10-09 day.
+- `.github/workflows/fuzz.yml`: the fuzz crate's seed, regression and known-crash tests on every change to a parser,
+  and a weekly libFuzzer campaign over every target (`fuzz/run.sh`, crashes uploaded as artifacts).
+- `.github/workflows/release-nautilus.yml`: releases the `queuetruth-nautilus` plugin to PyPI on a
+  `queuetruth-nautilus-vX.Y.Z` release (version checks, sdist and wheel, the plugin's tests on the built wheel with
+  nautilus_trader 1.231.0 and the newest 2.x, Trusted Publishing with attestations; a dry run on manual dispatch).
+  `release.yml` now runs only for `vX.Y.Z` tags.
+
+### Changed
+
+- **`block_stats` is about 4x faster and needs less than half the memory** (56 s and 4.8 GB above the input to 13 s
+  and 2.0 GB for one zoo run of 61,200 shadows on the real 2026-10-09 IEX day, where it was 60 to 85% of every
+  unit's time and ran units out of memory). Shadow and model ids are hashed by Arrow instead of sorting a Python
+  string per row (`queuetruth.eval._cols.unique_strings`, `unique_ints`), the population filter copies only the
+  columns read, and the cell keys are coded one column at a time. Outputs are byte-identical (checked on that unit;
+  `python/tests/eval/test_cols_unique.py` checks the helpers against `np.unique`). `common_population` and
+  `evaluate_toxicity` use the same helpers.
+- **`queuetruth zoo` leads with the reality gap**: the view's second line names the closest and the furthest model
+  from the exact replay at the sort horizon (`reality gap at 60 s: from +0.1 pp (...) to +13.3 pp (...)`).
+- README rewritten to fit one screen: the one-command demo first, the findings, a "pick your path" table and the
+  evidence in short; the full tables stay in `docs/RESULTS.md` and `docs/testing.md`. The docs entry page lists the
+  0.2 workflows (certificates, agent sandbox, prediction markets, forecasts, Freqtrade and Hummingbot).
+- Docs: the service reference names the `zoo_` id prefix and says rate limits are per tenant; the self-hosting guide
+  lists `zoo` among the `jobs submit` kinds and names the commands that stay local.
+
+### Fixed
+
+- **DBN files that crashed or exhausted the pinned decoder are input errors.** A DBN prelude announcing 100 to 103
+  metadata bytes made `dbn` 0.71.0 panic, and one announcing up to 256 MiB made it allocate that much before reading
+  any of it (a 24-byte file was enough). `qt_ingest::dbn::FrameCheck` now rejects a metadata block shorter than its
+  fixed fields (`MIN_METADATA_BYTES`, 104) or longer than the file can hold (its size for an uncompressed file, the
+  decompression guard's limit for a compressed one) as `QT-INPUT-002` before the decoder runs. The fuzz
+  reproducers moved from `fuzz/known-crashes/` to `fuzz/regressions/dbn/`, and the `dbn` and `ingest` fuzz targets
+  no longer skip them. The Parquet panics in `fuzz/known-crashes/parquet/` are still open.
+- **Trading halts censor shadows end to end (finding F2).** Ingest records the spans in which each instrument is
+  not in continuous trading in `data_quality.json` (`trading_halts`: `instrument_id`, `ts_start`, `ts_end`,
+  `state`, `reason`; schema 1.2, additive, omitted when empty, never part of the verdict): Nasdaq ITCH Stock
+  Trading Action `H` states `H`, `P` and `Q` and Operational Halt `h` of market `Q`, and IEX DEEP+ Trading Status
+  `H`, `O` and `P` and Operational Halt `O`; every span names an instrument of the dataset. `replay`, `why`, the
+  zoo, calibration, features and the agent sandbox apply them: a shadow live when a halt starts ends `censored_gap`
+  there, one whose `ts_live` falls in a halt never goes live. In the zoo both model arms follow (a halt start ends
+  every live model pair, and no model activates a shadow inside a halt), so no model books a fill while an
+  instrument is halted. `replay` adds one warning line when a run with shadows applies halts.
+  `scripts/scale/findings/repro_halt_shadow_fill.py` now exits 0. Nothing
+  changes for datasets without halts (the published Nasdaq tables included) or for datasets ingested before this
+  release, which carry no spans: re-ingest those. DBN, NYSE and crypto sources record no spans yet. Rust API:
+  `qt_ingest::halts`, `qt_replay::{halts_of, partition_halts}`, `qt_zoo::runner::StreamOptions::trading_halts`,
+  `qt_calib::collect::collect_events_with_spans`, `qt_features::extract::extract_events_with_spans`. Design note:
+  [halt censoring](docs/design/extensions/halt-censoring.md) H.6.
+
 ## [0.2.0] - 2026-10-25
 
 Data schema 1.2: every new document and table is additive and registered with the others (`queuetruth schema list`,

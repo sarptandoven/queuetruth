@@ -661,15 +661,18 @@ def fit_hazard(spec: s.HazardFitSpec | dict[str, Any]) -> m.HazardModelCard:
 def import_live(
     spec: s.LiveImportSpec | dict[str, Any], *, tz: str | None = None, **options: Any
 ) -> m.LiveImportSummary:
-    """`live import`: venue exports (`queuetruth.live.import_venue`) or simulator reports (venues `sim_hftbacktest`
-    / `sim_nautilus`: `queuetruth.live.import_sim`, log venue `sim:<name>`, for `score --sim-log`). `tz` (default:
-    the spec's `tz`) is the account time zone of venue-local times (IBKR Flex). `options` go to the simulator
-    importer (`venue` = live venue of the instrument-map rows, `size_exp`, `key_from_client_id`,
-    `order_key_map`)."""
+    """`live import`: venue exports (`queuetruth.live.import_venue`), simulator reports (venues `sim_hftbacktest`,
+    `sim_nautilus`, `sim_freqtrade`, `sim_hummingbot`: `queuetruth.live.import_sim`, log venue `sim:<name>`, for
+    `score --sim-log`) or a trading bot's live run (`freqtrade`, `hummingbot`: `queuetruth.live.import_bot`). `tz`
+    (default: the spec's `tz`) is the account time zone of venue-local times (IBKR Flex). `options` go to the
+    simulator or bot importer (`venue` = live venue of the instrument-map rows, `size_exp`, `key_from_client_id`,
+    `order_key_map`; for bots `dry_run`, `log_tz`, `timeframe`, `pair_with`, ...)."""
     from queuetruth import live as qlive
 
     sp = _validate(s.LiveImportSpec, spec)
     tz = tz if tz is not None else sp.tz
+    if sp.venue in qlive.BOT_VENUES:
+        return qlive.import_bot(sp, tz=tz, **options)
     if sp.venue.startswith("sim_") and sp.venue not in qlive.IMPORTERS:
         if not sp.out:
             raise QtError("QT-CONFIG-001", "out: an output directory is required")
@@ -688,7 +691,8 @@ def import_live(
         )
     if options:
         raise QtError(
-            "QT-CONFIG-001", f"options {sorted(options)}: apply to simulator imports (sim_hftbacktest, sim_nautilus)"
+            "QT-CONFIG-001",
+            f"options {sorted(options)}: apply to simulator imports (sim_*) and trading bots (freqtrade, hummingbot)",
         )
     return qlive.import_venue(sp, tz=tz)
 
@@ -1539,6 +1543,86 @@ class Session:
     def queue_ahead(self, instrument_id: int, side: str, price: int) -> tuple[int, int] | None:
         """Displayed quantity and order count at a price."""
         return self._wrap(self._s.queue_ahead, int(instrument_id), str(side), int(price))
+
+    # ---- shadow orders (sessions opened with `with_orders`) ----------------------------------------------------
+
+    @classmethod
+    def with_orders(cls, spec: s.ReplaySpec | dict[str, Any]) -> Session:
+        """A session that also takes shadow orders while it runs. Every partition replays as `replay` would replay
+        it with this spec (latency model and seed, fill rule, hidden-print policy, exclusions, the dataset's feed
+        gaps and trading halts); `shadows` and `amends` stay unset, orders come from `submit`, `cancel` and
+        `amend`, each at or after `position`. The session reads the data once however many orders it takes, and its
+        fills and results equal those of one `replay` with every order in its input."""
+        core = _core()
+        sp = _validate(s.ReplaySpec, _expand_order_ids(spec))
+        self = cls.__new__(cls)
+        try:
+            self._s = core.Session.from_spec(json.dumps(_dump(sp)))
+        except core.QtCoreError as e:
+            raise _qt_error(e) from None
+        return self
+
+    @property
+    def position(self) -> int:
+        """Every record with `ts_event` at or before this was applied."""
+        return int(self._s.position)
+
+    def submit(self, shadows: Any) -> None:
+        """Sends shadows, each with `ts_submit` at or after `position`: a `qt.shadow_spec` table (any Arrow stream)
+        or a list of row dicts (`shadow_id`, `instrument_id`, `side` `"B"` or `"A"`, `qty`, `ts_submit` in ns, and
+        `price` for an absolute price or `offset_ticks` for a touch-relative one; optional `latency_ns`, `group`,
+        `order_key`). A cancel or amend is sent later with `cancel` / `amend`."""
+        if isinstance(shadows, list):
+            shadows = _shadow_rows_table(shadows)
+        self._wrap(self._s.submit, shadows)
+
+    def cancel(self, shadow_id: str, ts: int) -> None:
+        """Sends a cancel at `ts` (at or after `position`); it takes effect after the cancel latency."""
+        self._wrap(self._s.cancel, str(shadow_id), int(ts))
+
+    def amend(self, shadow_id: str, ts: int, new_qty: int) -> None:
+        """Sends a priority-keeping reduction to `new_qty` at `ts` (at or after `position`)."""
+        self._wrap(self._s.amend, str(shadow_id), int(ts), int(new_qty))
+
+    def take_fills(self) -> pa.Table:
+        """Shadow fills since the last call (`qt.shadow_fills`)."""
+        return self._wrap(self._s.take_fills)
+
+    def take_results(self) -> pa.Table:
+        """Results of the shadows that ended since the last call (`qt.shadow_results`)."""
+        return self._wrap(self._s.take_results)
+
+    def finish(self) -> None:
+        """Replays to the end of the data; the shadows still open end as at the end of a `replay`."""
+        self._wrap(self._s.finish)
+
+
+def _shadow_rows_table(rows: list[dict[str, Any]]) -> pa.Table:
+    """`qt.shadow_spec` rows from plain dicts (`Session.submit`)."""
+    out = []
+    for r in rows:
+        side = str(r["side"]).upper()[:1]
+        if side not in ("B", "A"):
+            raise QtError("QT-INPUT-002", f"shadow {r.get('shadow_id')}: side must be 'B' or 'A', got {r['side']!r}")
+        touch = r.get("price") is None
+        out.append(
+            {
+                "shadow_id": str(r["shadow_id"]),
+                "instrument_id": int(r["instrument_id"]),
+                "side": ord(side),
+                "price_mode": "touch" if touch else "abs",
+                "price": None if touch else int(r["price"]),
+                "offset_ticks": int(r.get("offset_ticks") or 0),
+                "qty": int(r["qty"]),
+                "ts_submit": int(r["ts_submit"]),
+                "latency_ns": int(r.get("latency_ns") or 0),
+                "ts_cancel": None,
+                "group": r.get("group"),
+                "source": "user",
+                "order_key": r.get("order_key"),
+            }
+        )
+    return pa.Table.from_pylist(out, schema=SCHEMAS["qt.shadow_spec"])
 
 
 __all__ = [

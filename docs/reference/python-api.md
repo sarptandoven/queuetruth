@@ -73,7 +73,7 @@ fixtures_synth(out: str, venue: str = cme, sessions: int = 2) -> m.FixturesSumma
 import_live(spec: s.LiveImportSpec | dict[str, Any], *, tz: str | None = None, **options: Any) -> m.LiveImportSummary
 ```
 
-`live import`: venue exports (`queuetruth.live.import_venue`) or simulator reports (venues `sim_hftbacktest` / `sim_nautilus`: `queuetruth.live.import_sim`, log venue `sim:<name>`, for `score --sim-log`). `tz` (default: the spec's `tz`) is the account time zone of venue-local times (IBKR Flex). `options` go to the simulator importer (`venue` = live venue of the instrument-map rows, `size_exp`, `key_from_client_id`, `order_key_map`).
+`live import`: venue exports (`queuetruth.live.import_venue`), simulator reports (venues `sim_hftbacktest`, `sim_nautilus`, `sim_freqtrade`, `sim_hummingbot`: `queuetruth.live.import_sim`, log venue `sim:<name>`, for `score --sim-log`) or a trading bot's live run (`freqtrade`, `hummingbot`: `queuetruth.live.import_bot`). `tz` (default: the spec's `tz`) is the account time zone of venue-local times (IBKR Flex). `options` go to the simulator or bot importer (`venue` = live venue of the instrument-map rows, `size_exp`, `key_from_client_id`, `order_key_map`; for bots `dry_run`, `log_tz`, `timeframe`, `pair_with`, ...).
 
 ### `ingest` **SPEC 4.3**
 
@@ -232,9 +232,16 @@ Interactive replay session: `.advance_to(ts)`, `.bbo(inst)`, `.depth(inst, n)`, 
 | Method | Signature | Description |
 |---|---|---|
 | `advance_to` | `(self, ts: int) -> None` | Replays every record with `ts_event <= ts` (GIL released). |
+| `amend` | `(self, shadow_id: str, ts: int, new_qty: int) -> None` | Sends a priority-keeping reduction to `new_qty` at `ts` (at or after `position`). |
 | `bbo` | `(self, instrument_id: int) -> dict[str, tuple[int, int, int] \| None] \| None` | Best bid and ask. |
+| `cancel` | `(self, shadow_id: str, ts: int) -> None` | Sends a cancel at `ts` (at or after `position`); it takes effect after the cancel latency. |
 | `depth` | `(self, instrument_id: int, n: int) -> tuple[list[tuple[int, int, int]], list[tuple[int, int, int]]]` | Top `n` levels per side. |
+| `finish` | `(self) -> None` | Replays to the end of the data; the shadows still open end as at the end of a `replay`. |
 | `queue_ahead` | `(self, instrument_id: int, side: str, price: int) -> tuple[int, int] \| None` | Displayed quantity and order count at a price. |
+| `submit` | `(self, shadows: Any) -> None` | Sends shadows, each with `ts_submit` at or after `position`: a `qt.shadow_spec` table (any Arrow stream) or a list of row dicts (`shadow_id`, `instrument_id`, `side` `"B"` or `"A"`, `qty`, `ts_submit` in ns, and `price` for an absolute price or `offset_ticks` for a touch-relative one; optional `latency_ns`, `group`, `order_key`). A cancel or amend is sent later with `cancel` / `amend`. |
+| `take_fills` | `(self) -> pa.Table` | Shadow fills since the last call (`qt.shadow_fills`). |
+| `take_results` | `(self) -> pa.Table` | Results of the shadows that ended since the last call (`qt.shadow_results`). |
+| `with_orders` | `(spec: s.ReplaySpec \| dict[str, Any]) -> Session` | A session that also takes shadow orders while it runs. Every partition replays as `replay` would replay it with this spec (latency model and seed, fill rule, hidden-print policy, exclusions, the dataset's feed gaps and trading halts); `shadows` and `amends` stay unset, orders come from `submit`, `cancel` and `amend`, each at or after `position`. The session reads the data once however many orders it takes, and its fills and results equal those of one `replay` with every order in its input. |
 
 ## `queuetruth.stats`
 

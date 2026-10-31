@@ -1,0 +1,162 @@
+# The public Fill-Realism Atlas on IEX DEEP+ (ROADMAP W1). After each US session it runs the day IEX published
+# through the scale pipeline (scripts/scale/local_day.py: split, units, reduce), keeps the reduced day as an asset of
+# the `atlas-days` release, combines the newest ATLAS_WINDOW days (scripts/scale/atlas.py combine) and publishes the
+# site (scripts/scale/atlas_site.py) with GitHub Pages. Actions are pinned by commit SHA (tag in the trailing comment).
+#
+# One-time setup by a maintainer: Settings > Pages > Build and deployment > Source: GitHub Actions. Using IEX's data
+# means accepting IEX's Historical Data Terms of Use; every page carries IEX's attribution
+# (docs/data-and-licensing.md). Pages show aggregates only; no IEX file or message is republished.
+name: atlas
+
+on:
+  schedule:
+    - cron: "41 10 * * 2-6" # Tue to Sat; IEX publishes the previous session's file in the early UTC morning
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "Session date YYYY-MM-DD (empty: the newest day IEX published)"
+        required: false
+        default: ""
+      rebuild:
+        description: "Run the day again even when the atlas-days release already has it"
+        type: boolean
+        default: false
+      publish:
+        description: "Deploy the site to GitHub Pages"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: atlas
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  UV_PYTHON_DOWNLOADS: never
+  UV_VERSION: "0.11.31"
+  PYTHON_VERSION: "3.13"
+  RUST_TOOLCHAIN: "1.97.1"
+  ATLAS_RELEASE: atlas-days
+  ATLAS_WINDOW: "20"
+
+jobs:
+  build:
+    if: github.repository == 'sarptandoven/queuetruth'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    permissions:
+      contents: write # the reduced day is kept as an asset of the atlas-days release
+    outputs:
+      site: ${{ steps.site.outputs.built }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: find the day
+        id: day
+        env:
+          DATE_INPUT: ${{ inputs.date }}
+        run: |
+          args=()
+          if [ -n "$DATE_INPUT" ]; then args=(--date "$DATE_INPUT"); fi
+          python3 scripts/scale/iex_latest.py "${args[@]}" | tee -a "$GITHUB_OUTPUT"
+      - name: already in the atlas?
+        id: have
+        env:
+          DATE: ${{ steps.day.outputs.date }}
+          REBUILD: ${{ inputs.rebuild }}
+        run: |
+          have=false
+          if gh release view "$ATLAS_RELEASE" --json assets --jq '.assets[].name' 2>/dev/null \
+              | grep -qx "day-$DATE.tar.gz"; then
+            have=true
+          fi
+          run_day=true
+          if [ "$have" = true ] && [ "$REBUILD" != true ]; then run_day=false; fi
+          # a scheduled run with nothing new (a holiday) publishes nothing
+          run_site=true
+          if [ "$run_day" = false ] && [ "${{ github.event_name }}" = schedule ]; then run_site=false; fi
+          echo "run_day=$run_day" >> "$GITHUB_OUTPUT"
+          echo "run_site=$run_site" >> "$GITHUB_OUTPUT"
+          echo "day $DATE: in the release: $have; run the day: $run_day; build the site: $run_site"
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master 2026-10-16
+        if: steps.have.outputs.run_site == 'true'
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        if: steps.have.outputs.run_site == 'true'
+        id: py
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        if: steps.have.outputs.run_site == 'true'
+        with:
+          version: ${{ env.UV_VERSION }}
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        if: steps.have.outputs.run_site == 'true'
+      - name: venv + sync + develop
+        if: steps.have.outputs.run_site == 'true'
+        run: |
+          uv venv --python "${{ steps.py.outputs.python-path }}" .venv
+          make sync
+          make develop
+      # local_day.py lowers --workers to what memory holds at 6 GiB a unit: two on a 16 GB runner
+      - name: run the day (stream, split, units, reduce)
+        if: steps.have.outputs.run_day == 'true'
+        env:
+          DATE: ${{ steps.day.outputs.date }}
+          URL: ${{ steps.day.outputs.url }}
+        run: |
+          uv run --frozen --no-sync python scripts/scale/local_day.py --source iex --date "$DATE" --url "$URL" \
+            --out .atlas/run --workers 4 --threads 1 --min-free-gib 2
+          day_dir=".atlas/run/$(date -d "$DATE" +%m%d%Y)"
+          tar -C "$day_dir/day" -czf "day-$DATE.tar.gz" .
+          cp "$day_dir/local_day.json" "local_day-$DATE.json"
+      - name: keep the reduced day
+        if: steps.have.outputs.run_day == 'true'
+        env:
+          DATE: ${{ steps.day.outputs.date }}
+        run: |
+          if ! gh release view "$ATLAS_RELEASE" > /dev/null 2>&1; then
+            gh release create "$ATLAS_RELEASE" --prerelease --title "Fill-Realism Atlas: reduced IEX days" \
+              --notes "Per-day reduced tables of the public atlas (.github/workflows/atlas.yml). Aggregates of IEX DEEP+ data; IEX's attribution and terms apply (docs/data-and-licensing.md)."
+          fi
+          gh release upload "$ATLAS_RELEASE" "day-$DATE.tar.gz" "local_day-$DATE.json" --clobber
+      - name: combine the newest days and build the site
+        id: site
+        if: steps.have.outputs.run_site == 'true'
+        run: |
+          gh release download "$ATLAS_RELEASE" --pattern 'day-*.tar.gz' --dir .atlas/dl
+          args=()
+          for f in $(ls .atlas/dl/day-*.tar.gz | sort | tail -n "$ATLAS_WINDOW"); do
+            d=".atlas/days/$(basename "$f" .tar.gz)"
+            mkdir -p "$d" && tar -C "$d" -xzf "$f"
+            args+=(--day "$d")
+          done
+          uv run --frozen --no-sync python scripts/scale/atlas.py combine "${args[@]}" --out .atlas/atlas \
+            --flag-policy exclude
+          uv run --frozen --no-sync python scripts/scale/atlas_site.py --atlas .atlas/atlas --out .atlas/site \
+            --source iex
+          echo "built=true" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        if: steps.site.outputs.built == 'true'
+        with:
+          path: .atlas/site
+
+  deploy:
+    needs: build
+    if: needs.build.outputs.site == 'true' && (github.event_name == 'schedule' || inputs.publish)
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

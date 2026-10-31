@@ -931,6 +931,37 @@ def test_decomposition_matches_hand_computation(predictions: Any) -> None:
     assert hb["deny_ticks"]["value"] == pytest.approx(-1 / 5) and hb["bias_ticks"]["value"] == pytest.approx(-1 / 5)
 
 
+def test_pnl_terms_summed_in_blocks_give_the_documents_values(predictions: Any) -> None:
+    """The W1 atlas sums `PnlTerms` per instrument-day and block (`blocks.pnl_block_stats`); summed over the blocks,
+    every PnL statistic of the document comes back, so an atlas number is the `zoo-toxicity` number of its shadows."""
+    from queuetruth.eval import blocks as B
+
+    res = _evaluate(predictions)
+    fields = {"pnl_grant": "grant_ticks", "pnl_deny": "deny_ticks", "pnl_timing": "timing_ticks",
+              "pnl_model": "model_pnl_ticks", "pnl_exact": "exact_pnl_ticks", "pnl_bias": "bias_ticks"}  # fmt: skip
+    for block_ns in (None, 1 * S, 30 * 60 * S):
+        t = B.pnl_block_stats(res.pnl, symbols={1: "AAA"}, extra={"mode": "faithful"}, block_ns=block_ns)
+        assert set(t.column("symbol").to_pylist()) == {"AAA"} and set(t.column("mode").to_pylist()) == {"faithful"}
+        rows = t.to_pylist()
+        for d in res.doc["models"]:
+            for hz, h in d["horizons"].items():
+                mine = [r for r in rows if r["model_id"] == d["model_id"] and r["horizon_ns"] == int(hz)]
+                n = sum(r["pnl_n"] for r in mine)
+                assert n == h["n"], (d["model_id"], hz)
+                for f, name in fields.items():
+                    got = sum(r[f] for r in mine) / n if n else None
+                    assert got == pytest.approx(h[name]["value"], abs=1e-12), (d["model_id"], hz, name)
+                nb = sum(r["pnl_n_bps"] for r in mine)
+                got = sum(r["pnl_bias_bps"] for r in mine) / nb if nb else None
+                assert got == pytest.approx(h["bias_bps"]["value"], abs=1e-12)
+        # the cluster bootstrap reads the same sums: one instrument-day, so the value without an interval
+        r = B.cluster_bootstrap(
+            t, metric="pnl_bias_ticks", clusters=("session_date",), group=("model_id", "horizon_ns"), bootstrap_b=20
+        )
+        fq = next(x for x in r if x["model_id"] == FQ and x["horizon_ns"] == S)
+        assert fq["value"] == pytest.approx(-4 / 5) and fq["ci_lo"] is None and fq["n"] == 5
+
+
 def test_by_type_table_and_rankings(predictions: Any) -> None:
     doc = _evaluate(predictions).doc
     bt = {(e["arm"], e["status"], e["mechanism"]): e for e in doc["by_type"]}
@@ -1160,6 +1191,10 @@ def test_empty_inputs_give_an_empty_valid_document(predictions: Any) -> None:
     )
     assert res.doc["n_shadows"] == 0 and res.doc["models"] == [] and res.doc["by_type"] == []
     assert res.fills.num_rows == 0 and res.markouts.num_rows == 0 and res.shadows.num_rows == 0
+    from queuetruth.eval import blocks as B
+
+    pnl = B.pnl_block_stats(res.pnl)
+    assert pnl.num_rows == 0 and set(B.PNL_SUMS) <= set(pnl.column_names)
 
 
 def test_document_model_and_table_schemas_agree() -> None:

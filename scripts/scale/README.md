@@ -15,10 +15,12 @@ itch_split.py ─▶ split/<date>/ (K buckets) ─▶ plan.py ─▶ units ─�
 | script | does |
 |---|---|
 | `itch_split.py` | streams a day (`--date` for a public EMI day with pinned hashes, or `--url`), routes each symbol's messages from its `R` on to bucket `crc32(symbol) mod K` and locate 0 to all buckets; checks the stream against the pinned values; per bucket the file and content sha256 and per symbol `[locate, messages, executions]` |
-| `plan.py` | universe, exclusions with reasons (Nasdaq test symbols), per-symbol shadow quotas (`scale`, `fixed`, `breadth`), cost model, first-fit-decreasing units within a bucket, `run_id` |
-| `unit.py` | one unit: bucket sha256 check, ingest of its symbols, replay exactness checks, `per_partition` shadow sample, native zoo per population and mode, `block_stats`, 1% audit sample of predictions, `shard_manifest.json` with telemetry |
+| `iex_split.py` | the same for an IEX DEEP+ day (`--input` capture or `--url`, gzip or raw, pcap or pcapng): every symbol's messages to bucket `crc32(symbol) mod K`, System Events to all buckets, each bucket renumbered per (channel, session) with the source's gaps carried, so it is byte-identical to the `IexCutFilter` subset of its symbols; the manifest names the unit ingest spec (`iex_deep_plus`, venue `iex`), per symbol `[instrument id, messages, executions]`, test securities and the Trading Status spans |
+| `plan.py` | universe, exclusions with reasons (Nasdaq test symbols), per-symbol shadow quotas (`scale`, `fixed`, `breadth`), cost model, first-fit-decreasing units within a bucket, `run_id`; the units compute the P&L error unless `--no-pnl` |
+| `unit.py` | one unit: bucket sha256 check, ingest of its symbols, replay exactness checks, `per_partition` shadow sample, native zoo per population and mode, `block_stats`, the P&L terms of `zoo-toxicity` summed per symbol-day (`pnl_stats`: one exact replay with quotes per population, `evaluate_toxicity` per mode), 1% audit sample of predictions, `shard_manifest.json` with telemetry |
 | `aggregate.py` | verifies every shard (leaf hash, unit spec hash, output content digests), Merkle root, `zoo_errors_by_group`, `leaderboard` (two-way dates x symbols cluster bootstrap, BH), `per_symbol` (day-cluster CI, empirical-Bayes shrinkage, BH), summed exactness |
-| `atlas.py` | multi-day atlas: `reduce-day` streams a day's verified shards into per-symbol-day cells and per-tier strata with the day's Merkle root; `combine` builds tier leaderboards (two-way dates x symbols bootstrap, BH), per-symbol cross-day estimates (day bootstrap, shrinkage toward the tier, BH), tier x stratum maps, and the root over the day roots |
+| `atlas.py` | multi-day atlas: `reduce-day` streams a day's verified shards into per-symbol-day cells and per-tier strata with the day's Merkle root; `combine` builds tier leaderboards (two-way dates x symbols bootstrap, BH), per-symbol cross-day estimates (day bootstrap, shrinkage toward the tier, BH), tier x stratum maps, the P&L error by tier (`pnl_by_tier`, the same bootstrap) when the days have it, and the root over the day roots |
+| `atlas_site.py` | the public site from a `combine` directory: per tier, every fill model's bias against the exact replay at every horizon with its interval, its P&L error in ticks per order (`--pnl-horizon`, default 60 s), the plain-words headlines, the atlas and day Merkle roots with the verify command, `data/leaderboard.json`; static, no script, byte-identical for the same inputs; `--source iex` adds IEX's attribution to every page |
 | `verify_unit.py` | re-runs one unit and checks its leaf against the published root (a run's or a day's manifest) |
 | `symbol_exactness.py` | per-symbol exactness: when a unit's replay checks flag anything, replays each symbol alone (one-partition dataset views) and checks that the per-symbol counters add up to the unit's |
 | `itch_ref.py` | an independent Python reading of ITCH 5.0: rebuilds the displayed book of chosen symbols, counts crossed events and price-priority violations as the engine does, and keeps the trading-state timeline (`H`, `K`, `J`, `h`), `Q` crosses and crossed episodes that explain them |
@@ -27,9 +29,41 @@ itch_split.py ─▶ split/<date>/ (K buckets) ─▶ plan.py ─▶ units ─�
 | `prove_breadth.py` | the P0 proof below; `--compare-only --plan P --shards S` compares shards made elsewhere (the cloud gate) |
 | `modal_app.py` | Modal entry points: `check_image`, `days` (split, plan, units, reduce per day, spend guard; dry run unless `--confirm-spend`), `combine_days` |
 
+**IEX DEEP+ days.** IEX's historical data may be republished with its attribution
+(`docs/data-and-licensing.md`), so an IEX day is the source of the public atlas. One command runs a day locally,
+from the capture to the site (`--url` streams IEX's file instead of reading a local copy; a full DEEP+ day is about
+9.4 GB of gzip):
+
+```
+uv run --frozen --no-sync python scripts/scale/local_day.py --source iex --date 2026-10-09 \
+    --input 20261009_IEXTP1_DPLS1.0.pcap.gz --workers 4 --threads 2 --site
+```
+
+The planner reads an `iex_split.py` manifest like an ITCH one: the units ingest with `format: iex_deep_plus`, the
+regular session comes from the `R` and `M` System Events, test securities are excluded, and the Trading Status
+spans become `non_t_spans` (`trading_ok`). Plans of ITCH days keep their run ids.
+
 Liquidity tiers (`plan.py`) rank a day's symbols by executions (E, C and P messages): `T1_top100`, `T2_101_500`,
 `T3_501_1500`, `T4_1501_4000`, `T5_rest`. A day whose system events put the close away from 16:00 (2025-11-28 closes
 at 13:00) gets that session in its ingest spec.
+
+**The scheduled public atlas** (`.github/workflows/atlas.yml`). Tuesday to Saturday morning (UTC) the workflow asks
+`iex_latest.py` for the newest day IEX has published (IEX's files sit at a fixed address per date,
+`https://storage.googleapis.com/iex/data/feeds/<YYYYMMDD>/<YYYYMMDD>_IEXTP1_DPLS1.0.pcap.gz`; a holiday has none),
+runs it with `local_day.py --url` on one runner, keeps the reduced day (`<out>/<MMDDYYYY>/day`, a few MB) as the
+asset `day-<YYYY-MM-DD>.tar.gz` of the `atlas-days` release, combines the newest 20 days with `atlas.py combine
+--flag-policy exclude` and deploys `atlas_site.py`'s site with GitHub Pages. A day already in the release is not run
+again (a manual run can force it, or pick a date). A maintainer turns Pages on once: Settings > Pages > Source:
+GitHub Actions.
+
+**P&L error.** Fill rates say how often a simulator is wrong; the P&L error says what that is worth. A unit replays
+each population's shadows exactly once more with quotes and trades (`bbo: change`, as `zoo-toxicity` does) and runs
+`queuetruth.eval.toxicity.evaluate_toxicity` on every zoo run: per model, simulated minus exact P&L per order placed,
+each first fill marked to the mid 100 ms, 1 s, 10 s and 60 s later (the `zoo-toxicity` population: no planned cancel
+and an administrative end after the 300 s fill window). The per-shadow terms are summed per symbol-day
+(`blocks.pnl_block_stats`), so an atlas row is exactly `zoo-toxicity`'s number over the same shadows
+(`python/tests/scale/test_scale_pipeline.py` checks one unit against the command). On the real 2026-10-09 IEX day the
+step took about as long as `block_stats` for the same unit.
 
 ## Why splitting does not change the numbers
 
@@ -149,6 +183,9 @@ v0.1 contract, `docs/design/spec.md` 1.2, censors them instead). A symbol-day is
   `flagged_share`. `--flag-policy exclude` drops them from every table; it refuses a day reduced without per-symbol
   exactness or without a known trading state unless `--allow-legacy-days`. `local_day.py` and `modal_app.py`
   (`combine`, `combine_days`) default to `exclude`. `atlas_manifest.json` lists every flagged symbol-day either way.
+  Since the halt fix (after 0.2.0) the engine censors shadows of a halted symbol from units ingested with it (F2),
+  so a `trading_ok` label no longer means wrong fills there; `exclude` still keeps tables to the symbol-days whose
+  replay checks are clean (F1).
 - **Tracing.** Re-stream the flagged units' buckets (`trace_flags.py --restream-command
   SPLIT/<date>/split_manifest.json --out NEW_SPLIT` prints the `itch_split.py` command and each bucket's expected
   sha256) and run

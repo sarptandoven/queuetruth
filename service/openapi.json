@@ -1134,6 +1134,13 @@
             "title": "Source Specific",
             "type": "object"
           },
+          "trading_halts": {
+            "items": {
+              "$ref": "#/components/schemas/TradingHaltSpan"
+            },
+            "title": "Trading Halts",
+            "type": "array"
+          },
           "unexpected_modifies": {
             "title": "Unexpected Modifies",
             "type": "integer"
@@ -5916,6 +5923,41 @@
           "next_cursor"
         ],
         "title": "TombstonePage",
+        "type": "object"
+      },
+      "TradingHaltSpan": {
+        "additionalProperties": false,
+        "description": "A span `[ts_start, ts_end)` in which one instrument was not in continuous trading as its feed reported it\n(SPEC 1.2, halt censoring): replay, `why`, the zoo, calibration and features censor shadows there.",
+        "properties": {
+          "instrument_id": {
+            "title": "Instrument Id",
+            "type": "integer"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "ts_end": {
+            "title": "Ts End",
+            "type": "integer"
+          },
+          "ts_start": {
+            "title": "Ts Start",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "instrument_id",
+          "ts_start",
+          "ts_end",
+          "state",
+          "reason"
+        ],
+        "title": "TradingHaltSpan",
         "type": "object"
       },
       "Ttf": {

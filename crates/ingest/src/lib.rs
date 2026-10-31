@@ -20,6 +20,7 @@ use qt_types::{Instrument, MboEvent, QtError, QtResult, Ts, VenueRules};
 
 pub mod dq;
 pub mod guard;
+pub mod halts;
 pub mod iex;
 mod ingest_impl;
 mod seqgap;

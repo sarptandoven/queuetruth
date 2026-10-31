@@ -152,8 +152,9 @@ Logs and progress go to stderr only.
 - No hidden-liquidity modelling (Nasdaq price-slid orders, icebergs, CME implied): flagged and counted only.
 - FIFO venues only. Pro-rata books are rejected at ingest (`QT-CONFIG-001`).
 - No auction modelling: shadows resting through an auction or halt are censored (`end_state = censored_gap`). As
-  built, the engine censors at halt spans its caller supplies (5.2.7); ingest does not record the trading state yet,
-  so replays from a dataset still fill through halts (finding F2, design extension halt-censoring).
+  built, ingest records the trading state of Nasdaq ITCH and IEX DEEP+ (`qt.data_quality.trading_halts`) and every
+  engine censors shadows there (5.2.7; finding F2, design extension halt-censoring H.6); DBN, NYSE and crypto
+  datasets carry no spans yet.
 - No exact truth from L2-only data. L2-only datasets support simulation and markouts only.
 - DBN/CME: the reader ships, but its validation label stays `synthetic_only` until a real Databento parity run is
   done by the author (no Databento key is used by the project).
@@ -1959,8 +1960,9 @@ ts_end)` per instrument, `Engine::set_trading_halts`, `ReplayOptions::trading_ha
 `QT-CONFIG-001`): a shadow live when a halt starts ends `censored_gap` at the halt start (an event at exactly that
 instant still trades); a shadow whose `ts_live` falls inside a halt never goes live and ends `censored_gap` at its
 `ts_live` unless its cancel is effective at or before `ts_live`; a shadow arriving exactly at the resumption trades
-normally. Without spans nothing changes, and no ingest path records them yet (design extension halt-censoring). At
-end of partition input, live shadows end
+normally. Without spans nothing changes. Ingest records them for Nasdaq ITCH and IEX DEEP+
+(`qt.data_quality.trading_halts`), and `run_dataset`, `why`, the zoo, calibration and features apply a dataset's
+spans to each partition (design extension halt-censoring H.6). At end of partition input, live shadows end
 `censored_session_end` if the partition's last `ts_event >= midnight_utc_ns + close_s * 1e9`, else `open_at_end`.
 `out_of_session = ts_submit` outside `[midnight_utc_ns + open_s * 1e9, midnight_utc_ns + close_s * 1e9)` (i64
 arithmetic). `ambiguous_race = race_window_ns > 0` and (`ts_activated_event - ts_live <=
@@ -3429,7 +3431,7 @@ merged so far. The "Open conflicts" list below predates every note.
 | [fill-toxicity](extensions/fill-toxicity.md) | `zoo-toxicity`: fill mechanisms, markouts and the PnL split of each model's error | 3.4, 3.10, 4.4, 5.6 |
 | [forecast-referee](extensions/forecast-referee.md) | `queuetruth forecast`: forecast ledger, scoring and Kelly PnL | 3.10, 4.3, 4.4; a new section after 5.7 |
 | [freqtrade-hummingbot](extensions/freqtrade-hummingbot.md) | Freqtrade and Hummingbot importers, reconciliation and the candle-fill audit | 5.7.1, 5.7.5, 3.10 (`qt.bot_reconcile`) |
-| [halt-censoring](extensions/halt-censoring.md) | Halt spans censor shadows in the engine (fix of F2) | 1.2, 5.2.7 |
+| [halt-censoring](extensions/halt-censoring.md) | Ingest records halt spans; every engine censors shadows there (fix of F2) | 1.2, 5.2.7 |
 | [hftbacktest-integration](extensions/hftbacktest-integration.md) | hftbacktest queue-model config and order-by-order reconciliation (repository tooling) | 5.3.5, 5.10 |
 | [impact-flag](extensions/impact-flag.md) | Impact and queue-share warnings for independent shadows | 1.2, 3.4 (`qt.shadow_impact`), 3.10, new 5.6a |
 | [livefill-kit](extensions/livefill-kit.md) | Own-account live-fill kit for Bitstamp (repository tool on the public API) | none |

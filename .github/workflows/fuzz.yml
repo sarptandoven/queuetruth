@@ -1,0 +1,98 @@
+# Fuzzing (design extensions rust-fuzz and python-fuzz, SPEC 8.10). `replay` runs on every change to a parser and
+# weekly: the fuzz crate's tests on stable replay every committed seed, every fixed regression and every known crash
+# (make fuzz-rust). `campaign` runs weekly and on demand: each libFuzzer target for `seconds` (default 600) on
+# nightly, exactly as fuzz/run.sh does locally; a target that finds a crash fails the job and its artifacts are
+# uploaded for minimization (fuzz/README.md).
+#
+# Actions are pinned by commit SHA (tag in the trailing comment), as in ci.yml.
+name: fuzz
+
+on:
+  schedule:
+    - cron: "41 3 * * 1"
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: seconds per target
+        default: "600"
+  pull_request:
+    paths:
+      - "crates/ingest/**"
+      - "crates/crypto/**"
+      - "crates/schema/**"
+      - "fuzz/**"
+      - "Cargo.lock"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fuzz-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  RUST_TOOLCHAIN: "1.97.1"
+
+jobs:
+  replay:
+    name: seeds, regressions and known crashes (stable)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master 2026-10-16
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: fuzz
+      - name: cargo test (fuzz crate)
+        working-directory: fuzz
+        run: cargo +${{ env.RUST_TOOLCHAIN }} test --locked
+
+  campaign:
+    name: libFuzzer (${{ matrix.group }})
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: market data
+            targets: itch itch_parse iex iex_parse dbn
+          - group: ingest and files
+            targets: ingest etcsv parquet crypto_json crypto_prepare
+          - group: crypto
+            targets: >-
+              crypto_bitstamp crypto_bitfinex crypto_coinbase crypto_coinbase_level3 crypto_kraken_l3
+              crypto_hyperliquid crypto_tardis
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master 2026-10-16
+        with:
+          toolchain: nightly
+      - name: cargo-fuzz
+        run: cargo install cargo-fuzz --locked --version 0.13.1
+      - name: run the targets
+        env:
+          SECONDS_PER_TARGET: ${{ github.event.inputs.seconds || '600' }}
+          TARGETS: ${{ matrix.targets }}
+        run: |
+          available=$(cd fuzz && cargo +nightly fuzz list)
+          run=()
+          for t in $TARGETS; do
+            if grep -qx "$t" <<< "$available"; then run+=("$t"); else echo "::warning::no fuzz target $t"; fi
+          done
+          QT_FUZZ_JOBS=4 ./fuzz/run.sh "$SECONDS_PER_TARGET" "${run[@]}"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: fuzz-artifacts-${{ strategy.job-index }}
+          path: fuzz/artifacts/
+          if-no-files-found: ignore

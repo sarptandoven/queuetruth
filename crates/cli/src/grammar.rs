@@ -182,6 +182,10 @@ const LIVE_VENUES: &[&str] = &[
     "fix44",
     "sim-hftbacktest",
     "sim-nautilus",
+    "freqtrade",
+    "hummingbot",
+    "sim-freqtrade",
+    "sim-hummingbot",
 ];
 const REPLAY_TARGETS: &[&str] = &["hftbacktest", "nautilus"];
 const FIX_CHECKSUM: &[&str] = &["exclude", "keep"];
@@ -834,7 +838,8 @@ pub(crate) const COMMANDS: &[Cmd] = &[
                 "option",
                 Kind::KeyValue,
                 "_cli.options",
-                "simulator importer option KEY=VALUE (sim-* venues: venue, size_exp, key_from_client_id)",
+                "importer option KEY=VALUE (sim-* venues: venue, size_exp, key_from_client_id; freqtrade, hummingbot: \
+                 dry_run, log_tz, timeframe, pair_with, ...)",
             ),
         ],
         positional: &[],
@@ -2253,8 +2258,11 @@ pub(crate) fn build_args(
                 return Err("--fix-* flags apply to --venue fix44 only".into());
             }
             let has_options = args.get("_cli").and_then(|c| c.get("options")).is_some();
-            if has_options && !venue.starts_with("sim_") {
-                return Err("--option applies to --venue sim-hftbacktest|sim-nautilus only".into());
+            if has_options && !(venue.starts_with("sim_") || venue == "freqtrade" || venue == "hummingbot") {
+                return Err(
+                    "--option applies to the simulator (sim-*) and trading-bot (freqtrade, hummingbot) venues only"
+                        .into(),
+                );
             }
         }
         ["export", "replay-schedule"] => {

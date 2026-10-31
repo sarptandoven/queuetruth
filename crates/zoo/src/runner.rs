@@ -265,6 +265,11 @@ pub struct StreamOptions {
     /// `data_quality.json`), set on the exact engine exactly as `replay` does: shadows live across a gap end
     /// `censored_gap`. Record-level sequence-gap detection stays off (multi-instrument feeds). MBO streams only.
     pub feed_gaps: Vec<FeedGap>,
+    /// Ingest-recorded trading halts of the stream's partition (`qt_replay::partition_halts` of the dataset's
+    /// `data_quality.json`, SPEC 1.2), set on the exact engine exactly as `replay` does: a shadow live at a halt
+    /// ends `censored_gap` there and one going live in a halt never goes live; the engine's censoring ends the
+    /// model arms too. MBO streams only.
+    pub trading_halts: Vec<qt_replay::TradingHalt>,
 }
 
 /// Exclusion counters of a stream (audit A1).
@@ -399,6 +404,7 @@ pub fn run_stream(
         amends,
         exclude_order_ids,
         feed_gaps,
+        trading_halts,
     } = opts;
     let mut excluded = ExclusionStats {
         requested: exclude_order_ids.len() as u64,
@@ -408,6 +414,8 @@ pub fn run_stream(
     if record {
         sim.set_record(true);
     }
+    let spans: Vec<(Ts, Ts)> = trading_halts.iter().map(|h| (h.ts_start, h.ts_end)).collect();
+    sim.set_trading_halts(&spans);
     let close = inst
         .midnight_utc_ns
         .saturating_add(i64::from(inst.close_s).saturating_mul(1_000_000_000));
@@ -448,6 +456,7 @@ pub fn run_stream(
             // The ingest-recorded gaps of the partition censor the shadows live across them, as in replay.
             engine.set_sequence_gap_detection(false);
             engine.set_feed_gaps(&feed_gaps);
+            engine.set_trading_halts(&trading_halts)?;
             // audit A1: excluded orders and the level (side, price) each rests at (from its `A`/`M` records, as the
             // engine tracks it) for crediting its executions to the `hbt_l3_fifo` shadows
             let iid = inst.instrument_id;
@@ -899,8 +908,10 @@ fn run_jobs(
     exclude: &ExcludeMap,
     write_trajectory: bool,
 ) -> QtResult<Vec<PartResult>> {
-    // Ingest-recorded feed gaps, read once (as qt_replay::run_dataset).
-    let gaps = qt_replay::ingest_dq(ds).map(|d| d.feed_gaps).unwrap_or_default();
+    // Ingest-recorded feed gaps and trading halts, read once (as qt_replay::run_dataset).
+    let dq = qt_replay::ingest_dq(ds);
+    let gaps = dq.as_ref().map(|d| d.feed_gaps.clone()).unwrap_or_default();
+    let halts = dq.as_ref().map(qt_replay::halts_of).unwrap_or_default();
     par_map(jobs, spec.threads as usize, |(part, g)| {
         let inst = ds
             .instrument(part.instrument_id, part.session_date)
@@ -916,6 +927,7 @@ fn run_jobs(
             write_trajectory,
             trace: false,
         };
+        let midnight = inst.midnight_utc_ns;
         let job = PartJob {
             part,
             inst,
@@ -925,6 +937,7 @@ fn run_jobs(
                 amends: g.amends.clone(),
                 exclude_order_ids: excluded_on(exclude, part.instrument_id, part.session_date),
                 feed_gaps: qt_replay::partition_gaps(&gaps, part),
+                trading_halts: qt_replay::partition_halts(&halts, part, Some(midnight)),
             },
         };
         run_partition(ds, job, models, &cfg, &spec.l2, spec.latency, spec.seed, false)
@@ -1315,8 +1328,10 @@ pub fn particle_simulator(spec: &CalibrationSpec) -> QtResult<Box<dyn ParticleSi
         mode,
         Exchange::Partial,
     )?;
-    // Ingest-recorded feed gaps censor the exact truth as in replay.
-    let gaps = qt_replay::ingest_dq(&ds).map(|d| d.feed_gaps).unwrap_or_default();
+    // Ingest-recorded feed gaps and trading halts censor the exact truth as in replay.
+    let dq = qt_replay::ingest_dq(&ds);
+    let gaps = dq.as_ref().map(|d| d.feed_gaps.clone()).unwrap_or_default();
+    let halts = dq.as_ref().map(qt_replay::halts_of).unwrap_or_default();
     let results = par_map(&jobs, spec.threads as usize, |(part, sp, sh)| {
         let inst = ds
             .instrument(part.instrument_id, part.session_date)
@@ -1333,6 +1348,7 @@ pub fn particle_simulator(spec: &CalibrationSpec) -> QtResult<Box<dyn ParticleSi
             trace: false,
         };
         let lot = cfg.lot;
+        let midnight = inst.midnight_utc_ns;
         let job = PartJob {
             part,
             inst,
@@ -1340,6 +1356,7 @@ pub fn particle_simulator(spec: &CalibrationSpec) -> QtResult<Box<dyn ParticleSi
             shadows: sh.clone(),
             opts: StreamOptions {
                 feed_gaps: qt_replay::partition_gaps(&gaps, part),
+                trading_halts: qt_replay::partition_halts(&halts, part, Some(midnight)),
                 ..StreamOptions::default()
             },
         };

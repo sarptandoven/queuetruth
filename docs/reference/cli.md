@@ -109,6 +109,7 @@ section below is the command's own `--help` text.
 | [`queuetruth cert pubkey`](#queuetruth-cert-pubkey) | show the public key and fingerprint of a key file |
 | [`queuetruth cert render`](#queuetruth-cert-render) | render a certificate as HTML |
 | [`queuetruth cert partial-opening`](#queuetruth-cert-partial-opening) | write an opening that opens only some committed items |
+| [`queuetruth reconcile`](#queuetruth-reconcile) | a Freqtrade or Hummingbot simulator arm against its live run, order by order |
 
 ## queuetruth ingest
 
@@ -739,7 +740,7 @@ venue exports -> canonical live log
 Usage: queuetruth live import [OPTIONS] --venue <venue> --in <PATH> --out <VALUE>
 
 Options:
-      --venue <venue>                  venue [possible values: binance, bybit, okx, coinbase, kraken, deribit, hyperliquid, ibkr-flex, fix44, sim-hftbacktest, sim-nautilus]
+      --venue <venue>                  venue [possible values: binance, bybit, okx, coinbase, kraken, deribit, hyperliquid, ibkr-flex, fix44, sim-hftbacktest, sim-nautilus, freqtrade, hummingbot, sim-freqtrade, sim-hummingbot]
       --in <PATH>                      input file (repeatable)
       --out <VALUE>                    output live-log directory
       --account <VALUE>                account label
@@ -753,7 +754,7 @@ Options:
       --fix-data-dictionary <VALUE>    QuickFIX data dictionary XML (custom tags and enums; repeatable)
       --fix-session-venue <KEY=VALUE>  SESSION=VENUE: venue of a FIX session (file stem or counterparty CompID; repeatable)
       --fix-instrument-tag <N>         tag holding the instrument instead of Symbol(55), e.g. 107
-      --option <KEY=VALUE>             simulator importer option KEY=VALUE (sim-* venues: venue, size_exp, key_from_client_id)
+      --option <KEY=VALUE>             importer option KEY=VALUE (sim-* venues: venue, size_exp, key_from_client_id; freqtrade, hummingbot: dry_run, log_tz, timeframe, pair_with, ...)
   -h, --help                           Print help
       --log-level <log_level>          stderr log level (default warn) [possible values: error, warn, info, debug]
       --output-format <human|json>     output format (also --format human|json) [possible values: human, json]
@@ -2406,4 +2407,79 @@ Options:
       --seed <seed>                 random seed (default 0)
       --threads <threads>           worker threads (outputs do not depend on it; default 1)
       --verbose                     human output: every summary field after the answer; every warning and note on stderr
+```
+
+## queuetruth reconcile
+
+```text
+A trading bot's simulator arm (Freqtrade backtest or dry run, Hummingbot paper bot) against its live run: paired orders, why each differs, and the sim-vs-live scorecard.
+
+Usage: queuetruth reconcile [OPTIONS] --kind <kind> --sim <PATH> --live <PATH> --out <DIR>
+
+Options:
+      --kind <kind>
+          the bot
+          
+          [possible values: freqtrade, hummingbot]
+
+      --sim <PATH>
+          simulator arm: backtest result, dry-run database and logs, or paper-bot database (repeatable)
+
+      --live <PATH>
+          live arm: the bot's database, logs or trades CSV (repeatable)
+
+      --out <DIR>
+          output directory
+
+      --account <ACCOUNT>
+          account label of both logs (default main)
+
+      --instrument-map <FILE>
+          instrument_map.csv (default: generated, with a warning)
+
+      --window <DURATION>
+          scorer evaluation horizon, e.g. 1h (default 1 day freqtrade, 60 s hummingbot)
+
+      --price-tol-bps <X>
+          price difference that counts (default 0.5 bps)
+
+      --time-tol <DURATION>
+          timing difference that counts, e.g. 5s
+
+      --no-score
+          pair and explain only; do not run the scorer
+
+      --arms-as-given
+          do not refuse a bot simulator arm against a dry run
+
+      --option <KEY=VALUE>
+          importer option, e.g. timeframe=5m, strategy=NAME, dry_run=true, log_tz=Europe/Berlin (repeatable)
+
+      --max-rows <N>
+          order lines printed (default 50)
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+      --log-level <log_level>
+          stderr log level (default warn)
+          
+          [possible values: error, warn, info, debug]
+
+      --output-format <human|json>
+          output format (also --format human|json)
+          
+          [possible values: human, json]
+
+      --quiet
+          no progress or warnings on stderr
+
+      --seed <seed>
+          random seed (default 0)
+
+      --threads <threads>
+          worker threads (outputs do not depend on it; default 1)
+
+      --verbose
+          human output: every summary field after the answer; every warning and note on stderr
 ```

@@ -32,8 +32,8 @@ use qt_types::{Dur, LatencyModel, MboEvent, Px, QtResult, Qty, Ts, VenueRules};
 
 pub use engine::Engine;
 pub use run::{
-    ReplayOptions, for_each_partition, ingest_dq, partition_gaps, run_dataset, run_dataset_with, run_partition,
-    split_shadows, strict_violations,
+    ReplayOptions, for_each_partition, halts_of, ingest_dq, partition_gaps, partition_halts, run_dataset,
+    run_dataset_with, run_partition, split_shadows, strict_violations,
 };
 pub use sample::{mirror_real_orders, sample_shadows};
 pub use session::Session;

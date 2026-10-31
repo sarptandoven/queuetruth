@@ -41,6 +41,8 @@ env:
 jobs:
   meta:
     name: version and tag
+    # Plugin releases (`queuetruth-nautilus-v*`, release-nautilus.yml) are not queuetruth releases.
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.release.tag_name, 'v')
     runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.version.outputs.version }}

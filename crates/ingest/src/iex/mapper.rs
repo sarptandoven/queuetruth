@@ -21,15 +21,21 @@
 //! | `C` Clear Book (p.27) | `R` (the symbol's live orders are dropped) |
 //! | `B` Trade Break, `S D H I O P E` | none (statistics) |
 //!
+//! `H` Trading Status `H`, `O` and `P` and `O` Operational Halt Status `O` open a trading-halt span of the
+//! instrument, closed by the message that returns it to continuous trading (`H` status `T`, `O` status `N`):
+//! `Mapper::take_trading_halts`, SPEC 1.2 halt censoring.
+//!
 //! A duplicate live order id on `a` first cancels the old order (`C`), then adds. Anomalies (unknown references,
 //! over-executions, bad sides or prices, ...) are counted and never fatal.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
+use qt_schema::json::TradingHaltSpan;
 use qt_schema::rows::{TradeKind, TradeRow};
 use qt_types::{MboEvent, QtError, QtResult, Side, Ts, UNDEF_PRICE, flags};
 
 use super::message::{MODIFY_MAINTAIN_PRIORITY, Message, Symbol, sale, symbol_str};
+use crate::halts::{HaltKind, HaltTracker};
 use crate::itch::IdBuild;
 
 #[derive(Debug, Clone, Copy)]
@@ -200,6 +206,8 @@ pub struct Mapper {
     by_type: [u64; 256],
     /// Statistics.
     pub stats: MapperStats,
+    /// Trading state of the selected instruments (`H` and `O` messages).
+    halts: HaltTracker,
 }
 
 impl Mapper {
@@ -219,6 +227,7 @@ impl Mapper {
             orders: HashMap::with_capacity_and_hasher(1 << 14, IdBuild::default()),
             by_type: [0; 256],
             stats: MapperStats::default(),
+            halts: HaltTracker::new(),
         })
     }
 
@@ -313,19 +322,44 @@ impl Mapper {
                     info.directory_flags = Some(flags);
                 }
             }
-            Message::TradingStatus { status, .. } => {
-                if sel.is_some_and(|(_, s)| s) {
+            Message::TradingStatus { status, reason, .. } => {
+                if let Some((iid, true)) = sel {
                     *self
                         .stats
                         .trading_status
                         .entry((status as char).to_string())
                         .or_insert(0) += 1;
+                    // H halted, O order acceptance period (IPO or new issue), P paused are not continuous trading;
+                    // T is. Other bytes are not in the specification and change nothing.
+                    if ts > 0 && matches!(status, b'H' | b'O' | b'P' | b'T') {
+                        self.halts.apply(
+                            ts,
+                            iid,
+                            HaltKind::Status,
+                            status != b'T',
+                            format!("iex_H:{}", status as char),
+                            String::from_utf8_lossy(&reason).trim().to_owned(),
+                        );
+                    }
                 }
             }
-            Message::RetailLiquidity { .. }
-            | Message::OperationalHalt { .. }
-            | Message::ShortSalePriceTest { .. }
-            | Message::SecurityEvent { .. } => {}
+            Message::OperationalHalt { status, .. } => {
+                // O: IEX-specific operational halt; N: not operationally halted.
+                if let Some((iid, true)) = sel
+                    && ts > 0
+                    && matches!(status, b'O' | b'N')
+                {
+                    self.halts.apply(
+                        ts,
+                        iid,
+                        HaltKind::Operational,
+                        status == b'O',
+                        format!("iex_O:{}", status as char),
+                        String::new(),
+                    );
+                }
+            }
+            Message::RetailLiquidity { .. } | Message::ShortSalePriceTest { .. } | Message::SecurityEvent { .. } => {}
             Message::Unknown { .. } => self.stats.anomalies.unknown_message_type += 1,
             Message::TradeBreak { .. } => {
                 if sel.is_some_and(|(_, s)| s) {
@@ -537,6 +571,12 @@ impl Mapper {
     /// ids and statistics are kept.
     pub fn reset_book(&mut self) {
         self.orders.clear();
+    }
+
+    /// The trading-halt spans of the feed (`crate::halts`): instrument ids are shared by every input, so a span may
+    /// run from one input into the next; one still open ends at `end_of_input`. Call once, after the last input.
+    pub fn take_trading_halts(&mut self, end_of_input: Ts) -> Vec<TradingHaltSpan> {
+        self.halts.finish(end_of_input)
     }
 
     /// Live orders.

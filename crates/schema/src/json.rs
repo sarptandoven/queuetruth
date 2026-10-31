@@ -309,6 +309,24 @@ pub struct FeedGap {
     pub reason: String,
 }
 
+/// A span in which one instrument was not in continuous trading as its feed reported it, `[ts_start, ts_end)` in
+/// UTC ns (SPEC 1.2, halt-censoring extension): halted, paused, or quoting before an IPO or halt cross. Recorded by
+/// ingest; replay, `why`, the zoo, calibration and features censor shadows there (`qt_replay::TradingHalt`).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TradingHaltSpan {
+    /// Instrument.
+    pub instrument_id: u32,
+    /// Time of the message that left continuous trading.
+    pub ts_start: i64,
+    /// Time of the message that resumed it; the end of the input's session day when trading did not resume.
+    pub ts_end: i64,
+    /// Feed state that opened the span: `<source>_<message type>:<state>` (e.g. `itch_H:P`, `itch_h:H`, `iex_H:H`).
+    pub state: String,
+    /// Feed reason code (ITCH `Reason`, e.g. `LUDP`, `IPO1`; empty when the feed gives none).
+    pub reason: String,
+}
+
 /// Data-quality verdict.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -360,6 +378,11 @@ pub struct DataQuality {
     pub off_price_executions: u64,
     /// Feed gaps.
     pub feed_gaps: Vec<FeedGap>,
+    /// 1.2 (halt censoring): spans in which an instrument was not in continuous trading. Venue state, not a data
+    /// defect: never part of the verdict. Omitted when empty, so a dataset without halts writes the same bytes as
+    /// before.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub trading_halts: Vec<TradingHaltSpan>,
     /// Source-specific counters.
     pub source_specific: IndexMap<String, u64>,
     /// Verdict.

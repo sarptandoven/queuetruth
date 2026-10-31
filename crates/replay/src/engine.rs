@@ -237,6 +237,45 @@ impl Engine {
         self.cross_prints.extend(keys);
     }
 
+    /// An engine for an interactive session: no shadows yet, each instrument ready for `add_shadow` (so feed gaps and
+    /// trading halts set after this reach the shadows added later).
+    pub fn new_interactive(cfg: EngineConfig, instruments: &[Instrument]) -> QtResult<Self> {
+        let mut eng = Self::new(cfg, instruments, Vec::new(), Vec::new())?;
+        for i in instruments {
+            eng.shadows.ensure_instrument(i.instrument_id);
+        }
+        Ok(eng)
+    }
+
+    fn check_not_past(&self, ts: Ts, what: &str, shadow_id: &str) -> QtResult<()> {
+        match self.last_ts {
+            Some(p) if ts < p => Err(QtError::Config(format!(
+                "shadow {shadow_id}: {what} {ts} is before the replay position {p} (records up to it were applied)"
+            ))),
+            _ => Ok(()),
+        }
+    }
+
+    /// Adds a shadow while replaying (interactive sessions). Its replay is the one a run with it in the input would
+    /// make, because its work happens at the start of the first event after `ts_live >= ts_submit`, so `ts_submit`
+    /// must not be before the last record applied. Returns its index.
+    pub fn add_shadow(&mut self, spec: ShadowSpec) -> QtResult<u32> {
+        self.check_not_past(spec.ts_submit, "ts_submit", &spec.shadow_id)?;
+        self.shadows.add(spec)
+    }
+
+    /// Sends a cancel at `ts_cancel` for a shadow without one (not before the last record applied).
+    pub fn cancel_shadow(&mut self, shadow_id: &str, ts_cancel: Ts) -> QtResult<u32> {
+        self.check_not_past(ts_cancel, "ts_cancel", shadow_id)?;
+        self.shadows.cancel(shadow_id, ts_cancel)
+    }
+
+    /// Sends a priority-keeping reduction to `new_qty` at `ts_send` (not before the last record applied).
+    pub fn amend_shadow(&mut self, shadow_id: &str, ts_send: Ts, new_qty: Qty) -> QtResult<u32> {
+        self.check_not_past(ts_send, "ts_send", shadow_id)?;
+        self.shadows.amend(shadow_id, ts_send, new_qty)
+    }
+
     /// Planned (exogenous) end of every shadow, input order (A2).
     pub fn shadow_planned_ends(&self) -> Vec<PlannedEnd> {
         self.shadows

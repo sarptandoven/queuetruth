@@ -37,12 +37,19 @@ Every term is defined in the [Glossary](concepts/glossary.md).
 | If you... | Start here |
 |---|---|
 | want to see the whole workflow on synthetic data in a few minutes | [Getting started](getting-started.md) |
+| want to know how wrong popular backtesters are on a real market day, in fills and in P&L | [The Fill-Realism Atlas](concepts/fill-realism-atlas.md) |
 | have order-level data and want to know how wrong your L2 model is | [The L2 model zoo](concepts/l2-model-zoo.md) |
 | use hftbacktest and want a fitted `n` | [Calibrate my hftbacktest model](how-to/calibrate-hftbacktest.md) |
 | trade an L2-only venue and want a parameter fitted to your own fills | [Calibrate on an L2-only venue](how-to/calibrate-live-l2-venue.md) |
 | want to compare your backtest with your live fills | [Score my Nautilus backtest against my Binance fills](how-to/score-nautilus-vs-binance.md) |
 | run a QuickFIX order-entry session and want to score your simulator against it | [Score my QuickFIX-driven strategy](how-to/score-quickfix-strategy.md) |
+| run Freqtrade or Hummingbot and want to know how far your dry run or backtest is from your live fills | [Reconcile Freqtrade or Hummingbot](how-to/reconcile-freqtrade-hummingbot.md) |
+| want to see where the sim-vs-live gap comes from in money | [Decompose the sim-live gap](how-to/decompose-the-sim-live-gap.md) |
 | maintain a simulator and want regression tests for queue logic | [Referee my simulator](how-to/referee-your-simulator.md) |
+| want to prove a result to someone else, re-executable bit for bit | [Certify a result](how-to/certify-a-result.md) |
+| build an AI agent that trades a replayed day with exact fills | [Agent sandbox](how-to/agent-sandbox.md), [Use from an agent](how-to/use-from-an-agent.md) |
+| make markets on Kalshi or Polymarket from your own captures | [Prediction-market making](how-to/prediction-market-making.md) |
+| want forecasts scored before you trust them | [Score forecasts](how-to/score-forecasts.md) |
 | want a shared service for a team or for agents | [Self-host the service](how-to/self-host-the-service.md) |
 | want a word defined | [Glossary](concepts/glossary.md) |
 
@@ -88,6 +95,7 @@ truth.
 | DBN / CME | synthetic only |
 | Crypto L3 readers | assumed rules; one 10-minute capture per venue replays with every invariant 0 (counters only, not fill fidelity) |
 | Live-log importers, QuickFIX logs | fixtures written from public format docs and the engines' sources only |
+| Trading halts | recorded from Nasdaq ITCH and IEX DEEP+ and applied by every engine (shadows censored); DBN, NYSE and crypto sources record none yet |
 | Sim-vs-live scorer | 3,000 real Nasdaq orders per day used as a live log: the exact arm reproduces every order's fills on both days |
 
 Every claim has a named test: [How queuetruth is tested](testing.md). The rules that changed after an independent

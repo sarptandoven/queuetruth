@@ -473,7 +473,9 @@ def _gap_doc(src: SourceDataset, cut: int | None) -> dict[str, Any] | None:
     """`data_quality.json` of a cut: the source document with every counter zeroed and the instrument's feed gaps
     with `ts_start < cut`, each ending at most at `cut` (a gap still in progress there gets `GAP_IN_PROGRESS` as its
     reason); with `cut = None` the source document with all of the instrument's gaps as they are (module docstring:
-    the engine acts on a gap at the first event after its start and reads nothing else of it)."""
+    the engine acts on a gap at the first event after its start and reads nothing else of it). The instrument's
+    trading halts (`trading_halts`, SPEC 1.2) are cut the same way: a halt the feed announced before the cut is
+    known at the cut, its end and any later halt are not."""
     if src.data_quality is None:
         return None
     doc = json.loads(json.dumps(src.data_quality))
@@ -487,6 +489,20 @@ def _gap_doc(src: SourceDataset, cut: int | None) -> dict[str, Any] | None:
             if int(g["ts_end"]) > cut:
                 g = {**g, "ts_end": cut, "reason": GAP_IN_PROGRESS}
         gaps.append(g)
+    halts = []
+    for h in doc.get("trading_halts") or []:
+        if int(h.get("instrument_id", -1)) != src.partition.instrument_id:
+            continue
+        if cut is not None:
+            if int(h["ts_start"]) >= cut:
+                continue
+            if int(h["ts_end"]) > cut:
+                h = {**h, "ts_end": cut}
+        halts.append(h)
+    if halts:
+        doc["trading_halts"] = halts
+    else:
+        doc.pop("trading_halts", None)
     if cut is not None:
         for k, v in list(doc.items()):
             if isinstance(v, int) and not isinstance(v, bool) and k != "schema_version":

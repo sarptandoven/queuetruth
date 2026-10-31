@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any, ClassVar, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, SerializerFunctionWrapHandler, model_serializer
 
 HEX16 = r"^[0-9a-f]{16}$"
 HEX64 = r"^[0-9a-f]{64}$"
@@ -188,6 +188,20 @@ class FeedGap(QtModel):
     reason: str
 
 
+class TradingHaltSpan(QtModel):
+    """A span `[ts_start, ts_end)` in which one instrument was not in continuous trading as its feed reported it
+    (SPEC 1.2, halt censoring): replay, `why`, the zoo, calibration and features censor shadows there."""
+
+    instrument_id: int
+    ts_start: int
+    #: The message that resumed trading; the end of the input's session day when trading did not resume.
+    ts_end: int
+    #: Feed state that opened the span, `<source>_<message type>:<state>` (e.g. `itch_H:P`, `iex_O:O`).
+    state: str
+    #: Feed reason code (ITCH `Reason`, e.g. `LUDP`); empty when the feed gives none.
+    reason: str
+
+
 class DataQuality(QtDoc):
     """Data-quality counters and verdict (SPEC 5.1.5)."""
 
@@ -209,9 +223,22 @@ class DataQuality(QtDoc):
     hidden_prints: int
     off_price_executions: int
     feed_gaps: list[FeedGap]
+    #: 1.2: spans in which an instrument was not in continuous trading (venue state, never part of the verdict);
+    #: omitted when empty.
+    trading_halts: list[TradingHaltSpan] = Field(default_factory=list)
     source_specific: dict[str, int]
     verdict: Literal["clean", "warnings", "unusable"]
     reasons: list[str]
+
+    @model_serializer(mode="wrap")
+    def _omit_empty_halts(self, handler: SerializerFunctionWrapHandler):
+        """As the engine writes it: `trading_halts` is left out when empty, so a document without halts dumps the
+        same keys as before schema 1.2 and as `data_quality.json` on disk. No return annotation: pydantic then keeps
+        the model's own schema in serialization mode (the HTTP API's OpenAPI document), not a generic object."""
+        out = handler(self)
+        if not out.get("trading_halts"):
+            out.pop("trading_halts", None)
+        return out
 
 
 class IngestSummary(QtDoc):

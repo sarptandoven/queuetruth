@@ -139,12 +139,11 @@ def assign_strata(predictions: pa.Table) -> pa.Table:
     for name in ("queue_decile", "liquidity_bucket"):
         if C.has(t, name):
             t = t.drop_columns([name])
-    sid = C.strings(t, "shadow_id")
-    if sid.size == 0:
+    if t.num_rows == 0:
         return t.append_column("queue_decile", pa.array([], pa.uint8())).append_column(
             "liquidity_bucket", pa.array([], pa.uint8())
         )
-    _, first, inv = np.unique(sid, return_index=True, return_inverse=True)
+    _, first, inv = C.unique_strings(t, "shadow_id")
     inst, _ = C.ints(t, "instrument_id")
     date, _ = C.ints(t, "session_date")
     qa, qav = C.ints(t, "queue_ahead_at_live")
@@ -241,8 +240,11 @@ def common_population(predictions: pa.Table) -> pa.Table:
     ids = aborted_shadows(predictions)
     if not ids:
         return without_aborted(predictions)
-    keep = ~np.isin(C.strings(predictions, "shadow_id"), np.array(sorted(ids), dtype=object))
-    return without_aborted(predictions.filter(pa.array(keep)))
+    sid = predictions.column("shadow_id")
+    if pa.types.is_dictionary(sid.type):
+        sid = sid.cast(pa.utf8())
+    keep = pc.invert(pc.fill_null(pc.is_in(sid, value_set=pa.array(sorted(ids), pa.utf8())), False))
+    return without_aborted(predictions.filter(keep))
 
 
 def leaderboard_population(predictions: pa.Table, planned_life: pa.Table, h_max_ns: int) -> int:
@@ -266,7 +268,10 @@ def without_aborted(predictions: pa.Table) -> pa.Table:
     event at or before the row's deadline) is left out of every metric."""
     if "status" not in predictions.column_names:
         return predictions
-    return predictions.filter(pc.is_null(predictions.column("status")))
+    status = predictions.column("status")
+    if status.null_count == len(status):
+        return predictions  # nothing aborted: the filter would copy every row to keep them all
+    return predictions.filter(pc.is_null(status))
 
 
 def evaluate_zoo(

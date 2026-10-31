@@ -13,7 +13,7 @@ PYTHON_BIN ?= /opt/homebrew/bin/python3.13
 VENV_PY := $(ROOT)/.venv/bin/python
 RUN := uv run --frozen --no-sync
 CARGO := cargo
-PY_DIRS := $(wildcard python service scripts tests benches tools integrations)
+PY_DIRS := $(wildcard python service scripts tests benches tools integrations) actions
 # Test directories outside python/ and service/ (also in pyproject testpaths). Their optional dependencies
 # (the hftbacktest venvs, queuetruth._core, real data) skip with a reason when absent.
 EXTRA_TEST_DIRS := $(wildcard tools/livefill/tests scripts/nightly/tests scripts/scale/tests \

@@ -81,7 +81,14 @@ from queuetruth.schemas.specs import FixOptions, LiveImportSpec
 #: Venue name -> importer `(input paths, ImportOptions) -> ImportResult` (the nine `LiveImportSpec` venues).
 IMPORTERS: dict[str, Callable[..., Any]] = dict(VENUE_IMPORTERS)
 #: `LiveImportSpec.venue` values of the simulator importers (1.1, SPEC 3.11 #13) -> `import_sim` kind.
-SIM_VENUES: dict[str, str] = {"sim_hftbacktest": "hftbacktest", "sim_nautilus": "nautilus"}
+SIM_VENUES: dict[str, str] = {
+    "sim_hftbacktest": "hftbacktest",
+    "sim_nautilus": "nautilus",
+    "sim_freqtrade": "freqtrade",
+    "sim_hummingbot": "hummingbot",
+}
+#: Trading-bot venues of the live arm (`queuetruth.live.importers.BOT_IMPORTERS`): the log venue is the exchange.
+BOT_VENUES = frozenset({"freqtrade", "hummingbot"})
 #: Venues whose importer reads `tz` (IBKR Flex account times; FIX log times captured by `fix.local_ts_regex`).
 TZ_VENUES = frozenset({"ibkr_flex", "fix44"})
 
@@ -326,6 +333,8 @@ def import_venue(spec: LiveImportSpec | dict[str, Any], *, tz: str | None = None
             instrument_map=_paths([s.instrument_map])[0] if s.instrument_map is not None else None,
             append=s.append,
         )
+    if s.venue in BOT_VENUES:
+        return import_bot(s, tz=tz_eff)
     if fix_set and s.venue != "fix44":
         raise QtError("QT-CONFIG-001", f"fix: FIX options apply to venue fix44 only, not {s.venue}")
     if tz_eff and s.venue not in TZ_VENUES:
@@ -396,6 +405,34 @@ def import_quickfix(
         extra["tz"] = tz
     res = IMPORTERS["fix44"](paths, ImportOptions(account=account, imap=imap, extra=extra))
     return _finish_import(res.venue, res, paths, out, append=append)
+
+
+def import_bot(spec: LiveImportSpec, *, tz: str | None = None, **options: Any) -> LiveImportSummary:
+    """A trading bot's live (or dry-run) run -> canonical live-log directory `spec.out` (`freqtrade`: trades database
+    and bot logs; `hummingbot`: database or trades CSV). The log venue is the exchange the bot traded on; a dry-run
+    or paper run is marked `validation_status = simulated`. `options` are the importer's (`dry_run`, `venue`, `tif`,
+    `log_tz`, `timeframe`, `price_exp`, `size_exp`, ...; docs/how-to/reconcile-freqtrade-hummingbot.md); bot log
+    times take `log_tz`, not `tz`."""
+    if spec.venue not in BOT_VENUES:
+        raise QtError("QT-CONFIG-001", f"venue {spec.venue!r} is not a trading bot ({sorted(BOT_VENUES)})")
+    if not spec.out:
+        raise QtError("QT-CONFIG-001", "out: an output directory is required")
+    if tz:
+        raise QtError("QT-CONFIG-001", f"tz: bot log times take the importer option log_tz (e.g. log_tz={tz})")
+    if spec.fix != FixOptions():
+        raise QtError("QT-CONFIG-001", f"fix: FIX options apply to venue fix44 only, not {spec.venue}")
+    if spec.venue == "freqtrade":
+        from queuetruth.live.importers.freqtrade import import_freqtrade_live as run
+    else:
+        from queuetruth.live.importers.hummingbot import import_hummingbot_live as run
+    return run(
+        _paths(list(spec.inputs)),
+        spec.out,
+        account=spec.account,
+        instrument_map=_paths([spec.instrument_map])[0] if spec.instrument_map is not None else None,
+        append=spec.append,
+        **options,
+    )
 
 
 def import_sim(
