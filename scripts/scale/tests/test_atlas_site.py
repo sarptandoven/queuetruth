@@ -81,6 +81,8 @@ def test_nasdaq_site_reads_answer_first_and_is_deterministic(atlas: Path, tmp_pa
     assert page.index("<h2>Tier ALL</h2>") < page.index("<h2>Tier T1_top100</h2>")
     assert "ab" * 32 in page and "cd" * 32 in page and "Data provided for free by IEX" not in page
     assert "<script" not in page and "http://" not in page.replace("https://", "")
+    # the headline is the search and link-preview text
+    assert '<meta property="og:description" content="NautilusTrader&#x27;s touch fill model' in page
     # what a visitor can do next, before the verification section
     assert page.index("<h2>Check your own backtester</h2>") < page.index("<h2>Verify any number</h2>")
     assert "pipx run queuetruth demo --yes" in page and "referee-your-simulator.md" in page
@@ -117,3 +119,51 @@ def test_attribution_matches_the_package_and_options_are_checked(atlas: Path, tm
     assert (
         S.duration(100_000_000) == "100 ms" and S.duration(300 * S1) == "5 min" and S.parse_duration("1min") == 60 * S1
     )
+
+
+def _pnl_row(tier: str, model: str, h: int, bias: float, lo: float, hi: float) -> dict:
+    return {
+        "mode": "faithful", "shadow_pop": "standard", "tier": tier, "model_id": model, "horizon_ns": h, "n": 2900,
+        "n_dates": 2, "n_symbols": 4, "pnl_bias_ticks_value": bias, "pnl_bias_ticks_ci_lo": lo,
+        "pnl_bias_ticks_ci_hi": hi, "pnl_bias_ticks_se": 0.01, "model_pnl_ticks_value": -1.0 + bias,
+        "exact_pnl_ticks_value": -1.0, "pnl_bias_ticks_p_boot": 0.01, "pnl_bias_ticks_p_bh": 0.02,
+    }  # fmt: skip
+
+
+def test_site_shows_the_pnl_error_when_the_atlas_has_it(atlas: Path, tmp_path: Path) -> None:
+    S60 = 60 * S1
+    rows = []
+    for tier in ("ALL", "T1_top100"):
+        rows += [
+            _pnl_row(tier, "nt_prob_touch[mode=faithful;p=1]", S60, 0.25, 0.2, 0.3),
+            _pnl_row(tier, "hbt_power3[mode=faithful;n=2]", S60, -0.4, -0.5, -0.3),
+            _pnl_row(tier, "front_of_queue[mode=faithful]", S60, 1.5, 1.2, 1.8),  # a bound never leads
+            _pnl_row(tier, "hbt_power3[mode=faithful;n=2]", S1, -0.1, -0.2, 0.0),
+        ]
+    pq.write_table(pa.Table.from_pylist(rows), atlas / "pnl_by_tier.parquet")
+    out = tmp_path / "site"
+    r = S.build(atlas, out, horizon="1s")
+    page = (out / "index.html").read_text()
+    assert (
+        "In P&amp;L, hftbacktest's ProbQueue Power3 (hbt_power3[mode=faithful;n=2]) is furthest from the real queue: "
+        "it books 0.400 ticks per order less than the exact replay, marked to the mid 1 min after the fill "
+        "(95% interval -0.500 to -0.300; the exact P&amp;L is -1.000 ticks per order)." in page
+    )
+    assert "<th>P&amp;L, ticks (1 min)</th>" in page and '<td class="under">-0.400<br>' in page
+    assert "(over the 0 of 2 days whose units computed it)" in page  # the fixture manifest has no pnl_days
+    t_all = page.split("<h2>Tier ALL</h2>")[1].split("<h2>")[0]
+    assert '<td class="over">+0.250<br><span class="ci">[+0.200, +0.300]</span></td>' in t_all
+    data = json.loads((out / "data" / "leaderboard.json").read_text())
+    assert data["pnl_horizon_ns"] == S60 and len(data["pnl_rows"]) == r["pnl_rows"] == 6
+    # another markout horizon, and one the atlas does not have
+    S.build(atlas, tmp_path / "s1", horizon="1s", pnl_horizon="1s")
+    assert (
+        "ticks per order less than the exact replay, marked to the mid 1 s"
+        in (tmp_path / "s1" / "index.html").read_text()
+    )
+    with pytest.raises(SystemExit, match="P&L horizon"):
+        S.build(atlas, tmp_path / "x", horizon="1s", pnl_horizon="10s")
+    # without pnl_by_tier the page is what it was
+    (atlas / "pnl_by_tier.parquet").unlink()
+    S.build(atlas, tmp_path / "plain", horizon="1s")
+    assert "P&amp;L" not in (tmp_path / "plain" / "index.html").read_text()

@@ -27,6 +27,14 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   `summary.json` and a shields.io endpoint `badge.json`, and fails the step when a class fails. The runner,
   `actions/referee/run.py`, also works outside GitHub. Guide: [Referee my simulator](docs/how-to/referee-your-simulator.md)
   section 4.
+- **P&L error in the atlas** (ROADMAP W1, the reality gap in money): units compute the `zoo-toxicity` P&L terms of
+  every zoo run (one exact replay with quotes per shadow population, `evaluate_toxicity` per mode) and sum them per
+  symbol-day (`pnl_stats.parquet`, `queuetruth.eval.blocks.pnl_block_stats`); `atlas.py reduce-day` writes
+  `pnl_cells.parquet`, `combine` writes `pnl_by_tier.parquet` (simulated minus exact P&L per order in ticks and bps,
+  the model's and the exact P&L, the grant / deny / timing parts, with the two-way dates x symbols bootstrap), and
+  the site adds a P&L column and a second plain-words sentence on the model furthest from the real queue in P&L.
+  An atlas row equals `zoo-toxicity` on the same shadows (tested against the command). `plan.py --no-pnl` leaves it
+  out and keeps the plan's run id as before. `evaluate_toxicity` returns the per-shadow terms (`PnlTerms`).
 - **Fill-Realism Atlas site** (`scripts/scale/atlas_site.py`, ROADMAP W1): a static site from an `atlas.py combine`
   directory. For each liquidity tier it shows every fill model's fill-rate bias against the exact replay at every
   horizon with its 95% interval, sorted by size, and leads with one plain-words sentence. It also shows the atlas and
@@ -60,6 +68,13 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ### Changed
 
+- **`block_stats` is about 4x faster and needs less than half the memory** (56 s and 4.8 GB above the input to 13 s
+  and 2.0 GB for one zoo run of 61,200 shadows on the real 2026-10-09 IEX day, where it was 60 to 85% of every
+  unit's time and ran units out of memory). Shadow and model ids are hashed by Arrow instead of sorting a Python
+  string per row (`queuetruth.eval._cols.unique_strings`, `unique_ints`), the population filter copies only the
+  columns read, and the cell keys are coded one column at a time. Outputs are byte-identical (checked on that unit;
+  `python/tests/eval/test_cols_unique.py` checks the helpers against `np.unique`). `common_population` and
+  `evaluate_toxicity` use the same helpers.
 - **`queuetruth zoo` leads with the reality gap**: the view's second line names the closest and the furthest model
   from the exact replay at the sort horizon (`reality gap at 60 s: from +0.1 pp (...) to +13.3 pp (...)`).
 - README rewritten to fit one screen: the one-command demo first, the findings, a "pick your path" table and the

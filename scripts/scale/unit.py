@@ -17,16 +17,20 @@ and seed. The unit:
    raises is recorded as incomplete, with the exception type, and the unit still completes);
 3. per population draws the shadows with `allocation: per_partition` and the unit's `partition_quotas` (keyed by
    locate), so the shadows of a symbol-day are the same in whichever unit it runs (`crates/replay/src/sample.rs`);
-4. per population and mode runs the native zoo (no per-unit bootstrap: the evaluation happens once, in the
-   aggregator) and reduces its predictions with `queuetruth.eval.blocks.block_stats` (cell sums per model,
-   population, stratum, horizon, symbol-day and `block_minutes` block, 0 = whole day), plus a deterministic 1%
-   shadow sample of the predictions for audits (`stable_seed(seed, ["audit_sample", shadow_id]) mod 10000 <
-   frac x 10000`);
-5. writes `block_stats.parquet`, `shadows.parquet`, `exact.parquet`, `predictions_sample.parquet` and
-   `shard_manifest.json`. The manifest's `leaf` (unit spec hash, input hashes, shadow-file hashes, zoo run ids,
-   content digests of the outputs, exactness and zoo-abort counts) is what the run's Merkle root covers; `build`,
-   `telemetry` (records, shadows, CPU s, wall s, peak RSS per step: the planner's cost model input) and `timings`
-   are recorded next to it and not hashed.
+4. per population and mode runs the native zoo (no per-unit bootstrap: the evaluation happens once, in the aggregator)
+   and reduces its predictions with `queuetruth.eval.blocks.block_stats` (cell sums per model, population, stratum,
+   horizon, symbol-day and `block_minutes` block, 0 = whole day), plus a deterministic 1% shadow sample of the
+   predictions for audits (`stable_seed(seed, ["audit_sample", shadow_id]) mod 10000 < frac x 10000`). With
+   `pnl_horizons_ns` in the spec, per population one exact replay of its shadows with quotes and trades (`bbo: change`,
+   as `zoo-toxicity` replays) and per mode `queuetruth.eval.toxicity.evaluate_toxicity` over the zoo's predictions and
+   fill rows (fill window `h_max_ns`, markouts at `pnl_horizons_ns`), its per-shadow PnL terms summed with
+   `blocks.pnl_block_stats`; leaf `pnl` holds per population and mode the evaluated shadows, the exclusions and
+   warnings, or the error when the step raised (the unit still completes);
+5. writes `block_stats.parquet`, `shadows.parquet`, `exact.parquet`, `predictions_sample.parquet` (and
+   `pnl_stats.parquet` with `pnl_horizons_ns`) and `shard_manifest.json`. The manifest's `leaf` (unit spec hash, input
+   hashes, shadow-file hashes, zoo run ids, content digests of the outputs, exactness and zoo-abort counts) is what the
+   run's Merkle root covers; `build`, `telemetry` (records, shadows, CPU s, wall s, peak RSS per step: the planner's
+   cost model input) and `timings` are recorded next to it and not hashed.
 
 Everything else (the dataset, shadow files, zoo outputs) lives in a temporary work directory that is deleted.
 """
@@ -79,6 +83,15 @@ STAT_KEYS = [
     "session_date",
     "block",
 ]
+PNL_STAT_KEYS = ["mode", "shadow_pop", "model_id", "horizon_ns", "symbol", "session_date", "block"]
+#: sort and content-digest keys of every shard output
+OUTPUT_KEYS = {
+    "block_stats": STAT_KEYS,
+    "shadows": ["mode", "shadow_pop", "symbol", "session_date", "block"],
+    "exact": ["mode", "shadow_pop", "model_id", "horizon_ns", "symbol", "session_date"],
+    "predictions_sample": ["mode", "shadow_pop", "model_id", "shadow_id", "horizon_ns"],
+    "pnl_stats": PNL_STAT_KEYS,
+}
 
 
 class Telemetry:
@@ -159,6 +172,7 @@ def run_unit(unit: dict[str, Any], split: Path, out: Path, threads: int = 1, wor
     import queuetruth as qt
     from queuetruth.api import _planned_life
     from queuetruth.eval import blocks as B
+    from queuetruth.eval import toxicity as TX
 
     if unit.get("schema") != UNIT_SCHEMA:
         raise ValueError(f"not a {UNIT_SCHEMA} document")
@@ -235,8 +249,12 @@ def run_unit(unit: dict[str, Any], split: Path, out: Path, threads: int = 1, wor
         samples: dict[str, dict[str, int]] = {}
         zoo_ids: dict[str, str] = {}
         zoo_flags: dict[str, Any] = {}
+        pnl_stats: list[Any] = []
+        pnl_leaf: dict[str, Any] = {}
+        pnl_h = [int(x) for x in unit.get("pnl_horizons_ns") or []]
         n_shadows = 0
         h_max = int(unit.get("h_max_ns", K.H_MAX_NS))
+        bm = int(unit.get("block_minutes", 30))
         for pop, spec in unit["populations"].items():
             quotas = {
                 str(locates[s]): int(n)
@@ -263,6 +281,34 @@ def run_unit(unit: dict[str, Any], split: Path, out: Path, threads: int = 1, wor
             n_shadows += samp.n
             samples[pop] = {loc2sym.get(int(k), k): int(v) for k, v in samp.by_instrument.items()}
             shadow_files[pop] = K.sha256_file(sh)
+            pnl_in: dict[str, Any] | None = None
+            if pnl_h:
+                # the exact arm's fill rows, trades and quotes of these shadows, once for every mode (zoo-toxicity)
+                t0, c0 = time.perf_counter(), time.process_time()
+                rp = wd / f"pnl-replay-{pop}"
+                try:
+                    qt.replay(
+                        {
+                            "dataset": {"path": str(ds)},
+                            "shadows": {"path": str(sh)},
+                            "out": str(rp),
+                            "seed": unit["seed"],
+                            "bbo": "change",
+                            "trajectory": "none",
+                            "threads": threads,
+                        }
+                    )
+                    pnl_in = {
+                        name: pq.read_table(rp / f"{name}.parquet")
+                        for name in ("shadow_results", "shadow_fills", "trades", "bbo")
+                    }
+                    pnl_in["instruments"] = pq.read_table(ds / "instruments.parquet")
+                except Exception as e:  # the unit's fill statistics stand; reduce-day counts the gap
+                    print(f"{unit['unit_id']}: {pop}: P&L replay failed: {e!r}", file=sys.stderr)
+                    for mode in unit["modes"]:
+                        pnl_leaf[f"{pop}/{mode}"] = {"error": f"{type(e).__name__}: {e}"}
+                shutil.rmtree(rp, ignore_errors=True)
+                tel.step("pnl_replay", t0, c0)
             for mode in unit["modes"]:
                 zout = wd / f"zoo-{pop}-{mode}"
                 t0, c0 = time.perf_counter(), time.process_time()
@@ -284,7 +330,6 @@ def run_unit(unit: dict[str, Any], split: Path, out: Path, threads: int = 1, wor
                 pred = pq.read_table(zout / "zoo_predictions.parquet")
                 planned, _notes = _planned_life(zout)
                 extra = {"mode": mode, "shadow_pop": pop}
-                bm = int(unit.get("block_minutes", 30))
                 bs = B.block_stats(
                     pred, planned, h_max_ns=h_max, symbols=loc2sym, extra=extra, block_ns=bm * 60 * K.S1 or None
                 )
@@ -299,16 +344,50 @@ def run_unit(unit: dict[str, Any], split: Path, out: Path, threads: int = 1, wor
                 zoo_ids[f"{pop}/{mode}"] = summ.run_id
                 zoo_flags[f"{pop}/{mode}"] = _parse_warnings([str(w) for w in summ.warnings])
                 tel.step("block_stats", t0, c0)
+                if pnl_in is not None:
+                    t0, c0 = time.perf_counter(), time.process_time()
+                    try:
+                        res = TX.evaluate_toxicity(
+                            pred,
+                            planned,
+                            pq.read_table(zout / "zoo_fills.parquet"),
+                            pnl_in["shadow_results"],
+                            pnl_in["shadow_fills"],
+                            pnl_in["trades"],
+                            pnl_in["bbo"],
+                            pnl_in["instruments"],
+                            window_ns=h_max,
+                            horizons_ns=pnl_h,
+                            rank_horizon_ns=max(pnl_h),
+                            bootstrap_b=1,
+                            seed=unit["seed"],
+                            last_event_ts=TX._last_event_ts(man),
+                            allow_truth_mismatch=True,
+                        )
+                        pnl_stats.append(
+                            B.pnl_block_stats(res.pnl, symbols=loc2sym, extra=extra, block_ns=bm * 60 * K.S1 or None)
+                        )
+                        pnl_leaf[f"{pop}/{mode}"] = {
+                            "n_shadows": res.doc["n_shadows"],
+                            "n_excluded": res.doc["n_excluded"],
+                            "warnings": res.warnings,
+                        }
+                    except Exception as e:  # as above: the fill statistics stand, the gap is recorded
+                        print(f"{unit['unit_id']}: {pop}/{mode}: P&L failed: {e!r}", file=sys.stderr)
+                        pnl_leaf[f"{pop}/{mode}"] = {"error": f"{type(e).__name__}: {e}"}
+                    tel.step(f"pnl_{mode}", t0, c0)
                 shutil.rmtree(zout, ignore_errors=True)
             sh.unlink(missing_ok=True)
 
         t0, c0 = time.perf_counter(), time.process_time()
         tables = {
-            "block_stats": (B.concat(stats), STAT_KEYS),
-            "shadows": (B.concat(shadows), ["mode", "shadow_pop", "symbol", "session_date", "block"]),
-            "exact": (B.concat(exact), ["mode", "shadow_pop", "model_id", "horizon_ns", "symbol", "session_date"]),
-            "predictions_sample": (B.concat(sample), ["mode", "shadow_pop", "model_id", "shadow_id", "horizon_ns"]),
+            "block_stats": (B.concat(stats), OUTPUT_KEYS["block_stats"]),
+            "shadows": (B.concat(shadows), OUTPUT_KEYS["shadows"]),
+            "exact": (B.concat(exact), OUTPUT_KEYS["exact"]),
+            "predictions_sample": (B.concat(sample), OUTPUT_KEYS["predictions_sample"]),
         }
+        if pnl_h:  # a unit without P&L horizons writes what it always wrote, so its leaf is unchanged
+            tables["pnl_stats"] = (B.concat(pnl_stats), OUTPUT_KEYS["pnl_stats"])
         outputs, files = {}, {}
         for name, (t, keys) in tables.items():
             p = out / f"{name}.parquet"
@@ -333,6 +412,8 @@ def run_unit(unit: dict[str, Any], split: Path, out: Path, threads: int = 1, wor
         }
         if by_symbol is not None:  # only flagged units carry it, so an exact unit's leaf is unchanged
             leaf["exactness_by_symbol"] = by_symbol
+        if pnl_h:
+            leaf["pnl"] = pnl_leaf
         manifest = {
             "schema": SHARD_SCHEMA,
             "schema_version": 1,

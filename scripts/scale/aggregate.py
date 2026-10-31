@@ -45,14 +45,8 @@ ATLAS_SCHEMA = "qt.scale.atlas_manifest"
 def load_shards(plan: dict[str, Any], shards: Path, deep: bool = True) -> tuple[list[dict], list[dict]]:
     """(valid shard manifests in unit-id order, problems)."""
     import pyarrow.parquet as pq
-    from unit import STAT_KEYS
+    from unit import OUTPUT_KEYS as keys
 
-    keys = {
-        "block_stats": STAT_KEYS,
-        "shadows": ["mode", "shadow_pop", "symbol", "session_date", "block"],
-        "exact": ["mode", "shadow_pop", "model_id", "horizon_ns", "symbol", "session_date"],
-        "predictions_sample": ["mode", "shadow_pop", "model_id", "shadow_id", "horizon_ns"],
-    }
     ok, problems = [], []
     for u in sorted(plan["units"], key=lambda x: x["unit_id"]):
         d = shards / u["unit_id"]

@@ -16,11 +16,11 @@ itch_split.py ─▶ split/<date>/ (K buckets) ─▶ plan.py ─▶ units ─�
 |---|---|
 | `itch_split.py` | streams a day (`--date` for a public EMI day with pinned hashes, or `--url`), routes each symbol's messages from its `R` on to bucket `crc32(symbol) mod K` and locate 0 to all buckets; checks the stream against the pinned values; per bucket the file and content sha256 and per symbol `[locate, messages, executions]` |
 | `iex_split.py` | the same for an IEX DEEP+ day (`--input` capture or `--url`, gzip or raw, pcap or pcapng): every symbol's messages to bucket `crc32(symbol) mod K`, System Events to all buckets, each bucket renumbered per (channel, session) with the source's gaps carried, so it is byte-identical to the `IexCutFilter` subset of its symbols; the manifest names the unit ingest spec (`iex_deep_plus`, venue `iex`), per symbol `[instrument id, messages, executions]`, test securities and the Trading Status spans |
-| `plan.py` | universe, exclusions with reasons (Nasdaq test symbols), per-symbol shadow quotas (`scale`, `fixed`, `breadth`), cost model, first-fit-decreasing units within a bucket, `run_id` |
-| `unit.py` | one unit: bucket sha256 check, ingest of its symbols, replay exactness checks, `per_partition` shadow sample, native zoo per population and mode, `block_stats`, 1% audit sample of predictions, `shard_manifest.json` with telemetry |
+| `plan.py` | universe, exclusions with reasons (Nasdaq test symbols), per-symbol shadow quotas (`scale`, `fixed`, `breadth`), cost model, first-fit-decreasing units within a bucket, `run_id`; the units compute the P&L error unless `--no-pnl` |
+| `unit.py` | one unit: bucket sha256 check, ingest of its symbols, replay exactness checks, `per_partition` shadow sample, native zoo per population and mode, `block_stats`, the P&L terms of `zoo-toxicity` summed per symbol-day (`pnl_stats`: one exact replay with quotes per population, `evaluate_toxicity` per mode), 1% audit sample of predictions, `shard_manifest.json` with telemetry |
 | `aggregate.py` | verifies every shard (leaf hash, unit spec hash, output content digests), Merkle root, `zoo_errors_by_group`, `leaderboard` (two-way dates x symbols cluster bootstrap, BH), `per_symbol` (day-cluster CI, empirical-Bayes shrinkage, BH), summed exactness |
-| `atlas.py` | multi-day atlas: `reduce-day` streams a day's verified shards into per-symbol-day cells and per-tier strata with the day's Merkle root; `combine` builds tier leaderboards (two-way dates x symbols bootstrap, BH), per-symbol cross-day estimates (day bootstrap, shrinkage toward the tier, BH), tier x stratum maps, and the root over the day roots |
-| `atlas_site.py` | the public site from a `combine` directory: per tier, every fill model's bias against the exact replay at every horizon with its interval, the plain-words headline, the atlas and day Merkle roots with the verify command, `data/leaderboard.json`; static, no script, byte-identical for the same inputs; `--source iex` adds IEX's attribution to every page |
+| `atlas.py` | multi-day atlas: `reduce-day` streams a day's verified shards into per-symbol-day cells and per-tier strata with the day's Merkle root; `combine` builds tier leaderboards (two-way dates x symbols bootstrap, BH), per-symbol cross-day estimates (day bootstrap, shrinkage toward the tier, BH), tier x stratum maps, the P&L error by tier (`pnl_by_tier`, the same bootstrap) when the days have it, and the root over the day roots |
+| `atlas_site.py` | the public site from a `combine` directory: per tier, every fill model's bias against the exact replay at every horizon with its interval, its P&L error in ticks per order (`--pnl-horizon`, default 60 s), the plain-words headlines, the atlas and day Merkle roots with the verify command, `data/leaderboard.json`; static, no script, byte-identical for the same inputs; `--source iex` adds IEX's attribution to every page |
 | `verify_unit.py` | re-runs one unit and checks its leaf against the published root (a run's or a day's manifest) |
 | `symbol_exactness.py` | per-symbol exactness: when a unit's replay checks flag anything, replays each symbol alone (one-partition dataset views) and checks that the per-symbol counters add up to the unit's |
 | `itch_ref.py` | an independent Python reading of ITCH 5.0: rebuilds the displayed book of chosen symbols, counts crossed events and price-priority violations as the engine does, and keeps the trading-state timeline (`H`, `K`, `J`, `h`), `Q` crosses and crossed episodes that explain them |
@@ -55,6 +55,15 @@ asset `day-<YYYY-MM-DD>.tar.gz` of the `atlas-days` release, combines the newest
 --flag-policy exclude` and deploys `atlas_site.py`'s site with GitHub Pages. A day already in the release is not run
 again (a manual run can force it, or pick a date). A maintainer turns Pages on once: Settings > Pages > Source:
 GitHub Actions.
+
+**P&L error.** Fill rates say how often a simulator is wrong; the P&L error says what that is worth. A unit replays
+each population's shadows exactly once more with quotes and trades (`bbo: change`, as `zoo-toxicity` does) and runs
+`queuetruth.eval.toxicity.evaluate_toxicity` on every zoo run: per model, simulated minus exact P&L per order placed,
+each first fill marked to the mid 100 ms, 1 s, 10 s and 60 s later (the `zoo-toxicity` population: no planned cancel
+and an administrative end after the 300 s fill window). The per-shadow terms are summed per symbol-day
+(`blocks.pnl_block_stats`), so an atlas row is exactly `zoo-toxicity`'s number over the same shadows
+(`python/tests/scale/test_scale_pipeline.py` checks one unit against the command). On the real 2026-10-09 IEX day the
+step took about as long as `block_stats` for the same unit.
 
 ## Why splitting does not change the numbers
 

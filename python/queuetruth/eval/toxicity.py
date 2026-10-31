@@ -43,15 +43,16 @@ an empty side, before the first row or when `t` is past the instrument-day's las
 before `t` (no end check). `mo_ticks = d (M(t+h) - P) / tick`, `mo_bps = d (M(t+h) - P) / |P| 1e4`, `mm_ticks =
 d (M(t+h) - M(t-)) / tick`, `mm_bps = d (M(t+h) - M(t-)) / M(t-) 1e4`. Prices are differenced as integers first.
 
-Per-shadow PnL decomposition, model `m`, horizon `h`: `mo^m_s`, `mo^e_s` = `mo_ticks` of the first fill row
-(earliest `ts_event`, then `fill_seq`) of shadow `s` in the model and the exact arm, unit quantity; the `n` shadows
-whose first-fill markouts are defined in every arm that filled them. Per shadow of those `n`:
-`grant = sum_phantom mo^m / n` (PnL of the fills the model wrongly grants), `deny = -sum_missed mo^e / n` (minus the
-PnL of the fills it wrongly denies), `timing = sum_confirmed (mo^m - mo^e) / n`, `bias = grant + timing + deny =
-model_pnl - exact_pnl` with `model_pnl = sum_{model filled} mo^m / n`, `exact_pnl = sum_{exact filled} mo^e / n`.
-Positive = the model's simulated PnL is too high. The same in bps (`*_bps`). Status means: `phantom_mo_ticks` =
-mean `mo^m` over the phantom shadows of the `n`, likewise `missed` (`mo^e`), `confirmed` (`mo^m`) and
-`confirmed_exact` (`mo^e`), and `*_mm_ticks` the same with `mm_ticks` (shadows with a defined `mm`).
+Per-shadow PnL decomposition, model `m`, horizon `h`: `mo^m_s`, `mo^e_s` = `mo_ticks` of the first fill row (earliest
+`ts_event`, then `fill_seq`) of shadow `s` in the model and the exact arm, unit quantity; the `n` shadows whose
+first-fill markouts are defined in every arm that filled them. Per shadow of those `n`: `grant = sum_phantom mo^m / n`
+(PnL of the fills the model wrongly grants), `deny = -sum_missed mo^e / n` (minus the PnL of the fills it wrongly
+denies), `timing = sum_confirmed (mo^m - mo^e) / n`, `bias = grant + timing + deny = model_pnl - exact_pnl` with
+`model_pnl = sum_{model filled} mo^m / n`, `exact_pnl = sum_{exact filled} mo^e / n`. Positive = the model's simulated
+PnL is too high. The same in bps (`*_bps`). `evaluate_toxicity` also returns these per-shadow terms (`PnlTerms`), which
+sharded runs sum (`queuetruth.eval.blocks.pnl_block_stats`, the W1 atlas). Status means: `phantom_mo_ticks` = mean
+`mo^m` over the phantom shadows of the `n`, likewise `missed` (`mo^e`), `confirmed` (`mo^m`) and `confirmed_exact`
+(`mo^e`), and `*_mm_ticks` the same with `mm_ticks` (shadows with a defined `mm`).
 
 Fill-type table (`by_type`): per arm (`exact`, then each model), status (exact: null; model rows: `confirmed` /
 `phantom`; `missed`: the exact rows of the model's missed shadows) and mechanism (each present one, then `all`), the
@@ -113,6 +114,21 @@ MODEL_MECHANISM = {
     "touch_draw": "touch",
 }
 _HIDDEN_ELIGIBLE = ("queue_depleted", "trade_through")
+#: prediction columns `evaluate_toxicity` reads (with `status` for the population filter)
+_PRED_READ = (
+    "model_id",
+    "shadow_id",
+    "qty",
+    "horizon_ns",
+    "p_fill",
+    "model_ts_first_fill",
+    "truth_filled",
+    "truth_ts_first_fill",
+    "instrument_id",
+    "session_date",
+    "ts_live",
+    "status",
+)
 _MEASURES = ("mo_ticks", "mo_bps", "mm_ticks", "mm_bps")
 _NONE_TS = np.iinfo(np.int64).max
 
@@ -484,15 +500,48 @@ class _Boot:
 # ---- evaluation --------------------------------------------------------------------------------------------------
 
 
+#: per-shadow PnL terms of `PnlTerms.values`, in ticks unless named `_bps` (module docstring, "Per-shadow PnL")
+PNL_TERMS = (
+    "grant_ticks",
+    "deny_ticks",
+    "timing_ticks",
+    "model_pnl_ticks",
+    "exact_pnl_ticks",
+    "bias_ticks",
+    "bias_bps",
+)
+
+
+@dataclass
+class PnlTerms:
+    """The per-shadow numerators and denominators behind every model's PnL statistics, for summing across runs
+    (`queuetruth.eval.blocks.pnl_block_stats`): shadow arrays over the population (`pop`), and per term an array of
+    shape (models, horizons, shadows) that is 0 where the shadow does not count. `ok` (ticks) and `ok_bps` (bps,
+    `bias_bps` only) say which shadows count; the model's statistic at a horizon is `sum(term) / sum(ok)` over the
+    population, the `value` of the same field in `doc["models"][i]["horizons"]`."""
+
+    models: list[str]
+    horizons_ns: list[int]
+    instrument_id: np.ndarray
+    session_date: np.ndarray
+    ts_live: np.ndarray
+    pop: np.ndarray
+    ok: np.ndarray
+    ok_bps: np.ndarray
+    values: dict[str, np.ndarray]
+
+
 @dataclass
 class ToxicityResult:
-    """Output of `evaluate_toxicity`: the `qt.zoo_toxicity` body (without run_id, spec, files) and the tables."""
+    """Output of `evaluate_toxicity`: the `qt.zoo_toxicity` body (without run_id, spec, files), the tables, and the
+    per-shadow PnL terms (not written by `zoo-toxicity`)."""
 
     doc: dict[str, Any]
     fills: pa.Table
     markouts: pa.Table
     shadows: pa.Table
     warnings: list[str] = field(default_factory=list)
+    pnl: PnlTerms | None = None
 
 
 _ROW_COLS = ("arm", "sidx", "fill_seq", "ts", "px", "px_ok", "qty", "liquidity", "mechanism", "status", "reason")
@@ -594,7 +643,8 @@ def evaluate_toxicity(
     C.require(shadow_results, ["shadow_id", "instrument_id", "side", "price"], "shadow_results")
 
     n_hbt = len(aborted_shadows(predictions))
-    t = common_population(predictions)
+    # only the columns read below: the population filter then copies part of the table
+    t = common_population(predictions.select([c for c in _PRED_READ if c in predictions.column_names]))
     model = C.strings(t, "model_id")
     sid = C.strings(t, "shadow_id")
     h, _ = C.ints(t, "horizon_ns")
@@ -838,10 +888,16 @@ def evaluate_toxicity(
 
     model_docs = []
     rank_reps: list[dict[str, np.ndarray]] = []
-    for mname in models:
+    shape = (len(models), len(hs), n_sh)
+    pnl = PnlTerms(
+        models=list(models), horizons_ns=list(hs), instrument_id=iid, session_date=date, ts_live=live, pop=pop.copy(),
+        ok=np.zeros(shape, dtype=bool), ok_bps=np.zeros(shape, dtype=bool),
+        values={k: np.zeros(shape) for k in PNL_TERMS},
+    )  # fmt: skip
+    for i, mname in enumerate(models):
         d, reps = _model_doc(
             mname, model_filled, status, inconsistent, no_markout, exact_filled, pop, first_row, mk, hs, block, boot,
-            int(rank_horizon_ns),
+            int(rank_horizon_ns), (pnl, i),
         )  # fmt: skip
         model_docs.append(d)
         rank_reps.append(reps)
@@ -896,7 +952,9 @@ def evaluate_toxicity(
     shadows_t = _shadows_table(models, status, pop, ids, iid, date, live, first_row, R)
     seen: set[str] = set()
     uniq_warnings = [w for w in warnings if not (w in seen or seen.add(w))]
-    return ToxicityResult(doc=doc, fills=fills_t, markouts=markouts_t, shadows=shadows_t, warnings=uniq_warnings)
+    return ToxicityResult(
+        doc=doc, fills=fills_t, markouts=markouts_t, shadows=shadows_t, warnings=uniq_warnings, pnl=pnl
+    )
 
 
 def _row_status(st: np.ndarray) -> np.ndarray:
@@ -933,6 +991,7 @@ def _model_doc(
     block: np.ndarray,
     boot: _Boot,
     rank_hz: int,
+    terms: tuple[PnlTerms, int] | None = None,
 ) -> tuple[dict[str, Any], dict[str, np.ndarray]]:
     st = status[mname]
     mf = model_filled[mname] & pop
@@ -966,6 +1025,15 @@ def _model_doc(
         g_s, g_r = boot.stat(grant, one, block)
         d_s, d_r = boot.stat(deny, one, block)
         b_s, b_r = boot.stat(grant + timing + deny, one, block)
+        if terms is not None:
+            pt, i = terms
+            pt.ok[i, k], pt.ok_bps[i, k] = ok, okb
+            for name, v, m in (
+                ("grant_ticks", grant, ok), ("deny_ticks", deny, ok), ("timing_ticks", timing, ok),
+                ("model_pnl_ticks", z(mo_m, mf), ok), ("exact_pnl_ticks", z(mo_e, ef), ok),
+                ("bias_ticks", grant + timing + deny, ok), ("bias_bps", grant_b + timing_b + deny_b, okb),
+            ):  # fmt: skip
+                pt.values[name][i, k] = np.where(m, v, 0.0)
         if hz == rank_hz:
             reps_out = {"grant_ticks": g_r, "deny_ticks": d_r, "bias_ticks": b_r}
         horizons[str(hz)] = {

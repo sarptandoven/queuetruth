@@ -31,8 +31,8 @@ an issue to argue for one. Ids (`W1`, ...) are referenced from code and scripts.
   statistics. The pipeline (`scripts/scale/`), the site generator (`scripts/scale/atlas_site.py`) and the IEX DEEP+
   splitter (`scripts/scale/iex_split.py`; `local_day.py --source iex --site` runs a day from capture to site) exist,
   and `.github/workflows/atlas.yml` runs each new IEX day and publishes the site over the newest 20 days with
-  GitHub Pages; next are turning Pages on, P&L error next to the fill-rate bias, and the cloud run over the 19 public
-  Nasdaq days.
+  GitHub Pages. The P&L error is computed next to the fill-rate bias (done after 0.2.0). Next are turning Pages on
+  and the cloud run over the 19 public Nasdaq days.
 - **Upstream compatibility dashboard.** `scripts/nightly` made public: every new hftbacktest and NautilusTrader
   release checked against the exact queue within a day.
 - **`referee` as a GitHub Action**: done after 0.2.0 (`actions/referee`); next is getting simulator maintainers to
@@ -41,8 +41,8 @@ an issue to argue for one. Ids (`W1`, ...) are referenced from code and scripts.
   LEAN, VectorBT and Backtrader adapters.
 - **A one-line "reality gap"** in every report: how much a simulator overstates fills and P&L, in plain words, first.
   In fill rates it is there (the `zoo` view's first line, `score`'s RESULT line, the report's answer block, the
-  atlas headline); next is the P&L error (`zoo-toxicity`'s `bias_ticks`) beside it, and the sandbox on the one-pass
-  sessions.
+  atlas headline), and in P&L in the atlas (`pnl_by_tier`, `zoo-toxicity`'s `bias_ticks`; done after 0.2.0). Next:
+  the P&L error in `score` and the report, and the sandbox on the one-pass sessions.
 
 ## Later
 

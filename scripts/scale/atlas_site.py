@@ -2,17 +2,20 @@
 """The Fill-Realism Atlas site (ROADMAP W1): a static, self-contained site from an `atlas.py combine` directory.
 
     uv run --frozen --no-sync python scripts/scale/atlas_site.py --atlas ATLAS_DIR --out SITE_DIR \
-        [--source nasdaq|iex] [--mode faithful] [--population standard] [--horizon 1s] [--per-symbol]
+        [--source nasdaq|iex] [--mode faithful] [--population standard] [--horizon 1s] [--per-symbol] \
+        [--pnl-horizon 60s]
 
-Reads `atlas_manifest.json` and `leaderboard_by_tier.parquet` (and `per_symbol.parquet` with `--per-symbol`) and
-writes:
+Reads `atlas_manifest.json` and `leaderboard_by_tier.parquet` (`pnl_by_tier.parquet` when the atlas has it,
+`per_symbol.parquet` with `--per-symbol`) and writes:
 
 - `index.html`: for each liquidity tier (`ALL` first), every simulator fill model's fill-rate bias against the exact
   replay at every horizon, with its 95% interval from the two-way dates x symbols bootstrap, sorted by the size of
   the bias at `--horizon`; in plain words first ("NautilusTrader's default touch model fills 3.1 pp more orders
-  within 1 s than the real queue"); the flagged share of each row; how to verify every number;
-- `data/leaderboard.json`: the rows shown, for programs; `data/atlas_manifest.json`: the manifest as combined (day
-  roots, atlas root, flag policy, flagged symbol-days);
+  within 1 s than the real queue"); with `pnl_by_tier`, each model's P&L error (simulated minus exact P&L per order,
+  in ticks, marked to the mid `--pnl-horizon` after the first fill) with its interval and a second plain-words
+  sentence on the largest one; the flagged share of each row; how to verify every number;
+- `data/leaderboard.json`: the rows shown (and `pnl_rows`), for programs; `data/atlas_manifest.json`: the manifest
+  as combined (day roots, atlas root, flag policy, flagged symbol-days);
 - `symbols.html` with `--per-symbol`: per-symbol cross-day bias with empirical-Bayes shrinkage.
 
 The page loads nothing from the network and runs no script. Output is byte-identical for the same inputs (no
@@ -106,6 +109,44 @@ def _rows(atlas: Path, mode: str, population: str | None) -> tuple[list[dict[str
     return keep, population
 
 
+def _pnl_rows(atlas: Path, mode: str, population: str) -> list[dict[str, Any]]:
+    """The `pnl_by_tier` rows of (mode, population); none when the atlas has no P&L."""
+    import pyarrow.parquet as pq
+
+    path = atlas / "pnl_by_tier.parquet"
+    if not path.exists():
+        return []
+    rows = pq.read_table(path).to_pylist()
+    return [r for r in rows if r["mode"] == mode and r["shadow_pop"] == population]
+
+
+def ticks(x: float | None) -> str:
+    return "n/a" if x is None or not math.isfinite(x) else f"{x:+.3f}"
+
+
+def pnl_headline(rows: list[dict[str, Any]], horizon: int) -> str | None:
+    """One sentence on the non-bound model whose simulated P&L is furthest from the exact replay's, tier ALL."""
+    cands = [
+        r
+        for r in rows
+        if r["tier"] == "ALL"
+        and r["horizon_ns"] == horizon
+        and describe(r["model_id"])[0] != "bound"
+        and r.get("pnl_bias_ticks_value") is not None
+    ]
+    if not cands:
+        return None
+    r = max(cands, key=lambda r: (abs(r["pnl_bias_ticks_value"]), r["model_id"]))
+    lib, name = describe(r["model_id"])
+    b = r["pnl_bias_ticks_value"]
+    return (
+        f"In P&L, {lib}'s {name} ({r['model_id']}) is furthest from the real queue: it books {abs(b):.3f} ticks per "
+        f"order {'more' if b > 0 else 'less'} than the exact replay, marked to the mid {duration(horizon)} after "
+        f"the fill (95% interval {ticks(r.get('pnl_bias_ticks_ci_lo'))} to {ticks(r.get('pnl_bias_ticks_ci_hi'))}; "
+        f"the exact P&L is {ticks(r.get('exact_pnl_ticks_value'))} ticks per order)."
+    )
+
+
 def _tier_order(tiers: set[str]) -> list[str]:
     return ["ALL", *sorted(t for t in tiers if t != "ALL")] if "ALL" in tiers else sorted(tiers)
 
@@ -156,11 +197,22 @@ pre { background: var(--chip); padding: 12px; border-radius: 6px; overflow-x: au
 """
 
 
-def _page(title: str, body: str, attribution: str) -> str:
+SUMMARY = "How far each backtester's fill model is from the exact replay of the real order queue."
+
+
+def _page(title: str, body: str, attribution: str, description: str = SUMMARY) -> str:
+    """A whole page; `description` is the search and link-preview text (the headline when there is one)."""
+    d = html.escape(description if len(description) <= 300 else description[:297].rstrip() + "...")
+    t = html.escape(title)
+    meta = (
+        f'<meta name="description" content="{d}">\n<meta property="og:type" content="website">\n'
+        f'<meta property="og:title" content="{t}">\n<meta property="og:description" content="{d}">\n'
+        '<meta name="twitter:card" content="summary">\n'
+    )
     return (
         '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
-        f"<title>{html.escape(title)}</title>\n<style>{CSS}</style>\n</head>\n<body>\n<main>\n"
+        f"<title>{t}</title>\n{meta}<style>{CSS}</style>\n</head>\n<body>\n<main>\n"
         f"{body}\n{attribution}\n</main>\n</body>\n</html>\n"
     )
 
@@ -186,8 +238,9 @@ def build(
     population: str | None = None,
     horizon: str = "1s",
     per_symbol: bool = False,
+    pnl_horizon: str = "60s",
 ) -> dict[str, Any]:
-    """Writes the site; returns {pages, rows, atlas_root}."""
+    """Writes the site; returns {pages, rows, pnl_rows, atlas_root}."""
     if source not in ("nasdaq", "iex"):
         raise SystemExit(f"site: source must be nasdaq or iex, got {source!r}")
     manifest = json.loads((atlas / "atlas_manifest.json").read_text(encoding="utf-8"))
@@ -197,6 +250,12 @@ def build(
     if h not in horizons:
         raise SystemExit(f"site: horizon {horizon} not in the atlas ({', '.join(duration(x) for x in horizons)})")
     tiers = _tier_order({r["tier"] for r in rows})
+    pnl = _pnl_rows(atlas, mode, population)
+    ph = parse_duration(pnl_horizon)
+    if pnl and ph not in {r["horizon_ns"] for r in pnl}:
+        have = ", ".join(duration(x) for x in sorted({r["horizon_ns"] for r in pnl}))
+        raise SystemExit(f"site: P&L horizon {pnl_horizon} not in the atlas ({have})")
+    pnl_at = {(r["tier"], r["model_id"]): r for r in pnl if r["horizon_ns"] == ph}
     days = manifest.get("days") or []
     first, last = (days[0]["date"], days[-1]["date"]) if days else ("?", "?")
     attribution = _attribution(source)
@@ -209,15 +268,26 @@ def build(
         f"{manifest.get('symbol_days', 0):,} symbol-days, {manifest.get('distinct_symbols', 0):,} symbols; "
         f"{html.escape(mode)} mode, shadow population {html.escape(population)}.</p>",
     ]
-    line = headline(rows, h)
-    if line:
+    leads = [x for x in (headline(rows, h), pnl_headline(pnl, ph)) if x]
+    for line in leads:
         parts.append(f'<p class="lead">{html.escape(line, quote=False)}</p>')
+    pnl_days = manifest.get("pnl_days") or []
+    some = ""
+    if len(pnl_days) < len(days):
+        some = f" (over the {len(pnl_days)} of {len(days)} days whose units computed it)"
+    pnl_note = (
+        f" <em>P&amp;L</em>: the backtest's P&amp;L minus the exact replay's, per order placed, in ticks, each fill "
+        f"marked to the mid {html.escape(duration(ph))} later; positive: the backtest's P&amp;L is too high{some}."
+        if pnl
+        else ""
+    )
     parts.append(
         "<p>Positive bias: the model fills orders the real queue would not have filled (an optimistic backtest); "
         "negative: it misses fills. Intervals are 95%, from a bootstrap over dates and symbols. Rows are sorted by "
-        f"the size of the bias at {html.escape(duration(h))}. <em>flagged</em> is the share of a row's orders on "
-        "symbol-days whose replay checks raised a flag or that were not in continuous trading.</p>"
+        f"the size of the bias at {html.escape(duration(h))}.{pnl_note} <em>flagged</em> is the share of a row's "
+        "orders on symbol-days whose replay checks raised a flag or that were not in continuous trading.</p>"
     )
+    shown_pnl = []
     shown = []
     for tier in tiers:
         tr = [r for r in rows if r["tier"] == tier]
@@ -249,6 +319,18 @@ def build(
                     f"{pp(r.get('fill_rate_bias_ci_hi'))}]</span></td>"
                 )
                 shown.append({k: r.get(k) for k in sorted(r)})
+            if pnl:
+                pr = pnl_at.get((tier, m))
+                if pr is None or pr.get("pnl_bias_ticks_value") is None:
+                    cells.append("<td>n/a</td>")
+                else:
+                    lo, hi = pr.get("pnl_bias_ticks_ci_lo"), pr.get("pnl_bias_ticks_ci_hi")
+                    cls = "over" if lo is not None and lo > 0 else ("under" if hi is not None and hi < 0 else "")
+                    cells.append(
+                        f'<td class="{cls}">{ticks(pr["pnl_bias_ticks_value"])}<br><span class="ci">'
+                        f"[{ticks(lo)}, {ticks(hi)}]</span></td>"
+                    )
+                    shown_pnl.append({k: pr.get(k) for k in sorted(pr)})
             ref = at.get((m, h)) or {}
             share = ref.get("flagged_share")
             body_rows.append(
@@ -257,10 +339,11 @@ def build(
                 + f"<td>{'' if share is None else f'{100 * share:.1f}%'}</td></tr>"
             )
         n = max((r["n"] for r in tr), default=0)
+        pnl_head = f"<th>P&amp;L, ticks ({html.escape(duration(ph))})</th>" if pnl else ""
         parts.append(
             f'<h2>Tier {html.escape(tier)}</h2><p class="muted">{n:,} orders.</p>'
-            f'<div class="wrap"><table><thead><tr><th>library</th><th>model</th>{head}<th>flagged</th></tr></thead>'
-            f"<tbody>{''.join(body_rows)}</tbody></table></div>"
+            f'<div class="wrap"><table><thead><tr><th>library</th><th>model</th>{head}{pnl_head}<th>flagged</th>'
+            f"</tr></thead><tbody>{''.join(body_rows)}</tbody></table></div>"
         )
     parts.append(
         "<h2>Check your own backtester</h2><ul>"
@@ -298,7 +381,8 @@ def build(
     )
     out.mkdir(parents=True, exist_ok=True)
     (out / "data").mkdir(exist_ok=True)
-    (out / "index.html").write_text(_page("Fill-Realism Atlas", "\n".join(parts), attribution), encoding="utf-8")
+    page = _page("Fill-Realism Atlas", "\n".join(parts), attribution, leads[0] if leads else SUMMARY)
+    (out / "index.html").write_text(page, encoding="utf-8")
     data = {
         "schema": "qt.atlas_site_leaderboard",
         "schema_version": 1,
@@ -308,6 +392,9 @@ def build(
         "population": population,
         "rows": sorted(shown, key=lambda r: (r["tier"], r["model_id"], r["horizon_ns"])),
     }
+    if pnl:
+        data["pnl_horizon_ns"] = ph
+        data["pnl_rows"] = sorted(shown_pnl, key=lambda r: (r["tier"], r["model_id"]))
     if source == "iex":
         data["attribution"] = IEX_ATTRIBUTION
     (out / "data" / "leaderboard.json").write_text(json.dumps(data, indent=1, sort_keys=True) + "\n", encoding="utf-8")
@@ -317,7 +404,7 @@ def build(
     pages = ["index.html"]
     if per_symbol:
         pages.append(_symbols(atlas, out, mode, population, h, attribution))
-    return {"pages": pages, "rows": len(shown), "atlas_root": root}
+    return {"pages": pages, "rows": len(shown), "pnl_rows": len(shown_pnl), "atlas_root": root}
 
 
 def _symbols(atlas: Path, out: Path, mode: str, population: str, h: int, attribution: str) -> str:
@@ -355,6 +442,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--population", help="shadow population of the plan (default standard, else the first)")
     ap.add_argument("--horizon", default="1s", help="sort and headline horizon, e.g. 1s, 100ms, 1min")
     ap.add_argument("--per-symbol", action="store_true", help="also write symbols.html from per_symbol.parquet")
+    ap.add_argument("--pnl-horizon", default="60s", help="markout horizon of the P&L column (atlases with P&L)")
     a = ap.parse_args(argv)
     r = build(
         a.atlas,
@@ -364,6 +452,7 @@ def main(argv: list[str] | None = None) -> int:
         population=a.population,
         horizon=a.horizon,
         per_symbol=a.per_symbol,
+        pnl_horizon=a.pnl_horizon,
     )
     print(json.dumps(r, indent=1))
     return 0

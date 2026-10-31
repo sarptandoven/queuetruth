@@ -321,7 +321,8 @@ def test_two_day_pipeline_reduce_and_combine(tmp_path) -> None:
     day_dirs = []
     for date, seed in (("01022020", 3), ("01032020", 4)):
         src = tmp_path / f"{date}.NASDAQ_ITCH50.gz"
-        write_itch_day(src, SYMS, orders_per_symbol=120, seed=seed)
+        # messages up to 2 s apart: a 20-minute session, so shadows live past the 300 s P&L window
+        write_itch_day(src, SYMS, orders_per_symbol=120, seed=seed, max_step_ns=2 * S1)
         a = argparse.Namespace(
             date=date,
             url=f"file://{src}",
@@ -374,6 +375,70 @@ def test_two_day_pipeline_reduce_and_combine(tmp_path) -> None:
     per = pq.read_table(tmp_path / "atlas" / "per_symbol.parquet").to_pylist()
     assert {r["symbol"] for r in per} == set(SYMS) and all(r["n_days"] == 2 for r in per)
     assert pq.read_table(tmp_path / "atlas" / "maps_by_tier.parquet").num_rows > 0
+
+    # P&L error: every unit computed it, and the atlas rows are the pooled ratios of the day cells
+    assert man["pnl_days"] == ["01022020", "01032020"] and res["pnl_days"] == 2
+    for d in day_dirs:
+        dm = json.loads((d / "day_manifest.json").read_text())
+        assert dm["pnl"]["units_with_pnl"] == dm["units_valid"] and dm["pnl"]["errors"] == []
+    pnl = pq.read_table(tmp_path / "atlas" / "pnl_by_tier.parquet").to_pylist()
+    pcells = pa.concat_tables([pq.read_table(d / "pnl_cells.parquet") for d in day_dirs])
+    assert {r["horizon_ns"] for r in pnl} == set(K.PNL_HORIZONS_NS)
+    for r in (x for x in pnl if x["tier"] == "ALL"):
+        assert r["n_dates"] == 2 and r["n"] > 0
+        sel = pcells.filter(
+            pc.and_(pc.equal(pcells["model_id"], r["model_id"]), pc.equal(pcells["horizon_ns"], r["horizon_ns"]))
+        )
+        n = pc.sum(sel["pnl_n"]).as_py()
+        assert r["pnl_bias_ticks_value"] == pytest.approx(pc.sum(sel["pnl_bias"]).as_py() / n, abs=1e-12)
+        assert r["pnl_bias_ticks_value"] == pytest.approx(
+            r["model_pnl_ticks_value"] - r["exact_pnl_ticks_value"], abs=1e-9
+        )
+        parts = r["pnl_grant_ticks_value"] + r["pnl_deny_ticks_value"] + r["pnl_timing_ticks_value"]
+        assert r["pnl_bias_ticks_value"] == pytest.approx(parts, abs=1e-9)
+
+    # ... and a unit's P&L is what `zoo-toxicity` reports on the unit's own dataset, shadows and zoo run
+    from unit import _zoo_native
+
+    import queuetruth as qt
+    from queuetruth.eval.toxicity import run_zoo_toxicity
+
+    date = "01022020"
+    plan = json.loads((tmp_path / f"plan-{date}.json").read_text())
+    u = plan["units"][0]
+    wd = tmp_path / "tox-check"
+    qt.ingest({"format": "itch", "inputs": [{"path": str(tmp_path / "split" / date / u["bucket"]["file"])}],
+               "out": str(wd / "ds"), "symbols": u["symbols"], **u["ingest"]})  # fmt: skip
+    quotas = {str(u["locates"][s]): n for s, n in u["quotas"]["standard"].items()}
+    spec = u["populations"]["standard"]
+    qt.sample_shadows({"dataset": {"path": str(wd / "ds")}, "out": str(wd / "sh.parquet"), "n": 0, "seed": u["seed"],
+                       "allocation": "per_partition", "partition_quotas": quotas, "placements": spec["placements"],
+                       "qty": spec["qty"]})  # fmt: skip
+    _zoo_native({"dataset": {"path": str(wd / "ds")}, "shadows": {"path": str(wd / "sh.parquet")},
+                 "out": str(wd / "zoo"), "models": u["models"], "mode": "faithful", "threads": 1, "seed": u["seed"],
+                 "horizons_ns": u["horizons_ns"], "h_max_ns": u["h_max_ns"]})  # fmt: skip
+    doc = run_zoo_toxicity({"zoo": {"path": str(wd / "zoo")}, "dataset": {"path": str(wd / "ds")},
+                            "horizons_ns": u["pnl_horizons_ns"], "rank_horizon_ns": max(u["pnl_horizons_ns"]),
+                            "bootstrap_b": 10, "seed": u["seed"]})  # fmt: skip
+    shard = pq.read_table(tmp_path / "shards" / date / u["unit_id"] / "pnl_stats.parquet")
+    checked = 0
+    for mdoc in doc.models:
+        for hz, h in mdoc.horizons.items():
+            sel = shard.filter(
+                pc.and_(pc.equal(shard["model_id"], mdoc.model_id), pc.equal(shard["horizon_ns"], int(hz)))
+            )
+            n = pc.sum(sel["pnl_n"]).as_py() or 0
+            assert n == h.n, (mdoc.model_id, hz)
+            if n:
+                assert pc.sum(sel["pnl_bias"]).as_py() / n == pytest.approx(h.bias_ticks.value, abs=1e-12)
+                checked += 1
+    assert checked > 0
+
+    # a plan without P&L keeps the units (and run id) of before
+    P.main(["--split", str(tmp_path / "split" / date), "--out", str(tmp_path / "nopnl.json"), "--quota-rule", "fixed",
+            "--fixed-n", "30", "--populations", "standard", "--modes", "faithful", "--unit-core-s", "1e9",
+            "--no-pnl"])  # fmt: skip
+    assert all("pnl_horizons_ns" not in x for x in json.loads((tmp_path / "nopnl.json").read_text())["units"])
 
 
 def test_session_hours_and_tiers() -> None:

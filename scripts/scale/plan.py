@@ -152,6 +152,8 @@ def make_plan(a: argparse.Namespace) -> dict[str, Any]:
         "ingest": K.INGEST_DEFAULTS,
         "replay_checks": True,
     }
+    if a.pnl:  # absent without P&L, so such a plan's units and run id are what they were before P&L existed
+        run_spec["pnl_horizons_ns"] = list(K.PNL_HORIZONS_NS)
     sources, universe, exclusions, units = [], [], [], []
     total_cost = 0.0
     for split in a.split:
@@ -281,6 +283,12 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="block of the summed statistics (default 30 with --quota-rule breadth: the zoo's within-day bootstrap "
         "blocks; else 0 = whole symbol-days, evaluated by the cluster bootstrap)",
+    )
+    ap.add_argument(
+        "--no-pnl",
+        dest="pnl",
+        action="store_false",
+        help="leave out the P&L error (units then skip the exact replay with quotes and `evaluate_toxicity`)",
     )
     ap.add_argument("--one-symbol-per-unit", action="store_true")
     ap.add_argument("--exclude", default="", help="symbols to exclude (comma separated)")
