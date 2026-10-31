@@ -362,14 +362,14 @@ pub fn parse(b: &[u8]) -> Result<Message, ParseError> {
         return Err(ParseError::Empty);
     };
     let want = message_len(kind);
-    if let Some(want) = want {
-        if b.len() < want {
-            return Err(ParseError::Short {
-                kind,
-                got: b.len(),
-                want,
-            });
-        }
+    if let Some(want) = want
+        && b.len() < want
+    {
+        return Err(ParseError::Short {
+            kind,
+            got: b.len(),
+            want,
+        });
     }
     let raw_len = b.len();
     let mut pad = [0u8; PAD];

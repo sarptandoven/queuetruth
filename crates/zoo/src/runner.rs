@@ -1104,7 +1104,7 @@ pub fn run_zoo(spec: &ZooSpec) -> QtResult<json::ZooSummary> {
     if spec.write_trajectory || scope != "all" {
         let batch = codec::zoo_trajectory_to_batch(&traj);
         let mut md = batch.schema().metadata().clone();
-        md.insert("qt.zoo_trajectory_scope".into(), scope);
+        md.insert("qt.zoo_trajectory_scope", scope);
         let schema = Arc::new(batch.schema().as_ref().clone().with_metadata(md));
         let batch = RecordBatch::try_new(schema, batch.columns().to_vec())
             .map_err(|e| QtError::Engine(format!("zoo_trajectory: {e}")))?;

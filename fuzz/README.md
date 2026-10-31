@@ -59,7 +59,8 @@ it after each target and removes it on exit; `cargo test` removes each test's di
   the test fails, the inputs move to `regressions/` and the filter goes.
   - `dbn/`: the `dbn` 0.71.0 decoder panics on a prelude announcing 100 to 103 metadata bytes (plain or zstd).
   - `dbn-alloc/`: a 24-byte DBN file announcing 256 MiB of metadata makes the decoder allocate 256 MiB.
-  - `parquet/`: corrupt Parquet metadata panics inside the `arrow-ipc` and `parquet` crates. With
+  - `parquet/`: corrupt Parquet metadata (a negative column chunk range) panics inside the `parquet` crate; the
+    four `arrow-ipc` sites arrow 60 fixed are in `regressions/parquet/`. With
     `QT_FUZZ_KNOWN_DIR=<dir>`, the `parquet` target saves one input per distinct panic site there.
 
 A new finding: `cargo +nightly fuzz tmin <target> <artifact>`, copy the minimized file to `regressions/<target>/`

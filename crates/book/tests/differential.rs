@@ -31,7 +31,7 @@ fn stream(seed: u64, len: usize) -> Vec<MboEvent> {
             1..=20 => b'B',
             _ => b'A',
         };
-        let price = if r.next_u64() % 100 == 0 {
+        let price = if r.next_u64().is_multiple_of(100) {
             UNDEF_PRICE
         } else {
             95 + (r.next_u64() % 11) as i64
@@ -42,10 +42,10 @@ fn stream(seed: u64, len: usize) -> Vec<MboEvent> {
             _ => 1 + r.next_u64() % 40,
         };
         let mut f = 0u8;
-        if r.next_u64() % 2 == 0 {
+        if r.next_u64().is_multiple_of(2) {
             f |= flags::LAST;
         }
-        if r.next_u64() % 20 == 0 {
+        if r.next_u64().is_multiple_of(20) {
             f |= flags::SNAPSHOT;
         }
         out.push(MboEvent {

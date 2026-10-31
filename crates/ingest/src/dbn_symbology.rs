@@ -613,10 +613,10 @@ impl Symbology {
     /// else the latest definition or symbol mapping at or before `day` that names one, else a continuous alias that
     /// resolves to this id alone on `day` (never a parent symbol, even with one child).
     pub fn symbol_at(&self, instrument_id: u32, day: i32) -> Option<&str> {
-        if let Some(v) = self.by_id.get(&instrument_id) {
-            if let Some((_, _, s, _)) = v.iter().rev().find(|(a, b, _, _)| *a <= day && day < *b) {
-                return Some(s);
-            }
+        if let Some(v) = self.by_id.get(&instrument_id)
+            && let Some((_, _, s, _)) = v.iter().rev().find(|(a, b, _, _)| *a <= day && day < *b)
+        {
+            return Some(s);
         }
         let (upto, _) = self.receipts(instrument_id, day);
         if let Some(c) = upto
@@ -682,10 +682,10 @@ impl Symbology {
     /// Instrument id of raw `symbol` on UTC date `day` (raw metadata interval, else the latest definition or symbol
     /// mapping at or before `day`). Aliases are never used: a parent symbol has many ids.
     pub fn id_at(&self, symbol: &str, day: i32) -> Option<u32> {
-        if let Some(v) = self.by_symbol.get(symbol) {
-            if let Some((_, _, id, _)) = v.iter().rev().find(|(a, b, _, _)| *a <= day && day < *b) {
-                return Some(*id);
-            }
+        if let Some(v) = self.by_symbol.get(symbol)
+            && let Some((_, _, id, _)) = v.iter().rev().find(|(a, b, _, _)| *a <= day && day < *b)
+        {
+            return Some(*id);
         }
         let w = self.recs_by_symbol.get(symbol)?;
         let end = day_end(day);

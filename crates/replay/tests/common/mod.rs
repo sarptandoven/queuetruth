@@ -57,10 +57,10 @@ impl Scn {
     pub fn ev(mut self, ts: i64, f: impl FnOnce(&mut Ev<'_>)) -> Self {
         let start = self.recs.len();
         f(&mut Ev { s: &mut self, ts });
-        if self.recs.len() > start {
-            if let Some(last) = self.recs.last_mut() {
-                last.flags |= flags::LAST;
-            }
+        if self.recs.len() > start
+            && let Some(last) = self.recs.last_mut()
+        {
+            last.flags |= flags::LAST;
         }
         self
     }
@@ -201,11 +201,11 @@ impl Market {
     }
 
     fn end_event(&mut self) {
-        if let Some(l) = self.out.last_mut() {
-            if l.flags & flags::LAST == 0 {
-                l.flags |= flags::LAST;
-                self.seq += 1;
-            }
+        if let Some(l) = self.out.last_mut()
+            && l.flags & flags::LAST == 0
+        {
+            l.flags |= flags::LAST;
+            self.seq += 1;
         }
     }
 
@@ -441,13 +441,13 @@ pub fn random_shadows(seed: u64, events: &[MboEvent], n: usize) -> (Vec<ShadowSp
     let mut shadows = Vec::new();
     let mut amends = Vec::new();
     for i in 0..n {
-        let side = if r.next_u64() % 2 == 0 {
+        let side = if r.next_u64().is_multiple_of(2) {
             BookSide::Bid
         } else {
             BookSide::Ask
         };
         let ts_submit = t0 + (r.next_u64() % ((t1 - t0).max(1) as u64)) as i64;
-        let price = if r.next_u64() % 3 == 0 {
+        let price = if r.next_u64().is_multiple_of(3) {
             PriceSpec::Touch {
                 offset_ticks: (r.next_u64() % 4) as i32 - 2,
             }
@@ -457,8 +457,11 @@ pub fn random_shadows(seed: u64, events: &[MboEvent], n: usize) -> (Vec<ShadowSp
         };
         let qty = 1 + r.next_u64() % 60;
         let id = format!("x{i}");
-        let ts_cancel = (r.next_u64() % 3 == 0).then(|| ts_submit + (r.next_u64() % 200_000_000) as i64);
-        if qty > 2 && r.next_u64() % 4 == 0 {
+        let ts_cancel = r
+            .next_u64()
+            .is_multiple_of(3)
+            .then(|| ts_submit + (r.next_u64() % 200_000_000) as i64);
+        if qty > 2 && r.next_u64().is_multiple_of(4) {
             amends.push(ShadowAmend {
                 shadow_id: id.clone(),
                 ts_send: ts_submit + (r.next_u64() % 100_000_000) as i64,

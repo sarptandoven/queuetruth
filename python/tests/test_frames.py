@@ -556,10 +556,10 @@ def test_load_run_from_summary_file(runs: dict[str, Any]) -> None:
 def test_verify_catches_tampering(runs: dict[str, Any], tmp_path: Path) -> None:
     d = copy_run(runs["base"] / "zoo", tmp_path / "zoo")
     entry = next(f for f in runs["zoo"].files if f.name == "zoo_fills.parquet")
-    # Same size, different bytes: only the sha256 can catch it.
+    # Same size, different bytes, same table (one letter of the footer's `created_by`): only the sha256 can catch it.
     p = d / entry.name
     data = bytearray(p.read_bytes())
-    data[len(data) // 2] ^= 0xFF
+    data[data.rindex(b"queuetruth ")] ^= 0x20
     p.write_bytes(bytes(data))
     with pytest.raises(QtError) as e:
         frames.load_run(d, verify=True)

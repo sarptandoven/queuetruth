@@ -21,11 +21,11 @@ pub(crate) struct Framed {
 pub(crate) fn unwrap_line(t: &str, no: u64, err: impl Fn(u64, String) -> QtError) -> QtResult<Framed> {
     let mut v = jsonx::parse(t).map_err(|e| err(no, e))?;
     let recv = v.get("recv_ns").and_then(J::as_i64);
-    if let J::Obj(f) = &mut v {
-        if let Some(i) = f.iter().position(|(k, _)| k == "msg") {
-            let msg = f.swap_remove(i).1;
-            return Ok(Framed { no, recv, msg });
-        }
+    if let J::Obj(f) = &mut v
+        && let Some(i) = f.iter().position(|(k, _)| k == "msg")
+    {
+        let msg = f.swap_remove(i).1;
+        return Ok(Framed { no, recv, msg });
     }
     Ok(Framed { no, recv, msg: v })
 }
@@ -62,10 +62,10 @@ pub(crate) fn rec(
 
 /// Sets `LAST` on the final record of `out` from index `from` on (one venue event = `out[from..]`).
 pub(crate) fn mark_last(out: &mut [MboEvent], from: usize) {
-    if out.len() > from {
-        if let Some(l) = out.last_mut() {
-            l.flags |= flags::LAST;
-        }
+    if out.len() > from
+        && let Some(l) = out.last_mut()
+    {
+        l.flags |= flags::LAST;
     }
 }
 

@@ -589,11 +589,11 @@ impl Conv<'_> {
             self.bump("window_exit_levels");
             let ids = s.levels[si(side)].get(p).cloned().unwrap_or_default();
             for id in ids {
-                if let Some(o) = s.orders.get_mut(&id) {
-                    if o.in_view {
-                        o.in_view = false;
-                        *self.st.entry("window_exits".into()).or_insert(0) += 1;
-                    }
+                if let Some(o) = s.orders.get_mut(&id)
+                    && o.in_view
+                {
+                    o.in_view = false;
+                    *self.st.entry("window_exits".into()).or_insert(0) += 1;
                 }
             }
         }
@@ -700,12 +700,12 @@ impl Conv<'_> {
 
 /// Full conversion (records, trades, counters, resolved instruments, ingest-level quality numbers).
 pub fn convert_full(lines: impl Iterator<Item = QtResult<String>>, cfg: &Config) -> QtResult<L3Output> {
-    if let Some(d) = cfg.depth {
-        if !DEPTHS.contains(&d) {
-            return Err(QtError::Config(format!(
-                "kraken_l3 depth: must be one of 10, 100, 1000 (got {d})"
-            )));
-        }
+    if let Some(d) = cfg.depth
+        && !DEPTHS.contains(&d)
+    {
+        return Err(QtError::Config(format!(
+            "kraken_l3 depth: must be one of 10, 100, 1000 (got {d})"
+        )));
     }
     let mut frames = Vec::new();
     let mut acked: HashMap<String, u32> = HashMap::new();
@@ -722,15 +722,13 @@ pub fn convert_full(lines: impl Iterator<Item = QtResult<String>>, cfg: &Config)
                 .msg
                 .get("result")
                 .filter(|r| r.get("channel").and_then(J::as_str) == Some("level3"))
+                && let (Some(sym), Some(d)) = (r.get("symbol").and_then(J::as_str), r.get("depth").and_then(J::as_u64))
             {
-                if let (Some(sym), Some(d)) = (r.get("symbol").and_then(J::as_str), r.get("depth").and_then(J::as_u64))
-                {
-                    let d = u32::try_from(d)
-                        .ok()
-                        .filter(|d| DEPTHS.contains(d))
-                        .ok_or_else(|| fmt_err(no, format!("subscribe depth {d} is not 10, 100 or 1000")))?;
-                    acked.insert(sym.to_string(), d);
-                }
+                let d = u32::try_from(d)
+                    .ok()
+                    .filter(|d| DEPTHS.contains(d))
+                    .ok_or_else(|| fmt_err(no, format!("subscribe depth {d} is not 10, 100 or 1000")))?;
+                acked.insert(sym.to_string(), d);
             }
             continue;
         }
