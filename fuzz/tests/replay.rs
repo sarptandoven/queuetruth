@@ -141,7 +141,7 @@ fn known_dbn_crashes_still_reproduce() {
 fn known_parquet_crashes_still_reproduce() {
     let _s = Scratch;
     let fs = files(&root().join("known-crashes/parquet"));
-    assert!(fs.len() >= 6, "{} reproducers", fs.len());
+    assert!(!fs.is_empty(), "no reproducers");
     for f in fs {
         let data = std::fs::read(&f).unwrap();
         assert!(
@@ -150,5 +150,19 @@ fn known_parquet_crashes_still_reproduce() {
             f.display()
         );
         qt_fuzz::parquet(&data);
+    }
+}
+
+/// The Parquet decode panics fixed upstream (the four `arrow-ipc` schema sites, by arrow 60): the filtered harness
+/// in `regressions_stay_fixed` would swallow a panic inside `parquet` / `arrow`, so these run unfiltered.
+#[test]
+fn fixed_parquet_crashes_stay_fixed() {
+    let _s = Scratch;
+    let fs = files(&root().join("regressions/parquet"));
+    assert!(fs.len() >= 5, "{} reproducers", fs.len());
+    for f in fs {
+        let data = std::fs::read(&f).unwrap();
+        let r = std::panic::catch_unwind(|| qt_fuzz::parquet_unfiltered(&data));
+        assert!(r.is_ok(), "{} panics again", f.display());
     }
 }

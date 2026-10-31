@@ -32,9 +32,8 @@ queuetruth-calib.workspace = true
 queuetruth-features.workspace = true
 queuetruth-cli.workspace = true
 pyo3.workspace = true
-pyo3-arrow.workspace = true
-arrow-array.workspace = true
-arrow-schema.workspace = true
+arrow-array = { workspace = true, features = ["ffi"] }
+arrow-schema = { workspace = true, features = ["ffi"] }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
