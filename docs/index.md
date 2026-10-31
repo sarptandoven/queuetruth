@@ -37,6 +37,7 @@ Every term is defined in the [Glossary](concepts/glossary.md).
 | If you... | Start here |
 |---|---|
 | want to see the whole workflow on synthetic data in a few minutes | [Getting started](getting-started.md) |
+| want to know how wrong popular backtesters are on a real market day, in fills and in P&L | [The Fill-Realism Atlas](concepts/fill-realism-atlas.md) |
 | have order-level data and want to know how wrong your L2 model is | [The L2 model zoo](concepts/l2-model-zoo.md) |
 | use hftbacktest and want a fitted `n` | [Calibrate my hftbacktest model](how-to/calibrate-hftbacktest.md) |
 | trade an L2-only venue and want a parameter fitted to your own fills | [Calibrate on an L2-only venue](how-to/calibrate-live-l2-venue.md) |

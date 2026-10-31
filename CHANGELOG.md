@@ -35,6 +35,8 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   the site adds a P&L column and a second plain-words sentence on the model furthest from the real queue in P&L.
   An atlas row equals `zoo-toxicity` on the same shadows (tested against the command). `plan.py --no-pnl` leaves it
   out and keeps the plan's run id as before. `evaluate_toxicity` returns the per-shadow terms (`PnlTerms`).
+  [The Fill-Realism Atlas](docs/concepts/fill-realism-atlas.md) explains how to read the site, how a number is
+  made and checked, and its limits; the site links to it and carries a description and link-preview tags.
 - **Fill-Realism Atlas site** (`scripts/scale/atlas_site.py`, ROADMAP W1): a static site from an `atlas.py combine`
   directory. For each liquidity tier it shows every fill model's fill-rate bias against the exact replay at every
   horizon with its 95% interval, sorted by size, and leads with one plain-words sentence. It also shows the atlas and

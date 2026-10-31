@@ -266,7 +266,8 @@ def build(
         f'<p class="muted">How far each backtester\'s fill model is from the exact replay of the real queue: '
         f"{html.escape(venue)}, {len(days)} day(s) from {html.escape(first)} to {html.escape(last)}, "
         f"{manifest.get('symbol_days', 0):,} symbol-days, {manifest.get('distinct_symbols', 0):,} symbols; "
-        f"{html.escape(mode)} mode, shadow population {html.escape(population)}.</p>",
+        f"{html.escape(mode)} mode, shadow population {html.escape(population)} "
+        f'(<a href="{DOCS}/concepts/fill-realism-atlas.md">how to read it, how it is made, its limits</a>).</p>',
     ]
     leads = [x for x in (headline(rows, h), pnl_headline(pnl, ph)) if x]
     for line in leads:
