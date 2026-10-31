@@ -5,14 +5,16 @@
     uv run --frozen --no-sync python scripts/scale/local_day.py --source iex --date 2026-10-09 \
         --input 20261009_IEXTP1_DPLS1.0.pcap.gz --site                    # an IEX DEEP+ day, with the site
 
-The same stages as `modal_app.py::days`, with a local process pool instead of Modal containers, so a day can be
-measured for free: wall time per stage, the units' CPU core-hours (process CPU time, all threads), peak disk used under
-`--out` and the lowest free space seen, failed units, and the day's cost at Modal's prices (units at 2 cores and 6 GiB
-per container, as `modal_app.py` reserves them, from the measured unit wall times; plus the split and reduce stages at
-their reserved resources). Bucket files are deleted after the units unless `--keep-buckets`. Stops (and deletes the
-buckets) when free space falls below `--min-free-gib`. The single-day atlas uses `--flag-policy exclude` unless told
-otherwise (symbol-days whose replay checks flagged or that were not trading in the session are left out; the
-combine stage of `local_day.json` records the policy). Writes `<out>/local_day.json`.
+The same stages as `modal_app.py::days`, with a local process pool instead of Modal containers, so a day can be measured
+for free: wall time per stage, the units' CPU core-hours (process CPU time, all threads), peak disk used under `--out`
+and the lowest free space seen, failed units, and the day's cost at Modal's prices (units at 2 cores and 6 GiB per
+container, as `modal_app.py` reserves them, from the measured unit wall times; plus the split and reduce stages at their
+reserved resources). `--workers` is lowered to what the available memory holds at `--unit-mem-gib` (6 GiB, as
+`modal_app.py` reserves) per unit: a worker killed out of memory stops the run, and a rerun keeps the finished units.
+Bucket files are deleted after the units unless `--keep-buckets`. Stops (and deletes the buckets) when free space falls
+below `--min-free-gib`. The single-day atlas uses `--flag-policy exclude` unless told otherwise (symbol-days whose
+replay checks flagged or that were not trading in the session are left out; the combine stage of `local_day.json`
+records the policy). Writes `<out>/local_day.json`.
 
 `--source iex` splits an IEX DEEP+ capture with `iex_split.py` (`--input FILE` or `--url URL`; `--date` is the
 session date YYYY-MM-DD, the day's directory is its MMDDYYYY form as for ITCH). `--site` builds the Fill-Realism
@@ -23,12 +25,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
 import threading
 import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
 from typing import Any
 
@@ -68,6 +72,32 @@ class DiskWatch(threading.Thread):
             self.stop.wait(10)
 
 
+def avail_mem_gib() -> float | None:
+    """Memory this machine can give the units: MemAvailable (else physical memory), capped by a cgroup v2 limit."""
+    try:
+        with open("/proc/meminfo") as f:
+            avail = next(int(ln.split()[1]) * 1024 for ln in f if ln.startswith("MemAvailable:"))
+    except (OSError, StopIteration, ValueError):
+        try:
+            avail = os.sysconf("SC_PHYS_PAGES") * os.sysconf("SC_PAGE_SIZE")
+        except (AttributeError, OSError, ValueError):
+            return None
+    try:
+        lim = Path("/sys/fs/cgroup/memory.max").read_text().strip()
+        if lim != "max":
+            avail = min(avail, int(lim))
+    except (OSError, ValueError):
+        pass
+    return avail / 2**30
+
+
+def cap_workers(workers: int, unit_mem_gib: float, avail_gib: float | None) -> int:
+    """At most as many workers as units of `unit_mem_gib` fit in `avail_gib` (at least one); unchanged if unknown."""
+    if avail_gib is None or unit_mem_gib <= 0:
+        return workers
+    return max(1, min(workers, int(avail_gib // unit_mem_gib)))
+
+
 def _unit(args: tuple[dict, str, str, int]) -> dict[str, Any]:
     from unit import run_unit
 
@@ -100,6 +130,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--buckets", type=int, default=32)
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--threads", type=int, default=2)
+    ap.add_argument(
+        "--unit-mem-gib",
+        type=float,
+        default=UNIT_MEM_GIB,
+        help="memory one unit may need (modal_app reserves %(default)s GiB): --workers is lowered so that the workers "
+        "fit in the available memory; 0 turns the cap off",
+    )
     ap.add_argument("--unit-core-s", type=float, default=300.0)
     ap.add_argument("--min-free-gib", type=float, default=10.0)
     ap.add_argument("--keep-buckets", action="store_true")
@@ -196,10 +233,25 @@ def main(argv: list[str] | None = None) -> int:
                     continue
             todo.append((u, str(split_dir), str(shards / u["unit_id"]), a.threads))
         results = []
-        with ProcessPoolExecutor(max_workers=a.workers) as ex:
+        mem = avail_mem_gib()
+        workers = cap_workers(a.workers, a.unit_mem_gib, mem)
+        rep["workers"] = {"asked": a.workers, "used": workers, "avail_mem_gib": None if mem is None else round(mem, 1)}
+        if workers < a.workers:
+            print(
+                f"  {workers} workers, not {a.workers}: {mem:.1f} GiB available, {a.unit_mem_gib} GiB per unit",
+                file=sys.stderr,
+                flush=True,
+            )
+        with ProcessPoolExecutor(max_workers=workers) as ex:
             futs = [ex.submit(_unit, t) for t in todo]
             for i, f in enumerate(as_completed(futs), 1):
-                r = f.result()
+                try:
+                    r = f.result()
+                except BrokenProcessPool:
+                    raise SystemExit(
+                        "a unit worker was killed (out of memory?); finished units are kept, so rerun with fewer "
+                        "--workers or a larger --unit-mem-gib to go on"
+                    ) from None
                 results.append(r)
                 print(
                     f"  [{i}/{len(todo)}] {r['unit_id']} {r['wall_s']:.0f} s"

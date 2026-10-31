@@ -48,6 +48,9 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   `local_day.py --source iex --site` runs a whole IEX day from capture to atlas site. Tested end to end on a
   synthetic DEEP+ day: bucket = filter subset, bucket ingest = subset ingest, the manifest's ids = the ingest's,
   and split, plan, units, reduce, combine and the site.
+  A URL day survives dropped connections (the stream resumes with HTTP ranges), and `local_day.py` runs only as
+  many units at once as the machine's memory holds at 6 GiB each (`--unit-mem-gib`): three units on a 16 GB
+  machine ran it out of memory on the real 2026-10-09 day.
 - `.github/workflows/fuzz.yml`: the fuzz crate's seed, regression and known-crash tests on every change to a parser,
   and a weekly libFuzzer campaign over every target (`fuzz/run.sh`, crashes uploaded as artifacts).
 - `.github/workflows/release-nautilus.yml`: releases the `queuetruth-nautilus` plugin to PyPI on a

@@ -104,6 +104,7 @@ jobs:
           uv venv --python "${{ steps.py.outputs.python-path }}" .venv
           make sync
           make develop
+      # local_day.py lowers --workers to what memory holds at 6 GiB a unit: two on a 16 GB runner
       - name: run the day (stream, split, units, reduce)
         if: steps.have.outputs.run_day == 'true'
         env:
@@ -111,7 +112,7 @@ jobs:
           URL: ${{ steps.day.outputs.url }}
         run: |
           uv run --frozen --no-sync python scripts/scale/local_day.py --source iex --date "$DATE" --url "$URL" \
-            --out .atlas/run --workers 3 --threads 1 --min-free-gib 2
+            --out .atlas/run --workers 4 --threads 1 --min-free-gib 2
           day_dir=".atlas/run/$(date -d "$DATE" +%m%d%Y)"
           tar -C "$day_dir/day" -czf "day-$DATE.tar.gz" .
           cp "$day_dir/local_day.json" "local_day-$DATE.json"
