@@ -235,3 +235,49 @@ def atlas_site_attribution() -> str:
     import atlas_site
 
     return atlas_site.IEX_ATTRIBUTION
+
+
+def test_url_split_resumes_after_a_dropped_connection(tmp_path: Path) -> None:
+    """`--url` reads through the demo's resumable stream: the first connection is cut halfway, the split resumes
+    with a byte range and writes the same buckets as a split of the local file."""
+    import http.server
+    import threading
+
+    raw = iex_capture()
+    want = _split(tmp_path / "local", raw, 2)
+    body = (tmp_path / "local" / "20261009_IEXTP1_DPLS1.0.pcap.gz").read_bytes()
+    ranges: list[str | None] = []
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *a: object) -> None:
+            pass
+
+        def do_GET(self) -> None:
+            rng = self.headers.get("Range")
+            ranges.append(rng)
+            start = int(rng.split("=")[1].split("-")[0]) if rng else 0
+            self.send_response(206 if rng else 200)
+            if rng:
+                self.send_header("Content-Range", f"bytes {start}-{len(body) - 1}/{len(body)}")
+            self.send_header("Content-Length", str(len(body) - start))
+            self.send_header("ETag", '"day1"')
+            self.end_headers()
+            try:
+                self.wfile.write(body[start:] if rng else body[: len(body) // 2])  # the first response is cut
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        url = f"http://127.0.0.1:{srv.server_address[1]}/20261009_IEXTP1_DPLS1.0.pcap.gz"
+        a = argparse.Namespace(
+            input=None, url=url, date=None, buckets=2, out=tmp_path / "url", symbols=None, level=1, min_free_gib=0.0
+        )
+        assert iex_split.run_split(a) == 0
+    finally:
+        srv.shutdown()
+    got = json.loads((tmp_path / "url" / MMDD / "split_manifest.json").read_text())
+    assert ranges[0] is None and ranges[1] == f"bytes={len(body) // 2}-"
+    assert [b["content_sha256"] for b in got["buckets"]] == [b["content_sha256"] for b in want["buckets"]]
+    assert got["ok"] and got["stream"]["messages"] == want["stream"]["messages"]

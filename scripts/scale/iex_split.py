@@ -48,7 +48,6 @@ import shutil
 import struct
 import sys
 import time
-import urllib.request
 import zlib
 from collections import Counter
 from pathlib import Path
@@ -58,6 +57,7 @@ from zoneinfo import ZoneInfo
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent.parent / "python"))
 
+from queuetruth.demo.fetch import Stream  # noqa: E402
 from queuetruth.demo.iex import (  # noqa: E402
     DEEP_PLUS_PROTOCOL,
     SYMBOL_TYPES,
@@ -279,9 +279,13 @@ def _chunks(a: argparse.Namespace, stats: dict[str, Any]):
     n_c = n_u = members = 0
     d: Any = None
     pending = False  # a gzip member was started and has not ended
-    src = urllib.request.urlopen(a.url) if a.url else open(a.input, "rb")
+    # A URL is read with the demo's resumable stream: a dropped connection resumes with a byte range checked against
+    # the first response's validator, so a long day file survives resets (it is never restarted or spliced).
+    remote = Stream(a.url, retries=10, backoff_s=2.0) if a.url else None
+    src = None if remote is not None else open(a.input, "rb")
+    raw = remote.chunks() if remote is not None else iter(lambda: src.read(1 << 20), b"")
     try:
-        while buf := src.read(1 << 20):
+        for buf in raw:
             sha_c.update(buf)
             md5.update(buf)
             if n_c == 0 and buf[:2] == b"\x1f\x8b":
@@ -307,7 +311,11 @@ def _chunks(a: argparse.Namespace, stats: dict[str, Any]):
                 else:
                     buf = b""
     finally:
-        src.close()
+        if remote is not None:
+            remote.close()
+            stats["http_resumptions"] = remote.resumptions
+        else:
+            src.close()
     stats.update(
         compressed_bytes=n_c,
         compressed_md5=md5.hexdigest(),
