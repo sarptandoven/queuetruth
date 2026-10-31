@@ -48,7 +48,9 @@ def test_o_api_4_problem_bodies(svc):
     # 401: no key, malformed key, bad checksum, unknown key
     p = assert_problem(c.get("/v1/jobs"), 401, "unauthorized")
     assert c.get("/v1/jobs").headers["www-authenticate"].startswith("Bearer")
-    for bad in ("qt_test_garbage", svc.keys["A"][:-1] + "Z", keys.generate("dev")[0]):
+    good = svc.keys["A"]
+    bad_checksum = good[:-1] + ("Z" if good[-1] != "Z" else "Y")  # always another key (1 in 62 keys ends in Z)
+    for bad in ("qt_test_garbage", bad_checksum, keys.generate("dev")[0]):
         assert_problem(c.get("/v1/jobs", headers={"Authorization": f"Bearer {bad}"}), 401, "unauthorized")
     assert svc.keys["A"] not in json.dumps(p)
     # 404: unknown id, unknown route
