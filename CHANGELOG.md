@@ -40,7 +40,8 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   made and checked, and its limits; the site links to it and carries a description and link-preview tags.
 - **Atlas site: which setting fixes it, library pages, charts** (`scripts/scale/atlas_site.py`). A "Best setting by
   tier" table names, for each tier and library, the setting whose fill-rate bias at the headline horizon is closest
-  to 0, says whether it is still clearly off (its 95% interval excludes 0) or not, gives its P&L error and the config
+  to 0 as a point estimate, says whether it is still clearly off (its 95% interval excludes 0) or not, lists the
+  settings whose intervals overlap it (the atlas does not rank those), gives its P&L error and the config
   to paste: the hftbacktest `BacktestAsset` builder and exchange (as `queuetruth export hftbacktest` writes them) or
   the NautilusTrader `add_venue` keywords (as the NautilusTrader integration sets them); no config is offered where
   no released library reproduces the model (corrected mode, Databento with `k > 0`). `hftbacktest.html`,

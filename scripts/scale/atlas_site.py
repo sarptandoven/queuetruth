@@ -263,59 +263,63 @@ def short_label(model_id: str) -> str:
     return f"{SHORT[fam]} {extra}".strip()
 
 
-def _num(text: str) -> str | None:
-    """A model parameter as a Python literal (`2`, `0.3`), None when it is not a finite number."""
+def _fnum(text: str | None) -> float | None:
+    """A model parameter as a finite float, None when it is missing or not a number."""
     try:
-        x = float(text)
+        x = float(text) if text is not None else math.nan
     except ValueError:
         return None
-    return f"{x:g}" if math.isfinite(x) else None
+    return x if math.isfinite(x) else None
 
 
-#: zoo family -> hftbacktest `BacktestAsset` builder and whether it takes `n` (python/queuetruth/export/hftbacktest.py)
-HBT_BUILDERS = {
-    "hbt_power": ("power_prob_queue_model", True),
-    "hbt_power2": ("power_prob_queue_model2", True),
-    "hbt_power3": ("power_prob_queue_model3", True),
-    "hbt_log": ("log_prob_queue_model", False),
-    "hbt_log2": ("log_prob_queue_model2", False),
-    "hbt_risk_adverse": ("risk_adverse_queue_model", False),
-}
-HBT_EXCHANGES = {"partial": ".partial_fill_exchange()", "no-partial": ".no_partial_fill_exchange()"}
 #: NautilusTrader families -> `queue_position` on the venue (integrations/nautilus venue_options)
 NT_QUEUE = {"nt_prob_touch": False, "nt_queue_l2_prob_touch": True, "nt_queue_l2": True}
 
 
 def snippet(model_id: str) -> tuple[str, str] | None:
-    """(where it goes, code) to reproduce a zoo model in its library, as `queuetruth export` and the NautilusTrader
-    integration write it; None when no library setting reproduces it (corrected mode, L3 input, Databento k > 0, an
-    unknown family or parameter)."""
+    """(where it goes, code) to reproduce a zoo model in its library; None when no library setting reproduces it
+    (corrected mode, L3 input, Databento k outside (-1, 0], an unknown family, exchange or parameter).
+
+    hftbacktest lines take the builder, exchange and number format from `queuetruth.export.hftbacktest`, so the site
+    and `queuetruth export hftbacktest` cannot drift apart; the exchange follows the id's `exch` (the canonical
+    `partial` / `no_partial`; Databento's estimator runs with the partial-fill exchange, as the zoo does). The
+    NautilusTrader line is the `add_venue` keywords the NautilusTrader integration sets."""
+    from queuetruth.export._text import g6
+    from queuetruth.export.hftbacktest import EXCHANGES, FIXED_BUILDERS, POWER_BUILDERS
+
     fam, p = parse_id(model_id)
     if p.get("mode", "faithful") != "faithful":
         return None  # corrected mode is queuetruth's fixed variant: no released library does that
-    exch = HBT_EXCHANGES.get(p.get("exch", ""), "")
-    if fam in HBT_BUILDERS:
-        builder, takes_n = HBT_BUILDERS[fam]
-        n = _num(p.get("n", "")) if takes_n else ""
-        if n is None:
-            return None
-        return "hftbacktest BacktestAsset chain", f".{builder}({n}){exch}"
     if fam in NT_QUEUE:
-        prob = _num(p.get("p", "1"))
-        if prob is None:
+        prob = _fnum(p.get("p", "1"))
+        if prob is None or not 0 <= prob <= 1:
             return None
         return (
             "NautilusTrader BacktestEngine.add_venue keywords",
-            f"fill_model=FillModel(prob_fill_on_limit={prob}), book_type=BookType.L2_MBP, trade_execution=True, "
+            f"fill_model=FillModel(prob_fill_on_limit={g6(prob)}), book_type=BookType.L2_MBP, trade_execution=True, "
             f"queue_position={NT_QUEUE[fam]}",
         )
-    if fam == "databento_mc":
-        k = _num(p.get("k", ""))
-        if k is None or not -1 < float(k) <= 0:
+    exchange = EXCHANGES.get(p.get("exch", "partial").replace("-", "_"))
+    if exchange is None:
+        return None
+    key = fam.removeprefix("hbt_")
+    kind = "hftbacktest BacktestAsset chain"
+    if fam.startswith("hbt_") and key in POWER_BUILDERS:
+        n = _fnum(p.get("n"))
+        if n is None:
             return None
-        n = f"{1 / (1 + float(k)):g}"
-        return "hftbacktest approximation (expected value of the estimator)", f".power_prob_queue_model3({n})"
-    return None
+        call = f"{POWER_BUILDERS[key]}({g6(n)})"
+    elif fam.startswith("hbt_") and key in FIXED_BUILDERS:
+        call = f"{FIXED_BUILDERS[key]}()"
+    elif fam == "databento_mc":
+        k = _fnum(p.get("k"))
+        if k is None or not -1 < k <= 0:
+            return None
+        call = f"{POWER_BUILDERS['power3']}({g6(1 / (1 + k))})"
+        kind = "hftbacktest approximation (expected value of the estimator)"
+    else:
+        return None
+    return kind, f".{call}.{exchange}()"
 
 
 def _bias(r: dict[str, Any] | None) -> float | None:
@@ -323,36 +327,59 @@ def _bias(r: dict[str, Any] | None) -> float | None:
     return v if v is not None and math.isfinite(v) else None
 
 
+def side(r: dict[str, Any], metric: str = "fill_rate_bias") -> int:
+    """+1 when the metric's 95% interval lies above 0, -1 below, 0 when it holds 0 (or is missing): the same rule as
+    the colours, so the words never contradict them."""
+    lo, hi = r.get(f"{metric}_ci_lo"), r.get(f"{metric}_ci_hi")
+    if lo is None or hi is None:
+        return 0
+    return 1 if lo > 0 else (-1 if hi < 0 else 0)
+
+
 def verdict(r: dict[str, Any]) -> str:
     """Whether a setting is still clearly off at its horizon: only a 95% interval that excludes 0 says so."""
-    if _clear(r, "fill_rate_bias"):
-        return (
-            "still clearly off: too optimistic"
-            if r["fill_rate_bias_value"] > 0
-            else "still clearly off: too pessimistic"
-        )
+    s = side(r)
+    if s:
+        return "still clearly off: too optimistic" if s > 0 else "still clearly off: too pessimistic"
     return "no clear difference (95% interval includes 0)"
 
 
+def _overlaps(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    """The two settings' 95% intervals overlap (missing intervals count as overlapping): the atlas does not rank
+    them."""
+    alo, ahi = a.get("fill_rate_bias_ci_lo"), a.get("fill_rate_bias_ci_hi")
+    blo, bhi = b.get("fill_rate_bias_ci_lo"), b.get("fill_rate_bias_ci_hi")
+    if None in (alo, ahi, blo, bhi):
+        return True
+    return alo <= bhi and blo <= ahi
+
+
+def _settings(rows: list[dict[str, Any]], tier: str, lib: str, horizon: int) -> list[dict[str, Any]]:
+    """The library's settings in a tier at `horizon` (not its L3 model), closest point estimate first."""
+    cands = [
+        r
+        for r in rows
+        if r["tier"] == tier
+        and r["horizon_ns"] == horizon
+        and describe(r["model_id"])[0] == lib
+        and parse_id(r["model_id"])[0] not in NOT_A_SETTING
+        and _bias(r) is not None
+    ]
+    return sorted(cands, key=lambda r: (abs(r["fill_rate_bias_value"]), r["model_id"]))
+
+
 def best_settings(rows: list[dict[str, Any]], horizon: int, libraries: tuple[str, ...] | None = None) -> list[dict]:
-    """For each tier (`ALL` first) and library, the setting whose fill-rate bias at `horizon` is closest to 0 (ties
-    by model id), with whether its interval still excludes 0 and its snippet."""
+    """For each tier (`ALL` first) and library, the setting whose fill-rate bias at `horizon` is closest to 0 as a
+    point estimate (ties by model id), whether its interval still excludes 0, the other settings whose intervals
+    overlap its own (the atlas cannot rank those against it), and its snippet."""
     libs = libraries or tuple(LIBRARY_PAGES)
     out = []
     for tier in _tier_order({r["tier"] for r in rows}):
         for lib in libs:
-            cands = [
-                r
-                for r in rows
-                if r["tier"] == tier
-                and r["horizon_ns"] == horizon
-                and describe(r["model_id"])[0] == lib
-                and parse_id(r["model_id"])[0] not in NOT_A_SETTING
-                and _bias(r) is not None
-            ]
+            cands = _settings(rows, tier, lib, horizon)
             if not cands:
                 continue
-            r = min(cands, key=lambda r: (abs(r["fill_rate_bias_value"]), r["model_id"]))
+            r = cands[0]
             snip = snippet(r["model_id"])
             out.append(
                 {
@@ -364,7 +391,8 @@ def best_settings(rows: list[dict[str, Any]], horizon: int, libraries: tuple[str
                     "fill_rate_bias_value": r["fill_rate_bias_value"],
                     "fill_rate_bias_ci_lo": r.get("fill_rate_bias_ci_lo"),
                     "fill_rate_bias_ci_hi": r.get("fill_rate_bias_ci_hi"),
-                    "clearly_off": _clear(r, "fill_rate_bias"),
+                    "clearly_off": side(r) != 0,
+                    "overlapping": [o["model_id"] for o in cands[1:] if _overlaps(r, o)],
                     "snippet_kind": snip[0] if snip else None,
                     "snippet": snip[1] if snip else None,
                 }
@@ -378,27 +406,19 @@ def _count(k: int, one: str, many: str) -> str:
 
 def library_headline(rows: list[dict[str, Any]], lib: str, horizon: int) -> str | None:
     """A library page's fill-rate sentence (tier ALL, else the first tier): the exact fill rate, how many of the
-    library's settings fill clearly more or fewer orders (95% interval excludes 0), and the closest setting with
-    whether it is still clearly off."""
+    library's settings fill clearly more or fewer orders (95% interval excludes 0), the closest point estimate with
+    whether it is still clearly off, and how many settings it cannot be ranked against (overlapping intervals)."""
     tiers = _tier_order({r["tier"] for r in rows})
     best = [b for b in best_settings(rows, horizon, (lib,)) if tiers and b["tier"] == tiers[0]]
     if not best:
         return None
     b = best[0]
     tier = b["tier"]
-    cands = [
-        r
-        for r in rows
-        if r["tier"] == tier
-        and r["horizon_ns"] == horizon
-        and describe(r["model_id"])[0] == lib
-        and parse_id(r["model_id"])[0] not in NOT_A_SETTING
-        and _bias(r) is not None
-    ]
+    cands = _settings(rows, tier, lib, horizon)
     exact = cands[0].get("exact_fill_rate_value")
     where = "" if tier == "ALL" else f" among {TIER_WORDS.get(tier, 'tier ' + tier)}"
-    over = sum(1 for r in cands if _clear(r, "fill_rate_bias") and r["fill_rate_bias_value"] > 0)
-    under = sum(1 for r in cands if _clear(r, "fill_rate_bias") and r["fill_rate_bias_value"] < 0)
+    over = sum(1 for r in cands if side(r) > 0)
+    under = sum(1 for r in cands if side(r) < 0)
     lead = (
         f"Within {duration(horizon)}{where}, the exact replay of the real queue fills {pp(exact, False)}% of these "
         f"orders. Of {lib}'s {_count(len(cands), 'setting', 'settings')} in the atlas, "
@@ -412,14 +432,21 @@ def library_headline(rows: list[dict[str, Any]], lib: str, horizon: int) -> str 
         lead += " and ".join(said) + " (95% interval excludes 0)"
     else:
         lead += "none fills more or fewer orders than it beyond its 95% interval"
-    v = b["fill_rate_bias_value"]
-    if b["clearly_off"]:
-        tail = f"so even the best setting still fills clearly {'more' if v > 0 else 'fewer'} orders than the real queue"
+    s = side(b)
+    if s:
+        tail = f"and it still fills clearly {'more' if s > 0 else 'fewer'} orders than the real queue"
     else:
         tail = "which the atlas cannot tell from the exact replay at this sample size"
+    rank = ""
+    if b["overlapping"]:
+        k = len(b["overlapping"])
+        rank = (
+            f" Its interval overlaps {'that' if k == 1 else 'those'} of {_count(k, 'other setting', 'other settings')}"
+            f" ({', '.join(short_label(m) for m in b['overlapping'])}), so the atlas cannot rank them by closeness."
+        )
     return (
-        f"{lead}. The closest is {_named(b['model_id'])}, {pp(v)} pp (95% interval {pp(b['fill_rate_bias_ci_lo'])} "
-        f"to {pp(b['fill_rate_bias_ci_hi'])} pp), {tail}."
+        f"{lead}. The closest point estimate is {_named(b['model_id'])}, {pp(b['fill_rate_bias_value'])} pp (95% "
+        f"interval {pp(b['fill_rate_bias_ci_lo'])} to {pp(b['fill_rate_bias_ci_hi'])} pp), {tail}.{rank}"
     )
 
 
@@ -483,7 +510,8 @@ td.over { color: var(--over); } td.under { color: var(--under); } .ci { color: v
 code { background: var(--chip); padding: 1px 4px; border-radius: 4px; }
 pre { background: var(--chip); padding: 12px; border-radius: 6px; overflow-x: auto; }
 .attr { border-left: 3px solid var(--line); padding-left: 12px; }
-a { color: var(--under); } nav.libs { margin: 8px 0; } p { overflow-wrap: anywhere; }
+a { color: var(--fg); text-decoration-color: var(--muted); text-underline-offset: 2px; }
+a:hover { text-decoration-color: var(--fg); } nav.libs { margin: 8px 0; } p { overflow-wrap: anywhere; }
 table.best th, table.best td { text-align: left; white-space: normal; vertical-align: top; }
 table.best td.cfg { min-width: 18em; } table.best td code { overflow-wrap: anywhere; }
 figure.chart { margin: 8px 0 12px; } svg.bias { width: 100%; min-width: 560px; height: auto; display: block;
@@ -543,6 +571,9 @@ def _f(x: float) -> str:
 
 #: chart geometry in viewBox units
 CHART_W, CHART_LABEL, CHART_X0, CHART_X1, CHART_TOP, CHART_ROW = 720, 290, 300, 650, 30, 24
+#: longest label drawn (about 7 units a character at 12 px fits the 290 units left of the plot); the row's tooltip
+#: and the table keep the whole id
+CHART_LABEL_CHARS = 40
 
 
 def chart(rows: list[dict[str, Any]], chart_id: str, title: str, horizon: int) -> str:
@@ -573,7 +604,8 @@ def chart(rows: list[dict[str, Any]], chart_id: str, title: str, horizon: int) -
     height = CHART_TOP + len(pts) * CHART_ROW + 30
     bottom = CHART_TOP + len(pts) * CHART_ROW
     out = [
-        f'<svg class="bias" viewBox="0 0 {CHART_W} {height}" role="img" aria-labelledby="{chart_id}-t {chart_id}-d">',
+        f'<svg class="bias" viewBox="0 0 {CHART_W} {height}" role="img" aria-labelledby="{chart_id}-t" '
+        f'aria-describedby="{chart_id}-d">',
         f'<title id="{chart_id}-t">{html.escape(title)}</title>',
         f'<desc id="{chart_id}-d">Fill-rate bias of {len(pts)} models at {html.escape(duration(horizon))} in '
         "percentage points, with 95% intervals; the same values are in the table below.</desc>",
@@ -590,7 +622,8 @@ def chart(rows: list[dict[str, Any]], chart_id: str, title: str, horizon: int) -
         ci = f" [{lo:+.2f}, {hi:+.2f}]" if lo is not None else ""
         label = short_label(r["model_id"])
         out.append(f'<g class="{cls}"><title>{html.escape(label)}: {v:+.2f} pp{ci}</title>')
-        out.append(f'<text x="{CHART_LABEL}" y="{_f(cy + 4)}" text-anchor="end">{html.escape(label)}</text>')
+        shown = label if len(label) <= CHART_LABEL_CHARS else label[: CHART_LABEL_CHARS - 1].rstrip() + "\u2026"
+        out.append(f'<text x="{CHART_LABEL}" y="{_f(cy + 4)}" text-anchor="end">{html.escape(shown)}</text>')
         if lo is not None:
             out.append(f'<line class="ci" x1="{_f(x(lo))}" x2="{_f(x(hi))}" y1="{_f(cy)}" y2="{_f(cy)}"/>')
         out.append(f'<circle class="dot" cx="{_f(x(v))}" cy="{_f(cy)}" r="5"/>')
@@ -717,7 +750,7 @@ def _best_section(
             + f"<td>{html.escape(short_label(b['model_id']))}<br><code>{html.escape(b['model_id'])}</code></td>"
             + _cell(pp(b["fill_rate_bias_value"]), pp(b["fill_rate_bias_ci_lo"]), pp(b["fill_rate_bias_ci_hi"]),
                     _cls(b, "fill_rate_bias"))
-            + f"<td>{html.escape(verdict(b))}</td>{pcell}"
+            + f"<td>{html.escape(verdict(b))}{_overlap_note(b)}</td>{pcell}"
             + f'<td class="cfg">{cfg}</td></tr>'
         )  # fmt: skip
     pnl_head = f"<th>P&amp;L, ticks ({html.escape(duration(ph))})</th>" if pnl_at is not None else ""
@@ -727,7 +760,10 @@ def _best_section(
         " <code>FillModel</code> is <code>nautilus_trader.backtest.models.FillModel</code> in 1.x and "
         "<code>nautilus_trader.execution.DefaultFillModel</code> in 2.x; the keywords go to "
         "<code>BacktestEngine.add_venue</code> (2.x also needs a <code>fee_model</code>). The faithful models follow "
-        "nautilus_trader 1.231.0 on a delta-fed L2 book."
+        "nautilus_trader 1.231.0 on a delta-fed L2 book; from 2.0, a book update that shrinks the order's level also "
+        "caps the queue ahead with <code>queue_position=True</code>, so a few orders fill differently. With "
+        "<code>prob_fill_on_limit</code> below 1, every at-price print is a random draw: set <code>random_seed</code> "
+        "on the fill model to compare runs."
         if "NautilusTrader" in libs
         else ""
     )
@@ -740,11 +776,13 @@ def _best_section(
     return (
         f"<h2>{'Best setting by tier' if lib is None else f'Best {html.escape(lib)} setting by tier'}</h2>"
         f"<p>Which setting fixes it: for each tier{'' if lib else ' and library'}, the setting whose fill-rate bias "
-        f"within {html.escape(duration(h))} is closest to 0. It is <em>still clearly off</em> when its 95% interval "
-        "excludes 0; otherwise the atlas cannot tell it from the exact replay at this sample size, which is not proof "
-        "that it is exact. hftbacktest's L3 FIFO model is left out: it needs order-level data.</p>"
+        f"within {html.escape(duration(h))} is closest to 0 as a point estimate. It is <em>still clearly off</em> when "
+        "its 95% interval excludes 0; otherwise the atlas cannot tell it from the exact replay at this sample size, "
+        "which is not proof that it is exact. Settings whose intervals overlap the closest one's are listed under it: "
+        "the atlas cannot rank those by closeness. hftbacktest's L3 FIFO model is left out: it needs order-level "
+        "data.</p>"
         '<div class="wrap"><table class="best"><thead><tr><th>tier</th>'
-        f"{'' if lib else '<th>library</th>'}<th>closest setting</th>"
+        f"{'' if lib else '<th>library</th>'}<th>closest setting (point estimate)</th>"
         f"<th>bias ({html.escape(duration(h))})</th><th>verdict</th>{pnl_head}<th>config to paste</th></tr></thead>"
         f"<tbody>{''.join(rows)}</tbody></table></div>"
         f'<p class="muted">The setting is the one closest at this venue, horizon and population; refit on your own '
@@ -752,9 +790,18 @@ def _best_section(
     )
 
 
+def _overlap_note(b: dict[str, Any]) -> str:
+    if not b["overlapping"]:
+        return ""
+    names = ", ".join(short_label(m) for m in b["overlapping"])
+    return f'<br><span class="ci">interval overlaps: {html.escape(names)}</span>'
+
+
 def _library_nav(present: list[str], here: str | None) -> str:
     links = [
-        html.escape(lib) if lib == here else f'<a href="{LIBRARY_PAGES[lib][0]}">{html.escape(lib)}</a>'
+        f'<span aria-current="page">{html.escape(lib)}</span>'
+        if lib == here
+        else f'<a href="{LIBRARY_PAGES[lib][0]}">{html.escape(lib)}</a>'
         for lib in present
     ]
     back = "" if here is None else '<a href="index.html">Fill-Realism Atlas</a> | '
@@ -943,7 +990,7 @@ def _library_page(
     name, question, guide, guide_name = LIBRARY_PAGES[lib]
     mine = [r for r in rows if describe(r["model_id"])[0] == lib]
     my_pnl = [r for r in pnl if describe(r["model_id"])[0] == lib]
-    leads = [x for x in (library_headline(mine, lib, h), pnl_headline(my_pnl, ph, f"{lib}'s settings")) if x]
+    leads = [x for x in (library_headline(mine, lib, h), pnl_headline(my_pnl, ph, f"{lib}'s models")) if x]
     parts = [
         _library_nav(present, lib),
         f"<h1>{html.escape(question)}</h1>",
