@@ -145,9 +145,13 @@ TIER_WORDS = {
 
 
 def _clear(r: dict[str, Any], metric: str) -> bool:
-    """The metric's 95% interval excludes 0 (a difference the page may state as a finding)."""
-    lo, hi = r.get(f"{metric}_ci_lo"), r.get(f"{metric}_ci_hi")
-    return lo is not None and hi is not None and (lo > 0 or hi < 0)
+    """A difference the page may state as a finding: the metric's 95% interval excludes 0 on the side of its estimate
+    (a percentile interval can lie wholly on the other side of a near-zero estimate; then nothing is stated, since
+    "more" or "fewer" would contradict either the estimate or the interval)."""
+    v, lo, hi = r.get(f"{metric}_value"), r.get(f"{metric}_ci_lo"), r.get(f"{metric}_ci_hi")
+    if v is None or lo is None or hi is None:
+        return False
+    return (lo > 0 and v > 0) or (hi < 0 and v < 0)
 
 
 def _named(model_id: str) -> str:
@@ -328,16 +332,17 @@ def _bias(r: dict[str, Any] | None) -> float | None:
 
 
 def side(r: dict[str, Any], metric: str = "fill_rate_bias") -> int:
-    """+1 when the metric's 95% interval lies above 0, -1 below, 0 when it holds 0 (or is missing): the same rule as
-    the colours, so the words never contradict them."""
-    lo, hi = r.get(f"{metric}_ci_lo"), r.get(f"{metric}_ci_hi")
-    if lo is None or hi is None:
+    """+1 when the metric is clearly above 0, -1 clearly below, else 0, by `_clear` (the 95% interval excludes 0 on
+    the side of the estimate). The words, the table colours and the chart colours all use it, so they never disagree;
+    a skewed row (estimate and interval on opposite sides) is 0: grey, and not stated as a finding."""
+    if not _clear(r, metric):
         return 0
-    return 1 if lo > 0 else (-1 if hi < 0 else 0)
+    return 1 if r[f"{metric}_value"] > 0 else -1
 
 
 def verdict(r: dict[str, Any]) -> str:
-    """Whether a setting is still clearly off at its horizon: only a 95% interval that excludes 0 says so."""
+    """Whether a setting is still clearly off at its horizon: only a 95% interval that excludes 0 on the side of its
+    estimate says so (`side`)."""
     s = side(r)
     if s:
         return "still clearly off: too optimistic" if s > 0 else "still clearly off: too pessimistic"
@@ -618,7 +623,7 @@ def chart(rows: list[dict[str, Any]], chart_id: str, title: str, horizon: int) -
         out.append(f'<text class="tick" x="{tx}" y="{CHART_TOP - 12}" text-anchor="middle">{label}</text>')
     for i, (r, v, lo, hi) in enumerate(pts):
         cy = CHART_TOP + i * CHART_ROW + CHART_ROW / 2
-        cls = "over" if lo is not None and lo > 0 else ("under" if hi is not None and hi < 0 else "plain")
+        cls = {1: "over", -1: "under"}.get(side(r), "plain")
         ci = f" [{lo:+.2f}, {hi:+.2f}]" if lo is not None else ""
         label = short_label(r["model_id"])
         out.append(f'<g class="{cls}"><title>{html.escape(label)}: {v:+.2f} pp{ci}</title>')
@@ -654,8 +659,7 @@ def _cell(value: str, lo: str, hi: str, cls: str) -> str:
 
 
 def _cls(r: dict[str, Any], metric: str) -> str:
-    lo, hi = r.get(f"{metric}_ci_lo"), r.get(f"{metric}_ci_hi")
-    return "over" if lo is not None and lo > 0 else ("under" if hi is not None and hi < 0 else "")
+    return {1: "over", -1: "under"}.get(side(r, metric), "")
 
 
 def _tier_section(

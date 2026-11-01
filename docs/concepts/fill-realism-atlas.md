@@ -33,8 +33,8 @@ out of it so they do not squash the scale. Every value in a chart is also in the
 
 The "Best setting by tier" table takes, for each tier and library, the setting whose fill-rate bias at the sort
 horizon is closest to 0 as a point estimate (hftbacktest's L3 FIFO model is left out: it needs the order-level data
-the exact replay uses). It says whether that setting is **still clearly off** (its 95% interval excludes 0, on the
-side the interval lies) or shows **no clear difference**, which means the atlas cannot tell it from the exact
+the exact replay uses). It says whether that setting is **still clearly off** (its 95% interval excludes 0 on the
+side of its estimate; the colours follow the same rule) or shows **no clear difference**, which means the atlas cannot tell it from the exact
 replay at this sample size, not that it is exact. Settings whose intervals overlap the closest one's are listed
 under it: the atlas does not rank those by closeness. Next to it is the config to paste:
 

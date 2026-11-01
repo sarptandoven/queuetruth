@@ -180,6 +180,22 @@ def test_site_shows_the_pnl_error_when_the_atlas_has_it(atlas: Path, tmp_path: P
     assert "P&amp;L" not in (tmp_path / "plain" / "index.html").read_text()
 
 
+def test_a_finding_needs_its_estimate_and_interval_on_one_side() -> None:
+    # a percentile interval wholly above 0 around a negative estimate states nothing either way
+    skewed = {"fill_rate_bias_value": -0.001, "fill_rate_bias_ci_lo": 0.0005, "fill_rate_bias_ci_hi": 0.003}
+    assert not S._clear(skewed, "fill_rate_bias")
+    assert S._clear({**skewed, "fill_rate_bias_value": 0.001}, "fill_rate_bias")
+    assert not S._clear(
+        {"fill_rate_bias_value": 0.01, "fill_rate_bias_ci_lo": None, "fill_rate_bias_ci_hi": 0.02}, "fill_rate_bias"
+    )
+    rows = [
+        {**_row("ALL", "nt_prob_touch[mode=faithful;p=1]", S1, -0.001, 0.0005, 0.003)},
+        {**_row("ALL", "hbt_power3[mode=faithful;n=2]", S1, -0.004, -0.009, 0.001)},
+    ]
+    line = S.headline(rows, S1)
+    assert "optimistic" not in line and "pessimistic" not in line and "no fill model differs" in line
+
+
 S60 = 60 * S1
 #: An invented atlas with every library and several settings per library (no real numbers).
 PB2 = "hbt_power2[exch=partial;mode=faithful;n=2]"
@@ -387,12 +403,18 @@ def test_charts_are_accessible_static_svg_with_the_table_values(zoo_atlas: Path,
 
 
 def test_words_follow_the_interval_and_labels_fit(zoo_atlas: Path, tmp_path: Path) -> None:
-    # a point estimate below 0 whose interval lies above it (a skewed bootstrap): red, and the words say optimistic
+    # a point estimate below 0 whose interval lies above it (a skewed bootstrap) is no finding: grey everywhere, and
+    # no "more" or "fewer" in the verdict, the summary, the table or the chart (the same rule as `_clear`)
     odd = _row("ALL", PB2, S60, -0.001, 0.0005, 0.003)
-    assert S.side(odd) == 1 and S.verdict(odd) == "still clearly off: too optimistic"
-    assert '<g class="over">' in S.chart([odd], "o", "t", S60)
+    assert S.side(odd) == 0 and S.verdict(odd) == "no clear difference (95% interval includes 0)"
+    assert '<g class="plain">' in S.chart([odd], "o", "t", S60) and S._cls(odd, "fill_rate_bias") == ""
     said = S.library_headline([odd], "hftbacktest", S60)
-    assert "1 fills clearly more orders" in said and "it still fills clearly more orders" in said
+    assert "none fills more or fewer" in said and "clearly" not in said
+    assert not S.best_settings([odd], S60)[0]["clearly_off"]
+    # estimate and interval on one side: red, and the words say optimistic
+    up = _row("ALL", PB2, S60, 0.001, 0.0005, 0.003)
+    assert S.side(up) == 1 and S.verdict(up) == "still clearly off: too optimistic"
+    assert '<g class="over">' in S.chart([up], "u", "t", S60) and S._cls(up, "fill_rate_bias") == "over"
     # a long label is cut with an ellipsis; the row's tooltip keeps all of it
     long = "nt_queue_l2_prob_touch[mode=faithful;p=0.28662597]"
     svg = S.chart([_row("ALL", long, S60, 0.01, 0.0, 0.02)], "l", "t", S60)
