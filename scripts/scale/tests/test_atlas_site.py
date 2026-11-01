@@ -176,3 +176,19 @@ def test_site_shows_the_pnl_error_when_the_atlas_has_it(atlas: Path, tmp_path: P
     (atlas / "pnl_by_tier.parquet").unlink()
     S.build(atlas, tmp_path / "plain", horizon="1s")
     assert "P&amp;L" not in (tmp_path / "plain" / "index.html").read_text()
+
+
+def test_a_finding_needs_its_estimate_and_interval_on_one_side() -> None:
+    # a percentile interval wholly above 0 around a negative estimate states nothing either way
+    skewed = {"fill_rate_bias_value": -0.001, "fill_rate_bias_ci_lo": 0.0005, "fill_rate_bias_ci_hi": 0.003}
+    assert not S._clear(skewed, "fill_rate_bias")
+    assert S._clear({**skewed, "fill_rate_bias_value": 0.001}, "fill_rate_bias")
+    assert not S._clear(
+        {"fill_rate_bias_value": 0.01, "fill_rate_bias_ci_lo": None, "fill_rate_bias_ci_hi": 0.02}, "fill_rate_bias"
+    )
+    rows = [
+        {**_row("ALL", "nt_prob_touch[mode=faithful;p=1]", S1, -0.001, 0.0005, 0.003)},
+        {**_row("ALL", "hbt_power3[mode=faithful;n=2]", S1, -0.004, -0.009, 0.001)},
+    ]
+    line = S.headline(rows, S1)
+    assert "optimistic" not in line and "pessimistic" not in line and "no fill model differs" in line
