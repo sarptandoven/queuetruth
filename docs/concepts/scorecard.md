@@ -176,9 +176,50 @@ followed by the cluster-robust p and cluster count, the number of orders and the
 no significant fill-rate difference within 60 s: +0.0 pp (95% CI [+0.0, +0.0]); equivalent within ±2 pp (TOST p = 0); McNemar p = 1 (cluster-robust p = 1, 26 clusters); 200 orders; no gates configured
 ```
 
-The terminal output of `queuetruth score` leads with the same answer in a `RESULT:` line, then the equivalence
-result, the order counts, the gate status and the 2x2 table; `--verbose` prints every statistic. A scorecard with
-no scored order is an error (`QT-INPUT-002`, "NOT SCORED"), not an empty result.
+The terminal output of `queuetruth score` leads with the same answer in a `RESULT:` line, then the P&L gap in a
+`P&L:` line (next section), the equivalence result, the order counts, the gate status and the 2x2 table; `--verbose`
+prints every statistic. A scorecard with no scored order is an error (`QT-INPUT-002`, "NOT SCORED"), not an empty
+result.
+
+## The P&L gap
+
+The fill-rate gap says how often the simulator fills; the P&L gap says what that is worth. It is the per-order mean
+of the [shortfall decomposition](../how-to/decompose-the-sim-live-gap.md)'s `total_ccy`, the simulator's markout P&L
+minus live's on each scored order, net of fees, with the 95% interval of the same block bootstrap. Positive means
+the simulator's P&L is too high. The horizon is the markout equivalence horizon (`--markout-horizon`, 1 s by
+default), or the closest markout horizon when that one is not among `--markout-horizons`.
+
+A difference is stated only when its 95% interval excludes 0. Otherwise the line says that no P&L difference was
+found, with the estimate and its interval, which is not evidence that the P&L matches. A finding names the part it
+mostly comes from, the shortfall buckets per order regrouped by what the simulator did:
+
+| Part | Shortfall buckets | Reads as |
+|---|---|---|
+| `granted` | `missed_fill` of orders the simulator filled and live did not | fills it grants that live did not get |
+| `denied` | `missed_fill` of orders live filled and the simulator did not | fills live got that it misses |
+| `partial` | `partial_fill` | filling more or less of an order than live |
+| `timing` | `delay + spread + adverse_selection` | when and at what price it fills the orders live also filled |
+| `fees` | `fees` | fees and rebates |
+
+The parts are per-order means over the same orders, so they add up to the gap; they carry no interval of their own.
+The line names the part with the largest contribution in the direction of the gap: "mostly from" when it is at
+least half of the gap, "the largest part from" otherwise. On the synthetic data of
+[Getting started](../getting-started.md) (measured 2026-11-01):
+
+```text
+RESULT: the simulator fills 9.0 pp more often than live (95% CI +5.7 to +12.7 pp) within 60s of entry; significant (cluster-robust p = 7.73e-05, 26 clusters); plain McNemar p = 7.63e-06 assumes independent orders
+P&L: the simulator's P&L is 5.78 USD per order too high (95% CI +3.40 to +8.75) at the 1 s markout, the largest part from when and at what price it fills the orders live also filled (+2.69 USD per order); 200 orders
+```
+
+That is `front_of_queue`. At 1 s, fills that both arms got but the model gets earlier carry most of the gap; with
+`--markout-horizon 60s` the timing part is close to 0 and the line reads "mostly from fills it grants that live did
+not get (+2.66 USD per order)", as in the [atlas](fill-realism-atlas.md), whose P&L column uses 60 s. Short
+horizons isolate the spread and the immediate adverse selection, long ones the fills themselves.
+
+Each currency gets its own line. Orders that cannot be valued (no quote to mark a fill, a fill without a price) are
+left out and counted; without a dataset no order can be valued and the line says the P&L is not computable. The
+same entries are in `summary.json` as `pnl_gap` (schema 1.2, written with `--out`), and the report shows the
+sentence in its answer block and under the verdict headline.
 
 ## Fills-only logs
 
@@ -188,7 +229,7 @@ headline says so. Markouts and the time-to-fill comparison conditional on fill a
 
 ## Output files
 
-`score --out DIR` writes `summary.json` (`qt.scorecard_summary`), `score_orders.parquet` (one row per order with both
+`score --out DIR` writes `summary.json` (`qt.scorecard_summary`, with the P&L gap in `pnl_gap`), `score_orders.parquet` (one row per order with both
 arms' outcomes), `score_fills.parquet`, `score_markouts.parquet`, `score_position.parquet` (cumulative position per
 arm and instrument, the plot people usually make by hand), `score_tests.parquet` (every test with raw and adjusted p),
 `score_shortfall.parquet` (`qt.score_shortfall`: each order's sim-live gap split into delay, spread, missed fills,

@@ -205,6 +205,28 @@
       "live": 1,
       "sim": 1
     },
-    "fills_only": true
+    "fills_only": true,
+    "pnl_gap": [
+      {
+        "horizon_ns": 1,
+        "currency": "x",
+        "n_valued": 1,
+        "n_unvalued": 1,
+        "mean_ccy": 0.5,
+        "ci_lo": 0.5,
+        "ci_hi": 0.5,
+        "direction": "sim_too_high",
+        "parts_ccy": {
+          "granted": 0.5,
+          "denied": 0.5,
+          "partial": 0.5,
+          "timing": 0.5,
+          "fees": 0.5
+        },
+        "main_part": "granted",
+        "main_part_majority": true,
+        "headline": "x"
+      }
+    ]
   }
 }

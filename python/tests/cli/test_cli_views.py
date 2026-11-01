@@ -176,6 +176,23 @@ def test_score_view_leads_with_the_headline_in_plain_words() -> None:
     assert "live filled" in out and "live not filled" in out
 
 
+def test_score_view_puts_the_pnl_gap_under_the_result_line() -> None:
+    gap = {
+        "horizon_ns": 1_000_000_000,
+        "currency": "USD",
+        "direction": "sim_too_high",
+        "headline": "the simulator's P&L is 0.42 USD per order too high (95% CI +0.10 to +0.75) at the 1 s markout",
+    }
+    eur = {**gap, "currency": "EUR", "direction": "no_significant_difference", "headline": "no P&L difference found"}
+    lines = cli.render(["score"], _score_doc(pnl_gap=[gap, eur])).splitlines()
+    assert lines[1].startswith("RESULT: the simulator fills 11.5 pp less often")
+    assert lines[2] == f"P&L: {gap['headline']}" and lines[3] == "P&L: no P&L difference found"
+    assert lines[4].startswith("equivalence: ")
+    # summaries before schema 1.2 have no P&L gap: no line
+    assert "P&L" not in cli.render(["score"], _score_doc())
+    assert "P&L" not in cli.render(["score"], _score_doc(pnl_gap=None))
+
+
 def test_score_view_gate_status_only_with_gates() -> None:
     gated = {"gates": {"max_abs_fill_rate_bias": 0.05, "require_equivalence": False}}
     ok = cli.render(["score"], _score_doc(spec=gated))
@@ -629,6 +646,7 @@ def test_human_output_end_to_end(repo_root: Path, tmp_path: Path, capsys: pytest
     lines = out.splitlines()
     assert lines[0].startswith("score: zoo model hbt_power3") and lines[1].startswith("RESULT: the simulator fills ")
     assert "within 60s of entry" in lines[1] and "cluster-robust p = " in lines[1]
+    assert lines[2].startswith("P&L: ") and " at the 1 s markout" in lines[2]
     assert "gates: none set" in out and "Gates passed" not in out and "gates: passed" not in out
     sc2 = str(tmp_path / "sc2")
     code, out, _ = run("score", "--live", live, "--sim-model", "front_of_queue", "--data", ds, "--out", sc2,

@@ -41,8 +41,9 @@ an issue to argue for one. Ids (`W1`, ...) are referenced from code and scripts.
   LEAN, VectorBT and Backtrader adapters.
 - **A one-line "reality gap"** in every report: how much a simulator overstates fills and P&L, in plain words, first.
   In fill rates it is there (the `zoo` view's first line, `score`'s RESULT line, the report's answer block, the
-  atlas headline), and in P&L in the atlas (`pnl_by_tier`, `zoo-toxicity`'s `bias_ticks`; done after 0.2.0). Next:
-  the P&L error in `score` and the report, and the sandbox on the one-pass sessions.
+  atlas headline), and in P&L in the atlas (`pnl_by_tier`, `zoo-toxicity`'s `bias_ticks`) and in `score` and its
+  report (the `P&L:` line, `pnl_gap`, the answer block; both done after 0.2.0). Next: the sandbox on the one-pass
+  sessions.
 
 ## Later
 

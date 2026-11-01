@@ -3901,6 +3901,200 @@
         "title": "PathRef",
         "type": "object"
       },
+      "PnlGap": {
+        "additionalProperties": false,
+        "description": "1.2: the scorecard's P&L gap in one currency at one markout horizon (`queuetruth.score.pnl_gap`): the per-order\nmean of `qt.score_shortfall.total_ccy` (simulator minus live, net of fees; positive = the simulator's P&L is too\nhigh) with its 95% block-bootstrap CI, the direction (a finding only when the CI excludes 0), the parts and the\nplain sentence.",
+        "properties": {
+          "ci_hi": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ci Hi"
+          },
+          "ci_lo": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ci Lo"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "direction": {
+            "enum": [
+              "sim_too_high",
+              "sim_too_low",
+              "no_significant_difference",
+              "not_computable"
+            ],
+            "title": "Direction",
+            "type": "string"
+          },
+          "headline": {
+            "title": "Headline",
+            "type": "string"
+          },
+          "horizon_ns": {
+            "title": "Horizon Ns",
+            "type": "integer"
+          },
+          "main_part": {
+            "anyOf": [
+              {
+                "enum": [
+                  "granted",
+                  "denied",
+                  "partial",
+                  "timing",
+                  "fees"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Main Part"
+          },
+          "main_part_majority": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Main Part Majority"
+          },
+          "mean_ccy": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Ccy"
+          },
+          "n_unvalued": {
+            "title": "N Unvalued",
+            "type": "integer"
+          },
+          "n_valued": {
+            "title": "N Valued",
+            "type": "integer"
+          },
+          "parts_ccy": {
+            "$ref": "#/components/schemas/PnlGapParts"
+          }
+        },
+        "required": [
+          "horizon_ns",
+          "currency",
+          "n_valued",
+          "n_unvalued",
+          "mean_ccy",
+          "ci_lo",
+          "ci_hi",
+          "direction",
+          "parts_ccy",
+          "main_part",
+          "main_part_majority",
+          "headline"
+        ],
+        "title": "PnlGap",
+        "type": "object"
+      },
+      "PnlGapParts": {
+        "additionalProperties": false,
+        "description": "1.2: per-order means of the P&L gap's parts (`queuetruth.score.pnl_gap`); they add up to `mean_ccy`.",
+        "properties": {
+          "denied": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Denied"
+          },
+          "fees": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fees"
+          },
+          "granted": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Granted"
+          },
+          "partial": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partial"
+          },
+          "timing": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timing"
+          }
+        },
+        "required": [
+          "granted",
+          "denied",
+          "partial",
+          "timing",
+          "fees"
+        ],
+        "title": "PnlGapParts",
+        "type": "object"
+      },
       "Problem": {
         "additionalProperties": false,
         "description": "RFC 9457 problem details.",
@@ -5303,6 +5497,20 @@
           "n_unmatched_sim": {
             "title": "N Unmatched Sim",
             "type": "integer"
+          },
+          "pnl_gap": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PnlGap"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pnl Gap"
           },
           "run_id": {
             "pattern": "^[0-9a-f]{16}$",

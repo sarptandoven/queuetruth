@@ -930,6 +930,11 @@ Schema 1.2 is additive like 1.1 (JSON `schema_version` stays 1). It adds:
 - `qt.data_quality.source_specific` INFO counters (never affect the verdict; `qt_ingest::dq::INFO_SOURCE_COUNTERS`):
   `iex_modify_maintain_priority`, `iex_modify_reset_priority`, `iex_modify_noop`, `iex_duplicate_messages`,
   `iex_other_protocol_segments`.
+- `qt.scorecard_summary.pnl_gap?` [{horizon_ns, currency?, n_valued, n_unvalued, mean_ccy?, ci_lo?, ci_hi?,
+  direction (`sim_too_high`/`sim_too_low`/`no_significant_difference`/`not_computable`), parts_ccy {granted, denied,
+  partial, timing, fees}, main_part?, main_part_majority?, headline}] (`queuetruth.score.pnl_gap`): the per-order
+  mean of `qt.score_shortfall.total_ccy` per currency at the markout equivalence horizon with its 95% CI, a finding
+  only when the CI excludes 0; written with `out` only; mirrored in `qt_schema::json::PnlGap`.
 - Crypto ingest warnings: `qt_crypto::Prepared::notes` (each source's exactness caveats in plain words) are written
   as ingest warnings (`qt.ingest_summary.warnings`, and `qt.data_quality.reasons` as `warning: ...`).
 

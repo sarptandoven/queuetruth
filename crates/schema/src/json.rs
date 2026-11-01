@@ -1744,6 +1744,84 @@ pub struct ArmCounts {
     pub sim: u64,
 }
 
+/// 1.2: direction of the scorecard's P&L gap (a finding only when the 95% CI excludes 0).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PnlGapDirection {
+    /// CI lower > 0: the simulator's P&L is too high.
+    SimTooHigh,
+    /// CI upper < 0: the simulator's P&L is too low.
+    SimTooLow,
+    /// The CI contains 0, or there is no CI.
+    #[default]
+    NoSignificantDifference,
+    /// No valued order at the horizon.
+    NotComputable,
+}
+
+/// 1.2: part of the P&L gap.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PnlGapPart {
+    /// Orders the simulator filled and live did not.
+    #[default]
+    Granted,
+    /// Orders live filled and the simulator did not.
+    Denied,
+    /// Different filled quantities.
+    Partial,
+    /// Delay, spread and adverse selection of matched units.
+    Timing,
+    /// Fees and rebates.
+    Fees,
+}
+
+/// 1.2: per-order means of the P&L gap's parts.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PnlGapParts {
+    /// Fills the simulator grants that live did not get.
+    pub granted: Option<f64>,
+    /// Fills live got that the simulator misses.
+    pub denied: Option<f64>,
+    /// Different filled quantities.
+    pub partial: Option<f64>,
+    /// Timing and price of fills both arms got.
+    pub timing: Option<f64>,
+    /// Fees and rebates.
+    pub fees: Option<f64>,
+}
+
+/// 1.2: the scorecard's P&L gap in one currency at one markout horizon.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PnlGap {
+    /// Markout horizon.
+    pub horizon_ns: i64,
+    /// Currency.
+    pub currency: Option<String>,
+    /// Valued orders.
+    pub n_valued: u64,
+    /// Unvalued orders.
+    pub n_unvalued: u64,
+    /// Per-order mean of simulator minus live P&L.
+    pub mean_ccy: Option<f64>,
+    /// CI low.
+    pub ci_lo: Option<f64>,
+    /// CI high.
+    pub ci_hi: Option<f64>,
+    /// Direction.
+    pub direction: PnlGapDirection,
+    /// Parts.
+    pub parts_ccy: PnlGapParts,
+    /// Main part of a finding.
+    pub main_part: Option<PnlGapPart>,
+    /// The main part is at least half of the gap.
+    pub main_part_majority: Option<bool>,
+    /// Plain sentence.
+    pub headline: String,
+}
+
 /// Summary of `score`.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -1815,6 +1893,9 @@ pub struct ScorecardSummary {
     /// 1.1 (3.11 #9): fills-only live log.
     #[serde(default)]
     pub fills_only: Option<bool>,
+    /// 1.2: P&L gap per currency at the markout equivalence horizon.
+    #[serde(default)]
+    pub pnl_gap: Option<Vec<PnlGap>>,
 }
 doc!(ScorecardSummary, "qt.scorecard_summary");
 

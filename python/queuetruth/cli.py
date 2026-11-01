@@ -433,6 +433,9 @@ def _render_score(doc: Doc, args: Doc, extra: Doc) -> str | None:
         mc = (doc.get("mcnemar") or {}).get("p_exact")
         sig += f"; plain McNemar p = {_p(mc)} assumes independent orders" if mc is not None else ""
         lines.append(f"RESULT: {what} ({ci}) within {_hz(window)} of entry; {sig}")
+    for g in doc.get("pnl_gap") or []:
+        if isinstance(g, dict) and g.get("headline"):
+            lines.append(f"P&L: {g['headline']}")
     eq = doc.get("equivalence") or {}
     if eq.get("fill_rate_margin") is not None and v is not None and not doc.get("fills_only"):
         m = _pp(eq.get("fill_rate_margin"), signed=False)

@@ -5416,6 +5416,7 @@ Summary of `score` (SPEC 5.7).
 | `discordance_clustered` | DiscordanceClustered or null | no | `null` |  |
 | `n_taker_fills` | ArmCounts or null | no | `null` |  |
 | `fills_only` | boolean or null | no | `null` |  |
+| `pnl_gap` | array of PnlGap or null | no | `null` |  |
 
 **`ArmCounts`** (in `qt.scorecard_summary`)
 
@@ -5615,6 +5616,37 @@ McNemar test on the discordant pairs (SPEC 5.7.5).
 | `odds_ratio` | number or null | no | `null` |  |
 | `or_ci_lo` | number or null | no | `null` |  |
 | `or_ci_hi` | number or null | no | `null` |  |
+
+**`PnlGap`** (in `qt.scorecard_summary`)
+
+1.2: the scorecard's P&L gap in one currency at one markout horizon (`queuetruth.score.pnl_gap`): the per-order mean of `qt.score_shortfall.total_ccy` (simulator minus live, net of fees; positive = the simulator's P&L is too high) with its 95% block-bootstrap CI, the direction (a finding only when the CI excludes 0), the parts and the plain sentence.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `horizon_ns` | integer | yes |  |  |
+| `currency` | string or null | yes |  |  |
+| `n_valued` | integer | yes |  |  |
+| `n_unvalued` | integer | yes |  |  |
+| `mean_ccy` | number or null | yes |  |  |
+| `ci_lo` | number or null | yes |  |  |
+| `ci_hi` | number or null | yes |  |  |
+| `direction` | one of "sim_too_high", "sim_too_low", "no_significant_difference", "not_computable" | yes |  |  |
+| `parts_ccy` | PnlGapParts | yes |  |  |
+| `main_part` | one of "granted", "denied", "partial", "timing", "fees" or null | yes |  |  |
+| `main_part_majority` | boolean or null | yes |  |  |
+| `headline` | string | yes |  |  |
+
+**`PnlGapParts`** (in `qt.scorecard_summary`)
+
+1.2: per-order means of the P&L gap's parts (`queuetruth.score.pnl_gap`); they add up to `mean_ccy`.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `granted` | number or null | yes |  |  |
+| `denied` | number or null | yes |  |  |
+| `partial` | number or null | yes |  |  |
+| `timing` | number or null | yes |  |  |
+| `fees` | number or null | yes |  |  |
 
 **`SimSource`** (in `qt.scorecard_summary`)
 

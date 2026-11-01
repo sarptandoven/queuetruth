@@ -53,6 +53,10 @@ Summary 1.1 fields (SPEC 3.11 #9): `discordance_clustered` (statistics), `n_twin
 (when twin matching ran), `n_taker_fills` per arm and `fills_only`; `qt.score_fills` is written in the 1.1 layout
 (`side`, `instrument_id`). Markouts in bps and net of fees (review F10) are `qt.score_tests` rows
 (`markout_mean_bps`, `markout_mean_net_ccy`); sim fills are charged the live log's fee rate per liquidity.
+
+Summary 1.2 field `pnl_gap` (with `out` only, since it reads `qt.score_shortfall`): the per-order P&L gap per
+currency at the markout equivalence horizon, its 95% CI, direction, parts and plain sentence
+(`queuetruth.score.pnl_gap`).
 """
 
 from __future__ import annotations
@@ -89,6 +93,7 @@ from queuetruth.score.coverage import is_fills_only
 from queuetruth.score.l2_own import own_free_l2_dataset, own_orders_from_log
 from queuetruth.score.markouts import apply_fee_rates, compute_markouts, position_series
 from queuetruth.score.outcomes import Outcome, exact_outcomes, log_outcomes, zoo_outcomes
+from queuetruth.score.pnl_gap import pnl_gap
 from queuetruth.score.runner import DefaultRunner, ScoreRunner, find_table
 from queuetruth.score.schedule import (
     cancel_instruction,
@@ -923,6 +928,7 @@ def build_scorecard(
     tests = make_table("qt.score_tests", asm.tests)
 
     files: list[dict[str, Any]] = []
+    gap: list[dict[str, Any]] | None = None
     if s.out:
         out = Path(s.out)
         out.mkdir(parents=True, exist_ok=True)
@@ -935,6 +941,7 @@ def build_scorecard(
             order_rows, fills_ext, bbo, ds, s, unpriced_qty=unpriced, n_unmatched_live=n_unmatched_live
         )
         files.append(write(shortfall, out / "score_shortfall.parquet"))
+        gap = pnl_gap(rows(shortfall), s.equivalence.markout_horizon_ns)
         if schedule:
             files.append(write(make_table("qt.shadow_spec", schedule), out / "schedule.parquet"))
         if zoo_arm_spec is not None and ds is not None and ds.kind != "l2":
@@ -972,6 +979,7 @@ def build_scorecard(
             "twin_match_rate": None if twins is None else twins.rate,
             "n_taker_fills": n_taker,
             "fills_only": fills_only,
+            "pnl_gap": gap,
         }
     )
     if s.out:
