@@ -14,14 +14,15 @@
 //! 3. A GTX order that would cross at activation expires unfilled (exact: it takes liquidity).
 //!
 //! Whole-order fills change the filled quantity, never whether or when an order first fills, so they do not move the
-//! fill rate. `fixture_day_attribution` buckets every fill the faithful mode misses on the synthetic Nasdaq day.
+//! fill rate. `fixture_day_attribution` buckets every fill the faithful mode misses on the synthetic Nasdaq days
+//! (mechanisms 1 and 2; its activations are on uncrossed books only, so it does not measure mechanism 3).
 
 use std::collections::BTreeMap;
 
 use qt_book::{Book, Effect};
 use qt_testkit::QueueMix;
 use qt_testkit::fixtures::fixture_config;
-use qt_types::{Action, BookSide, MboEvent, Px, Qty, Ts, Venue, flags, rules};
+use qt_types::{Action, BookSide, MboEvent, Px, Qty, Ts, Venue, Xoshiro256StarStar, flags, rules};
 use qt_zoo::Mode;
 use qt_zoo::l3::{L3Pair, L3Reason};
 
@@ -197,10 +198,21 @@ fn whole_order_fills_do_not_change_the_first_fill() {
 
 const S: Ts = 1_000_000_000;
 const H: Ts = 60 * S;
-/// The `standard` population's placements (`scripts/repro/breadth.py` STD_PLACEMENTS), as touch offsets.
-const OFFSETS: [i64; 4] = [1, 0, -1, -2];
-/// One shadow per offset and side every this many events.
-const EVERY: usize = 40;
+/// The `standard` population's placements (`scripts/repro/breadth.py` STD_PLACEMENTS): touch offset and weight.
+const PLACEMENTS: [(i64, f64); 4] = [(0, 0.6), (-1, 0.2), (-2, 0.1), (1, 0.1)];
+/// One shadow every this many events, its offset drawn from `PLACEMENTS` and its side at random.
+const EVERY: usize = 10;
+
+fn draw_offset(u: f64) -> i64 {
+    let mut acc = 0.0;
+    for (off, w) in PLACEMENTS {
+        acc += w;
+        if u < acc {
+            return off;
+        }
+    }
+    PLACEMENTS[PLACEMENTS.len() - 1].0
+}
 
 #[derive(Default, Clone, Copy)]
 struct Seen {
@@ -255,6 +267,8 @@ fn attribution() -> (BTreeMap<&'static str, usize>, usize, [usize; 2]) {
         by_inst.entry(e.instrument_id).or_default().push(e);
     }
     let mut buckets: BTreeMap<&'static str, usize> = BTreeMap::new();
+    let mut rng = Xoshiro256StarStar::new(7);
+    let mut unit = move || (rng.next_u64() >> 11) as f64 / (1u64 << 53) as f64;
     let (mut n, mut filled) = (0usize, [0usize; 2]);
     for events in by_inst.values() {
         let mut book = Book::new(rules(Venue::Nasdaq));
@@ -267,22 +281,16 @@ fn attribution() -> (BTreeMap<&'static str, usize>, usize, [usize; 2]) {
             if at_start {
                 at_start = false;
                 n_events += 1;
-                // activation points on a two-sided, uncrossed book (the synthetic Nasdaq book is sometimes crossed);
-                // so no shadow here crosses at activation and mechanism 3 does not arise
+                // activation points on a two-sided, uncrossed book only (the synthetic Nasdaq book is sometimes
+                // crossed): no shadow here crosses at activation, so this harness does not measure mechanism 3
                 let open = match (book.best(BookSide::Bid), book.best(BookSide::Ask)) {
                     (Some(b), Some(a)) => b.price < a.price,
                     _ => false,
                 };
                 if n_events % EVERY == 0 && open {
-                    for (k, &off) in OFFSETS.iter().enumerate() {
-                        let side = if (n_events / EVERY + k) % 2 == 0 {
-                            BookSide::Bid
-                        } else {
-                            BookSide::Ask
-                        };
-                        let Some(px) = touch_price(side, off, cfg.tick, &book) else {
-                            continue;
-                        };
+                    let off = draw_offset(unit());
+                    let side = if unit() < 0.5 { BookSide::Bid } else { BookSide::Ask };
+                    if let Some(px) = touch_price(side, off, cfg.tick, &book) {
                         let mk = |m| Some(L3Pair::new(side, px, 1, m, &book).with_tick(cfg.tick));
                         live.push(Live {
                             side,
@@ -375,10 +383,12 @@ fn attribution() -> (BTreeMap<&'static str, usize>, usize, [usize; 2]) {
                     let (_, r) = l.first[1].unwrap();
                     let s = l.seen;
                     if r == L3Reason::TradeThrough && s.disp_through && s.through_at_feed_best {
+                        // split by placement: at the execution the shadow is strictly better than the feed best either
+                        // way (it rests above the executed order, which is at that best)
                         if l.offset > 0 {
-                            "missed: execution at the feed best, shadow improved the touch"
+                            "missed: execution at the feed best, placed +1 (improving the touch)"
                         } else {
-                            "missed: execution at the feed best, the orders at and above its price left"
+                            "missed: execution at the feed best, placed at or behind the touch"
                         }
                     } else if r == L3Reason::TradeThrough && s.hidden_through && !s.disp_through {
                         "missed: hidden print through the price"
@@ -401,8 +411,9 @@ fn attribution() -> (BTreeMap<&'static str, usize>, usize, [usize; 2]) {
 }
 
 /// Every fill the faithful mode misses within 60 s on the synthetic Nasdaq days falls under mechanism 1 or 2 of the
-/// module doc, and the execution-at-the-feed-best rule (mechanism 1) is the largest. Run with
-/// `--nocapture` for the table (docs/concepts/l2-model-zoo.md quotes it).
+/// module doc (mechanism 3 is not measured here: activations are on uncrossed books only). The counts are pinned:
+/// docs/concepts/l2-model-zoo.md quotes them, so a change to the generator, the harness or either mode must update
+/// both. Run with `--nocapture` for the table.
 #[test]
 fn fixture_day_attribution() {
     let (b, n, filled) = attribution();
@@ -419,14 +430,18 @@ fn fixture_day_attribution() {
         let base = if k.starts_with("missed") { missed } else { extra };
         eprintln!("  {k:<76} {v:>6}  ({:.1}%)", 100.0 * *v as f64 / base.max(1) as f64);
     }
-    assert!(n > 2000, "{n} shadows");
-    assert_eq!(filled[1] as i64 - filled[0] as i64, missed as i64 - extra as i64);
-    assert_eq!(b.get("missed: other").copied().unwrap_or(0), 0, "{b:?}");
-    let feed_best: usize = b
-        .iter()
-        .filter(|(k, _)| k.starts_with("missed: execution at the feed best"))
-        .map(|(_, v)| v)
-        .sum();
-    assert!(feed_best * 2 > missed, "{b:?}");
-    assert!(missed > extra, "{b:?}");
+    assert_eq!((n, filled), (5655, [3204, 3321]));
+    let want: BTreeMap<&str, usize> = [
+        ("extra: crossed", 1),
+        ("extra: trade-through", 5),
+        (
+            "missed: execution at the feed best, placed +1 (improving the touch)",
+            15,
+        ),
+        ("missed: execution at the feed best, placed at or behind the touch", 103),
+        ("missed: hidden print at the price", 5),
+    ]
+    .into_iter()
+    .collect();
+    assert_eq!(b, want);
 }

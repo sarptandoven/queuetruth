@@ -6,8 +6,10 @@ makes on the synthetic Nasdaq fixture with the `standard` population's placement
 - both arms are scored on the same rows with the same label: the exact fill rate is identical for every model, the
   corrected mode equals it, and `p_fill` / `truth_filled` both mean "first fill by the deadline", so faithful's whole
   order fills do not count for more than a partial exact fill;
-- every shadow faithful misses within 60 s had its exact first fill by trade-through or, for a usable hidden print,
-  by queue (docs/concepts/l2-model-zoo.md (c)); none by a cross or an execution behind it.
+- every shadow faithful misses within 60 s has a corrected (= exact) first fill of `trade_through` (rule 1, or a
+  hidden print through the price), `queue` (a usable hidden print at the price, rule 2) or `crossed_at_live`
+  (rule 3) (docs/concepts/l2-model-zoo.md (c)). The counts are pinned. The reason alone cannot tell rule 1 from a
+  hidden print through the price; `crates/zoo/tests/l3_faithful_gap.rs` makes that split from the records.
 """
 
 from __future__ import annotations
@@ -33,6 +35,9 @@ PLACEMENTS = [
     {"offset_ticks": -2, "weight": 0.1},
     {"offset_ticks": 1, "weight": 0.1},
 ]
+# shadows only one arm fills within 60 s, by the first fill's reason (corrected arm for missed, faithful for extra)
+MISSED = {"trade_through": 26, "queue": 1}
+EXTRA = {"trade_through": 1}
 QTY = [{"kind": "lots", "lots": 1, "weight": 0.5}, {"kind": "median_order_size", "weight": 0.5}]
 
 
@@ -80,8 +85,8 @@ def test_both_arms_are_scored_on_the_same_rows(zoo_out: Path) -> None:
     # same rows and labels for every model; corrected is the exact replay (O-ZOO-4)
     assert all(m["n"] == f["n"] and m["n_y"] == f["n_y"] for m in by.values()), by
     assert c["sum_p"] == c["n_y"]
-    # the gap the atlas reports: faithful fills fewer
-    assert f["sum_p"] < f["n_y"], f
+    # the gap the atlas reports, pinned: faithful 1007 of 1970 within 60 s, exact 1033
+    assert (f["n"], f["sum_p"], f["n_y"]) == (1970, 1007.0, 1033), f
 
 
 @pytest.mark.requires_core
@@ -101,6 +106,5 @@ def test_every_missed_fill_is_a_trade_through_or_hidden_print(zoo_out: Path) -> 
             missed[first[(CORRECTED, sid)]] += 1
         elif pf == 1.0 and pc_ == 0.0:
             extra[first[(FAITHFUL, sid)]] += 1
-    assert sum(missed.values()) > sum(extra.values()) > 0, (missed, extra)
-    assert set(missed) <= {"trade_through", "queue"}, missed
-    assert missed["trade_through"] > 10 * missed["queue"], missed
+    assert set(missed) <= {"trade_through", "queue", "crossed_at_live"}, missed
+    assert (dict(missed), dict(extra)) == (MISSED, EXTRA)

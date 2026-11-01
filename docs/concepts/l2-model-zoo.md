@@ -142,8 +142,9 @@ Three of hftbacktest's rules give fewer fills:
    hftbacktest fills better-priced backtest bids only when an execution is strictly below the feed's best bid
    (`if exec_price_tick < depth.best_bid_tick()` in `L3FIFOQueueModel::fill_market_feed_order`, asks likewise).
    Its source says it assumes that "the fill event should occur before the cancel event which may update the best
-   price". Nasdaq ITCH and IEX DEEP+ do the opposite: each execution message removes the executed size before the
-   next execution, so the executed order is always at the feed's best. A shadow priced better than every feed order
+   price". In Nasdaq ITCH and IEX DEEP+ an execution does come before the removal of the same order, but each
+   execution message carries its own removal, so a sweep's earlier order has left the book before the next execution
+   arrives. The executed order is therefore always at the feed's best. A shadow priced better than every feed order
    on its side therefore never fills by trade-through. That happens when it improved the touch (the `+1` placement)
    or when the orders at and above its price executed or left, as in a sweep through its level. Only a cross of
    the opposite side fills it. The exact replay fills it at the first execution through its price, since that seller
@@ -162,13 +163,19 @@ drops those shadows for every model and for the exact arm alike. In the other di
 execution behind the shadow at a price other than its resting price (ruling A4b), and a price-improved execution
 below the feed best, as fills.
 
-On the synthetic Nasdaq fixture days (`crates/zoo/tests/l3_faithful_gap.rs`, 5,027 shadows of the `standard`
-placements, 60 s), faithful fills 40.86% within 60 s and the exact replay 42.57%. Of the 93 orders only the exact
-replay fills, 91 (97.8%) are rule 1: 64 after the orders at and above the shadow's price left, 27 that improved the
-touch. The other 2 (2.2%) are rule 2, and none is rule 3. Faithful has 7 fills the exact replay lacks, all
-price-improved executions. In a zoo run, the exact arm's first-fill `reason` in `zoo_fills` buckets a miss:
-`trade_through` for rule 1 (or a hidden print through the price), `queue` for rule 2, `crossed_at_live` for rule 3.
-The fixture shares say which rule matters; they are not the IEX day's shares. The faithful rules stay hftbacktest's.
+On the synthetic Nasdaq fixture days (`crates/zoo/tests/l3_faithful_gap.rs`), 5,655 one-lot shadows are placed
+with the `standard` weights (60% at the touch, 20% one tick behind, 10% two behind, 10% one tick better) and live
+60 s each. Faithful fills 56.66% of them within 60 s and the exact replay 58.73%. Of the 123 orders only the exact
+replay fills, 118 (95.9%) are rule 1 and 5 (4.1%) are rule 2. Of the rule 1 misses, 103 were placed at or behind
+the touch and 15 at `+1`. That split is by placement: at the missed execution, both kinds rest above every feed
+order on their side. Rule 3 is not measured, because the harness activates orders only on uncrossed books. Faithful
+has 6 fills the exact replay lacks: 5 price-improved executions and 1 cross. The test pins these counts.
+
+These are shares on a synthetic Nasdaq tape, not on the IEX day. IEX carries a lot of non-displayed volume, so
+rule 2 may matter more there. To bucket a real run's misses, read the `hbt_l3_fifo[mode=corrected]` rows of
+`zoo_fills`: corrected equals the exact replay, and `zoo_fills` holds only model fills, not the exact arm's. Their
+first-fill `reason` is `trade_through` for rule 1 (or a hidden print through the price), `queue` for rule 2 and
+`crossed_at_live` for rule 3. The faithful rules stay hftbacktest's.
 
 ### (d) `nt_queue_l2`
 

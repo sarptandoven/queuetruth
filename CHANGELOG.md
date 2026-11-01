@@ -73,8 +73,9 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   better-priced order by trade-through only when the execution is below the feed's best on its side. On ITCH and
   DEEP+ every executed order is at that best, so an order that improved the touch, or that is left alone above the
   feed best, misses those fills. It also ignores hidden prints, and a GTX order that crosses at activation expires.
-  On the synthetic Nasdaq days these cover every missed fill (97.8% the first rule). Both arms are scored on the
-  same rows with the same "filled" label, so the comparison needed no fix; faithful semantics are unchanged.
+  On synthetic Nasdaq days the first two rules cover every missed fill (95.9% the first; the third is not measured
+  there). Both arms are scored on the same rows with the same "filled" label, so the comparison needed no fix;
+  faithful semantics are unchanged.
 
 ### Changed
 
