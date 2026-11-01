@@ -32,7 +32,8 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   symbol-day (`pnl_stats.parquet`, `queuetruth.eval.blocks.pnl_block_stats`); `atlas.py reduce-day` writes
   `pnl_cells.parquet`, `combine` writes `pnl_by_tier.parquet` (simulated minus exact P&L per order in ticks and bps,
   the model's and the exact P&L, the grant / deny / timing parts, with the two-way dates x symbols bootstrap), and
-  the site adds a P&L column and a second plain-words sentence on the model furthest from the real queue in P&L.
+  the site adds a P&L column and a second plain-words sentence on the largest clear P&L error among the 100 most
+  traded symbols (ticks pool there).
   An atlas row equals `zoo-toxicity` on the same shadows (tested against the command). `plan.py --no-pnl` leaves it
   out and keeps the plan's run id as before. `evaluate_toxicity` returns the per-shadow terms (`PnlTerms`).
   [The Fill-Realism Atlas](docs/concepts/fill-realism-atlas.md) explains how to read the site, how a number is
@@ -70,6 +71,11 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ### Changed
 
+- **The atlas site states only clear findings.** Its first sentence gives the exact fill rate, then the most
+  optimistic and the most pessimistic fill model among those whose 95% interval excludes 0, each with its relative
+  size, and the closest model; the P&L sentence names the largest clear error, or says that no model's P&L differs
+  beyond its interval. The default sort and headline horizon is 60 s (`--horizon`), where enough orders fill for
+  the differences to read (at 1 s the real IEX day fills 0.47% of orders).
 - **`block_stats` is about 4x faster and needs less than half the memory** (56 s and 4.8 GB above the input to 13 s
   and 2.0 GB for one zoo run of 61,200 shadows on the real 2026-10-09 IEX day, where it was 60 to 85% of every
   unit's time and ran units out of memory). Shadow and model ids are hashed by Arrow instead of sorting a Python

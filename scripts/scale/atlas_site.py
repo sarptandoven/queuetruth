@@ -2,7 +2,7 @@
 """The Fill-Realism Atlas site (ROADMAP W1): a static, self-contained site from an `atlas.py combine` directory.
 
     uv run --frozen --no-sync python scripts/scale/atlas_site.py --atlas ATLAS_DIR --out SITE_DIR \
-        [--source nasdaq|iex] [--mode faithful] [--population standard] [--horizon 1s] [--per-symbol] \
+        [--source nasdaq|iex] [--mode faithful] [--population standard] [--horizon 60s] [--per-symbol] \
         [--pnl-horizon 60s]
 
 Reads `atlas_manifest.json` and `leaderboard_by_tier.parquet` (`pnl_by_tier.parquet` when the atlas has it,
@@ -10,10 +10,12 @@ Reads `atlas_manifest.json` and `leaderboard_by_tier.parquet` (`pnl_by_tier.parq
 
 - `index.html`: for each liquidity tier (`ALL` first), every simulator fill model's fill-rate bias against the exact
   replay at every horizon, with its 95% interval from the two-way dates x symbols bootstrap, sorted by the size of
-  the bias at `--horizon`; in plain words first ("NautilusTrader's default touch model fills 3.1 pp more orders
-  within 1 s than the real queue"); with `pnl_by_tier`, each model's P&L error (simulated minus exact P&L per order,
-  in ticks, marked to the mid `--pnl-horizon` after the first fill) with its interval and a second plain-words
-  sentence on the largest one; the flagged share of each row; how to verify every number;
+  the bias at `--horizon` (default 60 s); in plain words first: the exact fill rate, the most optimistic and the most
+  pessimistic model among those whose interval excludes 0, with the relative size, and the closest model; with
+  `pnl_by_tier`, each model's P&L error (simulated minus exact P&L per order, in ticks, marked to the mid
+  `--pnl-horizon` after the first fill) with its interval, and a second sentence on the largest clear one among the
+  100 most traded symbols (ticks pool there; else all symbols); the flagged share of each row; how to verify every
+  number. Nothing is stated as a finding unless its 95% interval excludes 0;
 - `data/leaderboard.json`: the rows shown (and `pnl_rows`), for programs; `data/atlas_manifest.json`: the manifest
   as combined (day roots, atlas root, flag policy, flagged symbol-days);
 - `symbols.html` with `--per-symbol`: per-symbol cross-day bias with empirical-Bayes shrinkage.
@@ -124,26 +126,64 @@ def ticks(x: float | None) -> str:
     return "n/a" if x is None or not math.isfinite(x) else f"{x:+.3f}"
 
 
+#: tier names of `plan.py` in plain words
+TIER_WORDS = {
+    "ALL": "all symbols",
+    "T1_top100": "the 100 most traded symbols",
+    "T2_101_500": "the 101st to 500th most traded symbols",
+    "T3_501_1500": "the 501st to 1,500th most traded symbols",
+    "T4_1501_4000": "the 1,501st to 4,000th most traded symbols",
+    "T5_rest": "the less traded symbols",
+}
+
+
+def _clear(r: dict[str, Any], metric: str) -> bool:
+    """The metric's 95% interval excludes 0 (a difference the page may state as a finding)."""
+    lo, hi = r.get(f"{metric}_ci_lo"), r.get(f"{metric}_ci_hi")
+    return lo is not None and hi is not None and (lo > 0 or hi < 0)
+
+
+def _named(model_id: str) -> str:
+    lib, name = describe(model_id)
+    return f"{lib}'s {name} ({model_id})"
+
+
+def pnl_tier(rows: list[dict[str, Any]]) -> str | None:
+    """The tier of the P&L sentence: the 100 most traded symbols when the atlas has them (a tick means about the
+    same there, so ticks can be pooled), else all symbols."""
+    tiers = {r["tier"] for r in rows}
+    return "T1_top100" if "T1_top100" in tiers else ("ALL" if "ALL" in tiers else None)
+
+
 def pnl_headline(rows: list[dict[str, Any]], horizon: int) -> str | None:
-    """One sentence on the non-bound model whose simulated P&L is furthest from the exact replay's, tier ALL."""
+    """The P&L sentence (tier `pnl_tier`): the exact P&L per order, then the non-bound model whose P&L is furthest
+    from it among those whose difference is clear (95% interval excludes 0), or that none is."""
+    tier = pnl_tier(rows)
     cands = [
         r
         for r in rows
-        if r["tier"] == "ALL"
+        if r["tier"] == tier
         and r["horizon_ns"] == horizon
         and describe(r["model_id"])[0] != "bound"
         and r.get("pnl_bias_ticks_value") is not None
     ]
     if not cands:
         return None
-    r = max(cands, key=lambda r: (abs(r["pnl_bias_ticks_value"]), r["model_id"]))
-    lib, name = describe(r["model_id"])
+    where = f"Among {TIER_WORDS.get(tier, 'tier ' + tier)}, marked to the mid {duration(horizon)} after each fill"
+    exact = cands[0].get("exact_pnl_ticks_value")
+    lead = f"{where}, the exact replay makes {ticks(exact)} ticks per order"
+    clear = [r for r in cands if _clear(r, "pnl_bias_ticks")]
+    if not clear:
+        return f"{lead}, and no fill model's P&L differs from it beyond its 95% interval."
+    r = max(clear, key=lambda r: (abs(r["pnl_bias_ticks_value"]), r["model_id"]))
     b = r["pnl_bias_ticks_value"]
+    rel = f"an error of {100 * abs(b / exact):.0f}% of the exact P&L; " if exact else ""
+    bps = r.get("pnl_bias_bps_value")
     return (
-        f"In P&L, {lib}'s {name} ({r['model_id']}) is furthest from the real queue: it books {abs(b):.3f} ticks per "
-        f"order {'more' if b > 0 else 'less'} than the exact replay, marked to the mid {duration(horizon)} after "
-        f"the fill (95% interval {ticks(r.get('pnl_bias_ticks_ci_lo'))} to {ticks(r.get('pnl_bias_ticks_ci_hi'))}; "
-        f"the exact P&L is {ticks(r.get('exact_pnl_ticks_value'))} ticks per order)."
+        f"{lead}; {_named(r['model_id'])} books {abs(b):.3f} ticks per order {'more' if b > 0 else 'less'} "
+        f"({rel}95% interval {ticks(r.get('pnl_bias_ticks_ci_lo'))} to {ticks(r.get('pnl_bias_ticks_ci_hi'))}"
+        + (f"; {bps:+.2f} bp" if bps is not None else "")
+        + "), the largest clear P&L error of a fill model."
     )
 
 
@@ -152,7 +192,8 @@ def _tier_order(tiers: set[str]) -> list[str]:
 
 
 def headline(rows: list[dict[str, Any]], horizon: int) -> str | None:
-    """One sentence on the most biased non-bound model in tier ALL at `horizon`."""
+    """The fill-rate sentence (tier ALL, `horizon`): the exact fill rate, the most optimistic and the most
+    pessimistic non-bound models among those whose bias is clear (95% interval excludes 0), and the closest one."""
     cands = [
         r
         for r in rows
@@ -163,15 +204,31 @@ def headline(rows: list[dict[str, Any]], horizon: int) -> str | None:
     ]
     if not cands:
         return None
-    r = max(cands, key=lambda r: (abs(r["fill_rate_bias_value"]), r["model_id"]))
-    lib, name = describe(r["model_id"])
-    b = r["fill_rate_bias_value"]
-    more = "more" if b > 0 else "fewer"
-    return (
-        f"{lib}'s {name} ({r['model_id']}) fills {abs(100 * b):.2f} percentage points {more} orders within "
-        f"{duration(horizon)} than the exact replay of the real queue (95% interval {pp(r['fill_rate_bias_ci_lo'])} "
-        f"to {pp(r['fill_rate_bias_ci_hi'])} pp; exact fill rate {pp(r.get('exact_fill_rate_value'), False)}%)."
-    )
+    exact = cands[0].get("exact_fill_rate_value")
+    parts = [
+        f"Within {duration(horizon)}, the exact replay of the real queue fills {pp(exact, False)}% of these orders"
+    ]
+
+    def said(r: dict[str, Any], word: str) -> str:
+        b = r["fill_rate_bias_value"]
+        more = "more" if b > 0 else "fewer"
+        rel = f"{100 * abs(b / exact):.0f}% {more} orders; " if exact else ""
+        return (
+            f"the most {word} fill model, {_named(r['model_id'])}, fills {abs(100 * b):.2f} percentage points "
+            f"{more} ({rel}95% interval {pp(r['fill_rate_bias_ci_lo'])} to {pp(r['fill_rate_bias_ci_hi'])} pp)"
+        )
+
+    over = [r for r in cands if _clear(r, "fill_rate_bias") and r["fill_rate_bias_value"] > 0]
+    under = [r for r in cands if _clear(r, "fill_rate_bias") and r["fill_rate_bias_value"] < 0]
+    if over:
+        parts.append(said(max(over, key=lambda r: (r["fill_rate_bias_value"], r["model_id"])), "optimistic"))
+    if under:
+        parts.append(said(min(under, key=lambda r: (r["fill_rate_bias_value"], r["model_id"])), "pessimistic"))
+    close = min(cands, key=lambda r: (abs(r["fill_rate_bias_value"]), r["model_id"]))
+    parts.append(f"the closest is {_named(close['model_id'])}, {pp(close['fill_rate_bias_value'])} pp")
+    if not over and not under:
+        parts.insert(1, "no fill model differs from it beyond its 95% interval")
+    return "; ".join(parts) + "."
 
 
 CSS = """
@@ -236,7 +293,7 @@ def build(
     source: str = "nasdaq",
     mode: str = "faithful",
     population: str | None = None,
-    horizon: str = "1s",
+    horizon: str | None = None,
     per_symbol: bool = False,
     pnl_horizon: str = "60s",
 ) -> dict[str, Any]:
@@ -246,7 +303,10 @@ def build(
     manifest = json.loads((atlas / "atlas_manifest.json").read_text(encoding="utf-8"))
     rows, population = _rows(atlas, mode, population)
     horizons = sorted({r["horizon_ns"] for r in rows})
-    h = parse_duration(horizon)
+    if horizon is None:  # 60 s when the atlas has it: at 1 s too few orders fill for the differences to read
+        h = 60_000_000_000 if 60_000_000_000 in horizons else horizons[-1]
+    else:
+        h = parse_duration(horizon)
     if h not in horizons:
         raise SystemExit(f"site: horizon {horizon} not in the atlas ({', '.join(duration(x) for x in horizons)})")
     tiers = _tier_order({r["tier"] for r in rows})
@@ -441,7 +501,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--source", choices=("nasdaq", "iex"), default="nasdaq")
     ap.add_argument("--mode", default="faithful")
     ap.add_argument("--population", help="shadow population of the plan (default standard, else the first)")
-    ap.add_argument("--horizon", default="1s", help="sort and headline horizon, e.g. 1s, 100ms, 1min")
+    ap.add_argument(
+        "--horizon", help="sort and headline horizon, e.g. 1s, 100ms, 1min (default 60 s, else the longest)"
+    )
     ap.add_argument("--per-symbol", action="store_true", help="also write symbols.html from per_symbol.parquet")
     ap.add_argument("--pnl-horizon", default="60s", help="markout horizon of the P&L column (atlases with P&L)")
     a = ap.parse_args(argv)

@@ -69,11 +69,15 @@ def test_nasdaq_site_reads_answer_first_and_is_deterministic(atlas: Path, tmp_pa
     r = S.build(atlas, out, horizon="1s")
     assert r["pages"] == ["index.html"] and r["atlas_root"] == "ab" * 32
     page = (out / "index.html").read_text()
-    # the most biased non-bound model in tier ALL leads, in plain words
+    # in plain words first: the exact rate, the most optimistic clear model with its relative size, and the closest;
+    # hftbacktest's -0.40 pp is not a finding at 1 s (its interval holds 0), so no "most pessimistic" is named
     assert (
-        "NautilusTrader's touch fill model (prob_fill_on_limit) (nt_prob_touch[mode=faithful;p=1]) fills 3.13 "
-        "percentage points more orders within 1 s" in page
+        "Within 1 s, the exact replay of the real queue fills 11.00% of these orders; the most optimistic fill model, "
+        "NautilusTrader's touch fill model (prob_fill_on_limit) (nt_prob_touch[mode=faithful;p=1]), fills 3.13 "
+        "percentage points more (28% more orders; 95% interval +2.53 to +3.77 pp); the closest is hftbacktest's "
+        "ProbQueue Power3 (hbt_power3[mode=faithful;n=2]), -0.40 pp." in page
     )
+    assert "pessimistic" not in page
     assert '+3.13<br><span class="ci">[+2.53, +3.77]' in page
     # sorted by |bias| at 1 s: the upper bound first, then NautilusTrader, then hftbacktest
     t_all = page.split("<h2>Tier ALL</h2>")[1].split("<h2>")[0]
@@ -82,7 +86,7 @@ def test_nasdaq_site_reads_answer_first_and_is_deterministic(atlas: Path, tmp_pa
     assert "ab" * 32 in page and "cd" * 32 in page and "Data provided for free by IEX" not in page
     assert "<script" not in page and "http://" not in page.replace("https://", "")
     # the headline is the search and link-preview text
-    assert '<meta property="og:description" content="NautilusTrader&#x27;s touch fill model' in page
+    assert '<meta property="og:description" content="Within 1 s, the exact replay' in page
     # what a visitor can do next, before the verification section
     assert page.index("<h2>Check your own backtester</h2>") < page.index("<h2>Verify any number</h2>")
     assert "pipx run queuetruth demo --yes" in page and "referee-your-simulator.md" in page
@@ -110,7 +114,7 @@ def test_attribution_matches_the_package_and_options_are_checked(atlas: Path, tm
     from queuetruth.demo.sources import IEX_ATTRIBUTION
 
     assert S.IEX_ATTRIBUTION == IEX_ATTRIBUTION
-    r = S.build(atlas, tmp_path / "s", per_symbol=True)
+    r = S.build(atlas, tmp_path / "s", horizon="1s", per_symbol=True)
     assert r["pages"] == ["index.html", "symbols.html"]
     assert "AAPL" in (tmp_path / "s" / "symbols.html").read_text()
     with pytest.raises(SystemExit, match="horizon"):
@@ -145,10 +149,12 @@ def test_site_shows_the_pnl_error_when_the_atlas_has_it(atlas: Path, tmp_path: P
     out = tmp_path / "site"
     r = S.build(atlas, out, horizon="1s")
     page = (out / "index.html").read_text()
+    # the P&L sentence is about the 100 most traded symbols (ticks pool there), and names the largest clear error
     assert (
-        "In P&amp;L, hftbacktest's ProbQueue Power3 (hbt_power3[mode=faithful;n=2]) is furthest from the real queue: "
-        "it books 0.400 ticks per order less than the exact replay, marked to the mid 1 min after the fill "
-        "(95% interval -0.500 to -0.300; the exact P&amp;L is -1.000 ticks per order)." in page
+        "Among the 100 most traded symbols, marked to the mid 1 min after each fill, the exact replay makes -1.000 "
+        "ticks per order; hftbacktest's ProbQueue Power3 (hbt_power3[mode=faithful;n=2]) books 0.400 ticks per order "
+        "less (an error of 40% of the exact P&amp;L; 95% interval -0.500 to -0.300), the largest clear P&amp;L error "
+        "of a fill model." in page
     )
     assert "<th>P&amp;L, ticks (1 min)</th>" in page and '<td class="under">-0.400<br>' in page
     assert "(over the 0 of 2 days whose units computed it)" in page  # the fixture manifest has no pnl_days
@@ -158,9 +164,10 @@ def test_site_shows_the_pnl_error_when_the_atlas_has_it(atlas: Path, tmp_path: P
     assert data["pnl_horizon_ns"] == S60 and len(data["pnl_rows"]) == r["pnl_rows"] == 6
     # another markout horizon, and one the atlas does not have
     S.build(atlas, tmp_path / "s1", horizon="1s", pnl_horizon="1s")
+    # hftbacktest's -0.1 tick at 1 s has an interval that reaches 0: no P&L finding is stated
     assert (
-        "ticks per order less than the exact replay, marked to the mid 1 s"
-        in (tmp_path / "s1" / "index.html").read_text()
+        "marked to the mid 1 s after each fill, the exact replay makes -1.000 ticks per order, and no fill model's "
+        "P&amp;L differs from it beyond its 95% interval." in (tmp_path / "s1" / "index.html").read_text()
     )
     with pytest.raises(SystemExit, match="P&L horizon"):
         S.build(atlas, tmp_path / "x", horizon="1s", pnl_horizon="10s")
