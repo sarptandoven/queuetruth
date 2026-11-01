@@ -8,6 +8,26 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ### Added
 
+- **`queuetruth-hftbacktest`** (`integrations/hftbacktest/plugin`, a separate package with its own `pyproject.toml`,
+  Apache-2.0, depends on `queuetruth>=0.2.0,<0.3`; ROADMAP "Plugins for more backtesters"): an hftbacktest user with
+  order-level data scores a backtest against exact-queue truth and calibrates its ProbQueue model in one or two calls,
+  wrapping queuetruth's own commands. `prepare(data, orders, out)` resolves the orders with the exact replay and
+  writes their absolute-price schedule and exact truth, one hftbacktest event file per instrument-day
+  (`export l2-npz`) and the hftbacktest replay script (`export replay-schedule`); `run(prepared, python=...,
+  snippet=...)` runs it in the venv that has hftbacktest; `score(prepared)` imports hftbacktest's order states
+  (`import_sim("hftbacktest")`), referees them order by order (`referee`) and gives, per horizon, the paired
+  fill-rate difference with a cluster-robust 95% CI and the exact McNemar p. A backtest stopped by hftbacktest #312
+  is scored up to the stop, with a warning. `calibrate(data, train, test, out=...)` runs `calibrate alloc` for
+  `power3`, `power2` and `power`, picks the exportable fit with the smallest held-out log loss at 60 s and returns
+  queuetruth's `export hftbacktest` snippet as paste-ready code (`CalibrationRefused`, `QT-CALIB-001`, when no fit
+  passes the trust check; `force=True` writes it under `NOT VALIDATED`). CLI `queuetruth-hftbacktest
+  prepare|run|score|calibrate`. Its tests run on the synthetic dataset in their own pytest session
+  (`make test-hftbacktest-plugin`, part of `make test`), with hftbacktest 2.4.4 itself when `QT_HBT_PY` names its
+  venv; `make hftbacktest-plugin-wheel` runs them on the built wheel against queuetruth from PyPI. Release workflow
+  `.github/workflows/release-hftbacktest.yml` (tags `queuetruth-hftbacktest-vX.Y.Z`: version checks, sdist and
+  wheel, the plugin's tests on the built wheel with queuetruth 0.2.0 and the newest 0.2.x and hftbacktest 2.4.4,
+  Trusted Publishing with attestations, a dry run on manual dispatch). Guide:
+  [Score and calibrate my hftbacktest backtest with the plugin](docs/how-to/score-and-calibrate-hftbacktest.md).
 - `ROADMAP.md`: what is being worked on and in what order (the Fill-Realism Atlas is `W1`).
 - **Sessions that take orders while they run** (`qt.Session.with_orders(spec)`; Rust `Session::open_replay`,
   `Engine::new_interactive`, `add_shadow`, `cancel_shadow`, `amend_shadow`): `submit` (a `qt.shadow_spec` table or
