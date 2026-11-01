@@ -180,7 +180,10 @@ elimination, not by observation: faithful also fills on every displayed executio
 
 **The IEX DEEP+ day 2026-10-09, sample.** This bucketing ran on 26 of the atlas plan's 130 units (every fifth unit
 by id), with each unit's own `standard` population, 60 s horizon, `h_max` 300 s, and uncensored rows with a label.
-Of 1,165,575 orders, faithful misses 18,915 (1.62% of orders) and has no extra fills.
+Of 1,165,575 orders, faithful misses 18,915 (1.62% of orders) and has no extra fills. On the full day (all 130 units, `standard` population,
+flag policy `exclude`) the atlas has an exact fill rate of 10.76% within 60 s and faithful `hbt_l3_fifo` at
+-1.62 pp (95% interval -1.68 to -1.56). In the top-100 tier those figures are 45.67% and -2.99 pp (-3.76 to
+-2.26).
 
 | corrected first-fill `reason` | missed orders | share |
 |---|---|---|
