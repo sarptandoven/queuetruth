@@ -36,8 +36,10 @@ on:
 permissions:
   contents: read
 
+# A group keeps one pending run and a newer one replaces it, so the site-only rebuilds compat.yml dispatches get a
+# group of their own and can never drop a pending IEX day; the deploy job's own group orders the deployments.
 concurrency:
-  group: atlas
+  group: ${{ inputs.site_only && 'atlas-site' || 'atlas' }}
   cancel-in-progress: false
 
 env:
@@ -87,8 +89,7 @@ jobs:
             exit 0
           fi
           have=false
-          if gh release view "$ATLAS_RELEASE" --json assets --jq '.assets[].name' 2>/dev/null \
-              | grep -qx "day-$DATE.tar.gz"; then
+          if bash scripts/nightly/release_assets.sh names "$ATLAS_RELEASE" | grep -qx "day-$DATE.tar.gz"; then
             have=true
           fi
           run_day=true
@@ -146,24 +147,47 @@ jobs:
         id: site
         if: steps.have.outputs.run_site == 'true'
         run: |
-          gh release download "$ATLAS_RELEASE" --pattern 'day-*.tar.gz' --dir .atlas/dl
+          mkdir -p .atlas/site .atlas/compat
+          # the upstream compatibility page is best effort: when it cannot be built the atlas still deploys,
+          # without the link
+          compat=false
+          if results="$(bash scripts/nightly/release_assets.sh names "$COMPAT_RELEASE")" \
+              && mapfile -t names < <(grep -E '^compat-[0-9]{4}-[0-9]{2}-[0-9]{2}\.json$' <<< "$results" || true) \
+              && bash scripts/nightly/release_assets.sh download "$COMPAT_RELEASE" .atlas/compat "${names[@]}" \
+              && uv run --frozen --no-sync python scripts/nightly/compat_site.py --results .atlas/compat \
+                --out .atlas/site/compat.html --atlas-link; then
+            compat=true
+          else
+            echo "::warning::the upstream compatibility page could not be built; the atlas deploys without it"
+            rm -f .atlas/site/compat.html
+          fi
+          days="$(bash scripts/nightly/release_assets.sh names "$ATLAS_RELEASE")"
+          mapfile -t window < <(grep -E '^day-.*\.tar\.gz$' <<< "$days" | sort | tail -n "$ATLAS_WINDOW")
+          if [ "${#window[@]}" -eq 0 ]; then
+            # before the first IEX day the site is the compatibility page alone
+            if [ "$compat" != true ]; then
+              echo "::error::no atlas day and no compatibility page: nothing to publish"
+              exit 1
+            fi
+            uv run --frozen --no-sync python scripts/nightly/compat_site.py --results .atlas/compat \
+              --out .atlas/site/index.html
+            rm -f .atlas/site/compat.html
+            echo "built=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          bash scripts/nightly/release_assets.sh download "$ATLAS_RELEASE" .atlas/dl "${window[@]}"
           args=()
-          for f in $(ls .atlas/dl/day-*.tar.gz | sort | tail -n "$ATLAS_WINDOW"); do
-            d=".atlas/days/$(basename "$f" .tar.gz)"
-            mkdir -p "$d" && tar -C "$d" -xzf "$f"
+          for name in "${window[@]}"; do
+            d=".atlas/days/${name%.tar.gz}"
+            mkdir -p "$d" && tar -C "$d" -xzf ".atlas/dl/$name"
             args+=(--day "$d")
           done
           uv run --frozen --no-sync python scripts/scale/atlas.py combine "${args[@]}" --out .atlas/atlas \
             --flag-policy exclude
+          link=()
+          if [ "$compat" = true ]; then link=(--compat-link); fi
           uv run --frozen --no-sync python scripts/scale/atlas_site.py --atlas .atlas/atlas --out .atlas/site \
-            --source iex --compat-link
-          # the upstream compatibility page: every result compat.yml kept ("No results yet" before the first)
-          mkdir -p .atlas/compat
-          if gh release view "$COMPAT_RELEASE" > /dev/null 2>&1; then
-            gh release download "$COMPAT_RELEASE" --pattern 'compat-*.json' --dir .atlas/compat
-          fi
-          uv run --frozen --no-sync python scripts/nightly/compat_site.py --results .atlas/compat \
-            --out .atlas/site/compat.html --atlas-link
+            --source iex "${link[@]}"
           echo "built=true" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         if: steps.site.outputs.built == 'true'
@@ -172,6 +196,9 @@ jobs:
 
   deploy:
     needs: build
+    concurrency:
+      group: atlas-pages
+      cancel-in-progress: false
     if: needs.build.outputs.site == 'true' && (github.event_name == 'schedule' || inputs.publish)
     runs-on: ubuntu-24.04
     permissions:

@@ -84,12 +84,12 @@ def test_newest_per_major_skips_yanked_dev_and_releases_without_a_linux_wheel():
         "3.0.0": [],
         "0.9.0": _files("nt", "0.9.0"),
     }
-    ok = C.linux_installable("cp313", "x86_64")
+    ok = C.host_installable("cp313", "Linux", "x86_64")
     assert C.newest_per_major(releases, 1, ok) == ["2.0.0rc8", "1.232.0"]
     assert C.newest_per_major(releases, 2, ok) == ["2.0.0rc8"]
-    assert C.newest_per_major(releases, 0, C.linux_installable("cp312", "x86_64")) == []
+    assert C.newest_per_major(releases, 0, C.host_installable("cp312", "Linux", "x86_64")) == []
     aarch = {"2.0.0": _files("nt", "2.0.0", plat="manylinux_2_28_aarch64")}
-    assert C.newest_per_major(aarch, 2, C.linux_installable("cp313", "aarch64")) == ["2.0.0"]
+    assert C.newest_per_major(aarch, 2, C.host_installable("cp313", "Linux", "aarch64")) == ["2.0.0"]
     assert C.newest_per_major(aarch, 2, ok) == []
 
 
@@ -139,11 +139,22 @@ def test_plan_targets_rejects_a_bad_pin_and_reports_pypi_errors():
 
 def test_cmd_plan_reads_the_pins_from_the_repository(tmp_path, capsys):
     out = tmp_path / "targets.json"
-    a = C.build_parser().parse_args(["plan", "--out", str(out)])
+    a = C.build_parser().parse_args(
+        ["plan", "--out", str(out), "--py-tag", "cp313", "--system", "Linux", "--machine", "x86_64"]
+    )
     assert C.cmd_plan(a, fetch=_pypi()) == 0
     targets = json.loads(out.read_text())
     assert targets[0]["roles"][0] == "pinned" and targets[0]["version"] == C.N.pinned_hbt_version(C.N.REPO_DEFAULT)
     assert capsys.readouterr().out.startswith(f"count={len(targets)}\n")
+
+
+def test_plan_defaults_to_this_host_and_reads_macos_wheels():
+    a = C.build_parser().parse_args(["plan", "--out", "x"])
+    assert a.py_tag == f"cp{sys.version_info[0]}{sys.version_info[1]}"
+    assert (a.system, a.machine) == (C.platform.system(), C.platform.machine())
+    mac = {"2.0.0": _files("nt", "2.0.0", plat="macosx_14_0_arm64")}
+    assert C.newest_per_major(mac, 2, C.host_installable("cp313", "Darwin", "arm64", 15)) == ["2.0.0"]
+    assert C.newest_per_major(mac, 2, C.host_installable("cp313", "Linux", "x86_64")) == []
 
 
 def test_runner_option_selects_the_hbt_version():
@@ -160,7 +171,7 @@ def test_runner_option_selects_the_hbt_version():
 def _run_args(tmp_path, **kw):
     base = dict(
         repo=str(C.N.REPO_DEFAULT), out=str(tmp_path / "out"), python="/py/python3.13", qt_python="/qt/python",
-        mode="reduced", date="2026-11-01", min_free_gib=2.0, threads=2, commit="abc", run_url="https://ci/run/1",
+        mode="reduced", date="2026-11-01", min_free_gib=2.0, threads=2, target_timeout=60.0, commit="abc", run_url="https://ci/run/1",
         log_base="https://github.com/o/r/releases/download/compat-results/", summary="",
     )  # fmt: skip
     base.update(kw)
@@ -171,13 +182,15 @@ def _fake_runner(results: dict[str, object]):
     """runner(argv, log): writes the latest.json a nightly run of argv's --only check would write."""
     calls: list[list[str]] = []
 
-    def run(argv, log):
+    def run(argv, log, timeout_s):
         calls.append(argv)
         state = Path(argv[argv.index("--state") + 1])
         check = argv[argv.index("--only") + 1]
         log.write_text("runner says hello\n")
         version = argv[-1] if argv[-2] in ("--hbt", "--nt-rc") else "pinned"
         res = results.get(f"{check}:{version}")
+        if res == "timeout":  # stopped at the time limit before it recorded anything
+            return C.TIMEOUT_RC
         if res is None:  # the runner crashed before writing anything
             return 2
         nid = "20261101T041700Z"
@@ -236,6 +249,33 @@ def test_run_targets_writes_the_result_and_one_log_per_target(tmp_path):
     assert "| hftbacktest | 2.4.4 | pinned, newest 2.x | `hbt` | pass | 2 / 2 |" in md
 
 
+def test_run_targets_writes_the_result_after_every_target_and_reports_a_timeout(tmp_path):
+    a = _run_args(tmp_path)
+    seen: list[int] = []
+    inner = _fake_runner({"hbt:2.4.4": {"status": "pass", "gates": [_gate("a", True)]}, "nt-pinned:pinned": "timeout"})
+
+    def runner(argv, log, timeout_s):
+        assert timeout_s == 60.0
+        result = tmp_path / "out" / "upload" / "compat-2026-11-01.json"
+        seen.append(len(json.loads(result.read_text())["targets"]) if result.exists() else 0)
+        return inner(argv, log, timeout_s)
+
+    doc = C.run_targets(TARGETS[:2], a, runner)
+    assert seen == [0, 1]  # the first version's result was on disk before the second one started
+    assert doc["targets"][1]["status"] == "error"
+    assert doc["targets"][1]["reason"].startswith("stopped at the 60 s time limit: ")
+
+
+def test_run_with_timeout_stops_the_whole_process_group(tmp_path):
+    log = tmp_path / "log.txt"
+    assert C.run_with_timeout([sys.executable, "-c", "print('hi')"], log, 30) == 0
+    assert "hi" in log.read_text()
+    t0 = C.dt.datetime.now()
+    rc = C.run_with_timeout(["/bin/sh", "-c", "sleep 60 & sleep 60; wait"], log, 0.5, grace_s=5)
+    assert rc == C.TIMEOUT_RC and (C.dt.datetime.now() - t0).total_seconds() < 20
+    assert "stopped at the 0.5 s time limit" in log.read_text()
+
+
 def test_verdict_errors_only_for_a_pinned_version():
     doc = {"targets": [
         {"library": "hftbacktest", "version": "2.4.4", "roles": ["pinned"], "status": "pass", "gates": []},
@@ -248,6 +288,58 @@ def test_verdict_errors_only_for_a_pinned_version():
     doc["targets"][0].update(status="error", reason="uv pip install failed")
     rc, lines = C.verdict(doc)
     assert rc == 1 and lines[0] == "::error title=compat::hftbacktest 2.4.4 (pinned): error: uv pip install failed"
+
+
+def test_verdict_escapes_workflow_command_data():
+    doc = {"targets": [{"library": "hftbacktest", "version": "2.4.5", "roles": ["newest 2.x"], "status": "error",
+                        "gates": [], "reason": "50% done\r\n::error::injected"}]}  # fmt: skip
+    rc, lines = C.verdict(doc)
+    assert rc == 0 and len(lines) == 1 and "\n" not in lines[0] and "\r" not in lines[0]
+    assert lines[0].endswith("error: 50%25 done%0D%0A::error::injected")
+
+
+def _upload_dir(tmp_path, date="2026-11-01", **doc_kw):
+    d = tmp_path / "artifact"
+    d.mkdir(parents=True, exist_ok=True)
+    rows = [
+        {
+            "library": "hftbacktest",
+            "version": "2.4.4",
+            "status": "pass",
+            "log": f"compat-{date}-hftbacktest-2.4.4.log.txt",
+        }
+    ]
+    doc = {"schema": C.SCHEMA_RESULT, "schema_version": 1, "date": date, "targets": rows, **doc_kw}
+    (d / f"compat-{date}.json").write_text(json.dumps(doc))
+    (d / f"compat-{date}-hftbacktest-2.4.4.log.txt").write_text("log\n")
+    return d
+
+
+def test_upload_files_takes_only_the_result_of_the_date_and_its_logs(tmp_path):
+    d = _upload_dir(tmp_path)
+    (d / "compat-2099-01-01.json").write_text(
+        json.dumps({"schema": C.SCHEMA_RESULT, "date": "2099-01-01", "targets": []})
+    )
+    (d / "compat.html").write_text("<p>x</p>")
+    (d / "compat-2026-11-01-extra.log.txt").write_text("not named by the result\n")
+    assert [p.name for p in C.upload_files(d, "2026-11-01")] == [
+        "compat-2026-11-01.json",
+        "compat-2026-11-01-hftbacktest-2.4.4.log.txt",
+    ]
+    bad = _upload_dir(tmp_path / "c")
+    doc = json.loads((bad / "compat-2026-11-01.json").read_text())
+    (bad / "compat-2026-11-01.json").write_text(json.dumps({**doc, "date": "2099-01-01"}))
+    with pytest.raises(ValueError, match="its date is '2099-01-01'"):
+        C.upload_files(bad, "2026-11-01")
+    (bad / "compat-2026-11-01.json").write_text(
+        json.dumps({**doc, "targets": [{**doc["targets"][0], "log": "../x.log.txt"}]})
+    )
+    with pytest.raises(ValueError, match="is not a compat-2026-11-01"):
+        C.upload_files(bad, "2026-11-01")
+    (bad / "compat-2026-11-01.json").write_text(json.dumps({**doc, "targets": ["not an object"]}))
+    with pytest.raises(ValueError, match="not a valid"):
+        C.upload_files(bad, "2026-11-01")
+    assert C.main(["select", str(tmp_path / "missing"), "--date", "2026-11-01"]) == 2
 
 
 def test_stale_assets_only_dated_results_and_logs():
@@ -309,7 +401,7 @@ def test_page_per_library_and_version_newest_first(results):
     docs, skipped = CS.load_results(results)
     assert [d["date"] for d in docs] == ["2026-10-31", "2026-11-01"]
     assert skipped == [
-        "compat-2026-10-29.json: not a qt.compat.result document",
+        "compat-2026-10-29.json: not a valid qt.compat.result document",
         "compat-2026-10-30.json: JSONDecodeError",
     ]
     page = CS.render(docs, skipped)
@@ -347,3 +439,11 @@ def test_page_links_only_https_urls(tmp_path):
     row = _t("hftbacktest", "2.4.4", "pass", log_url="javascript:alert(1)")
     page = CS.render([_doc("2026-11-01", [row], run_url="")])
     assert "javascript:" not in page and ">log</a>" not in page
+
+
+def test_page_skips_a_result_whose_targets_are_not_objects(results):
+    (results / "compat-2026-11-02.json").write_text(json.dumps(_doc("2026-11-02", ["not an object", 3])))
+    docs, skipped = CS.load_results(results)
+    assert [d["date"] for d in docs] == ["2026-10-31", "2026-11-01"]
+    assert "compat-2026-11-02.json: not a valid qt.compat.result document" in skipped
+    assert "On 2026-11-01" in CS.render(docs, skipped)

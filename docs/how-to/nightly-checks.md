@@ -227,27 +227,39 @@ models of their rules say? It runs `scripts/nightly/compat.py`, which drives thi
 
 1. `compat.py plan` asks PyPI for every release of both projects and lists the versions to check: the pinned ones
    (`make hbt-crosscheck`, `scripts/nt_crosscheck/requirements.txt`) and the newest release of each major line from
-   the pinned one up, release candidates included, that has a Linux wheel for the runner's interpreter. A yanked or
-   dev release, or one without such a wheel, is skipped; a newest release equal to the pin is one row with both
+   the pinned one up, release candidates included, that has a wheel for the interpreter and platform (the workflow
+   asks for Linux x86_64 and CPython 3.13; run by hand, the default is your own host). A yanked or dev release, or
+   one without such a wheel, is skipped; a newest release equal to the pin is one row with both
    roles. So a NautilusTrader 1.x maintenance release and a 2.x release candidate are both checked.
 2. `compat.py run` makes one `nightly.py run --mode reduced --only <check>` per version, each with its own state
    directory and the checkout's `.venv` as `--qt-python`: `hbt` with `--hbt VERSION` for hftbacktest, `nt-pinned`
    for the pinned NautilusTrader and `nt-rc --nt-rc VERSION` for any other (its 2.x queue model is tracked, not
    gated, as in the table above). It writes `compat-<date>.json` (schema `qt.compat.result`: per version the check,
-   its status, every gate with its detail, the log's URL, the run's URL) and one log per version.
-3. The publish job keeps both as assets of the `compat-results` release (results older than 90 days are deleted),
-   uploads a preview `compat.html`, and fails when a pinned version did not pass. A newer release that disagrees is
+   its status, every gate with its detail, the log's URL, the run's URL) and one log per version. Each version has
+   a time limit (`--target-timeout`, 40 minutes in the workflow) and the result is rewritten after every version,
+   so one that hangs is recorded as an error and the others are kept.
+3. The publish job uploads only what `compat.py select` accepts from the check job's artifact: that day's result,
+   when it is valid and carries that date, and the logs it names. It keeps them as assets of the `compat-results`
+   release (results older than 90 days are deleted), uploads a preview `compat.html`, and fails when a pinned
+   version did not pass. A newer release that disagrees is
    a warning annotation, not a failure: finding it is what the page is for.
 4. The site job dispatches `.github/workflows/atlas.yml` with `site_only`. A repository has one GitHub Pages site,
    so the atlas workflow owns it: every site build downloads the kept results, renders `compat.html` next to the
-   atlas index with `scripts/nightly/compat_site.py` and links it from the index. A site-only build runs no IEX day.
+   atlas index with `scripts/nightly/compat_site.py` and links it from the index. A site-only build runs no IEX day
+   and has its own concurrency group, so it never displaces a pending IEX run. The compatibility page is best
+   effort: when it cannot be built the atlas deploys without it and without the link. Before the first IEX day the
+   compatibility page is the whole site.
 
 The page lists, per library and version (newest first), the latest result with its date, the gates passed, why it
 did not pass and links to the log and the run, then every kept result. Like the atlas it is static, runs no script,
 uses the atlas's styles and is byte-identical for the same result files.
 
-The check job installs packages published hours ago, so it gets a read-only token and its checkout keeps no
-credentials; only the publish job (release assets) and the site job (one dispatch) can write. To try the same steps
+The check job installs packages published hours ago, so it gets a read-only token, its checkout keeps no
+credentials and it saves no uv or Rust cache (the atlas workflow restores those caches while it can write, so a
+poisoned cache would carry the new packages' code there). Its artifact is treated as untrusted data, as described in
+step 3. Only the publish job (release assets) and the site job (one dispatch) can write. Release assets are listed
+through the paged REST API (`scripts/nightly/release_assets.sh`), so a release with hundreds of them is read in
+full. To try the same steps
 on your machine (needs the queuetruth `.venv` from `make sync develop` and network access to PyPI):
 
 <!-- check-docs: skip (builds one virtual environment per version and needs network access to PyPI) -->

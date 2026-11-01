@@ -5,13 +5,17 @@ against the newest hftbacktest and NautilusTrader releases on PyPI, and against 
 `.github/workflows/compat.yml` runs it every day; it works the same on any machine with the runner's requirements
 (docs/how-to/nightly-checks.md).
 
-  python3 scripts/nightly/compat.py plan --out targets.json [--py-tag cp313] [--machine x86_64]
+  python3 scripts/nightly/compat.py plan --out targets.json [--py-tag cp313 --system Linux --machine x86_64]
       ask PyPI for every release; write the versions to check (pinned, and the newest of each major line from the
-      pinned one up, pre-releases included, that has a Linux wheel for the interpreter) and print them as
-      `key=value` lines for $GITHUB_OUTPUT
+      pinned one up, pre-releases included, that has a wheel for the interpreter and platform, by default this
+      host's) and print them as `key=value` lines for $GITHUB_OUTPUT
   python3 scripts/nightly/compat.py run --targets targets.json --out DIR --python PY --qt-python QTPY [...]
-      one `nightly.py run --mode reduced --only <check>` per target, each with its own state directory; writes
-      DIR/upload/compat-<date>.json (schema qt.compat.result) and one log per target next to it
+      one `nightly.py run --mode reduced --only <check>` per target, each with its own state directory and a
+      time limit (--target-timeout); writes DIR/upload/compat-<date>.json (schema qt.compat.result) after every
+      target, so a later hang keeps the earlier results, and one log per target next to it
+  python3 scripts/nightly/compat.py select DIR --date YYYY-MM-DD
+      the files of DIR to publish: compat-<date>.json when it is a valid result of that date, and the logs it names
+      (the workflow's publish job uploads only these from the check job's artifact)
   python3 scripts/nightly/compat.py verdict RESULT.json
       GitHub annotations; exit 1 when a pinned version did not pass (a newer release that disagrees is a warning:
       it is what the dashboard is for, not a regression of queuetruth)
@@ -27,8 +31,11 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import os
+import platform
 import re
 import shutil
+import signal
 import subprocess
 import sys
 from collections.abc import Callable, Sequence
@@ -57,9 +64,12 @@ RESULT_NAME = re.compile(r"^compat-(\d{4}-\d{2}-\d{2})(?:\.json|-.+\.log\.txt)$"
 # ---------------------------------------------------------------------------------------------------------------
 
 
-def linux_installable(py_tag: str, machine: str) -> Callable[[list[dict[str, Any]]], bool]:
-    """Whether a release's files hold a Linux wheel of `py_tag` for `machine` (what the GitHub runner installs)."""
-    return lambda files: E.wheel_for_host(files, py_tag, "Linux", machine, None) is not None
+def host_installable(
+    py_tag: str, system: str, machine: str, os_major: int | None = None
+) -> Callable[[list[dict[str, Any]]], bool]:
+    """Whether a release's files hold a wheel of `py_tag` for this host (`system` as `platform.system()` names it;
+    the GitHub runner is Linux x86_64)."""
+    return lambda files: E.wheel_for_host(files, py_tag, system, machine, os_major) is not None
 
 
 def newest_per_major(
@@ -77,7 +87,9 @@ def plan_targets(
     pinned: dict[str, str],
     fetch: Callable[[str], dict[str, Any]],
     py_tag: str = "cp313",
+    system: str = "Linux",
     machine: str = "x86_64",
+    os_major: int | None = None,
 ) -> list[dict[str, Any]]:
     """The versions to check: `pinned[library]`, then the newest release of each major line from the pinned one up.
 
@@ -85,7 +97,7 @@ def plan_targets(
     (the pin is not on PyPI, or not for this platform) is left out. `fetch(url) -> JSON` is the PyPI client
     (`qtnightly.envs.fetch_json`; tests pass a fake)."""
     targets: list[dict[str, Any]] = []
-    ok = linux_installable(py_tag, machine)
+    ok = host_installable(py_tag, system, machine, os_major)
     for library, project, pinned_check, other_check, option in LIBRARIES:
         pin = pinned[library]
         pin_key = E.version_key(pin)
@@ -117,7 +129,8 @@ def github_output(targets: list[dict[str, Any]]) -> str:
 def cmd_plan(a: argparse.Namespace, fetch: Callable[[str], dict[str, Any]] = E.fetch_json) -> int:
     repo = Path(a.repo).resolve()
     pinned = {"hftbacktest": N.pinned_hbt_version(repo), "nautilus_trader": N.pinned_nt_version(repo)[0]}
-    targets = plan_targets(pinned, fetch, a.py_tag, a.machine)
+    os_major = E.mac_major() if a.system == "Darwin" else None
+    targets = plan_targets(pinned, fetch, a.py_tag, a.system, a.machine, os_major)
     Path(a.out).write_text(json.dumps(targets, indent=1) + "\n")
     sys.stdout.write(github_output(targets))
     return 0
@@ -126,6 +139,32 @@ def cmd_plan(a: argparse.Namespace, fetch: Callable[[str], dict[str, Any]] = E.f
 # ---------------------------------------------------------------------------------------------------------------
 # run: one nightly run per target
 # ---------------------------------------------------------------------------------------------------------------
+
+
+TIMEOUT_RC = 124
+
+
+def run_with_timeout(argv: list[str], log: Path, timeout_s: float, grace_s: float = 120.0) -> int:
+    """Runs `argv` in its own process group with output to `log`; at `timeout_s` sends SIGTERM (the nightly runner
+    then stops its check and records a partial run), SIGKILL after `grace_s`, and returns `TIMEOUT_RC`."""
+    with log.open("w") as f:
+        p = subprocess.Popen(argv, stdout=f, stderr=subprocess.STDOUT, start_new_session=True)
+        try:
+            return p.wait(timeout=timeout_s)
+        except subprocess.TimeoutExpired:
+            f.write(f"\n[compat] stopped at the {timeout_s:g} s time limit\n")
+            f.flush()
+            for sig, wait in ((signal.SIGTERM, grace_s), (signal.SIGKILL, 30.0)):
+                try:
+                    os.killpg(p.pid, sig)
+                except ProcessLookupError:
+                    break
+                try:
+                    p.wait(timeout=wait)
+                    break
+                except subprocess.TimeoutExpired:
+                    continue
+            return TIMEOUT_RC
 
 
 def slug(target: dict[str, Any]) -> str:
@@ -199,35 +238,13 @@ def run_targets(
 ) -> dict[str, Any]:
     """Runs every target and writes `<out>/upload/compat-<date>.json` and the logs; returns the result document.
 
-    `runner(argv, log) -> exit code` runs one nightly run (tests pass a fake that writes a `latest.json`)."""
+    `runner(argv, log, timeout_s) -> exit code` runs one nightly run, `TIMEOUT_RC` when it was stopped at the time
+    limit (tests pass a fake that writes a `latest.json`). The document is rewritten after every target."""
     out = Path(a.out)
     upload = out / "upload"
     upload.mkdir(parents=True, exist_ok=True)
-
-    def default_runner(argv: list[str], log: Path) -> int:
-        with log.open("w") as f:
-            return subprocess.run(argv, stdout=f, stderr=subprocess.STDOUT, check=False).returncode
-
-    run_one = runner or default_runner
-    rows = []
-    for t in targets:
-        state = out / "state" / slug(t)
-        if state.exists():
-            shutil.rmtree(state)
-        state.mkdir(parents=True)
-        rc = run_one(runner_argv(t, state, a), state / "compat-runner.log")
-        try:
-            run = json.loads((state / "latest.json").read_text())
-        except (OSError, ValueError):
-            run = None
-        row = target_result(t, run, rc)
-        log_name = f"compat-{a.date}-{slug(t)}.log.txt"
-        collect_log(state, run, t["check"], upload / log_name)
-        row["log"] = log_name
-        if a.log_base:
-            row["log_url"] = a.log_base.rstrip("/") + "/" + log_name
-        rows.append(row)
-        print(f"{slug(t)} ({t['check']}, {', '.join(t['roles'])}): {row['status']}", file=sys.stderr, flush=True)
+    run_one = runner or run_with_timeout
+    rows: list[dict[str, Any]] = []
     doc: dict[str, Any] = {
         "schema": SCHEMA_RESULT,
         "schema_version": SCHEMA_VERSION,
@@ -237,7 +254,29 @@ def run_targets(
         "run_url": a.run_url or None,
         "targets": rows,
     }
-    (upload / f"compat-{a.date}.json").write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
+    for t in targets:
+        state = out / "state" / slug(t)
+        if state.exists():
+            shutil.rmtree(state)
+        state.mkdir(parents=True)
+        rc = run_one(runner_argv(t, state, a), state / "compat-runner.log", a.target_timeout)
+        try:
+            run = json.loads((state / "latest.json").read_text())
+        except (OSError, ValueError):
+            run = None
+        row = target_result(t, run, rc)
+        if rc == TIMEOUT_RC and row["status"] != "pass":
+            why = f"stopped at the {a.target_timeout:g} s time limit"
+            row["status"] = "error"
+            row["reason"] = f"{why}: {row['reason']}" if row.get("reason") else why
+        log_name = f"compat-{a.date}-{slug(t)}.log.txt"
+        collect_log(state, run, t["check"], upload / log_name)
+        row["log"] = log_name
+        if a.log_base:
+            row["log_url"] = a.log_base.rstrip("/") + "/" + log_name
+        rows.append(row)
+        print(f"{slug(t)} ({t['check']}, {', '.join(t['roles'])}): {row['status']}", file=sys.stderr, flush=True)
+        (upload / f"compat-{a.date}.json").write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
     return doc
 
 
@@ -272,6 +311,12 @@ def cmd_run(a: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------------------------------------------
 
 
+def escape_command_data(text: str) -> str:
+    """A workflow command's message as GitHub requires: `%`, CR and LF encoded, so a reason that holds a newline
+    cannot start a command of its own."""
+    return text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+
 def verdict(doc: dict[str, Any]) -> tuple[int, list[str]]:
     """(exit code, GitHub annotation lines): 1 when a pinned version did not pass."""
     lines, rc = [], 0
@@ -280,7 +325,7 @@ def verdict(doc: dict[str, Any]) -> tuple[int, list[str]]:
             continue
         failed = [g["name"] for g in r["gates"] if not g["ok"]]
         why = r.get("reason") or ("failed gates: " + "; ".join(failed) if failed else "no gate")
-        msg = f"{r['library']} {r['version']} ({', '.join(r['roles'])}): {r['status']}: {why}"
+        msg = escape_command_data(f"{r['library']} {r['version']} ({', '.join(r['roles'])}): {r['status']}: {why}")
         if "pinned" in r["roles"]:
             rc = 1
             lines.append(f"::error title=compat::{msg}")
@@ -294,6 +339,49 @@ def cmd_verdict(a: argparse.Namespace) -> int:
     for line in lines:
         print(line)
     return rc
+
+
+def valid_result(doc: Any) -> bool:
+    """A `qt.compat.result` document whose targets are objects with string library, version and status."""
+    if not isinstance(doc, dict) or doc.get("schema") != SCHEMA_RESULT or not isinstance(doc.get("targets"), list):
+        return False
+    return all(
+        isinstance(t, dict) and all(isinstance(t.get(k), str) for k in ("library", "version", "status"))
+        for t in doc["targets"]
+    )
+
+
+def upload_files(directory: Path, date: str) -> list[Path]:
+    """The files of `directory` to publish for `date`: `compat-<date>.json` (a valid result whose own date is
+    `date`) and the logs it names, which must be `compat-<date>-*.log.txt` files there. Anything else in the
+    directory is ignored; a missing or invalid result raises ValueError. The directory comes from the job that ran
+    the new packages, so nothing in it is trusted to choose a name or a date."""
+    dt.date.fromisoformat(date)
+    result = directory / f"compat-{date}.json"
+    try:
+        doc = json.loads(result.read_text())
+    except (OSError, ValueError) as e:
+        raise ValueError(f"{result.name}: {type(e).__name__}: {e}") from e
+    if not valid_result(doc):
+        raise ValueError(f"{result.name}: not a valid {SCHEMA_RESULT} document")
+    if doc.get("date") != date:
+        raise ValueError(f"{result.name}: its date is {doc.get('date')!r}, not {date}")
+    log_name = re.compile(rf"^compat-{re.escape(date)}-[A-Za-z0-9._-]+\.log\.txt$")
+    logs = []
+    for t in doc["targets"]:
+        name = t.get("log")
+        if name is None:
+            continue
+        if not isinstance(name, str) or not log_name.match(name) or not (directory / name).is_file():
+            raise ValueError(f"{result.name}: log {name!r} is not a compat-{date}-*.log.txt file of the directory")
+        logs.append(directory / name)
+    return [result, *sorted(set(logs))]
+
+
+def cmd_select(a: argparse.Namespace) -> int:
+    for p in upload_files(Path(a.dir), a.date):
+        print(p)
+    return 0
 
 
 def stale_assets(names: Sequence[str], today: dt.date, keep_days: int) -> list[str]:
@@ -324,8 +412,13 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("plan", help="the versions to check, from PyPI")
     p.add_argument("--repo", default=str(N.REPO_DEFAULT))
     p.add_argument("--out", required=True, help="targets JSON to write")
-    p.add_argument("--py-tag", default="cp313", help="interpreter tag a release must have a Linux wheel for")
-    p.add_argument("--machine", default="x86_64")
+    p.add_argument(
+        "--py-tag",
+        default=f"cp{sys.version_info[0]}{sys.version_info[1]}",
+        help="interpreter tag a release must have a wheel for (default: this interpreter's)",
+    )
+    p.add_argument("--system", default=platform.system(), help="Linux or Darwin (default: this host)")
+    p.add_argument("--machine", default=platform.machine(), help="x86_64, arm64, aarch64 (default: this host)")
     p.set_defaults(fn=cmd_plan)
 
     p = sub.add_parser("run", help="one nightly run per target; the result JSON and the logs")
@@ -337,6 +430,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--mode", choices=sorted(N.MODES), default="reduced")
     p.add_argument("--date", default=today, help="date of the result (default: today, UTC)")
     p.add_argument("--min-free-gib", type=float, default=2.0)
+    p.add_argument("--target-timeout", type=float, default=2400.0, help="seconds one version may take (setup included)")
     p.add_argument("--threads", type=int, default=2)
     p.add_argument("--commit", default="", help="commit checked (recorded)")
     p.add_argument("--run-url", default="", help="URL of the CI run (recorded, linked from the page)")
@@ -348,6 +442,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("result")
     p.set_defaults(fn=cmd_verdict)
 
+    p = sub.add_parser("select", help="the files of DIR to publish for --date")
+    p.add_argument("dir")
+    p.add_argument("--date", required=True)
+    p.set_defaults(fn=cmd_select)
+
     p = sub.add_parser("prune", help="asset names (stdin) older than --keep-days")
     p.add_argument("--today", default=today)
     p.add_argument("--keep-days", type=int, default=90)
@@ -357,7 +456,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     a = build_parser().parse_args(argv)
-    return a.fn(a)
+    try:
+        return a.fn(a)
+    except ValueError as e:
+        print(f"compat: {e}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

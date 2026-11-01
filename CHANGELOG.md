@@ -23,8 +23,12 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   the pinned versions, on the synthetic Nasdaq day. Each day's `compat-<date>.json` and one log per version are kept
   on the `compat-results` release (90 days), and the atlas workflow renders `compat.html` (per library and version,
   pass or fail per gate, the date, links to the logs) into the same Pages site and links it from the atlas index;
-  `compat.yml` dispatches `atlas.yml` with the new `site_only` input after each result. The run fails when a pinned
-  version does not pass; a newer release that disagrees is a warning. The runner gained `--hbt VERSION`, and its
+  `compat.yml` dispatches `atlas.yml` with the new `site_only` input after each result (its own concurrency group;
+  the compatibility page is best effort and never blocks the atlas deploy). The run fails when a pinned version
+  does not pass; a newer release that disagrees is a warning. The job that installs the new releases has a
+  read-only token, saves no cache, and the publish job uploads only the day's validated result and its logs from
+  its artifact. Release assets of both workflows are now listed through the paged REST API
+  (`scripts/nightly/release_assets.sh`), so `atlas-days` past 100 assets is read in full. The runner gained `--hbt VERSION`, and its
   hftbacktest venv lifts the 14-day cutoff for hftbacktest itself so a release is checked on the day it is
   published. [Run the nightly cross-checks](docs/how-to/nightly-checks.md#upstream-compatibility-on-github).
 - **The scheduled public atlas** (`.github/workflows/atlas.yml`, `scripts/scale/iex_latest.py`): each new IEX

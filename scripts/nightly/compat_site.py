@@ -25,9 +25,9 @@ for _p in (HERE, HERE.parent / "scale"):
         sys.path.insert(0, str(_p))
 
 import atlas_site as S  # noqa: E402  (stdlib only at import time)
+from compat import SCHEMA_RESULT, valid_result  # noqa: E402
 from qtnightly import envs as E  # noqa: E402
 
-SCHEMA_RESULT = "qt.compat.result"
 TITLE = "Upstream compatibility"
 SUMMARY = "Whether the newest hftbacktest and NautilusTrader releases still match the exact replay of the queue."
 REPO = "https://github.com/sarptandoven/queuetruth"
@@ -54,8 +54,8 @@ def load_results(directory: Path) -> tuple[list[dict[str, Any]], list[str]]:
         except (OSError, ValueError) as e:
             skipped.append(f"{p.name}: {type(e).__name__}")
             continue
-        if not isinstance(d, dict) or d.get("schema") != SCHEMA_RESULT or not isinstance(d.get("targets"), list):
-            skipped.append(f"{p.name}: not a {SCHEMA_RESULT} document")
+        if not valid_result(d):
+            skipped.append(f"{p.name}: not a valid {SCHEMA_RESULT} document")
             continue
         docs.append(d)
     docs.sort(key=lambda d: str(d.get("date", "")))

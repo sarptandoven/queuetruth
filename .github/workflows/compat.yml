@@ -6,8 +6,11 @@
 # from every kept result (scripts/nightly/compat_site.py). Actions are pinned by commit SHA (tag in the trailing
 # comment).
 #
-# The check job runs freshly published third-party packages, so it holds a read-only token and no credentials are
-# persisted; only the publish job (release assets) and the site job (one workflow dispatch) can write.
+# The check job runs freshly published third-party packages, so it holds a read-only token, persists no credentials
+# and saves no cache (atlas.yml restores the uv and Rust caches while holding a write token, so a poisoned cache
+# would carry the new packages' code there); its artifact is treated as untrusted data by the publish job, which
+# uploads only the day's validated result and the logs it names (compat.py select). Only the publish job (release
+# assets) and the site job (one workflow dispatch) can write.
 name: compat
 
 on:
@@ -41,7 +44,7 @@ jobs:
   check:
     if: github.repository == 'sarptandoven/queuetruth'
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    timeout-minutes: 240 # the build, then at most --target-timeout (40 min) per version
     permissions:
       contents: read
     outputs:
@@ -60,7 +63,10 @@ jobs:
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           version: ${{ env.UV_VERSION }}
+          enable-cache: false # never save a cache after running untrusted packages
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: false # restore only: never save a cache after running untrusted packages
       - name: venv + sync + develop
         run: |
           uv venv --python "${{ steps.py.outputs.python-path }}" .venv
@@ -72,7 +78,7 @@ jobs:
           PY: ${{ steps.py.outputs.python-path }}
         run: |
           "$PY" scripts/nightly/compat.py plan --out targets.json --py-tag "cp${PYTHON_VERSION//./}" \
-            | tee -a "$GITHUB_OUTPUT"
+            --system Linux --machine x86_64 | tee -a "$GITHUB_OUTPUT"
       - name: run the checks
         id: run
         env:
@@ -81,11 +87,13 @@ jobs:
           LOG_BASE: ${{ github.server_url }}/${{ github.repository }}/releases/download/${{ env.COMPAT_RELEASE }}
         run: |
           date="$(date -u +%F)"
+          echo "date=$date" >> "$GITHUB_OUTPUT"
           "$PY" scripts/nightly/compat.py run --targets targets.json --out .compat --date "$date" \
             --python "$PY" --qt-python "$PWD/.venv/bin/python" --commit "$GITHUB_SHA" --run-url "$RUN_URL" \
-            --log-base "$LOG_BASE" --summary "$GITHUB_STEP_SUMMARY"
-          echo "date=$date" >> "$GITHUB_OUTPUT"
+            --log-base "$LOG_BASE" --summary "$GITHUB_STEP_SUMMARY" --target-timeout 2400
+      # the result is rewritten after every version, so a failed step still uploads what finished
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: ${{ !cancelled() && steps.run.outputs.date != '' }}
         with:
           name: compat
           path: .compat/upload
@@ -94,6 +102,7 @@ jobs:
 
   publish:
     needs: check
+    if: ${{ !cancelled() && needs.check.outputs.date != '' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -114,21 +123,27 @@ jobs:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: compat
-          path: .compat/upload
+          path: .compat/artifact
       - name: keep the result and the logs
         id: upload
+        env:
+          PY: ${{ steps.py.outputs.python-path }}
         run: |
+          # the artifact comes from the job that ran the new packages: upload only the day's validated result and
+          # the logs it names, never a file it merely contains
+          files="$("$PY" scripts/nightly/compat.py select .compat/artifact --date "$DATE")"
+          mapfile -t upload <<< "$files"
           if ! gh release view "$COMPAT_RELEASE" > /dev/null 2>&1; then
             gh release create "$COMPAT_RELEASE" --prerelease --title "Upstream compatibility results" \
               --notes "Daily results of .github/workflows/compat.yml: compat-<date>.json and one log per version. Synthetic data only."
           fi
-          gh release upload "$COMPAT_RELEASE" .compat/upload/* --clobber
+          gh release upload "$COMPAT_RELEASE" "${upload[@]}" --clobber
           echo "uploaded=true" >> "$GITHUB_OUTPUT"
       - name: drop results older than the window
         env:
           PY: ${{ steps.py.outputs.python-path }}
         run: |
-          gh release view "$COMPAT_RELEASE" --json assets --jq '.assets[].name' \
+          bash scripts/nightly/release_assets.sh names "$COMPAT_RELEASE" \
             | "$PY" scripts/nightly/compat.py prune --today "$DATE" --keep-days "$COMPAT_KEEP_DAYS" \
             | while read -r name; do
                 echo "deleting $name"
@@ -138,21 +153,25 @@ jobs:
         env:
           PY: ${{ steps.py.outputs.python-path }}
         run: |
-          gh release download "$COMPAT_RELEASE" --pattern 'compat-*.json' --dir .compat/all
+          mapfile -t results < <(bash scripts/nightly/release_assets.sh names "$COMPAT_RELEASE" \
+            | grep -E '^compat-[0-9]{4}-[0-9]{2}-[0-9]{2}\.json$')
+          bash scripts/nightly/release_assets.sh download "$COMPAT_RELEASE" .compat/all "${results[@]}"
           "$PY" scripts/nightly/compat_site.py --results .compat/all --out .compat/compat.html
           gh release upload "$COMPAT_RELEASE" .compat/compat.html --clobber
       - name: verdict (fails when a pinned version did not pass)
         env:
           PY: ${{ steps.py.outputs.python-path }}
         run: |
-          "$PY" scripts/nightly/compat.py verdict ".compat/upload/compat-$DATE.json"
+          "$PY" scripts/nightly/compat.py verdict ".compat/artifact/compat-$DATE.json"
 
   site:
     needs: publish
+    # a schedule event always runs on the default branch and its payload has no repository object, so only a manual
+    # run compares its branch with the default one
     if: >-
       ${{ !cancelled() && needs.publish.outputs.uploaded == 'true'
-      && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-      && (github.event_name == 'schedule' || inputs.site) }}
+      && (github.event_name == 'schedule'
+      || (inputs.site && github.ref_name == github.event.repository.default_branch)) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
