@@ -171,11 +171,27 @@ the touch and 15 at `+1`. That split is by placement: at the missed execution, b
 order on their side. Rule 3 is not measured, because the harness activates orders only on uncrossed books. Faithful
 has 6 fills the exact replay lacks: 5 price-improved executions and 1 cross. The test pins these counts.
 
-These are shares on a synthetic Nasdaq tape, not on the IEX day. IEX carries a lot of non-displayed volume, so
-rule 2 may matter more there. To bucket a real run's misses, read the `hbt_l3_fifo[mode=corrected]` rows of
-`zoo_fills`: corrected equals the exact replay, and `zoo_fills` holds only model fills, not the exact arm's. Their
-first-fill `reason` is `trade_through` for rule 1 (or a hidden print through the price), `queue` for rule 2 and
-`crossed_at_live` for rule 3. The faithful rules stay hftbacktest's.
+These are shares on a synthetic Nasdaq tape. To bucket a real run's misses, read the
+`hbt_l3_fifo[mode=corrected]` rows of `zoo_fills`: corrected equals the exact replay, and `zoo_fills` holds only
+model fills, not the exact arm's. A miss's first-fill `reason` there is `trade_through` for rule 1 or a hidden print
+through the price, `queue` for rule 2, and `crossed_at_live` for rule 3. A `queue` miss is a hidden print by
+elimination, not by observation: faithful also fills on every displayed execution behind the order, so a corrected
+`queue` fill that faithful lacks can only come from a hidden print at the price.
+
+**The IEX DEEP+ day 2026-10-09, sample.** This bucketing ran on 26 of the atlas plan's 130 units (every fifth unit
+by id), with each unit's own `standard` population, 60 s horizon, `h_max` 300 s, and uncensored rows with a label.
+Of 1,165,575 orders, faithful misses 18,915 (1.62% of orders) and has no extra fills.
+
+| corrected first-fill `reason` | missed orders | share |
+|---|---|---|
+| `trade_through` (rule 1, or a hidden print through the price) | 10,902 | 57.6% |
+| `queue` (rule 2: a hidden print at the price, by elimination) | 8,013 | 42.4% |
+| `crossed_at_live` (rule 3) | 0 | 0% |
+
+By placement, the `trade_through` misses are 6,015 at the touch, 2,360 at `+1`, 1,767 at `-1` and 760 at `-2`.
+Most are orders whose level was swept or emptied ahead of them, not orders that improved the touch. Hidden
+executions are about 42% of the IEX gap against 4% on the synthetic tape, which carries far fewer hidden prints. The
+faithful rules stay hftbacktest's.
 
 ### (d) `nt_queue_l2`
 

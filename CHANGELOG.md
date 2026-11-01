@@ -74,7 +74,8 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   DEEP+ every executed order is at that best, so an order that improved the touch, or that is left alone above the
   feed best, misses those fills. It also ignores hidden prints, and a GTX order that crosses at activation expires.
   On synthetic Nasdaq days the first two rules cover every missed fill (95.9% the first; the third is not measured
-  there). Both arms are scored on the same rows with the same "filled" label, so the comparison needed no fix;
+  there). On a sample of the 2026-10-09 IEX day, about 58% of the misses are trade-throughs and 42% hidden
+  executions. Both arms are scored on the same rows with the same "filled" label, so the comparison needed no fix;
   faithful semantics are unchanged.
 
 ### Changed
