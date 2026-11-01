@@ -1,7 +1,10 @@
 # The public Fill-Realism Atlas on IEX DEEP+ (ROADMAP W1). After each US session it runs the day IEX published
 # through the scale pipeline (scripts/scale/local_day.py: split, units, reduce), keeps the reduced day as an asset of
 # the `atlas-days` release, combines the newest ATLAS_WINDOW days (scripts/scale/atlas.py combine) and publishes the
-# site (scripts/scale/atlas_site.py) with GitHub Pages. Actions are pinned by commit SHA (tag in the trailing comment).
+# site (scripts/scale/atlas_site.py) with GitHub Pages. The site also carries compat.html, the upstream compatibility
+# page rendered from the results compat.yml keeps on the `compat-results` release (scripts/nightly/compat_site.py);
+# compat.yml dispatches this workflow with site_only after each new result, since a repository has one Pages site.
+# Actions are pinned by commit SHA (tag in the trailing comment).
 #
 # One-time setup by a maintainer: Settings > Pages > Build and deployment > Source: GitHub Actions. Using IEX's data
 # means accepting IEX's Historical Data Terms of Use; every page carries IEX's attribution
@@ -25,6 +28,10 @@ on:
         description: "Deploy the site to GitHub Pages"
         type: boolean
         default: true
+      site_only:
+        description: "Only rebuild the site from the kept days and compatibility results (compat.yml uses this)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -42,6 +49,7 @@ env:
   RUST_TOOLCHAIN: "1.97.1"
   ATLAS_RELEASE: atlas-days
   ATLAS_WINDOW: "20"
+  COMPAT_RELEASE: compat-results
 
 jobs:
   build:
@@ -58,6 +66,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: find the day
         id: day
+        if: ${{ !inputs.site_only }}
         env:
           DATE_INPUT: ${{ inputs.date }}
         run: |
@@ -69,7 +78,14 @@ jobs:
         env:
           DATE: ${{ steps.day.outputs.date }}
           REBUILD: ${{ inputs.rebuild }}
+          SITE_ONLY: ${{ inputs.site_only }}
         run: |
+          if [ "$SITE_ONLY" = true ]; then
+            echo "run_day=false" >> "$GITHUB_OUTPUT"
+            echo "run_site=true" >> "$GITHUB_OUTPUT"
+            echo "site only: no day is run"
+            exit 0
+          fi
           have=false
           if gh release view "$ATLAS_RELEASE" --json assets --jq '.assets[].name' 2>/dev/null \
               | grep -qx "day-$DATE.tar.gz"; then
@@ -140,7 +156,14 @@ jobs:
           uv run --frozen --no-sync python scripts/scale/atlas.py combine "${args[@]}" --out .atlas/atlas \
             --flag-policy exclude
           uv run --frozen --no-sync python scripts/scale/atlas_site.py --atlas .atlas/atlas --out .atlas/site \
-            --source iex
+            --source iex --compat-link
+          # the upstream compatibility page: every result compat.yml kept ("No results yet" before the first)
+          mkdir -p .atlas/compat
+          if gh release view "$COMPAT_RELEASE" > /dev/null 2>&1; then
+            gh release download "$COMPAT_RELEASE" --pattern 'compat-*.json' --dir .atlas/compat
+          fi
+          uv run --frozen --no-sync python scripts/nightly/compat_site.py --results .atlas/compat \
+            --out .atlas/site/compat.html --atlas-link
           echo "built=true" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         if: steps.site.outputs.built == 'true'

@@ -34,7 +34,11 @@ an issue to argue for one. Ids (`W1`, ...) are referenced from code and scripts.
   GitHub Pages. The P&L error is computed next to the fill-rate bias (done after 0.2.0). Next are turning Pages on
   and the cloud run over the 19 public Nasdaq days.
 - **Upstream compatibility dashboard.** `scripts/nightly` made public: every new hftbacktest and NautilusTrader
-  release checked against the exact queue within a day.
+  release checked against the exact queue within a day. `.github/workflows/compat.yml` runs the engine checks daily
+  on the synthetic day against the newest release of each major line and the pinned versions, keeps each result on
+  the `compat-results` release and publishes `compat.html` with the atlas site
+  ([how it works](docs/how-to/nightly-checks.md#upstream-compatibility-on-github)). Next are turning Pages on and
+  the first month of results.
 - **`referee` as a GitHub Action**: done after 0.2.0 (`actions/referee`); next is getting simulator maintainers to
   run it and show the badge.
 - **Plugins for more backtesters**: hftbacktest packaged like the NautilusTrader plugin, then Hummingbot, Freqtrade,

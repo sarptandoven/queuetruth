@@ -175,3 +175,13 @@ def test_site_shows_the_pnl_error_when_the_atlas_has_it(atlas: Path, tmp_path: P
     (atlas / "pnl_by_tier.parquet").unlink()
     S.build(atlas, tmp_path / "plain", horizon="1s")
     assert "P&amp;L" not in (tmp_path / "plain" / "index.html").read_text()
+
+
+def test_compat_link_only_when_asked(atlas: Path, tmp_path: Path) -> None:
+    S.build(atlas, tmp_path / "plain", horizon="1s")
+    assert 'href="compat.html"' not in (tmp_path / "plain" / "index.html").read_text()
+    S.build(atlas, tmp_path / "linked", horizon="1s", compat_link=True)
+    page = (tmp_path / "linked" / "index.html").read_text()
+    assert 'Upstream compatibility: <a href="compat.html">' in page
+    assert S.main(["--atlas", str(atlas), "--out", str(tmp_path / "cli"), "--horizon", "1s", "--compat-link"]) == 0
+    assert (tmp_path / "cli" / "index.html").read_text() == page

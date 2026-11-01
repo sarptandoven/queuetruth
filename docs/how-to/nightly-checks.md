@@ -10,8 +10,9 @@ interpreter (Homebrew's `/opt/homebrew/bin/python3.13` by default; `QT_NIGHTLY_P
 The runner itself needs CPython 3.11 or newer; macOS's `/usr/bin/python3` is 3.9, so start it through the wrapper
 `scripts/nightly/nightly.sh`, which picks the right interpreter. Network access to PyPI the first time each environment
 is built. For the reproduction check, the public ITCH subsets of `scripts/repro/reproduce.py` on disk (checked against
-the sha256 pinned in that script before anything runs), or `--repro-download` to stream them once. Nothing runs on
-GitHub Actions or any cloud runner.
+the sha256 pinned in that script before anything runs), or `--repro-download` to stream them once. Everything runs
+on your machine; the one exception is the daily [upstream compatibility](#upstream-compatibility-on-github) workflow,
+which runs the engine checks on a GitHub runner against every new hftbacktest and NautilusTrader release.
 
 ## Run it once
 
@@ -52,7 +53,7 @@ in a transitive dependency can be traced.
 
 | check | role | engine and venv | passes when |
 |---|---|---|---|
-| `hbt` | required | hftbacktest as pinned by `make hbt-crosscheck` (2.4.4), with numba and numpy | for both faithful `hbt_risk_adverse` and `hbt_power3[n=2]` (`no_partial`): every compared order has the same first fill timestamp; every order rested in hftbacktest (none expired or rejected on arrival); at least 90% of the orders were compared, and every hftbacktest error is the known #312 (error code 14) |
+| `hbt` | required | hftbacktest as pinned by `make hbt-crosscheck` (2.4.4), or `--hbt VERSION`, with numba and numpy | for both faithful `hbt_risk_adverse` and `hbt_power3[n=2]` (`no_partial`): every compared order has the same first fill timestamp; every order rested in hftbacktest (none expired or rejected on arrival); at least 90% of the orders were compared, and every hftbacktest error is the known #312 (error code 14) |
 | `nt-pinned` | required | nautilus_trader as pinned in `scripts/nt_crosscheck/requirements.txt` (1.231.0) | the touch default and `queue_position=True` fill exactly the orders the faithful `nt_*` models fill at 0.1 / 1 / 10 / 60 s; each rule-set replica reproduces its reference; no disagreement is unexplained |
 | `nt-rc` | advisory | the newest nautilus_trader 2.x on PyPI that has a wheel for this interpreter and platform, release candidates included (`--nt-rc` pins one) | the same, except the queue model, which 2.x changed on purpose (it caps queue ahead on book updates; [Results](../RESULTS.md#nautilustrader-cross-check)); its agreement is tracked, not gated |
 | `repro` | required | `scripts/repro/reproduce.py` in the queuetruth venv | every step passes or records its numbers, the build did not change during the run |
@@ -192,6 +193,8 @@ wrap the line so a non-zero exit sends you something, for example
 
 ## Options worth knowing
 
+- `--hbt VERSION`: run the `hbt` check against another hftbacktest release (default: the pinned one). The 14-day
+  cutoff below is lifted for hftbacktest itself, so a release is installable on the day it is published.
 - `--offline`: no network. Reuses existing venvs and wheels, picks the newest `nt-2.*` venv already built, and errors
   instead of downloading.
 - `--refresh-envs`: rebuild every venv (otherwise a venv is rebuilt only when what it should hold changes). When a
@@ -215,6 +218,45 @@ a cutoff 14 days back (`--exclude-newer`), the repository's supply-chain rule, l
 under test; only the release candidate itself may be a pre-release. The NautilusTrader 1.231.0 macOS arm64 wheel is
 tagged for macOS 26 although its modules are built for macOS 11, so on older macOS the runner installs it under a
 `macosx_11_0` name, as `scripts/nt_crosscheck/requirements.txt` documents.
+
+## Upstream compatibility on GitHub
+
+`.github/workflows/compat.yml` runs every day at 04:17 UTC (and on demand from the Actions tab) and answers one
+question: do the newest hftbacktest and NautilusTrader releases still fill orders exactly as queuetruth's faithful
+models of their rules say? It runs `scripts/nightly/compat.py`, which drives this runner:
+
+1. `compat.py plan` asks PyPI for every release of both projects and lists the versions to check: the pinned ones
+   (`make hbt-crosscheck`, `scripts/nt_crosscheck/requirements.txt`) and the newest release of each major line from
+   the pinned one up, release candidates included, that has a Linux wheel for the runner's interpreter. A yanked or
+   dev release, or one without such a wheel, is skipped; a newest release equal to the pin is one row with both
+   roles. So a NautilusTrader 1.x maintenance release and a 2.x release candidate are both checked.
+2. `compat.py run` makes one `nightly.py run --mode reduced --only <check>` per version, each with its own state
+   directory and the checkout's `.venv` as `--qt-python`: `hbt` with `--hbt VERSION` for hftbacktest, `nt-pinned`
+   for the pinned NautilusTrader and `nt-rc --nt-rc VERSION` for any other (its 2.x queue model is tracked, not
+   gated, as in the table above). It writes `compat-<date>.json` (schema `qt.compat.result`: per version the check,
+   its status, every gate with its detail, the log's URL, the run's URL) and one log per version.
+3. The publish job keeps both as assets of the `compat-results` release (results older than 90 days are deleted),
+   uploads a preview `compat.html`, and fails when a pinned version did not pass. A newer release that disagrees is
+   a warning annotation, not a failure: finding it is what the page is for.
+4. The site job dispatches `.github/workflows/atlas.yml` with `site_only`. A repository has one GitHub Pages site,
+   so the atlas workflow owns it: every site build downloads the kept results, renders `compat.html` next to the
+   atlas index with `scripts/nightly/compat_site.py` and links it from the index. A site-only build runs no IEX day.
+
+The page lists, per library and version (newest first), the latest result with its date, the gates passed, why it
+did not pass and links to the log and the run, then every kept result. Like the atlas it is static, runs no script,
+uses the atlas's styles and is byte-identical for the same result files.
+
+The check job installs packages published hours ago, so it gets a read-only token and its checkout keeps no
+credentials; only the publish job (release assets) and the site job (one dispatch) can write. To try the same steps
+on your machine (needs the queuetruth `.venv` from `make sync develop` and network access to PyPI):
+
+<!-- check-docs: skip (builds one virtual environment per version and needs network access to PyPI) -->
+```sh
+python3.13 scripts/nightly/compat.py plan --out .scratch/compat/targets.json
+python3.13 scripts/nightly/compat.py run --targets .scratch/compat/targets.json --out .scratch/compat \
+  --python "$(command -v python3.13)" --qt-python "$PWD/.venv/bin/python"
+python3.13 scripts/nightly/compat_site.py --results .scratch/compat/upload --out .scratch/compat/compat.html
+```
 
 ## Run the runner's own tests
 
