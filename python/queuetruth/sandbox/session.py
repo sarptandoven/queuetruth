@@ -4,9 +4,9 @@ as the real queue would have filled them.
 Clock and information. The agent's clock starts at the episode start and moves only forward, by `advance`. What the
 agent can see is the visible cut `clock - feed_latency_ns`: the tape (`queuetruth.sandbox.tape`) releases the source
 records of complete events up to that cut (into a scratch dataset with `replay` stepping), and every observation,
-fill, queue position and markout is computed from those records alone. Instructions are stamped with the clock (there is no way to
-backdate one), so an order sent at `T` arrives at `T + latency` and can only touch events after the cut it was
-decided on.
+fill, queue position and markout is computed from those records alone. Instructions are stamped with the clock (there
+is no way to backdate one), so an order sent at `T` arrives at `T + latency` and can only touch events after the cut
+it was decided on.
 
 Stepping. The fills and order states of each step are exactly those of one full exact replay (SPEC 5.1, 5.2, fill
 rule `exact`) of the same orders whose events lie in the visible prefix. Two ways of computing them give identical
