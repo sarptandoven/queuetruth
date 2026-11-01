@@ -39,6 +39,11 @@ out.
 | hftbacktest L3 FIFO (order-level input) | -1.62 pp (-15.0%) | -2.99 pp (-6.6%) | -0.639 |
 | Databento tutorial estimator | -0.87 to -0.90 pp (-8%) | -1.67 to -1.77 pp | -0.342 to -0.344 |
 
+hftbacktest's L3 model, on a sample of 26 of the 130 work units (1,165,575 orders): it misses 18,915 fills the exact
+replay makes (1.62% of orders, the full day's gap); 58% are trade-throughs its feed-best rule never fills and 42% are
+fills from the queue at the order's price, which for this model can only come from hidden executions; it adds no fill
+the exact replay lacks. (The synthetic fixtures in #5 put 98% on the first rule; IEX has much more hidden volume.)
+
 Symbols ranked 501 to 1,500 by trading activity show the largest relative errors: NautilusTrader's touch model fills
 16.2% more orders than the exact replay there, hftbacktest's ProbQueue models 9.6% to 13.4% fewer and its L3 model
 21.2% fewer.

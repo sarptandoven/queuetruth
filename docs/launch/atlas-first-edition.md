@@ -57,10 +57,15 @@ hftbacktest's fill rules as released (2.4.4), checked against its source:
 1. **A trade-through is judged against the feed's best price, not your order's price.** An order resting at a better
    price than every other order on its side (because it improved the touch, or because the orders ahead of it left)
    is only filled when an execution happens at a price worse than the feed's best. On feeds like IEX and Nasdaq the
-   executed order is always at the feed's best, so such an order never fills this way. On our synthetic test days
-   this rule explains 91 of the 93 fills the model misses (the IEX day's own breakdown is still to be published).
+   executed order is always at the feed's best, so such an order never fills this way.
 2. **Hidden executions are ignored.** Executions against non-displayed orders that trade through or at your price
    fill a real order but not a backtest one.
+
+On a sample of the day (26 of the 130 work units, 1.17 million orders), the L3 model misses 18,915 fills the exact
+replay makes, 1.62% of orders, the same gap as the full day. 58% of them are trade-throughs the first rule never
+fills, most of them orders at the touch whose price level was swept or emptied ahead of them. The other 42% are fills
+the exact replay makes from the queue at the order's price, which for this model can only come from hidden
+executions. The model never fills an order the exact replay does not.
 
 The details, with tests that reproduce each rule, are in {{HFTBACKTEST_ISSUE_URL}}.
 

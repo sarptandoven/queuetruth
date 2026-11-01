@@ -51,8 +51,8 @@ Body: the Hacker News text above, then:
 3. The closest: NautilusTrader's queue-position model, within 0.05 percentage points.
 4. It matters in money. Among the 100 most traded symbols, hftbacktest's models book 0.3 to 0.6 ticks per order less
    P&L than the real queue: the fills they miss are the profitable ones.
-5. Why the L3 model misses fills: a trade-through is checked against the feed's best price, not your order's price. An
-   order better than every other on its side never fills that way. Details went to the maintainers.
+5. Why the L3 model misses fills: 58% are trade-throughs checked against the feed's best price instead of your
+   order's price; 42% are executions against hidden orders, which it ignores. Details went to the maintainers.
 6. Every number re-runs from IEX's public file and checks against a published Merkle root. Open source, rebuilt each
    trading day. One day, one venue so far. https://sarptandoven.github.io/queuetruth/
 
