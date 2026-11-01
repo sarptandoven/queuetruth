@@ -144,9 +144,13 @@ TIER_WORDS = {
 
 
 def _clear(r: dict[str, Any], metric: str) -> bool:
-    """The metric's 95% interval excludes 0 (a difference the page may state as a finding)."""
-    lo, hi = r.get(f"{metric}_ci_lo"), r.get(f"{metric}_ci_hi")
-    return lo is not None and hi is not None and (lo > 0 or hi < 0)
+    """A difference the page may state as a finding: the metric's 95% interval excludes 0 on the side of its estimate
+    (a percentile interval can lie wholly on the other side of a near-zero estimate; then nothing is stated, since
+    "more" or "fewer" would contradict either the estimate or the interval)."""
+    v, lo, hi = r.get(f"{metric}_value"), r.get(f"{metric}_ci_lo"), r.get(f"{metric}_ci_hi")
+    if v is None or lo is None or hi is None:
+        return False
+    return (lo > 0 and v > 0) or (hi < 0 and v < 0)
 
 
 def _named(model_id: str) -> str:
