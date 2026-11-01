@@ -93,8 +93,8 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 - **Rust 1.88 or later** to build from source (arrow 60's minimum; was 1.85). Wheels are unaffected.
 - **`queuetruth._core` exchanges Arrow data through the Arrow PyCapsule interface directly**
   (`crates/py/src/arrow_ffi.rs`) instead of `pyo3-arrow`, which has no release for arrow 60; `Cargo.lock` lists 26
-  fewer crates. `read_table`, `arrow_schema` and `write_table` behave as before, and `write_table` still accepts any
-  object with `__arrow_c_stream__`.
+  fewer crates. `read_table`, `arrow_schema`, `write_table` and `Session.submit`, `take_fills` and `take_results`
+  behave as before, and `write_table` and `Session.submit` still accept any object with `__arrow_c_stream__`.
 - **Parquet files are written by `parquet` 60.0.0.** Data pages are unchanged; for some tables the footer is a few
   bytes smaller (in a sample run `zoo_fills`, `zoo_predictions` and `zoo_trajectory`; every `replay` output was
   byte-identical), so their sha256 in summaries differs from 0.2.0's for the same rows.
