@@ -82,6 +82,12 @@ def duration(ns: int) -> str:
     return f"{ns / 1_000_000:g} ms"
 
 
+def iso_date(d: str) -> str:
+    """A day as YYYY-MM-DD: the pipeline names days MMDDYYYY (as the Nasdaq files do); other forms pass through."""
+    d = str(d)
+    return f"{d[4:]}-{d[:2]}-{d[2:4]}" if len(d) == 8 and d.isdigit() else d
+
+
 def parse_duration(text: str) -> int:
     t = text.strip().replace(" ", "")
     for unit, scale in sorted(UNITS, key=lambda u: -len(u[0])):
@@ -786,14 +792,15 @@ def build(
         raise SystemExit(f"site: P&L horizon {pnl_horizon} not in the atlas ({have})")
     pnl_at = {(r["tier"], r["model_id"]): r for r in pnl if r["horizon_ns"] == ph} if pnl else None
     days = manifest.get("days") or []
-    first, last = (days[0]["date"], days[-1]["date"]) if days else ("?", "?")
+    first, last = (iso_date(days[0]["date"]), iso_date(days[-1]["date"])) if days else ("?", "?")
+    span = first if len(days) == 1 else f"{len(days)} days from {first} to {last}"
     attribution = _attribution(source)
     venue = "IEX DEEP+" if source == "iex" else "Nasdaq TotalView-ITCH"
     present = [lib for lib in LIBRARY_PAGES if any(describe(r["model_id"])[0] == lib for r in rows)]
     best = best_settings(rows, h)
 
     about = (
-        f"{html.escape(venue)}, {len(days)} day(s) from {html.escape(first)} to {html.escape(last)}, "
+        f"{html.escape(venue)}, {html.escape(span)}, "
         f"{manifest.get('symbol_days', 0):,} symbol-days, {manifest.get('distinct_symbols', 0):,} symbols; "
         f"{html.escape(mode)} mode, shadow population {html.escape(population)} "
         f'(<a href="{DOCS}/concepts/fill-realism-atlas.md">how to read it, how it is made, its limits</a>).'
@@ -857,7 +864,7 @@ def build(
     )
     root = manifest.get("atlas_root", "")
     day_rows = "".join(
-        f"<tr><td>{html.escape(str(d['date']))}</td><td><code>{html.escape(str(d['merkle_root']))}</code></td>"
+        f"<tr><td>{html.escape(iso_date(d['date']))}</td><td><code>{html.escape(str(d['merkle_root']))}</code></td>"
         f"<td>{d.get('units_valid', '')} / {d.get('units_planned', '')}</td></tr>"
         for d in days
     )

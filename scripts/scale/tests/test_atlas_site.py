@@ -92,6 +92,7 @@ def test_nasdaq_site_reads_answer_first_and_is_deterministic(atlas: Path, tmp_pa
     assert page.index("<h2>Check your own backtester</h2>") < page.index("<h2>Verify any number</h2>")
     assert "pipx run queuetruth demo --yes" in page and "referee-your-simulator.md" in page
     assert "concepts/fill-realism-atlas.md" in page
+    assert "2 days from 2019-12-30 to 2020-01-30" in page and S.iso_date("10092026") == "2026-10-09"
     data = json.loads((out / "data" / "leaderboard.json").read_text())
     assert len(data["rows"]) == 12 and "attribution" not in data
     # byte-identical rebuild
@@ -312,6 +313,7 @@ def test_one_page_per_library_answers_the_search_question(zoo_atlas: Path, tmp_p
     assert "of hftbacktest&#x27;s settings." not in hbt and "the largest clear P&amp;L error of hftbacktest's" in hbt
     assert "calibrate-hftbacktest.md" in hbt and '<a href="index.html">Fill-Realism Atlas</a>' in hbt
     assert S.IEX_ATTRIBUTION in hbt and "<script" not in hbt
+    assert "2 days from 2019-12-30 to 2020-01-30" in hbt  # the same ISO dates as the index
     nt = (out / "nautilustrader.html").read_text()
     assert "<title>How accurate is NautilusTrader&#x27;s fill model? Fill-Realism Atlas</title>" in nt
     # a setting whose interval holds 0 is never stated as a difference
