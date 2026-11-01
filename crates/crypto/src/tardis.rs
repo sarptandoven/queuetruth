@@ -431,10 +431,10 @@ pub(crate) fn convert_full(lines: impl Iterator<Item = QtResult<String>>, cfg: &
             }
             rows.push(r);
         }
-        if let (Some((&b, _)), Some((&a, _))) = (s.bids.iter().next_back(), s.asks.iter().next()) {
-            if b >= a {
-                crossed += 1;
-            }
+        if let (Some((&b, _)), Some((&a, _))) = (s.bids.iter().next_back(), s.asks.iter().next())
+            && b >= a
+        {
+            crossed += 1;
         }
     }
     let without_snapshot = states.values().filter(|s| !s.seen_snapshot).count() as u64

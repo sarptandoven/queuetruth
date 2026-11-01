@@ -227,7 +227,7 @@ impl<R: Read> CaptureReader<R> {
             _ => return Err(self.fmt_err("pcapng section header with an invalid byte-order magic")),
         };
         let len = u32_e(&self.buf[0..4], big) as usize;
-        if !(28..=MAX_BLOCK).contains(&len) || len % 4 != 0 {
+        if !(28..=MAX_BLOCK).contains(&len) || !len.is_multiple_of(4) {
             return Err(self.fmt_err(format!("pcapng section header length {len}")));
         }
         // Rest of the body after the byte-order magic, then the trailing length.
@@ -300,7 +300,7 @@ impl<R: Read> CaptureReader<R> {
                     let btype = u32_e(&self.buf[0..4], big);
                     self.fill(0, 4, "a pcapng block length")?;
                     let len = u32_e(&self.buf[0..4], big) as usize;
-                    if !(12..=MAX_BLOCK).contains(&len) || len % 4 != 0 {
+                    if !(12..=MAX_BLOCK).contains(&len) || !len.is_multiple_of(4) {
                         return Err(self.fmt_err(format!("pcapng block type {btype:#x} length {len}")));
                     }
                     self.fill(0, len - 8, "a pcapng block")?;

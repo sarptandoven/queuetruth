@@ -138,6 +138,10 @@ review found the second one by mutating footer bytes):
 | `arrow-ipc-59.3.0/src/convert.rs:514` | `not implemented: Type NONE not supported` |
 | `parquet-59.3.0/src/file/metadata/mod.rs:1063` | `column start and length should not be negative` |
 
+Update: arrow 60.0.0 fixed the four `arrow-ipc` sites (their reproducers moved to `fuzz/regressions/parquet/` and
+`fixed_parquet_crashes_stay_fixed` replays them without the filter). The `parquet` site remains, now
+`parquet-60.0.0/src/file/metadata/mod.rs:1040`.
+
 The four `arrow-ipc` sites decode the Arrow schema that Parquet writers embed in the footer (`ARROW:schema`). Every
 path that reads Parquet reaches them: a `parquet` ingest input, its `instruments` file, and any file of a dataset
 directory (`Dataset::open` reads `instruments.parquet`, partitions are read when replayed), so an uploaded dataset

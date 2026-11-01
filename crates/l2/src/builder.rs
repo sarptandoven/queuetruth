@@ -310,10 +310,10 @@ impl L2Builder {
     /// Feeds one record; appends rows when a batch is emitted.
     pub fn push(&mut self, e: &MboEvent, out: &mut Vec<L2Row>) {
         self.apply_book(e);
-        if e.action == b'T' {
-            if let Some(r) = self.trade_row(e) {
-                self.trades.push(r);
-            }
+        if e.action == b'T'
+            && let Some(r) = self.trade_row(e)
+        {
+            self.trades.push(r);
         }
         self.pending = true;
         self.last_rec = Some(Rec {

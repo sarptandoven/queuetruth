@@ -90,6 +90,14 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   0.2 workflows (certificates, agent sandbox, prediction markets, forecasts, Freqtrade and Hummingbot).
 - Docs: the service reference names the `zoo_` id prefix and says rate limits are per tenant; the self-hosting guide
   lists `zoo` among the `jobs submit` kinds and names the commands that stay local.
+- **Rust 1.88 or later** to build from source (arrow 60's minimum; was 1.85). Wheels are unaffected.
+- **`queuetruth._core` exchanges Arrow data through the Arrow PyCapsule interface directly**
+  (`crates/py/src/arrow_ffi.rs`) instead of `pyo3-arrow`, which has no release for arrow 60; `Cargo.lock` lists 26
+  fewer crates. `read_table`, `arrow_schema` and `write_table` behave as before, and `write_table` still accepts any
+  object with `__arrow_c_stream__`.
+- **Parquet files are written by `parquet` 60.0.0.** Data pages are unchanged; for some tables the footer is a few
+  bytes smaller (in a sample run `zoo_fills`, `zoo_predictions` and `zoo_trajectory`; every `replay` output was
+  byte-identical), so their sha256 in summaries differs from 0.2.0's for the same rows.
 
 ### Fixed
 
@@ -99,7 +107,7 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   fixed fields (`MIN_METADATA_BYTES`, 104) or longer than the file can hold (its size for an uncompressed file, the
   decompression guard's limit for a compressed one) as `QT-INPUT-002` before the decoder runs. The fuzz
   reproducers moved from `fuzz/known-crashes/` to `fuzz/regressions/dbn/`, and the `dbn` and `ingest` fuzz targets
-  no longer skip them. The Parquet panics in `fuzz/known-crashes/parquet/` are still open.
+  no longer skip them. The Parquet footer panic in `fuzz/known-crashes/parquet/` is still open.
 - **Trading halts censor shadows end to end (finding F2).** Ingest records the spans in which each instrument is
   not in continuous trading in `data_quality.json` (`trading_halts`: `instrument_id`, `ts_start`, `ts_end`,
   `state`, `reason`; schema 1.2, additive, omitted when empty, never part of the verdict): Nasdaq ITCH Stock
@@ -115,6 +123,16 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   `qt_ingest::halts`, `qt_replay::{halts_of, partition_halts}`, `qt_zoo::runner::StreamOptions::trading_halts`,
   `qt_calib::collect::collect_events_with_spans`, `qt_features::extract::extract_events_with_spans`. Design note:
   [halt censoring](docs/design/extensions/halt-censoring.md) H.6.
+- **Four of the five known Parquet decode panics** (the `arrow-ipc` schema sites found by the `parquet` fuzz target)
+  are fixed by arrow 60: their reproducers moved to `fuzz/regressions/parquet/`. The `parquet` footer panic on a
+  negative column chunk range remains in `fuzz/known-crashes/parquet/`.
+
+### Security
+
+- **zstd advisories cleared** (RUSTSEC-2026-0391, -0398, -0403, -0410 and the `unsound` warnings against
+  `zstd-safe`): `zstd` 0.14.3, `zstd-safe` 8.2.0 and `zstd-sys` 2.1.2, through `arrow-*` and `parquet` 60.0.0 (whose
+  `zstd` 0.14 replaces `parquet` 59's `zstd` 0.13) and a lockfile update of `dbn`'s `zstd`. `cargo audit --deny
+  warnings` passes on `Cargo.lock` and `fuzz/Cargo.lock`. Every new release is at least two weeks old.
 
 ## [0.2.0] - 2026-10-25
 
