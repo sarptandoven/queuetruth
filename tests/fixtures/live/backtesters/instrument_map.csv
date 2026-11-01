@@ -1,0 +1,2 @@
+venue,instrument,instrument_id,session_date,price_exp,size_exp,tick_size,lot_size
+binance,BTCUSDT,1,,-2,-5,0.01,0.00001

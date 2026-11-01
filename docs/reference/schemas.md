@@ -190,7 +190,7 @@ File: `schemas/json/qt.bot_reconcile.schema.json`.
 |---|---|---|---|---|
 | `schema` | const "qt.bot_reconcile" | yes | `"qt.bot_reconcile"` |  |
 | `schema_version` | const 1 | yes | `1` |  |
-| `kind` | one of "freqtrade", "hummingbot" | yes |  |  |
+| `kind` | one of "freqtrade", "hummingbot", "backtrader", "vectorbt" | yes |  |  |
 | `run_id` | string | yes |  |  |
 | `live_log` | string | yes |  |  |
 | `sim_log` | string | yes |  |  |
@@ -3438,7 +3438,7 @@ File: `schemas/json/qt.live_import_spec.schema.json`.
 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `venue` | one of "binance", "bybit", "okx", "coinbase", "kraken", "deribit", "hyperliquid", "ibkr_flex", "fix44", "sim_hftbacktest", "sim_nautilus", "freqtrade", "hummingbot", "sim_freqtrade", "sim_hummingbot" | yes |  |  |
+| `venue` | one of "binance", "bybit", "okx", "coinbase", "kraken", "deribit", "hyperliquid", "ibkr_flex", "fix44", "sim_hftbacktest", "sim_nautilus", "freqtrade", "hummingbot", "sim_freqtrade", "sim_hummingbot", "sim_backtrader", "sim_vectorbt" | yes |  |  |
 | `inputs` | array of PathRef or UploadRef or JobFileRef | yes |  |  |
 | `out` | string or null | no | `null` |  |
 | `account` | string or null | no | `null` |  |

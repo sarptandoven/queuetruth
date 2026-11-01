@@ -38,7 +38,9 @@ an issue to argue for one. Ids (`W1`, ...) are referenced from code and scripts.
 - **`referee` as a GitHub Action**: done after 0.2.0 (`actions/referee`); next is getting simulator maintainers to
   run it and show the badge.
 - **Plugins for more backtesters**: hftbacktest packaged like the NautilusTrader plugin, then Hummingbot, Freqtrade,
-  LEAN, VectorBT and Backtrader adapters.
+  LEAN, VectorBT and Backtrader adapters. Backtrader and VectorBT exports import as simulator logs and reconcile
+  against a live log (done after 0.2.0, [guide](docs/how-to/reconcile-backtrader-vectorbt.md)); next: LEAN, and
+  real exports from users.
 - **A one-line "reality gap"** in every report: how much a simulator overstates fills and P&L, in plain words, first.
   In fill rates it is there (the `zoo` view's first line, `score`'s RESULT line, the report's answer block, the
   atlas headline), and in P&L in the atlas (`pnl_by_tier`, `zoo-toxicity`'s `bias_ticks`; done after 0.2.0). Next:

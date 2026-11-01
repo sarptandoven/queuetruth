@@ -1,15 +1,19 @@
-"""`queuetruth reconcile`: a trading bot's simulator arm against its live (or dry-run) run, order by order.
+"""`queuetruth reconcile`: a trading bot's simulator arm against its live (or dry-run) run, or a backtest against a
+canonical live log, order by order.
 
-    queuetruth reconcile --kind freqtrade|hummingbot --sim PATH [--sim PATH ...] --live PATH [--live PATH ...]
-        --out DIR [--account NAME] [--instrument-map FILE] [--window DURATION] [--price-tol-bps X]
-        [--time-tol DURATION] [--no-score] [--arms-as-given] [--option KEY=VALUE ...] [--max-rows N]
+    queuetruth reconcile --kind freqtrade|hummingbot|backtrader|vectorbt --sim PATH [--sim PATH ...]
+        --live PATH [--live PATH ...] --out DIR [--account NAME] [--instrument-map FILE] [--window DURATION]
+        [--price-tol-bps X] [--time-tol DURATION] [--no-score] [--arms-as-given] [--option KEY=VALUE ...]
+        [--max-rows N]
 
-Runs `reconcile_freqtrade` / `reconcile_hummingbot` (`queuetruth.live.importers`): writes `<out>/live` and `<out>/sim`
-(canonical live logs), `<out>/score` (`queuetruth score` with the simulator arm) and `<out>/reconcile.json`
-(`qt.bot_reconcile`) with `reconcile_orders.csv`, and prints the report answer first (`--format json`: the
-`qt.bot_reconcile` document). Options are the importer options of the guide
-(docs/how-to/reconcile-freqtrade-hummingbot.md), e.g. `--option timeframe=5m`, `--option dry_run=true`. A Python-only
-group: `queuetruth.cli.main` runs it before the clap grammar, which lists it (crates/cli/gen_python_commands.py).
+Runs `reconcile_freqtrade` / `reconcile_hummingbot` / `reconcile_backtrader` / `reconcile_vectorbt`
+(`queuetruth.live.importers`; for the backtesters `--live` is one canonical live-log directory): writes
+`<out>/live` and `<out>/sim` (canonical live logs), `<out>/score` (`queuetruth score` with the simulator arm) and
+`<out>/reconcile.json` (`qt.bot_reconcile`) with `reconcile_orders.csv`, and prints the report answer first
+(`--format json`: the `qt.bot_reconcile` document). Options are the importer options of the guides
+(docs/how-to/reconcile-freqtrade-hummingbot.md, docs/how-to/reconcile-backtrader-vectorbt.md), e.g.
+`--option timeframe=5m`, `--option dry_run=true`. A Python-only group: `queuetruth.cli.main` runs it before the clap
+grammar, which lists it (crates/cli/gen_python_commands.py).
 
 Exit codes (SPEC 0.2): 0 success, 2 any error.
 """
@@ -47,24 +51,32 @@ def parser() -> argparse.ArgumentParser:
     sub = root.add_subparsers(dest="command", required=True, parser_class=_Parser)
     p = sub.add_parser(
         "reconcile",
-        help="a Freqtrade or Hummingbot simulator arm against its live run, order by order",
+        help="a bot's or backtester's simulated orders against the live run, order by order",
         description="A trading bot's simulator arm (Freqtrade backtest or dry run, Hummingbot paper bot) against its "
-        "live run: paired orders, why each differs, and the sim-vs-live scorecard.",
+        "live run, or a Backtrader or VectorBT backtest against a canonical live log: paired orders, why each "
+        "differs, and the sim-vs-live scorecard.",
     )
-    p.add_argument("--kind", required=True, choices=["freqtrade", "hummingbot"], help="the bot")
+    p.add_argument(
+        "--kind",
+        required=True,
+        choices=["freqtrade", "hummingbot", "backtrader", "vectorbt"],
+        help="the bot or backtester",
+    )
     p.add_argument(
         "--sim",
         action="append",
         required=True,
         metavar="PATH",
-        help="simulator arm: backtest result, dry-run database and logs, or paper-bot database (repeatable)",
+        help="simulator arm: backtest result, dry-run database and logs, paper-bot database, Backtrader notification "
+        "lines or VectorBT records (repeatable)",
     )
     p.add_argument(
         "--live",
         action="append",
         required=True,
         metavar="PATH",
-        help="live arm: the bot's database, logs or trades CSV (repeatable)",
+        help="live arm: the bot's database, logs or trades CSV (repeatable); for backtrader and vectorbt one canonical "
+        "live-log directory (queuetruth live import)",
     )
     p.add_argument("--out", required=True, metavar="DIR", help="output directory")
     p.add_argument("--account", default="main", help="account label of both logs (default main)")
@@ -72,14 +84,18 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--window",
         metavar="DURATION",
-        help="scorer evaluation horizon, e.g. 1h (default 1 day freqtrade, 60 s hummingbot)",
+        help="scorer evaluation horizon, e.g. 1h (default 60 s hummingbot, else 1 day)",
     )
     p.add_argument(
         "--price-tol-bps", type=float, default=0.5, metavar="X", help="price difference that counts (default 0.5 bps)"
     )
     p.add_argument("--time-tol", metavar="DURATION", help="timing difference that counts, e.g. 5s")
     p.add_argument("--no-score", action="store_true", help="pair and explain only; do not run the scorer")
-    p.add_argument("--arms-as-given", action="store_true", help="do not refuse a bot simulator arm against a dry run")
+    p.add_argument(
+        "--arms-as-given",
+        action="store_true",
+        help="do not refuse arms that look swapped (a simulated live arm, a live bot as the simulator)",
+    )
     p.add_argument(
         "--option",
         action="append",
@@ -137,8 +153,12 @@ def run(args: argparse.Namespace) -> tuple[dict[str, Any], str]:
         kw["time_tol_ns"] = duration_ns(args.time_tol)
     if args.kind == "freqtrade":
         from queuetruth.live.importers.freqtrade import reconcile_freqtrade as reconcile
-    else:
+    elif args.kind == "hummingbot":
         from queuetruth.live.importers.hummingbot import reconcile_hummingbot as reconcile
+    elif args.kind == "backtrader":
+        from queuetruth.live.importers.backtrader import reconcile_backtrader as reconcile
+    else:
+        from queuetruth.live.importers.vectorbt import reconcile_vectorbt as reconcile
     from queuetruth.live.importers.freqtrade import render_reconcile
 
     report = reconcile(args.sim, args.live, args.out, **kw)

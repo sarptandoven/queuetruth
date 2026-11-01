@@ -62,6 +62,16 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   A URL day survives dropped connections (the stream resumes with HTTP ranges), and `local_day.py` runs only as
   many units at once as the machine's memory holds at 6 GiB each (`--unit-mem-gib`): three units on a 16 GB
   machine ran it out of memory on the real 2026-10-09 day.
+- **Backtrader and VectorBT backtests.** `live import --venue sim-backtrader` reads the order and trade
+  notifications written by a documented analyzer (`QtOrderLog`, one JSON line per `notify_order` / `notify_trade`
+  with the new execution bits), or a `Transactions` analyzer dump (fills only); `--venue sim-vectorbt` reads
+  `pf.orders.records_readable` (or `pf.trades`) exported with `.to_csv` or `.to_json(orient="records")`. Neither
+  library is imported. Option `pair_with=<live log dir>` pairs each simulated order with the live order of the same
+  instrument and side placed nearest to it, so `score --sim-log` matches them; `timeframe`, `fill_delay_bars`,
+  `instrument(s)`, `data_tz`, `column`, `order_type` describe the export. `queuetruth reconcile --kind backtrader |
+  vectorbt --sim EXPORT --live LIVE_LOG_DIR --out DIR` writes the same `qt.bot_reconcile` report as for Freqtrade
+  and Hummingbot (`kind` gains the two values, additive; `LiveImportSpec.venue` gains `sim_backtrader` and
+  `sim_vectorbt`, schema 1.3, additive). Guide: `docs/how-to/reconcile-backtrader-vectorbt.md`.
 - `.github/workflows/fuzz.yml`: the fuzz crate's seed, regression and known-crash tests on every change to a parser,
   and a weekly libFuzzer campaign over every target (`fuzz/run.sh`, crashes uploaded as artifacts).
 - `.github/workflows/release-nautilus.yml`: releases the `queuetruth-nautilus` plugin to PyPI on a

@@ -21,7 +21,7 @@ pub(crate) const PYTHON_LONG_ABOUT: &[(&[&str], &str)] = &[
     (&["demo"], "Fetch a small public order-level subset (the first minutes of a Nasdaq TotalView-ITCH or IEX DEEP+ day), place simulated resting orders in the real queue, and show how often NautilusTrader's default fill model fills them compared with the exact replay, by horizon, with base rates. Writes <out>/demo.html and <out>/demo.json."),
     (&["forecast"], "Forecast referee: commit forecasts to a hash-chained ledger before their questions resolve, record resolutions, and score proper scores, calibration, skill and executable PnL."),
     (&["pm"], "Prediction-market kit (Kalshi, Polymarket): your own captures -> books, queue calibration and reward-aware market-making PnL. Self-hosted use on your own data only; see `queuetruth.pm.terms`."),
-    (&["reconcile"], "A trading bot's simulator arm (Freqtrade backtest or dry run, Hummingbot paper bot) against its live run: paired orders, why each differs, and the sim-vs-live scorecard."),
+    (&["reconcile"], "A trading bot's simulator arm (Freqtrade backtest or dry run, Hummingbot paper bot) against its live run, or a Backtrader or VectorBT backtest against a canonical live log: paired orders, why each differs, and the sim-vs-live scorecard."),
 ];
 
 /// Help of positional arguments: (command path, argument name, help).
@@ -478,19 +478,19 @@ pub(crate) const PYTHON_COMMANDS: &[Cmd] = &[
     Cmd {
         path: &["reconcile"],
         imp: Implementation::Python,
-        about: "a Freqtrade or Hummingbot simulator arm against its live run, order by order",
+        about: "a bot's or backtester's simulated orders against the live run, order by order",
         flags: &[
-            Flag { long: "kind", kind: Kind::Enum(&["freqtrade", "hummingbot"]), to: "_cli.kind", required: true, help: "the bot", short: None, value_name: None },
-            Flag { long: "sim", kind: Kind::StrAppend, to: "_cli.sim", required: true, help: "simulator arm: backtest result, dry-run database and logs, or paper-bot database (repeatable)", short: None, value_name: Some("PATH") },
-            Flag { long: "live", kind: Kind::StrAppend, to: "_cli.live", required: true, help: "live arm: the bot's database, logs or trades CSV (repeatable)", short: None, value_name: Some("PATH") },
+            Flag { long: "kind", kind: Kind::Enum(&["freqtrade", "hummingbot", "backtrader", "vectorbt"]), to: "_cli.kind", required: true, help: "the bot or backtester", short: None, value_name: None },
+            Flag { long: "sim", kind: Kind::StrAppend, to: "_cli.sim", required: true, help: "simulator arm: backtest result, dry-run database and logs, paper-bot database, Backtrader notification lines or VectorBT records (repeatable)", short: None, value_name: Some("PATH") },
+            Flag { long: "live", kind: Kind::StrAppend, to: "_cli.live", required: true, help: "live arm: the bot's database, logs or trades CSV (repeatable); for backtrader and vectorbt one canonical live-log directory (queuetruth live import)", short: None, value_name: Some("PATH") },
             Flag { long: "out", kind: Kind::Str, to: "_cli.out", required: true, help: "output directory", short: None, value_name: Some("DIR") },
             Flag { long: "account", kind: Kind::Str, to: "_cli.account", required: false, help: "account label of both logs (default main)", short: None, value_name: Some("ACCOUNT") },
             Flag { long: "instrument-map", kind: Kind::Str, to: "_cli.instrument_map", required: false, help: "instrument_map.csv (default: generated, with a warning)", short: None, value_name: Some("FILE") },
-            Flag { long: "window", kind: Kind::Str, to: "_cli.window", required: false, help: "scorer evaluation horizon, e.g. 1h (default 1 day freqtrade, 60 s hummingbot)", short: None, value_name: Some("DURATION") },
+            Flag { long: "window", kind: Kind::Str, to: "_cli.window", required: false, help: "scorer evaluation horizon, e.g. 1h (default 60 s hummingbot, else 1 day)", short: None, value_name: Some("DURATION") },
             Flag { long: "price-tol-bps", kind: Kind::Num, to: "_cli.price_tol_bps", required: false, help: "price difference that counts (default 0.5 bps)", short: None, value_name: Some("X") },
             Flag { long: "time-tol", kind: Kind::Str, to: "_cli.time_tol", required: false, help: "timing difference that counts, e.g. 5s", short: None, value_name: Some("DURATION") },
             Flag { long: "no-score", kind: Kind::Flag, to: "_cli.no_score", required: false, help: "pair and explain only; do not run the scorer", short: None, value_name: None },
-            Flag { long: "arms-as-given", kind: Kind::Flag, to: "_cli.arms_as_given", required: false, help: "do not refuse a bot simulator arm against a dry run", short: None, value_name: None },
+            Flag { long: "arms-as-given", kind: Kind::Flag, to: "_cli.arms_as_given", required: false, help: "do not refuse arms that look swapped (a simulated live arm, a live bot as the simulator)", short: None, value_name: None },
             Flag { long: "option", kind: Kind::StrAppend, to: "_cli.option", required: false, help: "importer option, e.g. timeframe=5m, strategy=NAME, dry_run=true, log_tz=Europe/Berlin (repeatable)", short: None, value_name: Some("KEY=VALUE") },
             Flag { long: "max-rows", kind: Kind::Int, to: "_cli.max_rows", required: false, help: "order lines printed (default 50)", short: None, value_name: Some("N") },
         ],
