@@ -164,7 +164,8 @@ fn sends_before_the_replay_position_or_out_of_rule_are_refused() {
 }
 
 /// `Session::open_replay` on a dataset with two instruments: sending each shadow, cancel and amend at its send time
-/// (advancing the session to it first) gives the fills and results of one `run_dataset` over the same orders.
+/// (advancing the session to it first, by records or by whole events) gives the fills and results of one
+/// `run_dataset` over the same orders.
 #[test]
 #[cfg_attr(not(feature = "gate"), ignore = "gate test: needs the testkit crate")]
 fn session_orders_match_run_dataset() {
@@ -241,34 +242,61 @@ fn session_orders_match_run_dataset() {
             .map(|a| Op::Amend(a.shadow_id.clone(), a.ts_send, a.new_qty)),
     );
     ops.sort_by_key(Op::at);
-    let mut session = qt_replay::Session::open_replay(&spec(serde_json::json!({}))).unwrap();
-    let mut fills = Vec::new();
-    let mut results = Vec::new();
-    for op in ops {
-        session.advance_to(op.at()).unwrap();
-        match op {
-            Op::Add(s) => session.submit(s),
-            Op::Cancel(id, t) => session.cancel(&id, t),
-            Op::Amend(id, t, q) => session.amend(&id, t, q),
-        }
-        .unwrap();
-        fills.extend(batch_to_shadow_fills(&session.take_fills().unwrap()).unwrap());
-    }
-    session.finish().unwrap();
-    fills.extend(batch_to_shadow_fills(&session.take_fills().unwrap()).unwrap());
-    results.extend(ShadowResultRow::from_batch(&session.take_results().unwrap()).unwrap());
-    assert!(session.advance_to(i64::MAX - 1).is_err(), "finished");
-
     let fill_key = |f: &ShadowFillRow| (f.shadow_id.clone(), f.fill_seq);
-    for v in [&mut want_fills, &mut fills] {
-        v.sort_by_key(fill_key);
+    want_fills.sort_by_key(fill_key);
+    want_results.sort_by(|a, b| a.shadow_id.cmp(&b.shadow_id));
+    // `advance_to` before each send, then `advance_events_to` (whole events, the sandbox's cut): both give the run's
+    // fills and results. With whole events the session is first taken to the end of its data (the unterminated tail
+    // ended, shadows still open) and `shadow_peek` must already show every ended shadow's result row.
+    for whole in [false, true] {
+        let mut session = qt_replay::Session::open_replay(&spec(serde_json::json!({}))).unwrap();
+        let mut fills = Vec::new();
+        let mut results = Vec::new();
+        for op in ops.iter() {
+            if whole {
+                session.advance_events_to(op.at()).unwrap();
+            } else {
+                session.advance_to(op.at()).unwrap();
+            }
+            match op {
+                Op::Add(s) => session.submit(s.clone()),
+                Op::Cancel(id, t) => session.cancel(id, *t),
+                Op::Amend(id, t, q) => session.amend(id, *t, *q),
+            }
+            .unwrap();
+            fills.extend(batch_to_shadow_fills(&session.take_fills().unwrap()).unwrap());
+        }
+        if whole {
+            session.advance_events_to(i64::MAX - 1).unwrap();
+            let mut ended = 0;
+            for want in &want_results {
+                let peek = session.shadow_peek(&want.shadow_id).unwrap();
+                if peek.status == qt_replay::ShadowStatus::Done {
+                    ended += 1;
+                    assert_eq!(
+                        ShadowResultRow {
+                            dq_flags: want.dq_flags,
+                            ..peek.result
+                        },
+                        *want
+                    );
+                    assert!(peek.ts_end.is_some());
+                }
+            }
+            assert!(ended > 0);
+            assert!(session.shadow_peek("nope").is_err());
+        }
+        session.finish().unwrap();
+        fills.extend(batch_to_shadow_fills(&session.take_fills().unwrap()).unwrap());
+        results.extend(ShadowResultRow::from_batch(&session.take_results().unwrap()).unwrap());
+        assert!(session.advance_to(i64::MAX - 1).is_err(), "finished");
+        assert!(session.shadow_peek(&shadows[0].shadow_id).is_err(), "finished");
+        fills.sort_by_key(fill_key);
+        results.sort_by(|a, b| a.shadow_id.cmp(&b.shadow_id));
+        assert_eq!(results.len(), shadows.len());
+        assert!(!fills.is_empty());
+        assert_eq!(fills, want_fills, "whole events: {whole}");
+        assert_eq!(results, want_results, "whole events: {whole}");
     }
-    for v in [&mut want_results, &mut results] {
-        v.sort_by(|a, b| a.shadow_id.cmp(&b.shadow_id));
-    }
-    assert_eq!(results.len(), shadows.len());
-    assert!(!fills.is_empty());
-    assert_eq!(fills, want_fills);
-    assert_eq!(results, want_results);
     std::fs::remove_dir_all(&root).ok();
 }

@@ -21,19 +21,21 @@ use qt_schema::codec::PlannedEndCols;
 use qt_schema::json::DatasetKindName;
 use qt_schema::rows::{Liquidity, ShadowFillRow, ShadowResultRow, ShadowSpec};
 use qt_schema::specs::ReplaySpec;
-use qt_types::{BookSide, MboEvent, Px, QtError, QtResult, Qty, Ts, Venue, rules};
+use qt_types::{BookSide, MboEvent, Px, QtError, QtResult, Qty, Ts, Venue, flags, rules};
 
 use crate::run::{
     ReplayOptions, dataset_path, engine_config, halts_of, ingest_dq, interactive_partition_engine, open_dataset,
 };
 use crate::sinks::{FillFull, ResultFull, Row};
-use crate::{BboMode, Engine, EngineConfig, Sink, TrajectoryMode};
+use crate::{BboMode, Engine, EngineConfig, ShadowPeek, Sink, TrajectoryMode};
 
 struct Cursor {
     instrument_id: u32,
     session_date: i32,
     iter: Box<dyn Iterator<Item = QtResult<MboEvent>> + Send>,
     pending: Option<MboEvent>,
+    /// Records of an event not complete at the last `advance_events_to` (applied, in order, before anything else).
+    held: Vec<MboEvent>,
     engine: Engine,
     started: bool,
     done: bool,
@@ -93,6 +95,7 @@ impl Session {
                 session_date: p.session_date,
                 iter: p.mbo()?,
                 pending: None,
+                held: Vec::new(),
                 engine,
                 started: false,
                 done: false,
@@ -136,6 +139,7 @@ impl Session {
                 session_date: p.session_date,
                 iter: p.mbo()?,
                 pending: None,
+                held: Vec::new(),
                 engine: interactive_partition_engine(p, &ds, &cfg, &gaps, &opts)?,
                 started: false,
                 done: false,
@@ -175,6 +179,10 @@ impl Session {
             return Ok(());
         }
         for c in &mut self.cursors {
+            for e in std::mem::take(&mut c.held) {
+                c.started = true;
+                c.engine.apply(&e, &mut self.rows)?;
+            }
             while !c.done {
                 let e = match c.pending.take() {
                     Some(e) => e,
@@ -195,6 +203,50 @@ impl Session {
             }
         }
         self.position = ts;
+        Ok(())
+    }
+
+    /// Replays whole events up to `ts`: in each partition, the records of the longest run of complete events (each
+    /// ending with a `LAST` record) whose records all have `ts_event <= ts`, reading in feed order up to the first
+    /// record past `ts`; the records of an event that is not complete by then wait for a later call. When the data
+    /// ends with every remaining record at or before `ts`, an unterminated tail is applied and ended as `finish`
+    /// ends it (shadows stay open: orders are still taken until `finish`). The rule is that of the agent sandbox's
+    /// tape (`queuetruth.sandbox.tape`), so the engine state after a call is that of a `replay` of exactly the
+    /// released prefix. The position becomes `ts`.
+    pub fn advance_events_to(&mut self, ts: Ts) -> QtResult<()> {
+        self.check_open()?;
+        for c in &mut self.cursors {
+            while !c.done {
+                let e = match c.pending.take() {
+                    Some(e) => e,
+                    None => match c.iter.next() {
+                        Some(e) => e?,
+                        None => {
+                            for e in std::mem::take(&mut c.held) {
+                                c.started = true;
+                                c.engine.apply(&e, &mut self.rows)?;
+                            }
+                            c.engine.end_open_events(&mut self.rows)?;
+                            c.done = true;
+                            break;
+                        }
+                    },
+                };
+                if e.ts_event > ts {
+                    c.pending = Some(e);
+                    break;
+                }
+                let last = e.flags & flags::LAST != 0;
+                c.held.push(e);
+                if last {
+                    for e in std::mem::take(&mut c.held) {
+                        c.started = true;
+                        c.engine.apply(&e, &mut self.rows)?;
+                    }
+                }
+            }
+        }
+        self.position = self.position.max(ts);
         Ok(())
     }
 
@@ -267,6 +319,20 @@ impl Session {
             .engine
             .amend_shadow(shadow_id, ts_send, new_qty)
             .map(drop)
+    }
+
+    /// A shadow as a replay ending now would report it (`ShadowPeek`): its result row so far, when it ended, and its
+    /// queue ahead and rank. The fills come from `take_fills`.
+    pub fn shadow_peek(&self, shadow_id: &str) -> QtResult<ShadowPeek> {
+        if self.finished {
+            return Err(QtError::Config("session: already finished".into()));
+        }
+        let k = self.owner_of(shadow_id)?;
+        let engine = &self.cursors[k].engine;
+        let idx = engine
+            .shadow_index(shadow_id)
+            .ok_or_else(|| QtError::Engine(format!("session: shadow {shadow_id} has no engine index")))?;
+        Ok(engine.shadow_peek(idx))
     }
 
     /// The shadow fills produced since the last call, as a `qt.shadow_fills` batch (schema 1.1 `liquidity`).

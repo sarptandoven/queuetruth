@@ -17,6 +17,12 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   with every order in its input (`crates/replay/tests/incremental.rs` checks this on random streams under both fill
   rules, with jitter, a feed gap and a halt, and on a dataset against `run_dataset`). This is the engine an agent
   benchmark needs: an episode costs one pass instead of a replay of its prefix per step.
+- **`Session.advance_events_to(ts)` and `Session.shadow_states(ids)`** (Rust `Session::advance_events_to`,
+  `Session::shadow_peek`, `Engine::end_open_events`, `Engine::shadow_peek`): advance a session that takes orders by
+  whole events only (the complete events whose records are all at or before `ts`; an event straddling `ts` waits, an
+  unterminated tail at the end of the data is applied and ended while orders are still taken), and read each order
+  as a replay ending now would report it (its `qt.shadow_results` columns so far, when it ended, its queue ahead and
+  rank). Tested against one batch run in `crates/replay/tests/incremental.rs`.
 - **The scheduled public atlas** (`.github/workflows/atlas.yml`, `scripts/scale/iex_latest.py`): each new IEX
   DEEP+ day runs through the scale pipeline on one runner, its reduced tables are kept as an asset of the
   `atlas-days` release, and the site over the newest 20 days is published with GitHub Pages (a maintainer turns
@@ -70,6 +76,16 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   `release.yml` now runs only for `vX.Y.Z` tags.
 
 ### Changed
+
+- **The agent sandbox reads the data once per episode.** `Sandbox.open(spec, stepping="session")`, the new default,
+  keeps one `qt.Session.with_orders` on the episode's partition that takes every order, cancel and partial cancel as
+  it is sent and is advanced by whole events to each visible cut, instead of replaying the episode's prefix at every
+  step. Observations, acks, rejections, the order log and the scorecard are identical to the previous method, still
+  available as `stepping="replay"` (`python/tests/sandbox/test_stepping.py` compares both on random and scripted
+  agents, including halts, events straddling the cut, an unterminated tail and orders after the data). The spec,
+  `spec_id`, logs and `verify` are unchanged. On the synthetic fixture day a quoting agent in 5 s steps runs
+  4,000 steps in 7.5 s instead of 144.1 s (19.2 times faster; 1.7 ms per step at any length) (`benches/sandbox_stepping.py`). How open orders, queue position, IOC orders and the single
+  partition map onto the session is in [Give an agent a realistic exchange](docs/how-to/agent-sandbox.md#stepping-session-or-replay).
 
 - **The atlas site states only clear findings.** Its first sentence gives the exact fill rate, then the most
   optimistic and the most pessimistic fill model among those whose 95% interval excludes 0, each with its relative

@@ -32,8 +32,8 @@ use qt_types::{Action, BookSide, MboEvent, Px, QtError, QtResult, Qty, Side, Ts}
 use crate::util::{InstrumentTable, SEC_NS};
 use crate::why::Tracer;
 use crate::{
-    EngineConfig, FillRule, HiddenPrintPolicy, ShadowDiagnostics, ShadowEventTruth, ShadowState, ShadowStatus, Sink,
-    TrajectoryMode,
+    EngineConfig, FillRule, HiddenPrintPolicy, ShadowDiagnostics, ShadowEventTruth, ShadowPeek, ShadowState,
+    ShadowStatus, Sink, TrajectoryMode,
 };
 
 use state::Shadow;
@@ -1832,66 +1832,77 @@ impl ShadowEngine {
 
     /// Result rows in input order.
     pub(crate) fn results(&self, dq_flags: u32) -> Vec<ShadowResultRow> {
-        self.specs
-            .iter()
-            .zip(&self.st)
-            .map(|(spec, s)| {
-                let act = s.ts_activated_event;
-                // Activation side (SPEC 5.2.7) and cancel side (audit minor 15): a fill in `(c - w, c]` raced the
-                // cancel. Fills are time-ordered and never after `c`, so the last fill decides. A shadow that replaced
-                // its twin (A1) is placed and filled by the twin's own records: no race.
-                let w = self.race_window;
-                let cancel_race = s
-                    .cancel_eff
-                    .zip(s.ts_last_fill)
-                    .is_some_and(|(c, f)| f <= c && f > c.saturating_sub(w));
-                let ambiguous = w > 0
-                    && s.twin.is_none()
-                    && act.is_some_and(|a| {
-                        a.saturating_sub(s.ts_live) <= w
-                            || s.ts_first_fill.is_some_and(|f| f >= a && f - a <= w)
-                            || cancel_race
-                    });
-                let out_of_session = self
-                    .instruments
-                    .at(spec.instrument_id, spec.ts_submit)
-                    .is_some_and(|i| {
-                        let open = i
-                            .midnight_utc_ns
-                            .saturating_add(i64::from(i.open_s).saturating_mul(SEC_NS));
-                        let close = i
-                            .midnight_utc_ns
-                            .saturating_add(i64::from(i.close_s).saturating_mul(SEC_NS));
-                        spec.ts_submit < open || spec.ts_submit >= close
-                    });
-                ShadowResultRow {
-                    shadow_id: spec.shadow_id.clone(),
-                    instrument_id: spec.instrument_id,
-                    side: spec.side,
-                    price: s.price,
-                    qty: s.qty,
-                    ts_submit: spec.ts_submit,
-                    ts_live: s.ts_live,
-                    ts_activated_event: act,
-                    ts_cancel_effective: s.cancel_eff,
-                    queue_ahead_at_live: s.qa_live,
-                    rank_at_live: s.rank_live,
-                    level_qty_at_live: s.level_live,
-                    ts_first_fill: s.ts_first_fill,
-                    ts_last_fill: s.ts_last_fill,
-                    ts_full_fill: s.ts_full_fill,
-                    filled_qty: s.filled,
-                    n_fills: s.n_fills,
-                    queue_ahead_at_first_fill: s.qa_first_fill,
-                    first_fill_reason: s.first_reason,
-                    end_state: s.end_state.unwrap_or(EndState::OpenAtEnd),
-                    latency_applied_ns: s.ts_live.saturating_sub(spec.ts_submit),
-                    ambiguous_race: ambiguous,
-                    out_of_session,
-                    dq_flags,
-                }
-            })
-            .collect()
+        (0..self.st.len()).map(|i| self.result_row(i, dq_flags)).collect()
+    }
+
+    /// One shadow now (interactive sessions): its result row as `results` would give it (`open_at_end` while it
+    /// has not ended), when it ended, and its queue ahead and rank after the last processed event once it went live.
+    pub(crate) fn peek(&self, idx: u32) -> ShadowPeek {
+        let s = &self.st[idx as usize];
+        let live_seen = s.ts_activated_event.is_some();
+        ShadowPeek {
+            status: s.status,
+            result: self.result_row(idx as usize, 0),
+            ts_end: s.ts_end,
+            queue_ahead: live_seen.then_some(s.qa),
+            rank: live_seen.then_some(s.rank),
+        }
+    }
+
+    fn result_row(&self, idx: usize, dq_flags: u32) -> ShadowResultRow {
+        let (spec, s) = (&self.specs[idx], &self.st[idx]);
+        let act = s.ts_activated_event;
+        // Activation side (SPEC 5.2.7) and cancel side (audit minor 15): a fill in `(c - w, c]` raced the
+        // cancel. Fills are time-ordered and never after `c`, so the last fill decides. A shadow that replaced
+        // its twin (A1) is placed and filled by the twin's own records: no race.
+        let w = self.race_window;
+        let cancel_race = s
+            .cancel_eff
+            .zip(s.ts_last_fill)
+            .is_some_and(|(c, f)| f <= c && f > c.saturating_sub(w));
+        let ambiguous = w > 0
+            && s.twin.is_none()
+            && act.is_some_and(|a| {
+                a.saturating_sub(s.ts_live) <= w || s.ts_first_fill.is_some_and(|f| f >= a && f - a <= w) || cancel_race
+            });
+        let out_of_session = self
+            .instruments
+            .at(spec.instrument_id, spec.ts_submit)
+            .is_some_and(|i| {
+                let open = i
+                    .midnight_utc_ns
+                    .saturating_add(i64::from(i.open_s).saturating_mul(SEC_NS));
+                let close = i
+                    .midnight_utc_ns
+                    .saturating_add(i64::from(i.close_s).saturating_mul(SEC_NS));
+                spec.ts_submit < open || spec.ts_submit >= close
+            });
+        ShadowResultRow {
+            shadow_id: spec.shadow_id.clone(),
+            instrument_id: spec.instrument_id,
+            side: spec.side,
+            price: s.price,
+            qty: s.qty,
+            ts_submit: spec.ts_submit,
+            ts_live: s.ts_live,
+            ts_activated_event: act,
+            ts_cancel_effective: s.cancel_eff,
+            queue_ahead_at_live: s.qa_live,
+            rank_at_live: s.rank_live,
+            level_qty_at_live: s.level_live,
+            ts_first_fill: s.ts_first_fill,
+            ts_last_fill: s.ts_last_fill,
+            ts_full_fill: s.ts_full_fill,
+            filled_qty: s.filled,
+            n_fills: s.n_fills,
+            queue_ahead_at_first_fill: s.qa_first_fill,
+            first_fill_reason: s.first_reason,
+            end_state: s.end_state.unwrap_or(EndState::OpenAtEnd),
+            latency_applied_ns: s.ts_live.saturating_sub(spec.ts_submit),
+            ambiguous_race: ambiguous,
+            out_of_session,
+            dq_flags,
+        }
     }
 
     pub(crate) fn counts(&self) -> ShadowCounts {

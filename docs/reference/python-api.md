@@ -231,6 +231,7 @@ Interactive replay session: `.advance_to(ts)`, `.bbo(inst)`, `.depth(inst, n)`, 
 
 | Method | Signature | Description |
 |---|---|---|
+| `advance_events_to` | `(self, ts: int) -> None` | Replays whole events up to `ts`: in each partition, the complete events (runs ending with `F_LAST`) whose records are all at or before `ts`, read in feed order up to the first record past it; the records of an event not complete by then wait for a later call. When the data ends with every remaining record at or before `ts`, an unterminated tail is applied and ended as the end of a `replay` ends it (orders are still taken until `finish`). This is the cut of the agent sandbox's tape, so the state after a call is that of a `replay` of exactly that prefix (GIL released). |
 | `advance_to` | `(self, ts: int) -> None` | Replays every record with `ts_event <= ts` (GIL released). |
 | `amend` | `(self, shadow_id: str, ts: int, new_qty: int) -> None` | Sends a priority-keeping reduction to `new_qty` at `ts` (at or after `position`). |
 | `bbo` | `(self, instrument_id: int) -> dict[str, tuple[int, int, int] \| None] \| None` | Best bid and ask. |
@@ -238,6 +239,7 @@ Interactive replay session: `.advance_to(ts)`, `.bbo(inst)`, `.depth(inst, n)`, 
 | `depth` | `(self, instrument_id: int, n: int) -> tuple[list[tuple[int, int, int]], list[tuple[int, int, int]]]` | Top `n` levels per side. |
 | `finish` | `(self) -> None` | Replays to the end of the data; the shadows still open end as at the end of a `replay`. |
 | `queue_ahead` | `(self, instrument_id: int, side: str, price: int) -> tuple[int, int] \| None` | Displayed quantity and order count at a price. |
+| `shadow_states` | `(self, shadow_ids: list[str]) -> list[dict[str, Any]]` | Each shadow as a `replay` ending now would report it, one dict per id: `status` (`pending`, `live` or `done`); the `qt.shadow_results` columns its state determines (`price` as resolved, `ts_live`, `ts_activated_event`, `ts_cancel_effective`, `ts_first_fill`, `ts_last_fill`, `ts_full_fill`, `filled_qty`, `n_fills`, `out_of_session`, ...) with `end_state` None until it is done; `ts_end`, when it ended; and `queue_ahead` / `rank` after the last processed event once it went live (the values a `queue_trajectory` row would show; sessions keep no trajectory). |
 | `submit` | `(self, shadows: Any) -> None` | Sends shadows, each with `ts_submit` at or after `position`: a `qt.shadow_spec` table (any Arrow stream) or a list of row dicts (`shadow_id`, `instrument_id`, `side` `"B"` or `"A"`, `qty`, `ts_submit` in ns, and `price` for an absolute price or `offset_ticks` for a touch-relative one; optional `latency_ns`, `group`, `order_key`). A cancel or amend is sent later with `cancel` / `amend`. |
 | `take_fills` | `(self) -> pa.Table` | Shadow fills since the last call (`qt.shadow_fills`). |
 | `take_results` | `(self) -> pa.Table` | Results of the shadows that ended since the last call (`qt.shadow_results`). |

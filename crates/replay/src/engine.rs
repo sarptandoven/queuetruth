@@ -19,7 +19,7 @@ use crate::util::{DAY_NS, InstrumentTable, SEC_NS, utc_days};
 use crate::why::Tracer;
 use crate::{
     BboMode, EngineConfig, EngineReport, EventEnd, EventObserver, FillRule, HiddenPrintPolicy, PlannedEnd,
-    ShadowDiagnostics, ShadowState, Sink, Stats, TradingHalt,
+    ShadowDiagnostics, ShadowPeek, ShadowState, Sink, Stats, TradingHalt,
 };
 
 type BboKey = (Option<Px>, Qty, u32, Option<Px>, Qty, u32);
@@ -691,13 +691,21 @@ impl Engine {
         Ok((r, self.shadows.why.take()))
     }
 
-    fn finish_inner(&mut self, sink: &mut dyn Sink) -> QtResult<EngineReport> {
+    /// Ends every event still open (no `LAST` record yet) as `finish` does at the end of input, without ending the
+    /// shadows: an interactive session at the end of its data (`Session::advance_events_to`), where shadows can still
+    /// be added and cancelled until `finish`.
+    pub fn end_open_events(&mut self, sink: &mut dyn Sink) -> QtResult<()> {
         for slot in 0..self.insts.len() {
             if self.insts[slot].open {
                 self.stats.unterminated_events += 1;
                 self.end_event(slot, sink)?;
             }
         }
+        Ok(())
+    }
+
+    fn finish_inner(&mut self, sink: &mut dyn Sink) -> QtResult<EngineReport> {
+        self.end_open_events(sink)?;
         if let Some(o) = self.oracle.as_mut() {
             for inst in &mut self.insts {
                 o.flush(&mut inst.sweeps, inst.id, sink)?;
@@ -815,6 +823,11 @@ impl Engine {
             }
         }
         st
+    }
+
+    /// A shadow as a replay ending now would report it (panics on an index not returned by `shadow_index`).
+    pub fn shadow_peek(&self, idx: u32) -> ShadowPeek {
+        self.shadows.peek(idx)
     }
 
     /// Ends every shadow as `censored_gap` without replaying (their partition does not exist).

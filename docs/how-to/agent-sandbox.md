@@ -23,14 +23,16 @@ including what is exact and what is not, is in [the sandbox design note](../desi
   and takes effect `latency_ns` (plus a deterministic jitter draw) later.
 - **You act only at the times you advance to.** Nothing wakes you in between, so your reaction time to a market event
   is your step plus `latency_ns`: about 5 s in the real-data episode below, not its 1 ms of latency.
-- **No look-ahead, by construction.** The sandbox copies the recorded events up to the visible cut, and only up to
-  it, into a private scratch dataset, and every replay it runs during the episode reads that copy. Records after the
-  cut wait in the reader's private buffer and reach neither the copy nor anything you receive.
-- **Decide, then replay.** The engine replays whole datasets and its interactive session carries no shadow orders,
-  so each `advance` re-runs the exact replay of the episode's prefix with your open orders. Instructions take effect
-  after the cut they were made at and the prefixes nest, so each step equals the same prefix of one full replay.
+- **No look-ahead, by construction.** A forward-only reader releases the recorded events up to the visible cut, and
+  only whole events up to it; everything you receive is computed from what it released. Records after the cut wait in
+  the reader's private buffer and reach nothing you receive.
+- **One pass over the data.** One exact-replay session that takes orders while it runs
+  (`qt.Session.with_orders`) receives each of your orders, cancels and partial cancels as you send them and is
+  advanced, step by step, by whole events to the visible cut, so an episode reads the data once. Instructions take
+  effect after the cut they were made at and the cuts nest, so each step equals the same prefix of one full replay.
   `finish` runs that one full replay on the original files and checks, fill by fill and order by order, that it equals
-  what you were told during the episode.
+  what you were told during the episode. The original method, a replay of the episode's prefix at every step, is
+  still there as `stepping="replay"` and gives identical results (see [Stepping](#stepping-session-or-replay)).
 
 ## Run an episode
 
@@ -81,6 +83,48 @@ refused). Prices in documents are integers in fixed-point units; `sb.to_price(ra
 | `max_order_qty`, `max_position`, `max_open_orders` | none, none, 100 | risk checks at submit |
 | `self_trade_prevention` | `reject_new` | reject an order that could trade with one of your own |
 | `hidden_print_policy` | venue default | the engine's hidden-print rule (SPEC 5.2.4a) |
+
+## Stepping: session or replay
+
+`Sandbox.open(spec, stepping=...)` chooses how each step brings your orders to the visible cut. The outputs are the
+same: the same agent receives byte-identical observations, acks and rejections, commits the same order log (entry
+hashes and root) and gets the same scorecard on both (`python/tests/sandbox/test_stepping.py` runs seeded random
+agents on both synthetic fixtures and scripted agents on hand-made edge cases through both and compares everything).
+`stepping` is not part of the spec, so it changes neither `spec_id` nor the log, and `verify` re-executes a log made
+with either.
+
+| `stepping` | How a step works | Cost of an episode |
+|---|---|---|
+| `session` (default) | one `qt.Session.with_orders` takes every instruction as it is sent and is advanced by whole events to each cut (`Session.advance_events_to`); open orders are read back with `Session.shadow_states` | one pass over the data, plus the open orders at each step |
+| `replay` | the visible prefix is copied into a scratch dataset and replayed from the start with every open order at each step that has open orders and new records | one replay of the prefix per step: quadratic in the episode length |
+
+How the session stepping reproduces what a replay of each prefix shows:
+
+- **Orders still open at a step.** A replay of the prefix ends an order that has not ended `open_at_end`, and the
+  sandbox shows it `pending` or `working`; `shadow_states` reports it as such a replay would end it now. One case
+  ends there: a pending order whose arrival falls in a trading halt announced before the cut is ended `censored_gap`
+  at its arrival by a replay of the prefix, before any later event, and the session stepping shows it censored at
+  the same step.
+- **Orders still open at the episode end.** `finish` is unchanged: it cancels every open day order at the current
+  clock and runs one full replay of all orders on the original files, which decides every end (`finish_cancel`, or
+  `expired` with `open_at_end_of_data` when the data ends before the cancel takes effect). The finish cancels are not
+  sent to the session, which is dropped without being finished.
+- **Queue position.** The session keeps no trajectory. `shadow_states` reports an order's queue ahead and rank
+  after the last processed event, the values of the last `queue_trajectory` row a replay of the prefix would write.
+- **IOC and market orders.** Both steppings map them the same way: the order is sent with a cancel 1 ns after its
+  submit, only its arrival fills (`crossed_at_live`) count, and it is final once it activates.
+- **One instrument-day.** The session is opened on the certification view of the episode's partition (the original
+  files of that instrument-day alone, with that instrument's feed gaps and trading halts), so it replays one
+  partition even when the dataset holds many, as the final replay does.
+- **Whole events.** The session advances by the tape's cut rule: complete events (runs ending with `F_LAST`) whose
+  records are all at or before the cut. An event whose records straddle the cut waits whole, and an unterminated
+  event at the end of the data is applied and ended once the cut passes the end; orders sent after the end of the
+  data are still taken and never go live.
+- **`window_replays`** in the scorecard counts the steps at which the open orders were brought to a new cut (a
+  replay of the prefix with `replay`, a read of the session with `session`); it is the same number on both.
+
+The session stepping reads the original files through the certification view and opens them when the episode
+starts, so a dataset file the engine cannot read fails `Sandbox.open` rather than `finish`.
 
 ## What an observation holds
 
@@ -260,7 +304,7 @@ scorecard number below as printed (the scorecard is deterministic; the wall time
 | Adverse selection of maker fills | 1,084.98 USD at 1 s (64% of fills adverse), 1,459.055 USD at 10 s, 1,058.40 USD at 60 s |
 | PnL gross, fees, net | -965.67 USD, -48.22 USD (rebates), -917.45 USD (-943.29 USD marking the short at the ask) |
 | Consistency with one full replay | equal: 537 of 537 reported fills matched, none unreported or misattributed; 511 of 511 orders shown in the states and at the steps the full replay implies |
-| Wall time (shared laptop, Low Power Mode) | 33.2 s for the episode, of which 24.1 s in the 360 window replays (67 ms each); finish 0.4 s; `verify` 34.5 s |
+| Wall time (shared laptop, Low Power Mode; measured with `replay` stepping, before the session stepping existed) | 33.2 s for the episode, of which 24.1 s in the 360 window replays (67 ms each); finish 0.4 s; `verify` 34.5 s |
 
 The agent's fills were 8.9 ticks better than the mid it saw on average, and by the end of the episode the mid had
 moved against them by 3,052.715 USD, more than that edge. One 30-minute episode of a naive agent is a demonstration
@@ -279,23 +323,25 @@ QT_REALDATA_DS=.realdata/ds/nasdaq-2019-12-30 python -m pytest -m realdata pytho
   displayed size. The scorecard counts these cases (`diagnostics`).
 - **You react at your step, not at the event.** Decisions happen only at the times you advance to, so a fill or a
   quote change is acted on up to one step later, plus `latency_ns`. Waking at the next market event or at your own
-  fill would be causal, but while each step costs a replay of the whole prefix it would cost a replay per event; an
-  `advance` that ends at the next event is left for when the engine accepts orders into a running replay.
+  fill would be causal, and with the session stepping a step no longer costs a replay of the prefix, but an `advance`
+  that ends at the next event is not built yet (ROADMAP, Agent arena).
 - **Arrival confirmation waits for the next market event.** On a quiet book a marketable order can show `pending`
   for as long as no event arrives; its fills then carry the arrival time.
 - **Hidden liquidity, auctions and halts** follow the engine: hidden prints per the venue policy, orders resting
   through a book clear or a feed gap end `censored`.
-- **Cost grows with the episode.** Each step that has open orders replays the episode's prefix from the start of the
-  data (67 ms per step on TSLA above, over prefixes of 169,195 to 233,747 records); a step without open orders, or
-  without a new market event since the last replay, replays nothing. Hundreds of steps are fine. A full liquid day in
-  one-second steps is 23,400 steps: at least 26 minutes at the cost of a mid-morning step, and more, since each step
-  replays the prefix from the start of the data and the whole TSLA day holds 2.9 times the records of its prefix at
-  10:30 (678,438 against 233,747).
+- **Cost.** With the default `session` stepping an episode reads the data once: a step costs the events since the
+  previous step and the orders open at it. With `stepping="replay"` each step that has open orders replays the
+  episode's prefix from the start of the data (67 ms per step on TSLA above, over prefixes of 169,195 to 233,747
+  records), so a full liquid day in one-second steps (23,400 steps) would take well over 26 minutes. On the synthetic
+  fixture day, a quoting agent in 5 s steps measured 4,000 steps (5.5 hours, 2,478 orders, 1,257 fills) in 7.5 s with `session` stepping against 144.1 s with `replay` stepping, 19.2 times faster: 1.7 ms per step at every length measured (250 to 4,000 steps), against 28 ms per step at 250 steps growing to 36 ms at 4,000. The fixture day holds about 50,000 records; on a larger day each replayed prefix is longer, so the gap grows (`benches/sandbox_stepping.py`, which also checks
+  that both steppings commit the same log and scorecard).
 - **One instrument per episode**, FIFO venues only (as the engine).
-- **The guarantee is about the interface.** Nothing the session returns depends on data past the visible cut, and
-  every replay it runs reads only the copy up to the cut. Python code running in the same process can still open the
-  dataset or read private attributes; an agent that must not, should drive the sandbox through the MCP tools, from
-  another process.
+- **The guarantee is about the interface.** Nothing the session returns depends on data past the visible cut. With
+  `replay` stepping every replay it runs reads only a copy of the data up to the cut; with `session` stepping the
+  engine reads the original files but applies only the whole events up to the cut, and its book is checked against
+  the released records (`test_stepping.py`). Python code running in the same process can still open the dataset or
+  read private attributes; an agent that must not, should drive the sandbox through the MCP tools, from another
+  process.
 
 ## What the guarantee does not cover
 
