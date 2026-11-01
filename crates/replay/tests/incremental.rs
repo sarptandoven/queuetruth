@@ -258,6 +258,21 @@ fn session_orders_match_run_dataset() {
     // ended, shadows still open) and `shadow_peek` must already show every ended shadow's result row.
     for whole in [false, true] {
         let mut session = qt_replay::Session::open_replay(&spec(serde_json::json!({}))).unwrap();
+        // A batch is accepted whole or not at all: a duplicate id, or an order for an instrument the dataset has no
+        // data for, refuses the batch and adds none of it, also when the batch holds an order no partition covers
+        // (taken alone, such an order is accepted: see "orphan"). The replay below then matches `run_dataset`
+        // exactly, so nothing stray was added.
+        let s0 = shadows[0].clone();
+        assert!(session.submit_all(vec![s0.clone(), s0.clone()]).is_err());
+        let mut nowhere = shadows[1].clone();
+        nowhere.instrument_id = 99;
+        assert!(session.submit_all(vec![s0.clone(), nowhere.clone()]).is_err());
+        let mut stray = s0.clone();
+        stray.shadow_id = "stray".into();
+        stray.ts_submit = last_ts + 20 * 86_400_000_000_000;
+        assert!(session.submit_all(vec![stray, nowhere]).is_err());
+        assert!(session.cancel(&s0.shadow_id, s0.ts_submit).is_err(), "s0 was not added");
+        assert!(session.cancel("stray", s0.ts_submit).is_err(), "stray was not added");
         let mut fills = Vec::new();
         let mut results = Vec::new();
         for op in ops.iter() {
@@ -272,7 +287,12 @@ fn session_orders_match_run_dataset() {
                 Op::Amend(id, t, q) => session.amend(id, *t, *q),
             }
             .unwrap();
-            fills.extend(batch_to_shadow_fills(&session.take_fills().unwrap()).unwrap());
+            // pending rows stay pending until consumed (a failed hand-off loses nothing)
+            let (b, n) = session.pending_fills().unwrap();
+            assert_eq!(session.pending_fills().unwrap().1, n);
+            fills.extend(batch_to_shadow_fills(&b).unwrap());
+            session.consume_fills(n);
+            assert_eq!(session.pending_fills().unwrap().1, 0);
         }
         if whole {
             session.advance_events_to(i64::MAX - 1).unwrap();

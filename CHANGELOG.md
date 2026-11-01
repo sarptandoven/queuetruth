@@ -22,9 +22,9 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   whole events only (the complete events whose records are all at or before `ts`; an event straddling `ts` waits, an
   unterminated tail at the end of the data is applied and ended while orders are still taken), and read each order
   as a replay ending now would report it (its `qt.shadow_results` columns so far, when it ended, its queue ahead and
-  rank). Tested against one batch run in `crates/replay/tests/incremental.rs`. A shadow that no partition covers is
-  now taken by `Session.submit` and ends `censored_gap` at its `ts_live` without being replayed, as in `replay`
-  (it was refused), and `advance_to` applies records held by `advance_events_to` first, even at an earlier time.
+  rank). Tested against one batch run in `crates/replay/tests/incremental.rs`. A shadow of a known instrument that no
+  partition covers (a time outside its days) is now taken by `Session.submit` and ends `censored_gap` at its `ts_live`
+  without being replayed, as in `replay` (it was refused; an instrument without data is still refused), and `advance_to` applies records held by `advance_events_to` first, even at an earlier time.
 - **The scheduled public atlas** (`.github/workflows/atlas.yml`, `scripts/scale/iex_latest.py`): each new IEX
   DEEP+ day runs through the scale pipeline on one runner, its reduced tables are kept as an asset of the
   `atlas-days` release, and the site over the newest 20 days is published with GitHub Pages (a maintainer turns
@@ -90,6 +90,11 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   position, IOC orders and the single partition map onto the session is in [Give an agent a realistic
   exchange](docs/how-to/agent-sandbox.md#stepping-session-or-replay).
 
+- **`Session.submit` is all or none, and `take_fills` / `take_results` lose nothing.** A batch with one refused row
+  (duplicate id, `ts_submit` before the position, an instrument without data) used to leave the rows before it submitted; every
+  row is now checked before any is sent (`qt_replay::Session::submit_all`, `Engine::check_shadow`). The take methods
+  drop the rows only after the table reached Python (`pending_fills` / `consume_fills`), so a failed hand-off keeps
+  them for the next call. Found by the review of #8.
 - **The atlas site states only clear findings.** Its first sentence gives the exact fill rate, then the most
   optimistic and the most pessimistic fill model among those whose 95% interval excludes 0, each with its relative
   size, and the closest model; the P&L sentence names the largest clear error, or says that no model's P&L differs

@@ -81,6 +81,12 @@ def duration(ns: int) -> str:
     return f"{ns / 1_000_000:g} ms"
 
 
+def iso_date(d: str) -> str:
+    """A day as YYYY-MM-DD: the pipeline names days MMDDYYYY (as the Nasdaq files do); other forms pass through."""
+    d = str(d)
+    return f"{d[4:]}-{d[:2]}-{d[2:4]}" if len(d) == 8 and d.isdigit() else d
+
+
 def parse_duration(text: str) -> int:
     t = text.strip().replace(" ", "")
     for unit, scale in sorted(UNITS, key=lambda u: -len(u[0])):
@@ -138,9 +144,13 @@ TIER_WORDS = {
 
 
 def _clear(r: dict[str, Any], metric: str) -> bool:
-    """The metric's 95% interval excludes 0 (a difference the page may state as a finding)."""
-    lo, hi = r.get(f"{metric}_ci_lo"), r.get(f"{metric}_ci_hi")
-    return lo is not None and hi is not None and (lo > 0 or hi < 0)
+    """A difference the page may state as a finding: the metric's 95% interval excludes 0 on the side of its estimate
+    (a percentile interval can lie wholly on the other side of a near-zero estimate; then nothing is stated, since
+    "more" or "fewer" would contradict either the estimate or the interval)."""
+    v, lo, hi = r.get(f"{metric}_value"), r.get(f"{metric}_ci_lo"), r.get(f"{metric}_ci_hi")
+    if v is None or lo is None or hi is None:
+        return False
+    return (lo > 0 and v > 0) or (hi < 0 and v < 0)
 
 
 def _named(model_id: str) -> str:
@@ -317,14 +327,15 @@ def build(
         raise SystemExit(f"site: P&L horizon {pnl_horizon} not in the atlas ({have})")
     pnl_at = {(r["tier"], r["model_id"]): r for r in pnl if r["horizon_ns"] == ph}
     days = manifest.get("days") or []
-    first, last = (days[0]["date"], days[-1]["date"]) if days else ("?", "?")
+    first, last = (iso_date(days[0]["date"]), iso_date(days[-1]["date"])) if days else ("?", "?")
+    span = first if len(days) == 1 else f"{len(days)} days from {first} to {last}"
     attribution = _attribution(source)
     venue = "IEX DEEP+" if source == "iex" else "Nasdaq TotalView-ITCH"
 
     parts = [
         "<h1>Fill-Realism Atlas</h1>",
         f'<p class="muted">How far each backtester\'s fill model is from the exact replay of the real queue: '
-        f"{html.escape(venue)}, {len(days)} day(s) from {html.escape(first)} to {html.escape(last)}, "
+        f"{html.escape(venue)}, {html.escape(span)}, "
         f"{manifest.get('symbol_days', 0):,} symbol-days, {manifest.get('distinct_symbols', 0):,} symbols; "
         f"{html.escape(mode)} mode, shadow population {html.escape(population)} "
         f'(<a href="{DOCS}/concepts/fill-realism-atlas.md">how to read it, how it is made, its limits</a>).</p>',
@@ -421,7 +432,7 @@ def build(
     )
     root = manifest.get("atlas_root", "")
     day_rows = "".join(
-        f"<tr><td>{html.escape(str(d['date']))}</td><td><code>{html.escape(str(d['merkle_root']))}</code></td>"
+        f"<tr><td>{html.escape(iso_date(d['date']))}</td><td><code>{html.escape(str(d['merkle_root']))}</code></td>"
         f"<td>{d.get('units_valid', '')} / {d.get('units_planned', '')}</td></tr>"
         for d in days
     )
