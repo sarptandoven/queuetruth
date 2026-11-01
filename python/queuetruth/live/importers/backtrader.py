@@ -19,15 +19,17 @@ Formats (read from Backtrader's public source, release 1.9.78.123; Backtrader it
   feed in one bar, so each entry becomes one order known from fills only (`coverage = fills_only`; no unfilled
   orders, no limit prices).
 
-Mapping: one order per `ref`. `submit_sent` at `created`, `ack` at the `dt` of the `Accepted` line (else at
-`created`), one fill per execution bit (`<ref>:<k>`, fee = `comm`), `cancel_ack` / `expire` / `reject`
-(`Margin`: not enough cash) at the line's `dt`. Order types: `Market` and `Close` -> market, `Limit` -> limit at
-`price`, `Stop` and `StopTrail` -> stop, `StopLimit` -> stop_limit at `pricelimit`, `StopTrailLimit` ->
-stop_limit without a limit price (it trails), `Historical` -> other; time in force `gtc`, `gtd` with a `valid`
-time, `other` for market orders. Backtrader's datetimes are naive (UTC unless the data feed has a `tz`): option
-`data_tz` names their zone. A `BackBroker` fill is the bar's price (open for market orders, the limit or the bar's
-open through it for limit orders): no queue and no partial fills unless a filler is set. `order.info["order_key"]`
-set to a live order key pairs that order with it directly.
+Mapping: one order per `ref` of one file (`Order.ref` restarts at 1 in every run, so several notification files number
+their refs `<file>-<ref>`; the same input twice, or notification lines next to a Transactions dump, fail
+`QT-CONFIG-001`). `submit_sent` at `created`, `ack` at the `dt` of the `Accepted` line only (an order refused at
+submission, `Submitted` then `Margin` or `Rejected`, never rested and gets no `ack`), one fill per execution bit
+(`<ref>:<k>`, fee = `comm`), `cancel_ack` / `expire` / `reject` (`Margin`: not enough cash) at the line's `dt`. Order
+types: `Market` and `Close` -> market, `Limit` -> limit at `price`, `Stop` and `StopTrail` -> stop, `StopLimit` ->
+stop_limit at `pricelimit`, `StopTrailLimit` -> stop_limit without a limit price (it trails), `Historical` -> other;
+time in force `gtc`, `gtd` with a `valid` time, `other` for market orders. Backtrader's datetimes are naive (UTC unless
+the data feed has a `tz`): option `data_tz` names their zone. A `BackBroker` fill is the bar's price (open for market
+orders, the limit or the bar's open through it for limit orders): no queue and no partial fills unless a filler is set.
+`order.info["order_key"]` set to a live order key pairs that order with it directly.
 """
 
 from __future__ import annotations
@@ -46,6 +48,7 @@ from queuetruth.live.importers.backtest import (
     SimOrder,
     SimRun,
     apply_timeframe,
+    check_labels,
     data_tz,
     import_backtest_sim,
     instrument_names,
@@ -55,6 +58,7 @@ from queuetruth.live.importers.backtest import (
     time_of,
 )
 from queuetruth.live.importers.freqtrade import ReconcileReport, check_options, db_int, dtext, finish_to_dir, num
+from queuetruth.schemas.io import sha256_file
 
 BT_SIM = "sim:backtrader"
 #: Backtrader release the format notes were read from.
@@ -130,11 +134,13 @@ def _read_transactions(doc: dict[str, Any], rec: Record, run: SimRun, tz: str) -
     )
 
 
-def _order_line(obj: dict[str, Any], rec: Record, by_ref: dict[str, SimOrder], run: SimRun, tz: str) -> None:
+def _order_line(
+    obj: dict[str, Any], rec: Record, by_ref: dict[str, SimOrder], run: SimRun, tz: str, prefix: str
+) -> None:
     loc = rec.location
     if obj.get("ref") is None:
         raise input_error(loc, "order notification without ref")
-    ref = str(db_int(obj.get("ref"), "ref", loc))
+    ref = prefix + str(db_int(obj.get("ref"), "ref", loc))
     status = _name(obj.get("status"))
     if status not in _STATUS:
         raise input_error(loc, f"status {obj.get('status')!r} is not a Backtrader Order.Status name")
@@ -173,7 +179,7 @@ def _order_line(obj: dict[str, Any], rec: Record, by_ref: dict[str, SimOrder], r
             tif=tif,
             qty=abs(size),
             limit_px=limit,
-            placed_ns=created,
+            placed_ns=None,  # set by the Accepted notification: an order refused at submission never rests
             placed_precision=prec,
             rec=rec,
             submit_ns=created,
@@ -182,7 +188,7 @@ def _order_line(obj: dict[str, Any], rec: Record, by_ref: dict[str, SimOrder], r
         )
         by_ref[ref] = o
         run.orders.append(o)
-    if status == "accepted":
+    if status == "accepted" and o.placed_ns is None:
         o.placed_ns, o.placed_precision = time_of(obj.get("dt") or obj.get("created"), "dt", loc, tz)
     bits = obj.get("exbits")
     if status in ("partial", "completed"):
@@ -214,23 +220,49 @@ def _order_line(obj: dict[str, Any], rec: Record, by_ref: dict[str, SimOrder], r
             run.skip("second terminal notification of an order")
 
 
+def _kind_of(recs: list[Record]) -> str:
+    """`transactions` for a Transactions analyzer dump, else `notifications`."""
+    if len(recs) == 1 and isinstance(recs[0].obj, dict) and "event" not in recs[0].obj:
+        doc = recs[0].obj
+        if doc and all(isinstance(v, list) for v in doc.values()):
+            return "transactions"
+    return "notifications"
+
+
 def read_backtrader(paths: list[str], opts: dict[str, Any]) -> SimRun:
-    """`QtOrderLog` notification lines and / or `Transactions` analyzer dumps -> `SimRun` (rules in the module
-    docstring)."""
+    """`QtOrderLog` notification lines or `Transactions` analyzer dumps -> `SimRun` (rules in the module
+    docstring). Each notification file is one Backtrader run: `Order.ref` restarts at 1 in every process, so with
+    several files the order refs are `<file number>-<ref>`. The same input twice, and notification lines mixed with
+    Transactions dumps (two views of the same executions), fail `QT-CONFIG-001`."""
     tz = data_tz(opts)
     run = SimRun("backtrader", [], [str(p) for p in paths])
-    by_ref: dict[str, SimOrder] = {}
     trades: dict[str, int] = {}
     pnl: dict[str, Decimal] = {}
+    seen: dict[str, str] = {}
+    files: list[tuple[str, list[Record], str]] = []
     for i, p in enumerate(paths):
+        digest = sha256_file(p) if Path(p).is_file() else ""
+        if digest in seen:
+            raise QtError("QT-CONFIG-001", f"{p}: the same input as {seen[digest]} (sha256 {digest[:16]}): given twice")
+        seen[digest] = str(p)
         recs = read_json_records(Path(p), i)
         if not recs:
             raise input_error(str(p), "empty input (no Backtrader notification line)")
-        if len(recs) == 1 and isinstance(recs[0].obj, dict) and "event" not in recs[0].obj:
-            doc = recs[0].obj
-            if doc and all(isinstance(v, list) for v in doc.values()):
-                _read_transactions(doc, recs[0], run, tz)
-                continue
+        files.append((str(p), recs, _kind_of(recs)))
+    kinds = {k for _, _, k in files}
+    if len(kinds) > 1:
+        raise QtError(
+            "QT-CONFIG-001",
+            "QtOrderLog notification lines and a Transactions analyzer dump given together: both record the same "
+            "executions, so every fill would count twice; import one of them (the notification lines are complete)",
+        )
+    n_logs = sum(1 for _, _, k in files if k == "notifications")
+    for file_no, (_p, recs, kind) in enumerate(files, start=1):
+        if kind == "transactions":
+            _read_transactions(recs[0].obj, recs[0], run, tz)
+            continue
+        by_ref: dict[str, SimOrder] = {}
+        prefix = f"{file_no}-" if n_logs > 1 else ""
         for rec in recs:
             obj = rec.obj
             if not isinstance(obj, dict) or _name(obj.get("event")) not in ("order", "trade"):
@@ -251,7 +283,9 @@ def read_backtrader(paths: list[str], opts: dict[str, Any]) -> SimRun:
                     d = str(obj.get("data") or "data0")
                     pnl[d] = pnl.get(d, Decimal(0)) + (v or Decimal(0))
                 continue
-            _order_line(obj, rec, by_ref, run, tz)
+            _order_line(obj, rec, by_ref, run, tz, prefix)
+    if n_logs > 1:
+        run.warn(f"{n_logs} notification files: each is one Backtrader run, order refs numbered <file>-<ref>")
     if trades:
         sums = ", ".join(f"{d} {dtext(v)}" for d, v in sorted(pnl.items()))
         run.warn(
@@ -259,6 +293,7 @@ def read_backtrader(paths: list[str], opts: dict[str, Any]) -> SimRun:
             "positions, not orders, so they carry no event"
         )
     one, many = instrument_names(opts)
+    check_labels({o.instrument for o in run.orders}, many, "data feeds")
     for o in run.orders:
         o.instrument = rename(o.instrument, one, many)
         o.fills.sort(key=lambda f: (f.ts_ns, f.fill_id))

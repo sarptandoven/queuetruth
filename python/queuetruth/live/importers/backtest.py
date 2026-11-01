@@ -35,13 +35,23 @@ with the bar time kept in the fill's `reason` (counted), as for a Freqtrade back
 from __future__ import annotations
 
 import bisect
+import datetime as dt
+import re
 from dataclasses import dataclass, field
 from decimal import ROUND_HALF_EVEN, Decimal
 from pathlib import Path
 from typing import Any
 
 from queuetruth.errors import QtError
-from queuetruth.live._common import Record, input_error, make_order_key, rfc3339_ns, utc_date_days, valid_id
+from queuetruth.live._common import (
+    Record,
+    input_error,
+    local_to_utc_s,
+    make_order_key,
+    rfc3339_ns,
+    utc_date_days,
+    valid_id,
+)
 from queuetruth.live.builder import ImportResult, LogBuilder
 from queuetruth.live.imap import InstrumentEntry, InstrumentMap, load_instrument_map
 from queuetruth.live.importers._base import ImportOptions
@@ -162,12 +172,27 @@ class SimRun:
 # ---- options -------------------------------------------------------------------------------------------------------
 
 
+_DATE_ONLY = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
 def time_of(value: Any, what: str, loc: str, tz: str) -> tuple[int, str]:
     """A backtest timestamp: ISO 8601 text (`2024-03-01 10:00:00`, with or without an offset; naive times are in
-    `tz`) -> (UTC ns, precision)."""
+    `tz`), or a date alone (`2024-03-01`, daily bars: midnight in `tz`, precision `s`) -> (UTC ns, precision)."""
     if value is None or (isinstance(value, str) and not value.strip()):
         raise input_error(loc, f"{what}: missing timestamp")
-    return rfc3339_ns(str(value), what, loc, default_tz=tz)
+    text = str(value).strip()
+    if _DATE_ONLY.fullmatch(text):
+        return rfc3339_ns(f"{text} 00:00:00", what, loc, default_tz=tz)
+    return rfc3339_ns(text, what, loc, default_tz=tz)
+
+
+def naive_epoch_ns(ns: int, tz: str, what: str, loc: str) -> int:
+    """An epoch value of a naive wall-clock time (pandas writes a naive index as if it were UTC) read in zone `tz`."""
+    if tz.upper() == "UTC":
+        return ns
+    secs, frac = divmod(ns, _NS)
+    t = dt.datetime.fromtimestamp(secs, tz=dt.UTC)
+    return local_to_utc_s(t.year, t.month, t.day, t.hour, t.minute, t.second, tz, what, loc) * _NS + frac
 
 
 def data_tz(opts: dict[str, Any]) -> str:
@@ -192,6 +217,13 @@ def instrument_names(opts: dict[str, Any]) -> tuple[str | None, dict[str, str]]:
     if one not in (None, "") and many:
         raise QtError("QT-CONFIG-001", "instrument and instruments: give one of them")
     return (None if one in (None, "") else str(one)), many
+
+
+def check_labels(labels: set[str], many: dict[str, str], what: str) -> None:
+    """`QT-CONFIG-001` for an `instruments` label that names no data feed / column of the export."""
+    missing = sorted(set(many) - labels)
+    if missing:
+        raise QtError("QT-CONFIG-001", f"instruments: {what} {missing} are not in the export (it has {sorted(labels)})")
 
 
 def rename(label: str, one: str | None, many: dict[str, str]) -> str:
@@ -822,6 +854,7 @@ __all__ = [
     "SimFill",
     "SimOrder",
     "SimRun",
+    "check_labels",
     "emit_sim",
     "import_backtest_sim",
     "pair_sim_live",

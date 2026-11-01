@@ -26,8 +26,10 @@ venue is `sim:backtrader` / `sim:vectorbt`, `source = sim`, `validation_status =
 **Backtrader** (formats of release 1.9.78.123): JSON lines of the documented `QtOrderLog` analyzer. Order lines
 (`event = order`): `ref`, `data`, `status` (`Order.Status` name), `ordtype`, `exectype` (`Order.ExecTypes` name),
 `size` (signed), `price`, `pricelimit`, `created`, `dt`, `valid`, `exbits` (`[{dt, size, price, comm}]`, the
-`iterpending()` bits of the notification), `order_key`. One order per `ref`: `submit_sent` at `created`
-(`ts_local_send`), `ack` at the `Accepted` line's `dt` (`ts_exchange`, `record_time`), one fill per bit (`fill_id =
+`iterpending()` bits of the notification), `order_key`. One order per `ref` of a file (several files: `<file>-<ref>`, since
+`Order.ref` restarts per run; the same content twice, or notification lines with a Transactions dump, fail
+`QT-CONFIG-001`): `submit_sent` at `created` (`ts_local_send`), `ack` at the `Accepted` line's `dt` only
+(`ts_exchange`, `record_time`; an order refused at submission has none), one fill per bit (`fill_id =
 <ref>:<k>`, fee = `comm`), `cancel_ack` / `expire` / `reject` (`Canceled` / `Expired` / `Margin`, `Rejected`) at
 the line's `dt`; `Created` is counted, a second terminal line is counted. Types: `Market`, `Close` -> market;
 `Limit` -> limit at `price`; `Stop`, `StopTrail` -> stop; `StopLimit` -> stop_limit at `pricelimit`;
@@ -46,13 +48,15 @@ Trade Id`, `Trade Id` or `Position Id`; `Entry Timestamp`, `Avg Entry Price`, `E
 `Status`, ...) next to order records are counted and their closed `PnL` summed in a warning; alone they give one
 entry order per trade and one exit order per closed trade (warned). Integer timestamps are epoch milliseconds;
 values below 10^11 are bar numbers and fail `QT-INPUT-002`, as do raw records (`id, col, idx, ...`) and
-column-oriented JSON. More than one column fails `QT-CONFIG-001` unless option `column` or `instruments`.
+column-oriented JSON. More than one column fails `QT-CONFIG-001` unless option `column` or `instruments`
+(`instrument` alone does not choose a column). Epoch values are read in `data_tz` (pandas writes a naive index's
+wall-clock time as UTC).
 
-**Shared** (both): times are ISO 8601 text (naive in option `data_tz`, default UTC; precision from the text) or
-epoch ms; doubles are read as decimals rounded to 15 significant digits, then rounded half-even to the instrument
+**Shared** (both): times are ISO 8601 text, or a date alone (midnight; precision `s`), naive in option `data_tz`
+(default UTC; precision from the text), or epoch ms; doubles are read as decimals rounded to 15 significant digits, then rounded half-even to the instrument
 exponents (counted), in place, so a reconciliation quotes the logged values. Options: `timeframe` (bar length; the
 fill time is known to `[t, t + timeframe)`), `fill_delay_bars` (fills `k` bars later; needs `timeframe`),
-`instrument` / `instruments` (`LABEL:NAME,...`), `venue`, `map_venue`, `price_exp`, `size_exp`, `pair_with`,
+`instrument` / `instruments` (`LABEL:NAME,...`; a label naming no data feed or column fails `QT-CONFIG-001`), `venue`, `map_venue`, `price_exp`, `size_exp`, `pair_with`,
 `pair_window_ms`.
 
 ## 5.7.5 (additions) The live arm and the pairing

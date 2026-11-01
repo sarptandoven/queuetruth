@@ -21,10 +21,13 @@ Every VectorBT order record is an execution: the simulator fills an order in ful
 rests unfilled. Each record becomes one order with an `ack` and one fill of its size at its price at the bar's
 timestamp, liquidity `unknown` (the records do not say); option `order_type` is `market` (default) or `limit` (the
 record's price is the limit price: the live strategy rests limit orders at the prices the backtest fills at).
-Timestamps: ISO 8601 text (naive times in option `data_tz`, default UTC) or epoch milliseconds (pandas' JSON
-default; values before 1973 are bar numbers of a portfolio without a DatetimeIndex and fail). A sweep's columns
-are separate backtests: with more than one column, option `column` keeps one, or `instrument` / `instruments`
-(`LABEL:NAME,...`) names the live instrument of each kept column.
+Timestamps: ISO 8601 text, or a date alone for daily bars (midnight), naive times in option `data_tz` (default UTC);
+or epoch milliseconds (pandas' JSON default; values before 1973 are bar numbers of a portfolio without a
+DatetimeIndex and fail). pandas writes a naive index's wall-clock time as if it were UTC, so epoch values are read
+in `data_tz` too: leave it unset for a tz-aware index (true UTC epochs). A sweep's columns are separate backtests:
+with more than one column, option `column` keeps one (and `instrument` may rename it), or `instruments`
+(`LABEL:NAME,...`) names the live instrument of each kept column; `instrument` alone over several columns fails
+`QT-CONFIG-001` (it would merge separate backtests into one instrument).
 """
 
 from __future__ import annotations
@@ -43,9 +46,11 @@ from queuetruth.live.importers.backtest import (
     SimOrder,
     SimRun,
     apply_timeframe,
+    check_labels,
     data_tz,
     import_backtest_sim,
     instrument_names,
+    naive_epoch_ns,
     reconcile_backtest,
     rename,
     time_of,
@@ -74,7 +79,8 @@ def _ts(v: Any, what: str, loc: str, tz: str) -> tuple[int, str]:
                 f"{what}: {v} is a bar number, not a time (the portfolio has no DatetimeIndex: build it on a "
                 "time-indexed price series, or set the index before exporting)",
             )
-        return epoch_ns(v, "ms", what, loc)
+        ns, prec = epoch_ns(v, "ms", what, loc)
+        return naive_epoch_ns(ns, tz, what, loc), prec
     if isinstance(v, str) and v.strip().lstrip("-").isdigit():
         return _ts(int(v.strip()), what, loc, tz)
     return time_of(v, what, loc, tz)
@@ -230,19 +236,17 @@ def read_vectorbt(paths: list[str], opts: dict[str, Any]) -> SimRun:
             raise QtError("QT-CONFIG-001", f"column {keep!r}: not in the export's columns {labels}")
         orders = [(lb, o) for lb, o in orders if lb == keep]
     elif many:
-        missing = sorted(set(many) - set(labels))
-        if missing:
-            raise QtError("QT-CONFIG-001", f"instruments: columns {missing} are not in the export's columns {labels}")
+        check_labels(set(labels), many, "columns")
         left = sorted(set(labels) - set(many))
         if left:
             run.warn(f"columns {left} not named in option instruments left out")
         orders = [(lb, o) for lb, o in orders if lb in many]
-    elif len(labels) > 1 and one is None:
+    elif len(labels) > 1:
         raise QtError(
             "QT-CONFIG-001",
             f"the export holds {len(labels)} columns {labels[:10]}: each column of a VectorBT portfolio is its own "
-            "backtest (a symbol or a parameter combination); pass option column=<label> to keep one, or "
-            "instruments=LABEL:NAME,... to name the live instrument of each",
+            "backtest (a symbol or a parameter combination); pass option column=<label> to keep one (instrument=NAME "
+            "then names it), or instruments=LABEL:NAME,... to name the live instrument of each",
         )
     for label, o in orders:
         o.instrument = rename(label, one, many)

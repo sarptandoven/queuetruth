@@ -112,7 +112,8 @@ def test_read_backtrader_notifications() -> None:
         "buy", "limit", "gtc", Decimal("0.01"), Decimal("61000.0"),
     )  # fmt: skip
     # created on the 09:00 bar, filled by BackBroker on the next one
-    assert first.submit_ns == T0 + 9 * H and first.placed_ns == T0 + 9 * H
+    # submitted on the 09:00 bar; BackBroker accepts it (and fills it) at the next bar's notification
+    assert first.submit_ns == T0 + 9 * H and first.placed_ns == T0 + 10 * H
     assert [(f.ts_ns, f.qty, f.px, f.fee, f.fill_id) for f in first.fills] == [
         (T0 + 10 * H, Decimal("0.01"), Decimal("61000.0"), Decimal("0.61"), "1:1")
     ]
@@ -215,12 +216,54 @@ def test_backtrader_malformed(tmp_path: Path) -> None:
         {},
     )
     _err("QT-INPUT-001", bt.import_backtrader, [str(tmp_path / "missing.jsonl")], tmp_path / "o")
-    # a Created notification is counted, not an event; a margin call is a reject
-    margin = [{**good, "ref": 9, "status": "Created"}, {**good, "ref": 9, "status": "Margin", "exbits": []}]
-    p = _write(tmp_path, "m.jsonl", "\n".join(json.dumps(x) for x in margin) + "\n")
-    run = bt.read_backtrader([p], {})
+    # a Created notification is counted, not an event
+    created = [{**good, "ref": 9, "status": "Created"}, {**good, "ref": 9, "status": "Canceled", "exbits": []}]
+    run = bt.read_backtrader([_write(tmp_path, "c.jsonl", "\n".join(json.dumps(x) for x in created) + "\n")], {})
     assert run.skipped == {"Created notification (no event)": 1}
-    assert run.orders[0].end is not None and run.orders[0].end[2:] == ("reject", "Margin: not enough cash")
+
+
+def _events_of(out: Path) -> dict[str, list[str]]:
+    by: dict[str, list[str]] = {}
+    for e in _rows(out)[1]:
+        by.setdefault(e["order_key"], []).append(e["event_type"])
+    return by
+
+
+def test_backtrader_second_run_and_several_files(tmp_path: Path) -> None:
+    run2 = FIX / "bt_orders_run2.jsonl"
+    one = bt.read_backtrader([str(run2)], {})
+    by = {o.ref: o for o in one.orders}
+    # a Partial notification with two bits, then Completed with the third: three fills of one order
+    assert [(f.qty, f.fill_id) for f in by["1"].fills] == [
+        (Decimal("0.01"), "1:1"), (Decimal("0.005"), "1:2"), (Decimal("0.015"), "1:3"),
+    ]  # fmt: skip
+    assert (by["3"].order_type, by["3"].limit_px, by["3"].fills[0].px) == ("stop", None, Decimal("59990.0"))
+    assert (by["4"].order_type, by["4"].limit_px) == ("stop_limit", Decimal("61050.0"))
+    s = qlive.import_sim("backtrader", [str(run2)], tmp_path / "r2", instrument_map=str(IMAP), venue="binance")
+    ev = _events_of(tmp_path / "r2")
+    assert ev["sim:backtrader:main:1"] == ["submit_sent", "ack", "fill", "fill", "fill"]
+    assert ev["sim:backtrader:main:2"] == ["submit_sent", "ack", "cancel_ack"]
+    # refused at submission (Submitted, then Margin, never Accepted): no ack, so it never rested
+    assert ev["sim:backtrader:main:5"] == ["submit_sent", "reject"]
+    assert s.n_fills == 4
+    fills = {e["fill_id"]: e for e in _rows(tmp_path / "r2")[1] if e["event_type"] == "fill"}
+    assert fills["3:1"]["liquidity"] == "taker" and fills["1:1"]["liquidity"] == "unknown"
+    # two runs: Order.ref restarts at 1 in each, so refs are numbered per file and nothing merges
+    both = bt.read_backtrader([str(BT), str(run2)], {})
+    assert len(both.orders) == 12 and sum(len(o.fills) for o in both.orders) == 10
+    assert {o.ref for o in both.orders} == {f"1-{i}" for i in range(1, 8)} | {f"2-{i}" for i in range(1, 6)}
+    assert any(w.startswith("2 notification files") for w in both.warnings)
+
+
+def test_backtrader_refuses_double_counting(tmp_path: Path) -> None:
+    e = _err("QT-CONFIG-001", bt.read_backtrader, [str(BT), str(BT)], {})
+    assert "given twice" in str(e)
+    copy = _write(tmp_path, "copy.jsonl", BT.read_text())  # the same content under another name
+    _err("QT-CONFIG-001", bt.read_backtrader, [str(BT), copy], {})
+    e = _err("QT-CONFIG-001", bt.read_backtrader, [str(BT), str(TXN)], {})
+    assert "every fill would count twice" in str(e)
+    e = _err("QT-CONFIG-001", bt.read_backtrader, [str(BT)], {"instruments": "ETHUSDT:ETH"})
+    assert "data feeds ['ETHUSDT'] are not in the export" in str(e)
 
 
 # ---- VectorBT ------------------------------------------------------------------------------------------------------
@@ -280,6 +323,28 @@ def test_vectorbt_columns(tmp_path: Path) -> None:
     # the same Column and Order Id twice: dropped and counted
     dup = vb.read_vectorbt([_write(tmp_path, "d.csv", text + lines[1] + "\n")], {})
     assert len(dup.orders) == 6 and dup.skipped == {"duplicate order record (same Column and Order Id)": 1}
+
+
+def test_vectorbt_sweep_naive_json_and_daily_bars(tmp_path: Path) -> None:
+    sweep = str(FIX / "vbt_sweep_orders.csv")
+    _err("QT-CONFIG-001", vb.read_vectorbt, [sweep], {})
+    # one instrument name over several columns would merge separate backtests: refused
+    e = _err("QT-CONFIG-001", vb.read_vectorbt, [sweep], {"instrument": "BTCUSDT"})
+    assert "column=<label>" in str(e)
+    run = vb.read_vectorbt([sweep], {"column": "(10, 'BTCUSDT')", "instrument": "BTCUSDT"})
+    assert [(o.ref, o.instrument) for o in run.orders] == [
+        ("(10, 'BTCUSDT')-0", "BTCUSDT"),
+        ("(10, 'BTCUSDT')-1", "BTCUSDT"),
+    ]
+    # pandas writes a naive New York index's wall-clock time as epoch ms; data_tz reads it in New York
+    naive = vb.read_vectorbt([str(FIX / "vbt_orders_naive_ny.json")], {"data_tz": "America/New_York"})
+    assert [o.placed_ns for o in naive.orders] == [o.placed_ns for o in vb.read_vectorbt([str(VCSV)], {}).orders]
+    assert vb.read_vectorbt([str(FIX / "vbt_orders_naive_ny.json")], {}).orders[0].placed_ns == T0 + 5 * H
+    # a daily-bar index exports dates alone: midnight in data_tz
+    head = "Order Id,Column,Timestamp,Size,Price,Fees,Side\n"
+    daily = _write(tmp_path, "daily.csv", head + "0,BTCUSDT,2024-03-01,0.01,61000,0.6,Buy\n")
+    assert vb.read_vectorbt([daily], {}).orders[0].placed_ns == T0
+    assert vb.read_vectorbt([daily], {"data_tz": "Asia/Tokyo"}).orders[0].placed_ns == T0 - 9 * H
 
 
 def test_vectorbt_malformed(tmp_path: Path) -> None:
@@ -347,7 +412,11 @@ def test_reconcile_end_to_end(tmp_path: Path, live: Path, fn: Any, sim: Path, n_
     assert rep.kind == {"bt": "backtrader", "vbt": "vectorbt"}[sim.name.split("_")[0]]
     sc = rep.score
     assert sc is not None and sc.two_by_two == {"both": 4, "neither": 0, "live_only": 0, "sim_only": 1}
-    assert rep.missed_fill_notional == {"BTCUSDT": "608"}
+    assert rep.missed_fill_notional == {"BTCUSDT": "608"} and rep.sim_price_advantage_quote == {"BTCUSDT": "0.1962"}
+    assert (sc.n_matched, sc.n_clusters, sc.interpretable) == (5, 5, False)
+    assert "+20.0 pp (95% CI [+0.0, +60.0])" in sc.headline
+    missed = next(r for r in rep.orders if r.category == "missed_fill")
+    assert "the live order rested 59m28s and ended cancelled" in missed.explanation
     price = next(r for r in rep.orders if r.category == "price")
     # the simulator log's price at the 0.01 tick: 61210.12 vs 61190.50
     assert price.sim_avg_px == "61210.12" and price.sim_price_advantage_bps == pytest.approx(3.20638, abs=1e-5)

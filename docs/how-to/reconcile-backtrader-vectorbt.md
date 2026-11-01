@@ -120,23 +120,32 @@ cerebro.run()
 How the lines are read:
 
 - One order per `ref`. `submit_sent` at `created` (the bar the strategy placed it on), `ack` at the bar of the
-  `Accepted` notification, one fill per execution bit (fee = its `comm`), and `cancel_ack`, `expire` or `reject`
-  (`Margin`: not enough cash, `Rejected`) at the bar of that notification. `Created` notifications are counted.
+  `Accepted` notification (`BackBroker` delivers `Submitted` and `Accepted` on the next bar), one fill per execution
+  bit (fee = its `comm`), and `cancel_ack`, `expire` or `reject` (`Margin`: not enough cash, `Rejected`) at the bar
+  of that notification. An order refused at submission (`Submitted`, then `Margin`) never rested: it gets
+  `submit_sent` and `reject`, no `ack`. `Created` notifications are counted.
+- One file is one run. `Order.ref` restarts at 1 in every Backtrader process, so several `--sim` files number
+  their orders `<file>-<ref>` (`1-3` is order 3 of the first file). The same file twice, under any name, fails
+  `QT-CONFIG-001`.
 - `Market` and `Close` orders are market orders, `Limit` a limit order at `price`, `Stop` and `StopTrail` stop
   orders, `StopLimit` a stop-limit at `pricelimit`, `StopTrailLimit` a stop-limit without a limit price (it
   trails). Time in force is `gtc`, or `gtd` when the order has a `valid` time.
 - Trade lines are positions, not orders: they are counted and their closed `pnlcomm` summed in a warning.
-- Backtrader's datetimes are naive. With a data feed that has a `tz`, `num2date` gives UTC, the default. Otherwise
-  they are in your data's own zone: pass `--option data_tz=Europe/Berlin` (any IANA name).
+- Backtrader's datetimes are naive. With a data feed that has a `tz`, `num2date` in this analyzer gives UTC, the
+  default. Otherwise they are in your data's own zone: pass `--option data_tz=Europe/Berlin` (any IANA name).
 - Use the name of the live instrument as the data feed's `name` (`cerebro.adddata(data, name="BTCUSDT")`), or map
-  it with `--option instrument=BTCUSDT` (every order) or `--option instruments=data0:BTCUSDT,data1:ETHUSDT`.
+  it with `--option instrument=BTCUSDT` (every order) or `--option instruments=data0:BTCUSDT,data1:ETHUSDT` (a
+  label that names no data feed of the file fails `QT-CONFIG-001`).
 - If your backtest replays known live orders, pass the live order key to the order:
   `self.buy(price=61000, exectype=bt.Order.Limit, order_key="binance:main:7100001")`. Backtrader keeps it in
   `order.info`, the analyzer writes it, and that order pairs with that live order directly.
 
 Already running the standard `Transactions` analyzer? Its result works too, with less information: it nets every
 execution of a data feed in one bar, so each entry becomes one order known from its fill only (no unfilled orders,
-no limit prices; the import says `coverage=fills_only`).
+no limit prices; the import says `coverage=fills_only`). Give it instead of the `QtOrderLog` lines, never with
+them: both record the same executions, so the import refuses the pair (`QT-CONFIG-001`). Its keys come from
+`strategy.datetime.datetime()`, which is in the data feed's own zone (its `tz` when it has one), not UTC: pass that
+zone as `--option data_tz=...`.
 
 <!-- check-docs: skip (needs Backtrader) -->
 ```python
@@ -165,11 +174,16 @@ How the records are read:
 
 - Columns `Order Id`, `Column`, `Timestamp`, `Size`, `Price`, `Fees`, `Side`. Each record is one order with an
   `ack` and one fill of its size at its price at the bar's timestamp; `Fees` is the fee in your cash currency.
-- The portfolio needs a `DatetimeIndex`: `Timestamp` must be a time (ISO text, or pandas' JSON epoch milliseconds),
-  not a bar number. Naive times are UTC unless you pass `--option data_tz=...`.
+- The portfolio needs a `DatetimeIndex`: `Timestamp` must be a time (ISO text, a date alone for daily bars, which
+  reads as midnight, or pandas' JSON epoch milliseconds), not a bar number. Naive times are UTC unless you pass
+  `--option data_tz=...`. That includes JSON epoch values: pandas writes a naive index's wall-clock time as if it
+  were UTC, so a portfolio indexed by naive New York times needs `--option data_tz=America/New_York` for its JSON as
+  for its CSV. Leave `data_tz` unset when the index is tz-aware (its epochs are true UTC).
 - `Column` is the instrument. A portfolio with several columns (several symbols, or a parameter sweep, where every
-  column is a separate backtest) needs `--option column=<label>` to keep one, or
-  `--option instruments=<label>:<live instrument>,...` to name each kept column.
+  column is a separate backtest) needs `--option column=<label>` to keep one (copy the label as the CSV writes it,
+  for a sweep `(10, 'BTCUSDT')`; `--option instrument=NAME` then names it), or
+  `--option instruments=<label>:<live instrument>,...` to name each kept column. `instrument` alone over several
+  columns fails `QT-CONFIG-001`: it would merge separate backtests into one instrument.
 - VectorBT records no order type. They are market orders by default; pass `--option order_type=limit` when your
   live strategy rests limit orders at the prices the backtest fills at. Fill liquidity is `unknown` (the records
   do not say).
@@ -261,6 +275,12 @@ smaller quantity difference. A Backtrader order that carries an `order_key` pair
 Paired simulator orders take the live `order_key`, so `queuetruth score` matches them. A backtest fill stamped
 before the live order existed (the bar's time) is moved to the live order's entry time, with the bar time kept in
 the fill's `reason`: the scorer's window starts at the live entry.
+
+VectorBT has no submission time, so its reference is the fill bar's timestamp. A live limit order placed more than
+`pair_window_ms` before it filled (it rested for hours) is too far from that bar to pair, and pairs with nothing or
+with a later order of the same side. When your live orders rest longer than two bars, widen the window
+(`--option pair_window_ms=...`, at least the longest rest you expect) and check `pairing_coverage` and the
+`no_sim_twin` rows.
 
 **Categories** (first that applies): `no_live_twin`, `no_sim_twin`, `missed_fill` (the backtest filled, live did
 not), `extra_live_fill`, `partial_fill` (filled quantities differ), `price` (more than `--price-tol-bps`, default
@@ -369,6 +389,8 @@ queuetruth report --in sc-exact --in sc-backtest --out backtest-vs-exact.html
 - The fill time of both backtesters is a bar's label. A live fill inside the bar is on time only when you give
   `timeframe`; bars labelled by their close time, or fills at the close of bars labelled by their open, need
   `fill_delay_bars` or `--time-tol`.
+- VectorBT pairs by fill time (it has no submission time): long-resting live limit orders need a wider
+  `pair_window_ms`.
 - A Backtrader order with several execution bits keeps each bit as a fill; a `Transactions` dump nets them per bar.
 - VectorBT records only executions, so it never contributes an unfilled order: a live order it has no record for
   is `no_sim_twin`, not `missed_fill`.

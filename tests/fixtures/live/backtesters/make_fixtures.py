@@ -13,6 +13,11 @@ as a backtest in each library. Outputs:
   docs/how-to/reconcile-backtrader-vectorbt.md writes them (Backtrader 1.9.78.123 `Order` / `Trade` fields): each
   order is created on the bar before it executes (`BackBroker` fills on the next bar), one order expires unfilled.
 - `bt_transactions.json`: the same backtest's `bt.analyzers.Transactions` result dumped as JSON.
+- `bt_orders_run2.jsonl`: a second Backtrader run (refs restart at 1): a fill over two notifications and three
+  execution bits, a cancelled limit, a triggered stop, a cancelled stop-limit and a `Margin` refusal at submission.
+  Submitted and Accepted come on the bar after `created`, as `BackBroker` delivers them.
+- `vbt_sweep_orders.csv`: a two-parameter sweep with MultiIndex column labels; `vbt_orders_naive_ny.json`: the
+  order records of a portfolio with a naive New York index, as `to_json` writes them.
 - `vbt_orders.csv`, `vbt_orders.json`, `vbt_trades.csv`: `pf.orders.records_readable.to_csv(...)`, the same
   records with `.to_json(..., orient="records")` (epoch milliseconds, pandas' default) and
   `pf.trades.records_readable.to_csv(...)` (VectorBT 0.28.1 column titles). The market sell carries slippage, so
@@ -160,8 +165,9 @@ def backtrader() -> tuple[str, str]:
 
     for ref, b in enumerate(BACKTEST, start=1):
         side, _ex, size, _price, created, fill_h, fill_px, end = b
-        order_line(ref, "Submitted", b, created, [])
-        order_line(ref, "Accepted", b, created, [])
+        # BackBroker delivers Submitted and Accepted at the next bar's _brokernotify, then executes on that bar
+        order_line(ref, "Submitted", b, created + 1, [])
+        order_line(ref, "Accepted", b, created + 1, [])
         if fill_h is not None:
             signed = size if side == "Buy" else -size
             comm = abs(signed) * fill_px * COMM
@@ -194,6 +200,65 @@ def backtrader() -> tuple[str, str]:
             )
         )
     return "\n".join(lines) + "\n", json.dumps(txn, indent=2) + "\n"
+
+
+def _line(
+    ref: int,
+    status: str,
+    side: str,
+    ex: str,
+    size: float,
+    price: float,
+    plimit: float,
+    created: float,
+    at: float,
+    bits: list[tuple[float, float, float]],
+) -> str:
+    signed = size if side == "Buy" else -size
+    exbits = [{"dt": _iso(h), "size": q if side == "Buy" else -q, "price": p, "comm": q * p * COMM} for h, q, p in bits]
+    return json.dumps({
+        "event": "order", "ref": ref, "data": "BTCUSDT", "status": status, "ordtype": side, "exectype": ex,
+        "size": signed, "price": price, "pricelimit": plimit, "created": _iso(created), "dt": _iso(at),
+        "valid": None, "exbits": exbits, "order_key": None,
+    })  # fmt: skip
+
+
+def backtrader_second_run() -> str:
+    """A second Backtrader run (refs restart at 1) earlier that day: a limit buy filled over two notifications and
+    three execution bits, a cancelled limit sell, a triggered stop, a cancelled stop-limit and an order refused at
+    submission for lack of cash (Submitted, then Margin, never Accepted)."""
+    rows = [
+        _line(1, "Submitted", "Buy", "Limit", 0.03, 60500.0, 60500.0, 1, 2, []),
+        _line(1, "Accepted", "Buy", "Limit", 0.03, 60500.0, 60500.0, 1, 2, []),
+        _line(1, "Partial", "Buy", "Limit", 0.03, 60500.0, 60500.0, 1, 2, [(2, 0.01, 60500.0), (2, 0.005, 60500.0)]),
+        _line(1, "Completed", "Buy", "Limit", 0.03, 60500.0, 60500.0, 1, 3, [(3, 0.015, 60500.0)]),
+        _line(2, "Submitted", "Sell", "Limit", 0.01, 62500.0, 62500.0, 1, 2, []),
+        _line(2, "Accepted", "Sell", "Limit", 0.01, 62500.0, 62500.0, 1, 2, []),
+        _line(2, "Canceled", "Sell", "Limit", 0.01, 62500.0, 62500.0, 1, 5, []),
+        _line(3, "Submitted", "Sell", "Stop", 0.01, 60000.0, 60000.0, 2, 3, []),
+        _line(3, "Accepted", "Sell", "Stop", 0.01, 60000.0, 60000.0, 2, 3, []),
+        _line(3, "Completed", "Sell", "Stop", 0.01, 60000.0, 60000.0, 2, 4, [(4, 0.01, 59990.0)]),
+        _line(4, "Submitted", "Buy", "StopLimit", 0.01, 61000.0, 61050.0, 2, 3, []),
+        _line(4, "Accepted", "Buy", "StopLimit", 0.01, 61000.0, 61050.0, 2, 3, []),
+        _line(4, "Canceled", "Buy", "StopLimit", 0.01, 61000.0, 61050.0, 2, 5, []),
+        _line(5, "Submitted", "Buy", "Limit", 5.0, 60000.0, 60000.0, 3, 4, []),
+        _line(5, "Margin", "Buy", "Limit", 5.0, 60000.0, 60000.0, 3, 4, []),
+    ]
+    return "\n".join(rows) + "\n"
+
+
+def vectorbt_sweep() -> str:
+    """A two-parameter sweep (`fast` window 10 and 20) on BTCUSDT: MultiIndex column labels as pandas writes them."""
+    buf = io.StringIO()
+    w = csv.writer(buf, lineterminator="\n")
+    w.writerow(["", "Order Id", "Column", "Timestamp", "Size", "Price", "Fees", "Side"])
+    rows = [
+        (0, "(10, 'BTCUSDT')", 10, 0.01, 61000.0, "Buy"), (1, "(10, 'BTCUSDT')", 12, 0.01, 61500.0, "Sell"),
+        (2, "(20, 'BTCUSDT')", 14, 0.01, 60800.0, "Buy"), (3, "(20, 'BTCUSDT')", 16, 0.01, 61200.0, "Sell"),
+    ]  # fmt: skip
+    for i, (o, col, h, size, px, side) in enumerate(rows):
+        w.writerow([i, o, col, f"{_iso(h).replace('T', ' ')}+00:00", size, px, repr(size * px * COMM), side])
+    return buf.getvalue()
 
 
 def vectorbt() -> tuple[str, str, str]:
@@ -233,6 +298,15 @@ def vectorbt() -> tuple[str, str, str]:
     return buf.getvalue(), json.dumps(js) + "\n", tbuf.getvalue()
 
 
+def vectorbt_naive_json() -> str:
+    """The order records of a portfolio indexed by naive New York wall-clock times, as `to_json` writes them: epoch
+    milliseconds of the wall-clock time read as UTC (10:00 UTC is 05:00 EST on 2024-03-01)."""
+    rows = json.loads(vectorbt()[1])
+    for r in rows:
+        r["Timestamp"] -= 5 * H
+    return json.dumps(rows) + "\n"
+
+
 IMAP = (
     "venue,instrument,instrument_id,session_date,price_exp,size_exp,tick_size,lot_size\n"
     "binance,BTCUSDT,1,,-2,-5,0.01,0.00001\n"
@@ -249,6 +323,9 @@ def main() -> None:
     (HERE / "vbt_orders.csv").write_text(v_csv)
     (HERE / "vbt_orders.json").write_text(v_json)
     (HERE / "vbt_trades.csv").write_text(v_trades)
+    (HERE / "bt_orders_run2.jsonl").write_text(backtrader_second_run())
+    (HERE / "vbt_sweep_orders.csv").write_text(vectorbt_sweep())
+    (HERE / "vbt_orders_naive_ny.json").write_text(vectorbt_naive_json())
 
 
 if __name__ == "__main__":
