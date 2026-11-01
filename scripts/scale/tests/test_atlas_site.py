@@ -91,6 +91,7 @@ def test_nasdaq_site_reads_answer_first_and_is_deterministic(atlas: Path, tmp_pa
     assert page.index("<h2>Check your own backtester</h2>") < page.index("<h2>Verify any number</h2>")
     assert "pipx run queuetruth demo --yes" in page and "referee-your-simulator.md" in page
     assert "concepts/fill-realism-atlas.md" in page
+    assert "2 days from 2019-12-30 to 2020-01-30" in page and S.iso_date("10092026") == "2026-10-09"
     data = json.loads((out / "data" / "leaderboard.json").read_text())
     assert len(data["rows"]) == 12 and "attribution" not in data
     # byte-identical rebuild
