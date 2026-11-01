@@ -1564,7 +1564,8 @@ class Session:
 
     @property
     def position(self) -> int:
-        """Every record with `ts_event` at or before this was applied."""
+        """Every record with `ts_event` at or before this was applied, except after `advance_events_to` the records of
+        an event not complete by then, held until it completes or the next `advance_to`."""
         return int(self._s.position)
 
     def advance_events_to(self, ts: int) -> None:
@@ -1573,7 +1574,8 @@ class Session:
         event not complete by then wait for a later call. When the data ends with every remaining record at or
         before `ts`, an unterminated tail is applied and ended as the end of a `replay` ends it (orders are still
         taken until `finish`). This is the cut of the agent sandbox's tape, so the state after a call is that of a
-        `replay` of exactly that prefix (GIL released)."""
+        `replay` of exactly that prefix (GIL released). `position` becomes `ts`; the held records of an incomplete
+        event are applied first by the next `advance_to`, whatever its time."""
         self._wrap(self._s.advance_events_to, int(ts))
 
     def shadow_states(self, shadow_ids: list[str]) -> list[dict[str, Any]]:
@@ -1589,7 +1591,9 @@ class Session:
         """Sends shadows, each with `ts_submit` at or after `position`: a `qt.shadow_spec` table (any Arrow stream)
         or a list of row dicts (`shadow_id`, `instrument_id`, `side` `"B"` or `"A"`, `qty`, `ts_submit` in ns, and
         `price` for an absolute price or `offset_ticks` for a touch-relative one; optional `latency_ns`, `group`,
-        `order_key`). A cancel or amend is sent later with `cancel` / `amend`."""
+        `order_key`). A cancel or amend is sent later with `cancel` / `amend`. A shadow that no partition covers
+        (another day, an instrument without data) is taken and ends `censored_gap` at its `ts_live` without being
+        replayed, as in `replay`."""
         if isinstance(shadows, list):
             shadows = _shadow_rows_table(shadows)
         self._wrap(self._s.submit, shadows)

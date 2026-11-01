@@ -120,6 +120,9 @@ How the session stepping reproduces what a replay of each prefix shows:
   records are all at or before the cut. An event whose records straddle the cut waits whole, and an unterminated
   event at the end of the data is applied and ended once the cut passes the end; orders sent after the end of the
   data are still taken and never go live.
+- **Orders outside the instrument-day.** An episode may end after the day's midnight (`end` up to `47:59`); an order
+  sent then belongs to no partition. A replay takes it and ends it `censored` (`feed_gap`) at its arrival without
+  replaying it, and so does the session, which keeps such orders aside unreplayed.
 - **`window_replays`** in the scorecard counts the steps at which the open orders were brought to a new cut (a
   replay of the prefix with `replay`, a read of the session with `session`); it is the same number on both.
 
@@ -330,11 +333,14 @@ QT_REALDATA_DS=.realdata/ds/nasdaq-2019-12-30 python -m pytest -m realdata pytho
 - **Hidden liquidity, auctions and halts** follow the engine: hidden prints per the venue policy, orders resting
   through a book clear or a feed gap end `censored`.
 - **Cost.** With the default `session` stepping an episode reads the data once: a step costs the events since the
-  previous step and the orders open at it. With `stepping="replay"` each step that has open orders replays the
-  episode's prefix from the start of the data (67 ms per step on TSLA above, over prefixes of 169,195 to 233,747
-  records), so a full liquid day in one-second steps (23,400 steps) would take well over 26 minutes. On the synthetic
-  fixture day, a quoting agent in 5 s steps measured 4,000 steps (5.5 hours, 2,478 orders, 1,257 fills) in 7.5 s with `session` stepping against 144.1 s with `replay` stepping, 19.2 times faster: 1.7 ms per step at every length measured (250 to 4,000 steps), against 28 ms per step at 250 steps growing to 36 ms at 4,000. The fixture day holds about 50,000 records; on a larger day each replayed prefix is longer, so the gap grows (`benches/sandbox_stepping.py`, which also checks
-  that both steppings commit the same log and scorecard).
+  previous step and the orders open at it. With `stepping="replay"` each step that has open orders replays the episode's
+  prefix from the start of the data (67 ms per step on TSLA above, over prefixes of 169,195 to 233,747 records), so a
+  full liquid day in one-second steps (23,400 steps) would take well over 26 minutes. On the synthetic fixture day
+  (about 50,000 records), a quoting agent that always has orders open, in 5 s steps, took (median of 3 runs) 7.7 s for
+  4,000 steps (5.5 hours, 2,478 orders, 1,257 fills) with `session` stepping against 139.1 s with `replay` stepping,
+  18.1 times faster; per step, 1.7 to 1.9 ms at each length measured (250 to 4,000 steps) against 30 ms at 250 steps
+  growing to 35 ms at 4,000 (`benches/sandbox_stepping.py`, which also checks that every run commits the same log and
+  scorecard). That is one synthetic day and one agent; on a longer day each replayed prefix is longer.
 - **One instrument per episode**, FIFO venues only (as the engine).
 - **The guarantee is about the interface.** Nothing the session returns depends on data past the visible cut. With
   `replay` stepping every replay it runs reads only a copy of the data up to the cut; with `session` stepping the

@@ -188,6 +188,14 @@ fn session_orders_match_run_dataset() {
         };
         s.price = PriceSpec::Touch { offset_ticks: offset };
     }
+    // One shadow no partition covers (ten days after the data): `replay` ends it `censored_gap` at `ts_live`
+    // without replaying it, and so must the session.
+    let last_ts = out.events.iter().map(|e| e.ts_event).max().unwrap();
+    let mut orphan = shadows[0].clone();
+    orphan.shadow_id = "orphan".into();
+    orphan.ts_submit = last_ts + 10 * 86_400_000_000_000;
+    orphan.ts_cancel = None;
+    shadows.push(orphan);
     shadows.sort_by_key(|s| s.ts_submit);
     let spec = |extra: serde_json::Value| -> qt_schema::specs::ReplaySpec {
         let mut v = serde_json::json!({
@@ -284,6 +292,9 @@ fn session_orders_match_run_dataset() {
                 }
             }
             assert!(ended > 0);
+            let orphan = session.shadow_peek("orphan").unwrap();
+            assert_eq!(orphan.status, qt_replay::ShadowStatus::Done);
+            assert_eq!(orphan.result.end_state, qt_schema::rows::EndState::CensoredGap);
             assert!(session.shadow_peek("nope").is_err());
         }
         session.finish().unwrap();

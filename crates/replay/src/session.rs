@@ -68,8 +68,13 @@ pub struct Session {
     /// Opened from a replay spec: takes shadows.
     orders: bool,
     rows: ShadowRows,
-    /// Shadow id -> its cursor.
-    owner: HashMap<String, usize>,
+    /// Shadow id -> its cursor (`None`: no partition covers its submit time, see `unmatched`).
+    owner: HashMap<String, Option<usize>>,
+    /// The engine configuration of `open_replay` (for `unmatched`).
+    cfg: Option<EngineConfig>,
+    /// Shadows no partition covers: `replay` ends them `censored_gap` at `ts_live` without replaying them, so they
+    /// are kept here, never replayed, and reported so (`shadow_peek`, `finish`).
+    unmatched: Option<Engine>,
     finished: bool,
 }
 
@@ -145,7 +150,9 @@ impl Session {
                 done: false,
             });
         }
-        Ok(Self::with(ds, cursors, true))
+        let mut s = Self::with(ds, cursors, true);
+        s.cfg = Some(cfg);
+        Ok(s)
     }
 
     fn with(ds: Dataset, cursors: Vec<Cursor>, orders: bool) -> Self {
@@ -156,6 +163,8 @@ impl Session {
             orders,
             rows: ShadowRows::default(),
             owner: HashMap::new(),
+            cfg: None,
+            unmatched: None,
             finished: false,
         }
     }
@@ -167,7 +176,9 @@ impl Session {
         Ok(())
     }
 
-    /// The session's position: every record with `ts_event` at or before it was applied.
+    /// The session's position: every record with `ts_event` at or before it was applied, except, after
+    /// `advance_events_to`, the records of an event not complete by then (held until it completes or the next
+    /// `advance_to`). Orders are taken at or after it.
     pub fn position(&self) -> Ts {
         self.position
     }
@@ -175,14 +186,17 @@ impl Session {
     /// Replays every event with `ts_event <= ts`.
     pub fn advance_to(&mut self, ts: Ts) -> QtResult<()> {
         self.check_open()?;
-        if ts <= self.position {
-            return Ok(());
-        }
+        // Records held back by `advance_events_to` are at or before the position: they go first, whatever `ts`.
         for c in &mut self.cursors {
             for e in std::mem::take(&mut c.held) {
                 c.started = true;
                 c.engine.apply(&e, &mut self.rows)?;
             }
+        }
+        if ts <= self.position {
+            return Ok(());
+        }
+        for c in &mut self.cursors {
             while !c.done {
                 let e = match c.pending.take() {
                     Some(e) => e,
@@ -266,14 +280,27 @@ impl Session {
         Ok(())
     }
 
-    fn owner_of(&self, shadow_id: &str) -> QtResult<usize> {
+    fn owner_of(&self, shadow_id: &str) -> QtResult<Option<usize>> {
         self.owner.get(shadow_id).copied().ok_or_else(|| QtError::InputFormat {
             location: format!("shadow {shadow_id}"),
             msg: "unknown shadow_id".into(),
         })
     }
 
-    /// Sends a shadow (`ts_submit` at or after the position), routed to the partition `replay` would give it.
+    /// The engine holding a shadow: its partition's, or `unmatched`.
+    fn engine_of(&mut self, shadow_id: &str) -> QtResult<&mut Engine> {
+        match self.owner_of(shadow_id)? {
+            Some(k) => Ok(&mut self.cursors[k].engine),
+            None => self
+                .unmatched
+                .as_mut()
+                .ok_or_else(|| QtError::Engine("session: unmatched shadow without an engine".into())),
+        }
+    }
+
+    /// Sends a shadow (`ts_submit` at or after the position), routed to the partition `replay` would give it. A
+    /// shadow no partition covers (another day, an instrument without data) is taken and ends `censored_gap` at
+    /// its `ts_live` without being replayed, as in `replay`.
     pub fn submit(&mut self, spec: ShadowSpec) -> QtResult<()> {
         self.orders_check(spec.ts_submit, "ts_submit", &spec.shadow_id)?;
         if self.owner.contains_key(&spec.shadow_id) {
@@ -282,16 +309,19 @@ impl Session {
                 id: spec.shadow_id,
             });
         }
-        let p = self
-            .ds
-            .partition_for(spec.instrument_id, spec.ts_submit)
-            .ok_or_else(|| QtError::InputFormat {
-                location: format!("shadow {}", spec.shadow_id),
-                msg: format!(
-                    "no partition of instrument {} covers ts_submit {}",
-                    spec.instrument_id, spec.ts_submit
-                ),
-            })?;
+        let Some(p) = self.ds.partition_for(spec.instrument_id, spec.ts_submit) else {
+            if self.unmatched.is_none() {
+                let cfg = self
+                    .cfg
+                    .clone()
+                    .ok_or_else(|| QtError::Engine("session: orders without a replay configuration".into()))?;
+                self.unmatched = Some(Engine::new_interactive(cfg, &self.ds.instruments)?);
+            }
+            let id = spec.shadow_id.clone();
+            self.engine_of_unmatched()?.add_shadow(spec)?;
+            self.owner.insert(id, None);
+            return Ok(());
+        };
         let key = (p.instrument_id, p.session_date);
         let k = self
             .cursors
@@ -300,23 +330,26 @@ impl Session {
             .ok_or_else(|| QtError::Engine("session: partition without a cursor".into()))?;
         let id = spec.shadow_id.clone();
         self.cursors[k].engine.add_shadow(spec)?;
-        self.owner.insert(id, k);
+        self.owner.insert(id, Some(k));
         Ok(())
+    }
+
+    fn engine_of_unmatched(&mut self) -> QtResult<&mut Engine> {
+        self.unmatched
+            .as_mut()
+            .ok_or_else(|| QtError::Engine("session: no unmatched engine".into()))
     }
 
     /// Sends a cancel at `ts_cancel` (at or after the position) for a shadow without one.
     pub fn cancel(&mut self, shadow_id: &str, ts_cancel: Ts) -> QtResult<()> {
         self.orders_check(ts_cancel, "ts_cancel", shadow_id)?;
-        let k = self.owner_of(shadow_id)?;
-        self.cursors[k].engine.cancel_shadow(shadow_id, ts_cancel).map(drop)
+        self.engine_of(shadow_id)?.cancel_shadow(shadow_id, ts_cancel).map(drop)
     }
 
     /// Sends a priority-keeping reduction to `new_qty` at `ts_send` (at or after the position).
     pub fn amend(&mut self, shadow_id: &str, ts_send: Ts, new_qty: Qty) -> QtResult<()> {
         self.orders_check(ts_send, "ts_send", shadow_id)?;
-        let k = self.owner_of(shadow_id)?;
-        self.cursors[k]
-            .engine
+        self.engine_of(shadow_id)?
             .amend_shadow(shadow_id, ts_send, new_qty)
             .map(drop)
     }
@@ -327,12 +360,25 @@ impl Session {
         if self.finished {
             return Err(QtError::Config("session: already finished".into()));
         }
-        let k = self.owner_of(shadow_id)?;
-        let engine = &self.cursors[k].engine;
+        let owner = self.owner_of(shadow_id)?;
+        let engine = match owner {
+            Some(k) => &self.cursors[k].engine,
+            None => self
+                .unmatched
+                .as_ref()
+                .ok_or_else(|| QtError::Engine("session: unmatched shadow without an engine".into()))?,
+        };
         let idx = engine
             .shadow_index(shadow_id)
             .ok_or_else(|| QtError::Engine(format!("session: shadow {shadow_id} has no engine index")))?;
-        Ok(engine.shadow_peek(idx))
+        let mut peek = engine.shadow_peek(idx);
+        if owner.is_none() {
+            // `replay` ends it `censored_gap` at `ts_live` without replaying it (`Engine::censor_unreplayed`).
+            peek.status = crate::ShadowStatus::Done;
+            peek.result.end_state = qt_schema::rows::EndState::CensoredGap;
+            peek.ts_end = Some(peek.result.ts_live);
+        }
+        Ok(peek)
     }
 
     /// The shadow fills produced since the last call, as a `qt.shadow_fills` batch (schema 1.1 `liquidity`).
@@ -352,6 +398,10 @@ impl Session {
         self.advance_to(Ts::MAX)?;
         for c in std::mem::take(&mut self.cursors) {
             c.engine.finish(&mut self.rows)?;
+        }
+        if let Some(mut eng) = self.unmatched.take() {
+            eng.censor_unreplayed(&mut self.rows)?;
+            eng.finish(&mut self.rows)?;
         }
         self.finished = true;
         Ok(())

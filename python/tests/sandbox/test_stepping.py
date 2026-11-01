@@ -196,9 +196,9 @@ def test_a_pending_order_arriving_in_a_halt_ends_at_the_same_step(tmp_path: Path
     assert (c.statuses_mismatched, c.fills_matched, c.fills_reported) == (1, c.fills_reported, c.fills_reported)
 
 
-def test_an_event_straddling_the_cut_waits_whole(tmp_path: Path) -> None:
-    """An event whose first record is before the cut and whose `F_LAST` is after it is released at once, by the tape
-    and by the session alike: an order arriving before its first record goes live at the step that covers its end."""
+def _straddling(root: Path) -> Path:
+    """A dataset with one event whose records carry two times: the bid at 100.00 is cancelled at 20 s and a new bid
+    added at 22 s, `F_LAST` on the second."""
     t = Tape()
     a, _ = _book(t)
     t.noop(at(11))
@@ -211,7 +211,13 @@ def test_an_event_straddling_the_cut_waits_whole(tmp_path: Path) -> None:
         t.noop(at(k))
     t.trade(at(28), "A", [(7777, 3)])
     t.noop(at(29))
-    ds = write_dataset(tmp_path / "ds", t)
+    return write_dataset(root, t)
+
+
+def test_an_event_straddling_the_cut_waits_whole(tmp_path: Path) -> None:
+    """An event whose first record is before the cut and whose `F_LAST` is after it is released at once, by the tape
+    and by the session alike: an order arriving before its first record goes live at the step that covers its end."""
+    ds = _straddling(tmp_path / "ds")
 
     def drive(sb: Any) -> None:
         sb.observe()
@@ -302,6 +308,64 @@ def test_book_clear_feed_gap_rejections_and_open_orders_at_the_end(tmp_path: Pat
     assert ("censored", "book_clear") in statuses and ("censored", "feed_gap") in statuses
     assert ("rejected", "rejected_no_touch") in statuses
     assert any(s == "cancelled" and r == "finish_cancel" for s, r in statuses)
+
+
+def test_an_episode_across_midnight(tmp_path: Path) -> None:
+    """Orders sent after the session day's midnight belong to no partition: `replay` takes them and ends them
+    `censored_gap` at their arrival without replaying them, and the session stepping does the same (it used to refuse
+    them, unlogged). A log made with `replay` stepping verifies (`verify` re-executes with the default stepping)."""
+    from queuetruth.sandbox import verify
+
+    t = Tape()
+    t.add(at(86_380), "B", px(0), 5)
+    t.add(at(86_380), "A", px(5), 5)
+    for k in (86_385, 86_390, 86_395):
+        t.noop(at(k))
+    ds = write_dataset(tmp_path / "ds", t)
+
+    def drive(sb: Any) -> None:
+        sb.observe()
+        sb.submit("buy", 1, price=px(0))
+        sb.advance(to=at(86_388))
+        sb.advance(to=at(86_405))  # past midnight
+        sb.submit("sell", 2, price=px(9))  # no partition covers it
+        sb.cancel("o1")
+        sb.submit("sell", 1, type="market")
+        sb.advance(to=at(86_415))
+        sb.cancel("o2", qty=1)
+        sb.advance(to=at(86_425))
+
+    spec = base_spec(ds, start=at(86_382), end="24:00:30", latency="1ms")
+    run = _same(spec, drive, swallow=False)
+    orders = {o.order_id: o for o in run["card_obj"].orders}
+    assert orders["o2"].status == "censored" and orders["o2"].reason == "feed_gap"
+    assert orders["o2"].ts_done == at(86_405) + 1_000_000
+    assert not any('"error"' in d for d in run["docs"])
+    with Sandbox.open(spec, stepping="replay") as sb:
+        drive(Recorder(sb, swallow=False))
+        sb.finish(out=tmp_path / "out")
+    v = verify(tmp_path / "out" / "order_log.json", scorecard=tmp_path / "out" / "scorecard.json", workdir=tmp_path)
+    assert v.ok, v.problems
+
+
+def test_mixing_whole_event_and_record_advances(tmp_path: Path) -> None:
+    """`advance_events_to` holds the records of an event not complete at the cut; a later `advance_to`, even to the
+    same time, applies them first, so the position again means every record at or before it was applied."""
+    ds = _straddling(tmp_path / "ds")
+    spec = {"dataset": {"path": str(ds)}, "bbo": "none", "trajectory": "none"}
+    ref = queuetruth.api.Session.with_orders(spec)
+    ref.advance_to(at(21))
+    s = queuetruth.api.Session.with_orders(spec)
+    s.advance_events_to(at(21))
+    assert s.position == at(21)
+    assert s.bbo(1)["bid"] == (px(0), 5, 1)  # the cancel at 20 s waits with its event
+    s.advance_to(at(21))
+    assert s.depth(1, 5) == ref.depth(1, 5) and s.bbo(1)["bid"] == (px(-1), 5, 1)
+    s.advance_events_to(at(23))
+    ref.advance_to(at(23))
+    assert s.depth(1, 5) == ref.depth(1, 5) and s.bbo(1)["bid"] == (px(0), 3, 1)
+    s.finish()
+    ref.finish()
 
 
 # ---- what the session stepping reads -----------------------------------------------------------------------------
