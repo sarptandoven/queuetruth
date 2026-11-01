@@ -84,5 +84,10 @@ To score your own simulator rather than the ones in the zoo, start from [getting
 - **Hidden liquidity, auctions and halts.** Hidden prints follow the venue's rule
   ([hidden prints](shadow-orders.md#hidden-prints)). Orders are placed during continuous trading, the exact fill
   rule does not model auction crosses, and an order resting through a trading halt is censored rather than scored.
+- **hftbacktest's order-level model sees the same queue but fills less.** Faithful `hbt_l3_fifo` tracks the orders
+  ahead exactly, yet fills fewer orders than the exact replay, mainly because it never fills an order priced better
+  than the feed's best by a trade-through when the executed order is at that best, which is how IEX publishes every
+  execution. It also ignores hidden prints. Its gap is a rule of hftbacktest, not a different queue or a different
+  definition of "filled"; [`hbt_l3_fifo`](l2-model-zoo.md#c-hbt_l3_fifo-order-level-input) has the details.
 - **Markouts are not a strategy.** The P&L is the mid move after a fill, per order placed, before fees and rebates.
   It measures what a model's fill mistakes are worth, not what a strategy would earn.
