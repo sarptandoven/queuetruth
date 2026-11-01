@@ -55,8 +55,9 @@ Summary 1.1 fields (SPEC 3.11 #9): `discordance_clustered` (statistics), `n_twin
 (`markout_mean_bps`, `markout_mean_net_ccy`); sim fills are charged the live log's fee rate per liquidity.
 
 Summary 1.2 field `pnl_gap` (with `out` only, since it reads `qt.score_shortfall`): the per-order P&L gap per
-currency at the markout equivalence horizon, its 95% CI, direction, parts and plain sentence
-(`queuetruth.score.pnl_gap`).
+currency at the markout equivalence horizon, its 95% CI, direction, parts with CIs and plain sentence
+(`queuetruth.score.pnl_gap`); `not_answerable` for a fills-only live log, and its headline carries the `BLOCKED:`
+prefix of a blocked scorecard.
 """
 
 from __future__ import annotations
@@ -93,7 +94,7 @@ from queuetruth.score.coverage import is_fills_only
 from queuetruth.score.l2_own import own_free_l2_dataset, own_orders_from_log
 from queuetruth.score.markouts import apply_fee_rates, compute_markouts, position_series
 from queuetruth.score.outcomes import Outcome, exact_outcomes, log_outcomes, zoo_outcomes
-from queuetruth.score.pnl_gap import pnl_gap
+from queuetruth.score.pnl_gap import pnl_gap_table
 from queuetruth.score.runner import DefaultRunner, ScoreRunner, find_table
 from queuetruth.score.schedule import (
     cancel_instruction,
@@ -941,7 +942,16 @@ def build_scorecard(
             order_rows, fills_ext, bbo, ds, s, unpriced_qty=unpriced, n_unmatched_live=n_unmatched_live
         )
         files.append(write(shortfall, out / "score_shortfall.parquet"))
-        gap = pnl_gap(rows(shortfall), s.equivalence.markout_horizon_ns)
+        gap = pnl_gap_table(
+            shortfall,
+            s.equivalence.markout_horizon_ns,
+            order_rows=order_rows,
+            bootstrap=s.bootstrap,
+            fills_only=fills_only,
+        )
+        if own_block is not None:  # the same prefix as the blocked verdict headline
+            for g in gap:
+                g["headline"] = "BLOCKED: own resting orders are in the L2 depth; " + g["headline"]
         if schedule:
             files.append(write(make_table("qt.shadow_spec", schedule), out / "schedule.parquet"))
         if zoo_arm_spec is not None and ds is not None and ds.kind != "l2":

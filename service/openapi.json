@@ -3903,7 +3903,7 @@
       },
       "PnlGap": {
         "additionalProperties": false,
-        "description": "1.2: the scorecard's P&L gap in one currency at one markout horizon (`queuetruth.score.pnl_gap`): the per-order\nmean of `qt.score_shortfall.total_ccy` (simulator minus live, net of fees; positive = the simulator's P&L is too\nhigh) with its 95% block-bootstrap CI, the direction (a finding only when the CI excludes 0), the parts and the\nplain sentence.",
+        "description": "1.2: the scorecard's P&L gap in one currency at one markout horizon (`queuetruth.score.pnl_gap`): the per-order\nmean of `qt.score_shortfall.total_ccy` (simulator minus live, net of fees; positive = the simulator's P&L is too\nhigh) with its 95% block-bootstrap CI, the direction (a finding only when the CI excludes 0), why it is not\ncomputable or not answerable, the parts (per-order means that add up to the gap) with their CIs on the same\ndraws, the part a finding mostly comes from, and the plain sentence.",
         "properties": {
           "ci_hi": {
             "anyOf": [
@@ -3943,7 +3943,8 @@
               "sim_too_high",
               "sim_too_low",
               "no_significant_difference",
-              "not_computable"
+              "not_computable",
+              "not_answerable"
             ],
             "title": "Direction",
             "type": "string"
@@ -3962,7 +3963,6 @@
                 "enum": [
                   "granted",
                   "denied",
-                  "partial",
                   "timing",
                   "fees"
                 ],
@@ -3973,17 +3973,6 @@
               }
             ],
             "title": "Main Part"
-          },
-          "main_part_majority": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Main Part Majority"
           },
           "mean_ccy": {
             "anyOf": [
@@ -4006,6 +3995,23 @@
           },
           "parts_ccy": {
             "$ref": "#/components/schemas/PnlGapParts"
+          },
+          "parts_ci_hi": {
+            "$ref": "#/components/schemas/PnlGapParts"
+          },
+          "parts_ci_lo": {
+            "$ref": "#/components/schemas/PnlGapParts"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
           }
         },
         "required": [
@@ -4017,9 +4023,11 @@
           "ci_lo",
           "ci_hi",
           "direction",
+          "reason",
           "parts_ccy",
+          "parts_ci_lo",
+          "parts_ci_hi",
           "main_part",
-          "main_part_majority",
           "headline"
         ],
         "title": "PnlGap",
@@ -4027,7 +4035,7 @@
       },
       "PnlGapParts": {
         "additionalProperties": false,
-        "description": "1.2: per-order means of the P&L gap's parts (`queuetruth.score.pnl_gap`); they add up to `mean_ccy`.",
+        "description": "1.2: one value per part of the P&L gap (`queuetruth.score.pnl_gap`): fills the simulator grants that live did\nnot get, fills live got that it misses, the timing of fills both arms got, and fees.",
         "properties": {
           "denied": {
             "anyOf": [
@@ -4062,17 +4070,6 @@
             ],
             "title": "Granted"
           },
-          "partial": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Partial"
-          },
           "timing": {
             "anyOf": [
               {
@@ -4088,7 +4085,6 @@
         "required": [
           "granted",
           "denied",
-          "partial",
           "timing",
           "fees"
         ],

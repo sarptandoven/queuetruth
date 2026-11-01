@@ -190,36 +190,44 @@ the simulator's P&L is too high. The horizon is the markout equivalence horizon 
 default), or the closest markout horizon when that one is not among `--markout-horizons`.
 
 A difference is stated only when its 95% interval excludes 0. Otherwise the line says that no P&L difference was
-found, with the estimate and its interval, which is not evidence that the P&L matches. A finding names the part it
-mostly comes from, the shortfall buckets per order regrouped by what the simulator did:
+found, with the estimate and its interval, which is not evidence that the P&L matches. The parts are the shortfall
+buckets per order regrouped by what the simulator did:
 
 | Part | Shortfall buckets | Reads as |
 |---|---|---|
-| `granted` | `missed_fill` of orders the simulator filled and live did not | fills it grants that live did not get |
-| `denied` | `missed_fill` of orders live filled and the simulator did not | fills live got that it misses |
-| `partial` | `partial_fill` | filling more or less of an order than live |
+| `granted` | `missed_fill` of orders only the simulator filled, `partial_fill` of orders it filled more of than live | fills it grants that live did not get |
+| `denied` | `missed_fill` of orders only live filled, `partial_fill` of orders it filled less of than live | fills live got that it misses |
 | `timing` | `delay + spread + adverse_selection` | when and at what price it fills the orders live also filled |
 | `fees` | `fees` | fees and rebates |
 
-The parts are per-order means over the same orders, so they add up to the gap; they carry no interval of their own.
-The line names the part with the largest contribution in the direction of the gap: "mostly from" when it is at
-least half of the gap, "the largest part from" otherwise. On the synthetic data of
-[Getting started](../getting-started.md) (measured 2026-11-01):
+The parts are per-order means over the same orders, so they add up to the gap, and each has a 95% interval on the
+same bootstrap draws as the gap (`parts_ci_lo`, `parts_ci_hi`). A finding says "mostly from" a part only when that
+part has the sign of the gap, its own interval excludes 0, and it is more than half of the sum of the absolute
+parts. Parts that offset one another, or a part that comes from a handful of orders, name nothing. On the synthetic
+data of [Getting started](../getting-started.md) (measured 2026-11-01), `front_of_queue` gives:
 
 ```text
 RESULT: the simulator fills 9.0 pp more often than live (95% CI +5.7 to +12.7 pp) within 60s of entry; significant (cluster-robust p = 7.73e-05, 26 clusters); plain McNemar p = 7.63e-06 assumes independent orders
-P&L: the simulator's P&L is 5.78 USD per order too high (95% CI +3.40 to +8.75) at the 1 s markout, the largest part from when and at what price it fills the orders live also filled (+2.69 USD per order); 200 orders
+P&L: the simulator's P&L is 5.78 USD per order too high (95% CI +3.40 to +8.75) at the 1 s markout, mostly from fills it grants that live did not get (+3.09 USD per order); 200 orders
 ```
 
-That is `front_of_queue`. At 1 s, fills that both arms got but the model gets earlier carry most of the gap; with
-`--markout-horizon 60s` the timing part is close to 0 and the line reads "mostly from fills it grants that live did
-not get (+2.66 USD per order)", as in the [atlas](fill-realism-atlas.md), whose P&L column uses 60 s. Short
-horizons isolate the spread and the immediate adverse selection, long ones the fills themselves.
+The rest, +2.69 USD per order, is timing: fills both arms got, which the model gets earlier. With
+`--markout-horizon 60s` the timing part is close to 0 (-0.09, interval -0.88 to +0.59) and granted fills are
+almost the whole gap (+3.28 of +3.19), as in the [atlas](fill-realism-atlas.md), whose P&L column uses 60 s. Short
+horizons isolate the spread and the immediate adverse selection, long ones the fills themselves. `hbt_power3[n=2]`
+on the same data understates live, "mostly from fills live got that it misses (-0.510 USD per order)"; its timing
+part (-0.340) has an interval that reaches 0 (see [Decompose the sim-live gap](../how-to/decompose-the-sim-live-gap.md)).
+
+A fills-only live log does not hold the orders live never filled, so the fills the simulator grants on them cannot
+be counted: the line says the P&L gap is not answerable and states no finding (`direction = not_answerable`).
 
 Each currency gets its own line. Orders that cannot be valued (no quote to mark a fill, a fill without a price) are
-left out and counted; without a dataset no order can be valued and the line says the P&L is not computable. The
-same entries are in `summary.json` as `pnl_gap` (schema 1.2, written with `--out`), and the report shows the
-sentence in its answer block and under the verdict headline.
+left out and counted; when none can be valued (for example without a dataset) the line says the P&L is not
+computable and why, with the count per reason. Orders of an instrument missing from the dataset have no currency
+and are counted only in the shortfall table's total rows when another currency was valued. The same entries are in
+`summary.json` as `pnl_gap` (schema 1.2, written with `--out`), and the report shows the sentence in its answer
+block and under the verdict headline. A scorecard blocked by own orders in the L2 depth prints no `P&L:` line and
+the report shows none; its `pnl_gap` headlines carry the same `BLOCKED:` prefix as the verdict headline.
 
 ## Fills-only logs
 

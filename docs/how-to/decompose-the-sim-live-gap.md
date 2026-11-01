@@ -11,7 +11,7 @@ table is still written, with every order unvalued (there are no quotes to mark f
 
 `queuetruth score` also prints the gap in one line, `P&L:`, under its `RESULT:` line: the per-order mean of
 `total_ccy` with its 95% interval at the markout equivalence horizon (1 s by default), stated as a difference only
-when the interval excludes 0, and the part it mostly comes from. See [the P&L gap](../concepts/scorecard.md#the-pl-gap).
+when the interval excludes 0, and the part it mostly comes from when one part clearly dominates. See [the P&L gap](../concepts/scorecard.md#the-pl-gap).
 
 ## What the gap is
 
@@ -112,8 +112,13 @@ assert worst < 1e-9
 
 On this run (measured 2026-10-24) the 1 s totals over the 184 scored orders are: missed fills -37.50 USD, adverse
 selection -62.50, partial fills -56.25, delay, spread and fees 0, total -156.25. The mean per order is -0.85 USD
-with a 95% CI of [-1.89, -0.20], the run's `P&L:` line (`the simulator's P&L is 0.849 USD per order too low (95% CI
--1.893 to -0.197) at the 1 s markout, ...`). So `hbt_power3[n=2]` understates live here, mostly through fills it missed: 3
+with a 95% CI of [-1.89, -0.20]. The run's `P&L:` line says the same:
+
+```text
+P&L: the simulator's P&L is 0.849 USD per order too low (95% CI -1.893 to -0.197) at the 1 s markout, mostly from fills live got that it misses (-0.510 USD per order); 184 orders
+```
+
+The -0.510 is missed and partial fills together, (-37.50 - 56.25) / 184. So `hbt_power3[n=2]` understates live here, mostly through fills it missed: 3
 orders live filled and the model did not, and 4 it filled short, all on fills that earned money. The
 adverse-selection total comes from a single order (one of the 93 that both arms filled) and its CI reaches 0, so it
 is not a finding about the model. The identity check prints 0.0 on all 1,288 order rows, and the total rows' `note`

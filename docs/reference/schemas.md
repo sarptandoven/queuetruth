@@ -5619,7 +5619,7 @@ McNemar test on the discordant pairs (SPEC 5.7.5).
 
 **`PnlGap`** (in `qt.scorecard_summary`)
 
-1.2: the scorecard's P&L gap in one currency at one markout horizon (`queuetruth.score.pnl_gap`): the per-order mean of `qt.score_shortfall.total_ccy` (simulator minus live, net of fees; positive = the simulator's P&L is too high) with its 95% block-bootstrap CI, the direction (a finding only when the CI excludes 0), the parts and the plain sentence.
+1.2: the scorecard's P&L gap in one currency at one markout horizon (`queuetruth.score.pnl_gap`): the per-order mean of `qt.score_shortfall.total_ccy` (simulator minus live, net of fees; positive = the simulator's P&L is too high) with its 95% block-bootstrap CI, the direction (a finding only when the CI excludes 0), why it is not computable or not answerable, the parts (per-order means that add up to the gap) with their CIs on the same draws, the part a finding mostly comes from, and the plain sentence.
 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
@@ -5630,21 +5630,22 @@ McNemar test on the discordant pairs (SPEC 5.7.5).
 | `mean_ccy` | number or null | yes |  |  |
 | `ci_lo` | number or null | yes |  |  |
 | `ci_hi` | number or null | yes |  |  |
-| `direction` | one of "sim_too_high", "sim_too_low", "no_significant_difference", "not_computable" | yes |  |  |
+| `direction` | one of "sim_too_high", "sim_too_low", "no_significant_difference", "not_computable", "not_answerable" | yes |  |  |
+| `reason` | string or null | yes |  |  |
 | `parts_ccy` | PnlGapParts | yes |  |  |
-| `main_part` | one of "granted", "denied", "partial", "timing", "fees" or null | yes |  |  |
-| `main_part_majority` | boolean or null | yes |  |  |
+| `parts_ci_lo` | PnlGapParts | yes |  |  |
+| `parts_ci_hi` | PnlGapParts | yes |  |  |
+| `main_part` | one of "granted", "denied", "timing", "fees" or null | yes |  |  |
 | `headline` | string | yes |  |  |
 
 **`PnlGapParts`** (in `qt.scorecard_summary`)
 
-1.2: per-order means of the P&L gap's parts (`queuetruth.score.pnl_gap`); they add up to `mean_ccy`.
+1.2: one value per part of the P&L gap (`queuetruth.score.pnl_gap`): fills the simulator grants that live did not get, fills live got that it misses, the timing of fills both arms got, and fees.
 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `granted` | number or null | yes |  |  |
 | `denied` | number or null | yes |  |  |
-| `partial` | number or null | yes |  |  |
 | `timing` | number or null | yes |  |  |
 | `fees` | number or null | yes |  |  |
 

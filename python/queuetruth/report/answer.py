@@ -295,12 +295,13 @@ _PNL_STATUS: dict[str, tuple[Status, str]] = {
     "sim_too_low": (WARN, "P&L TOO LOW"),
     "no_significant_difference": (INFO, "NO DIFFERENCE FOUND"),
     "not_computable": (NEUTRAL, "NOT COMPUTABLE"),
+    "not_answerable": (WARN, "FILLS ONLY"),
 }
 
 
 def _score_pnl(run: Any, s: ScorecardSummary, many: bool) -> list[Answer]:
     """The P&L gap (`pnl_gap`, one answer per currency): the scorer's sentence, which states a difference only when
-    its 95% CI excludes 0. None for a scorecard without a P&L gap, not scored, or blocked by own orders."""
+    its 95% CI excludes 0. [] for a scorecard without a P&L gap, not scored, or blocked by own orders."""
     if si.not_scored(s) or si.blocked_by_own_orders(s):
         return []
     gaps = si.pnl_gaps(run, s)

@@ -13,7 +13,7 @@ from queuetruth.report import render
 from queuetruth.schemas.arrow import SCHEMAS
 from queuetruth.schemas.io import write_table
 from queuetruth.score._io import make_table
-from queuetruth.score.pnl_gap import pnl_gap
+from queuetruth.score.pnl_gap import headline, pnl_gap
 from report import synth as rc
 
 S = 1_000_000_000
@@ -58,14 +58,20 @@ def _shortfall(lo: float, hi: float) -> list[dict[str, Any]]:
     return tot + orders
 
 
-def _gap(lo: float, hi: float) -> list[dict[str, Any]]:
-    return pnl_gap(_shortfall(lo, hi), S)
+def _gap(lo: float, hi: float, part: str | None = None, **kw: Any) -> list[dict[str, Any]]:
+    """The entries of `_shortfall`; `part` sets the part a finding names (the scorer derives it from part CIs)."""
+    gaps = pnl_gap(_shortfall(lo, hi), S, **kw)
+    for g in gaps:
+        if part:
+            g["main_part"] = part
+            g["headline"] = headline(g)
+    return gaps
 
 
 def test_answer_and_verdict_carry_the_pnl_gap(tmp_path: Path) -> None:
     root = tmp_path / "score"
     rc.make_score_dir(root, n=200)
-    _edit_summary(root, lambda d: d.update(pnl_gap=_gap(0.2, 0.8)))
+    _edit_summary(root, lambda d: d.update(pnl_gap=_gap(0.2, 0.8, part="granted")))
     html = _render(tmp_path, root)
     ans = _section(html, "answer")
     assert "Does the simulator fill like live trading?" in ans
@@ -107,6 +113,17 @@ def test_older_summaries_fall_back_to_the_shortfall_table(tmp_path: Path) -> Non
     write_table(t, root / "score_shortfall.parquet", SCHEMAS["qt.score_shortfall"])
     ans = _section(_render(tmp_path, root), "answer")
     assert "P&amp;L TOO HIGH" in ans and "0.500 USD per order too high" in ans
+    assert "mostly" not in ans  # without the scorer's order rows no part has a CI, so none is named
+
+
+def test_fills_only_scorecard_does_not_state_a_pnl_finding(tmp_path: Path) -> None:
+    root = tmp_path / "score"
+    rc.make_score_dir(root, n=200)
+    _edit_summary(root, lambda d: d.update(fills_only=True, pnl_gap=_gap(0.2, 0.8, fills_only=True)))
+    ans = _section(_render(tmp_path, root), "answer")
+    li = ans.rfind("<li>", 0, ans.index("P&amp;L match live"))
+    q = ans[li : ans.index("</li>", li)]
+    assert "FILLS ONLY" in q and "P&amp;L gap not answerable at the 1 s markout" in q and "TOO HIGH" not in q
 
 
 def test_blocked_scorecard_has_no_pnl_answer(tmp_path: Path) -> None:

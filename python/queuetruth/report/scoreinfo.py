@@ -19,7 +19,7 @@ from typing import Any
 from queuetruth.report import cols
 from queuetruth.report.load import RunDir
 from queuetruth.schemas.models import PnlGap, ScorecardSummary
-from queuetruth.score.pnl_gap import pnl_gap as _pnl_gap
+from queuetruth.score.pnl_gap import pnl_gap_table
 
 NOT_COMPUTABLE = "not computable: fills-only source"
 
@@ -297,10 +297,12 @@ def markout_rows(run: RunDir, test_id: str) -> list[dict[str, Any]]:
 
 def pnl_gaps(run: RunDir, s: ScorecardSummary) -> list[PnlGap]:
     """The scorecard's P&L gap per currency (`queuetruth.score.pnl_gap`): the 1.2 summary field `pnl_gap`, else
-    computed from the run's `qt.score_shortfall` table at the markout equivalence horizon; [] without either."""
+    computed from the run's `qt.score_shortfall` table at the markout equivalence horizon (without the scorer's order
+    rows, so no part has a CI and none is named); [] without either."""
     if s.pnl_gap is not None:
         return list(s.pnl_gap)
     t = run.table("qt.score_shortfall")
     if t is None:
         return []
-    return [PnlGap.model_validate(g) for g in _pnl_gap(cols.pylist(t.read()), s.equivalence.markout_horizon_ns)]
+    gaps = pnl_gap_table(t.read(), s.equivalence.markout_horizon_ns, fills_only=fills_only(s))
+    return [PnlGap.model_validate(g) for g in gaps]

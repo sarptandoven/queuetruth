@@ -1269,11 +1269,11 @@ class ArmCounts(QtModel):
 
 
 class PnlGapParts(QtModel):
-    """1.2: per-order means of the P&L gap's parts (`queuetruth.score.pnl_gap`); they add up to `mean_ccy`."""
+    """1.2: one value per part of the P&L gap (`queuetruth.score.pnl_gap`): fills the simulator grants that live did
+    not get, fills live got that it misses, the timing of fills both arms got, and fees."""
 
     granted: float | None
     denied: float | None
-    partial: float | None
     timing: float | None
     fees: float | None
 
@@ -1281,8 +1281,9 @@ class PnlGapParts(QtModel):
 class PnlGap(QtModel):
     """1.2: the scorecard's P&L gap in one currency at one markout horizon (`queuetruth.score.pnl_gap`): the per-order
     mean of `qt.score_shortfall.total_ccy` (simulator minus live, net of fees; positive = the simulator's P&L is too
-    high) with its 95% block-bootstrap CI, the direction (a finding only when the CI excludes 0), the parts and the
-    plain sentence."""
+    high) with its 95% block-bootstrap CI, the direction (a finding only when the CI excludes 0), why it is not
+    computable or not answerable, the parts (per-order means that add up to the gap) with their CIs on the same
+    draws, the part a finding mostly comes from, and the plain sentence."""
 
     horizon_ns: int
     currency: str | None
@@ -1291,10 +1292,12 @@ class PnlGap(QtModel):
     mean_ccy: float | None
     ci_lo: float | None
     ci_hi: float | None
-    direction: Literal["sim_too_high", "sim_too_low", "no_significant_difference", "not_computable"]
+    direction: Literal["sim_too_high", "sim_too_low", "no_significant_difference", "not_computable", "not_answerable"]
+    reason: str | None
     parts_ccy: PnlGapParts
-    main_part: Literal["granted", "denied", "partial", "timing", "fees"] | None
-    main_part_majority: bool | None
+    parts_ci_lo: PnlGapParts
+    parts_ci_hi: PnlGapParts
+    main_part: Literal["granted", "denied", "timing", "fees"] | None
     headline: str
 
 

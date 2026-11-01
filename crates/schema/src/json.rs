@@ -1757,26 +1757,26 @@ pub enum PnlGapDirection {
     NoSignificantDifference,
     /// No valued order at the horizon.
     NotComputable,
+    /// Fills-only live log: the orders live never filled are missing.
+    NotAnswerable,
 }
 
 /// 1.2: part of the P&L gap.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PnlGapPart {
-    /// Orders the simulator filled and live did not.
+    /// Fills the simulator grants that live did not get.
     #[default]
     Granted,
-    /// Orders live filled and the simulator did not.
+    /// Fills live got that the simulator misses.
     Denied,
-    /// Different filled quantities.
-    Partial,
     /// Delay, spread and adverse selection of matched units.
     Timing,
     /// Fees and rebates.
     Fees,
 }
 
-/// 1.2: per-order means of the P&L gap's parts.
+/// 1.2: one value per part of the P&L gap.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PnlGapParts {
@@ -1784,8 +1784,6 @@ pub struct PnlGapParts {
     pub granted: Option<f64>,
     /// Fills live got that the simulator misses.
     pub denied: Option<f64>,
-    /// Different filled quantities.
-    pub partial: Option<f64>,
     /// Timing and price of fills both arms got.
     pub timing: Option<f64>,
     /// Fees and rebates.
@@ -1812,12 +1810,16 @@ pub struct PnlGap {
     pub ci_hi: Option<f64>,
     /// Direction.
     pub direction: PnlGapDirection,
-    /// Parts.
+    /// Why the gap is not computable or not answerable.
+    pub reason: Option<String>,
+    /// Parts (per-order means).
     pub parts_ccy: PnlGapParts,
-    /// Main part of a finding.
+    /// CI low of each part.
+    pub parts_ci_lo: PnlGapParts,
+    /// CI high of each part.
+    pub parts_ci_hi: PnlGapParts,
+    /// The part a finding mostly comes from.
     pub main_part: Option<PnlGapPart>,
-    /// The main part is at least half of the gap.
-    pub main_part_majority: Option<bool>,
     /// Plain sentence.
     pub headline: String,
 }

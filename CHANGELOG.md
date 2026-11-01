@@ -10,14 +10,18 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 - **The P&L gap next to the fill-rate gap in `score`** (ROADMAP, the one-line reality gap): under its `RESULT:` line
   `queuetruth score` prints a `P&L:` line, for example `the simulator's P&L is 5.78 USD per order too high (95% CI
-  +3.40 to +8.75) at the 1 s markout, ...`, and the report adds the same sentence to its answer block (one answer per
-  currency) and under the verdict headline. It is the per-order mean of `score_shortfall.parquet`'s `total_ccy`
-  (simulator minus live markout P&L, net of fees) with the decomposition's 95% block-bootstrap interval, at the
-  markout equivalence horizon (`--markout-horizon`, 1 s). A difference is stated only when the interval excludes 0,
-  otherwise the line says no P&L difference was found; a finding names the part it mostly comes from (fills the
-  simulator grants that live did not get, fills live got that it misses, partial fills, timing, fees). New summary
-  field `qt.scorecard_summary.pnl_gap` (schema 1.2, additive, optional; mirrored in `qt_schema`), computed by
-  `queuetruth.score.pnl_gap`; for summaries without it the report computes it from `score_shortfall.parquet`.
+  +3.40 to +8.75) at the 1 s markout, mostly from fills it grants that live did not get (+3.09 USD per order)`, and
+  the report adds the same sentence to its answer block (one answer per currency) and under the verdict headline.
+  It is the per-order mean of `score_shortfall.parquet`'s `total_ccy` (simulator minus live markout P&L, net of
+  fees) with the decomposition's 95% block-bootstrap interval, at the markout equivalence horizon
+  (`--markout-horizon`, 1 s). A difference is stated only when the interval excludes 0, otherwise the line says no
+  P&L difference was found. The gap splits into fills the simulator grants that live did not get, fills live got
+  that it misses (whole or partial fills in both), timing and fees, each with an interval on the same draws; a
+  finding names a part only when its interval excludes 0 and it is more than half of the parts. A fills-only live
+  log is not answerable (the orders live never filled are missing), a scorecard blocked by own orders in the L2
+  depth prints no line, and a gap that cannot be valued says why. New summary field `qt.scorecard_summary.pnl_gap`
+  (schema 1.2, additive, optional; mirrored in `qt_schema`), computed by `queuetruth.score.pnl_gap`; for summaries
+  without it the report computes it from `score_shortfall.parquet`.
   [Scorecard statistics](docs/concepts/scorecard.md#the-pl-gap) explains how to read it.
 - `ROADMAP.md`: what is being worked on and in what order (the Fill-Realism Atlas is `W1`).
 - **Sessions that take orders while they run** (`qt.Session.with_orders(spec)`; Rust `Session::open_replay`,

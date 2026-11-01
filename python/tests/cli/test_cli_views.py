@@ -191,6 +191,10 @@ def test_score_view_puts_the_pnl_gap_under_the_result_line() -> None:
     # summaries before schema 1.2 have no P&L gap: no line
     assert "P&L" not in cli.render(["score"], _score_doc())
     assert "P&L" not in cli.render(["score"], _score_doc(pnl_gap=None))
+    # a scorecard blocked by own orders in the L2 depth gets no P&L line (as in the report)
+    blocked = {"headline": "BLOCKED: own resting orders are in the L2 depth; x", "signed_bias": -0.115,
+               "gates_passed": False, "failed_gates": ["own_orders_in_l2_depth"]}  # fmt: skip
+    assert "P&L" not in cli.render(["score"], _score_doc(pnl_gap=[gap], verdict=blocked))
 
 
 def test_score_view_gate_status_only_with_gates() -> None:
