@@ -22,8 +22,41 @@ only) that bracket every honest model. The columns are:
 - **flagged**: the share of the row's orders on symbol-days whose replay checks raised a flag or that were not in
   continuous trading. With the published flag policy (`exclude`) those symbol-days are left out and this is 0.
 
-The two sentences at the top name the non-bound model furthest from the real queue in fill rate (at the sort
-horizon, 1 s by default) and in P&L. The tables are sorted by the size of the fill-rate bias at that horizon.
+The two sentences at the top give the exact fill rate and name the most optimistic and the most pessimistic
+non-bound models (at the sort horizon, 60 s by default) and the largest P&L error, but only among models whose 95%
+interval excludes 0: a difference whose interval reaches 0 is never stated as a finding. The tables are sorted by
+the size of the fill-rate bias at that horizon. Above each table, a chart draws every model's bias at that horizon
+as a dot with its interval as a whisker; it is coloured only when the interval excludes 0, and the bounds are left
+out of it so they do not squash the scale. Every value in a chart is also in the table below it.
+
+## Which setting fixes it
+
+The "Best setting by tier" table takes, for each tier and library, the setting whose fill-rate bias at the sort
+horizon is closest to 0 (hftbacktest's L3 FIFO model is left out: it needs the order-level data the exact replay
+uses). It says whether that setting is **still clearly off** (its 95% interval excludes 0) or shows **no clear
+difference**, which means the atlas cannot tell it from the exact replay at this sample size, not that it is exact.
+Next to it is the config to paste:
+
+- hftbacktest: the queue model and exchange calls of your `BacktestAsset()` chain, for example
+  `.power_prob_queue_model2(2).partial_fill_exchange()`, with the builder names `queuetruth export hftbacktest`
+  uses ([Calibrate my hftbacktest queue model](../how-to/calibrate-hftbacktest.md)).
+- NautilusTrader: the `BacktestEngine.add_venue` keywords, for example
+  `fill_model=FillModel(prob_fill_on_limit=1), book_type=BookType.L2_MBP, trade_execution=True, queue_position=True`
+  for the `queue_position` model, as the NautilusTrader integration sets them (`FillModel` is `DefaultFillModel`
+  in 2.x).
+- Databento's tutorial estimator has no library of its own; for `-1 < k <= 0` the table gives hftbacktest's
+  expected-value equivalent `.power_prob_queue_model3(1 / (1 + k))`.
+
+Where no released library reproduces the model (corrected mode, Databento with `k > 0`), the table shows only the
+model id. The best setting is the closest one on this venue, horizon and population; refit it on your own data
+before relying on it. What each model does is in [the L2 model zoo](l2-model-zoo.md).
+
+## One page per library
+
+`hftbacktest.html`, `nautilustrader.html` and `databento.html` each show one library's models across every tier
+and horizon (fill rate and P&L), its best settings by tier with the configs, a chart per tier and a plain-words
+summary: the exact fill rate, how many of the library's settings fill clearly more or fewer orders, and its closest
+setting with whether it is still clearly off. The index links to them.
 
 ## How a number is made
 

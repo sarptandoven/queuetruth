@@ -32,6 +32,7 @@ import argparse
 import html
 import json
 import math
+import re
 from pathlib import Path
 from typing import Any
 
@@ -155,9 +156,10 @@ def pnl_tier(rows: list[dict[str, Any]]) -> str | None:
     return "T1_top100" if "T1_top100" in tiers else ("ALL" if "ALL" in tiers else None)
 
 
-def pnl_headline(rows: list[dict[str, Any]], horizon: int) -> str | None:
+def pnl_headline(rows: list[dict[str, Any]], horizon: int, subject: str = "a fill model") -> str | None:
     """The P&L sentence (tier `pnl_tier`): the exact P&L per order, then the non-bound model whose P&L is furthest
-    from it among those whose difference is clear (95% interval excludes 0), or that none is."""
+    from it among those whose difference is clear (95% interval excludes 0), or that none is; `subject` names the
+    models of `rows` (a library page passes only its library's)."""
     tier = pnl_tier(rows)
     cands = [
         r
@@ -183,12 +185,236 @@ def pnl_headline(rows: list[dict[str, Any]], horizon: int) -> str | None:
         f"{lead}; {_named(r['model_id'])} books {abs(b):.3f} ticks per order {'more' if b > 0 else 'less'} "
         f"({rel}95% interval {ticks(r.get('pnl_bias_ticks_ci_lo'))} to {ticks(r.get('pnl_bias_ticks_ci_hi'))}"
         + (f"; {bps:+.2f} bp" if bps is not None else "")
-        + "), the largest clear P&L error of a fill model."
+        + f"), the largest clear P&L error of {subject}."
     )
 
 
 def _tier_order(tiers: set[str]) -> list[str]:
     return ["ALL", *sorted(t for t in tiers if t != "ALL")] if "ALL" in tiers else sorted(tiers)
+
+
+#: The libraries with a page of their own: library -> (page, the question people search for, docs path of the guide
+#: to calibrate it, the guide's name).
+LIBRARY_PAGES = {
+    "hftbacktest": (
+        "hftbacktest.html",
+        "How accurate is hftbacktest's queue model?",
+        "docs/how-to/calibrate-hftbacktest.md",
+        "calibrate hftbacktest's queue model",
+    ),
+    "NautilusTrader": (
+        "nautilustrader.html",
+        "How accurate is NautilusTrader's fill model?",
+        "integrations/nautilus/README.md",
+        "the NautilusTrader integration",
+    ),
+    "Databento": (
+        "databento.html",
+        "How accurate is Databento's queue position estimate?",
+        "docs/how-to/databento-mbo.md",
+        "score on Databento MBO data",
+    ),
+}
+REPO = DOCS.rsplit("/docs", 1)[0]
+#: Model families that are not a setting a reader of an L2 backtest can pick: hftbacktest's L3 FIFO model needs
+#: order-level input, the very data the exact replay uses.
+NOT_A_SETTING = ("hbt_l3_fifo",)
+#: Short chart labels per family (with the setting's parameters appended).
+SHORT = {
+    "nt_prob_touch": "NautilusTrader touch",
+    "nt_queue_l2_prob_touch": "NautilusTrader queue_position + touch",
+    "nt_queue_l2": "NautilusTrader queue_position",
+    "hbt_l3_fifo": "hftbacktest L3 FIFO",
+    "hbt_risk_adverse": "hftbacktest RiskAdverse",
+    "hbt_power3": "hftbacktest Power3",
+    "hbt_power2": "hftbacktest Power2",
+    "hbt_power": "hftbacktest Power",
+    "hbt_log2": "hftbacktest Log2",
+    "hbt_log": "hftbacktest Log",
+    "databento_mc": "Databento",
+}
+#: Model id keys that are not a setting of the library (the zoo's mode and exchange, the Monte Carlo size).
+_NOT_PARAMS = ("mode", "exch", "particles")
+
+
+def parse_id(model_id: str) -> tuple[str, dict[str, str]]:
+    """`hbt_power3[exch=partial;mode=faithful;n=2]` -> (`hbt_power3`, {exch: partial, mode: faithful, n: 2})."""
+    fam, _, rest = model_id.partition("[")
+    params: dict[str, str] = {}
+    for kv in rest.rstrip("]").split(";") if rest else ():
+        k, _, v = kv.partition("=")
+        if k:
+            params[k] = v
+    return fam, params
+
+
+def short_label(model_id: str) -> str:
+    """`hftbacktest Power3 n=2`: the chart label of a zoo model id; unknown families keep their id."""
+    fam, params = parse_id(model_id)
+    if fam not in SHORT:
+        return model_id
+    extra = " ".join(f"{k}={v}" for k, v in sorted(params.items()) if k not in _NOT_PARAMS)
+    return f"{SHORT[fam]} {extra}".strip()
+
+
+def _num(text: str) -> str | None:
+    """A model parameter as a Python literal (`2`, `0.3`), None when it is not a finite number."""
+    try:
+        x = float(text)
+    except ValueError:
+        return None
+    return f"{x:g}" if math.isfinite(x) else None
+
+
+#: zoo family -> hftbacktest `BacktestAsset` builder and whether it takes `n` (python/queuetruth/export/hftbacktest.py)
+HBT_BUILDERS = {
+    "hbt_power": ("power_prob_queue_model", True),
+    "hbt_power2": ("power_prob_queue_model2", True),
+    "hbt_power3": ("power_prob_queue_model3", True),
+    "hbt_log": ("log_prob_queue_model", False),
+    "hbt_log2": ("log_prob_queue_model2", False),
+    "hbt_risk_adverse": ("risk_adverse_queue_model", False),
+}
+HBT_EXCHANGES = {"partial": ".partial_fill_exchange()", "no-partial": ".no_partial_fill_exchange()"}
+#: NautilusTrader families -> `queue_position` on the venue (integrations/nautilus venue_options)
+NT_QUEUE = {"nt_prob_touch": False, "nt_queue_l2_prob_touch": True, "nt_queue_l2": True}
+
+
+def snippet(model_id: str) -> tuple[str, str] | None:
+    """(where it goes, code) to reproduce a zoo model in its library, as `queuetruth export` and the NautilusTrader
+    integration write it; None when no library setting reproduces it (corrected mode, L3 input, Databento k > 0, an
+    unknown family or parameter)."""
+    fam, p = parse_id(model_id)
+    if p.get("mode", "faithful") != "faithful":
+        return None  # corrected mode is queuetruth's fixed variant: no released library does that
+    exch = HBT_EXCHANGES.get(p.get("exch", ""), "")
+    if fam in HBT_BUILDERS:
+        builder, takes_n = HBT_BUILDERS[fam]
+        n = _num(p.get("n", "")) if takes_n else ""
+        if n is None:
+            return None
+        return "hftbacktest BacktestAsset chain", f".{builder}({n}){exch}"
+    if fam in NT_QUEUE:
+        prob = _num(p.get("p", "1"))
+        if prob is None:
+            return None
+        return (
+            "NautilusTrader BacktestEngine.add_venue keywords",
+            f"fill_model=FillModel(prob_fill_on_limit={prob}), book_type=BookType.L2_MBP, trade_execution=True, "
+            f"queue_position={NT_QUEUE[fam]}",
+        )
+    if fam == "databento_mc":
+        k = _num(p.get("k", ""))
+        if k is None or not -1 < float(k) <= 0:
+            return None
+        n = f"{1 / (1 + float(k)):g}"
+        return "hftbacktest approximation (expected value of the estimator)", f".power_prob_queue_model3({n})"
+    return None
+
+
+def _bias(r: dict[str, Any] | None) -> float | None:
+    v = None if r is None else r.get("fill_rate_bias_value")
+    return v if v is not None and math.isfinite(v) else None
+
+
+def verdict(r: dict[str, Any]) -> str:
+    """Whether a setting is still clearly off at its horizon: only a 95% interval that excludes 0 says so."""
+    if _clear(r, "fill_rate_bias"):
+        return (
+            "still clearly off: too optimistic"
+            if r["fill_rate_bias_value"] > 0
+            else "still clearly off: too pessimistic"
+        )
+    return "no clear difference (95% interval includes 0)"
+
+
+def best_settings(rows: list[dict[str, Any]], horizon: int, libraries: tuple[str, ...] | None = None) -> list[dict]:
+    """For each tier (`ALL` first) and library, the setting whose fill-rate bias at `horizon` is closest to 0 (ties
+    by model id), with whether its interval still excludes 0 and its snippet."""
+    libs = libraries or tuple(LIBRARY_PAGES)
+    out = []
+    for tier in _tier_order({r["tier"] for r in rows}):
+        for lib in libs:
+            cands = [
+                r
+                for r in rows
+                if r["tier"] == tier
+                and r["horizon_ns"] == horizon
+                and describe(r["model_id"])[0] == lib
+                and parse_id(r["model_id"])[0] not in NOT_A_SETTING
+                and _bias(r) is not None
+            ]
+            if not cands:
+                continue
+            r = min(cands, key=lambda r: (abs(r["fill_rate_bias_value"]), r["model_id"]))
+            snip = snippet(r["model_id"])
+            out.append(
+                {
+                    "tier": tier,
+                    "library": lib,
+                    "model_id": r["model_id"],
+                    "horizon_ns": horizon,
+                    "n_settings": len(cands),
+                    "fill_rate_bias_value": r["fill_rate_bias_value"],
+                    "fill_rate_bias_ci_lo": r.get("fill_rate_bias_ci_lo"),
+                    "fill_rate_bias_ci_hi": r.get("fill_rate_bias_ci_hi"),
+                    "clearly_off": _clear(r, "fill_rate_bias"),
+                    "snippet_kind": snip[0] if snip else None,
+                    "snippet": snip[1] if snip else None,
+                }
+            )
+    return out
+
+
+def _count(k: int, one: str, many: str) -> str:
+    return f"{k} {one if k == 1 else many}"
+
+
+def library_headline(rows: list[dict[str, Any]], lib: str, horizon: int) -> str | None:
+    """A library page's fill-rate sentence (tier ALL, else the first tier): the exact fill rate, how many of the
+    library's settings fill clearly more or fewer orders (95% interval excludes 0), and the closest setting with
+    whether it is still clearly off."""
+    tiers = _tier_order({r["tier"] for r in rows})
+    best = [b for b in best_settings(rows, horizon, (lib,)) if tiers and b["tier"] == tiers[0]]
+    if not best:
+        return None
+    b = best[0]
+    tier = b["tier"]
+    cands = [
+        r
+        for r in rows
+        if r["tier"] == tier
+        and r["horizon_ns"] == horizon
+        and describe(r["model_id"])[0] == lib
+        and parse_id(r["model_id"])[0] not in NOT_A_SETTING
+        and _bias(r) is not None
+    ]
+    exact = cands[0].get("exact_fill_rate_value")
+    where = "" if tier == "ALL" else f" among {TIER_WORDS.get(tier, 'tier ' + tier)}"
+    over = sum(1 for r in cands if _clear(r, "fill_rate_bias") and r["fill_rate_bias_value"] > 0)
+    under = sum(1 for r in cands if _clear(r, "fill_rate_bias") and r["fill_rate_bias_value"] < 0)
+    lead = (
+        f"Within {duration(horizon)}{where}, the exact replay of the real queue fills {pp(exact, False)}% of these "
+        f"orders. Of {lib}'s {_count(len(cands), 'setting', 'settings')} in the atlas, "
+    )
+    if over or under:
+        said = []
+        if over:
+            said.append(f"{_count(over, 'fills', 'fill')} clearly more orders")
+        if under:
+            said.append(f"{_count(under, 'fills', 'fill')} clearly fewer")
+        lead += " and ".join(said) + " (95% interval excludes 0)"
+    else:
+        lead += "none fills more or fewer orders than it beyond its 95% interval"
+    v = b["fill_rate_bias_value"]
+    if b["clearly_off"]:
+        tail = f"so even the best setting still fills clearly {'more' if v > 0 else 'fewer'} orders than the real queue"
+    else:
+        tail = "which the atlas cannot tell from the exact replay at this sample size"
+    return (
+        f"{lead}. The closest is {_named(b['model_id'])}, {pp(v)} pp (95% interval {pp(b['fill_rate_bias_ci_lo'])} "
+        f"to {pp(b['fill_rate_bias_ci_hi'])} pp), {tail}."
+    )
 
 
 def headline(rows: list[dict[str, Any]], horizon: int) -> str | None:
@@ -251,6 +477,17 @@ td.over { color: var(--over); } td.under { color: var(--under); } .ci { color: v
 code { background: var(--chip); padding: 1px 4px; border-radius: 4px; }
 pre { background: var(--chip); padding: 12px; border-radius: 6px; overflow-x: auto; }
 .attr { border-left: 3px solid var(--line); padding-left: 12px; }
+a { color: var(--under); } nav.libs { margin: 8px 0; } p { overflow-wrap: anywhere; }
+table.best th, table.best td { text-align: left; white-space: normal; vertical-align: top; }
+table.best td.cfg { min-width: 18em; } table.best td code { overflow-wrap: anywhere; }
+figure.chart { margin: 8px 0 12px; } svg.bias { width: 100%; min-width: 560px; height: auto; display: block;
+  font: 12px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+svg.bias text { fill: var(--fg); } svg.bias .tick { fill: var(--muted); }
+svg.bias .grid { stroke: var(--line); stroke-width: 1; } svg.bias .zero { stroke: var(--muted); stroke-width: 1.5; }
+svg.bias .ci { stroke: var(--muted); stroke-width: 2; stroke-linecap: round; }
+svg.bias .dot { fill: var(--muted); stroke: var(--bg); stroke-width: 2; }
+svg.bias .over .ci { stroke: var(--over); } svg.bias .over .dot { fill: var(--over); }
+svg.bias .under .ci { stroke: var(--under); } svg.bias .under .dot { fill: var(--under); }
 """
 
 
@@ -286,6 +523,238 @@ def _attribution(source: str) -> str:
     )
 
 
+def _tick_step(span: float) -> float:
+    """A 1, 2 or 5 x 10^k step that gives about five ticks over `span`."""
+    raw = span / 5
+    mag = 10 ** math.floor(math.log10(raw))
+    return next(m * mag for m in (1, 2, 5, 10) if m * mag >= raw)
+
+
+def _f(x: float) -> str:
+    """An SVG coordinate: one decimal, so the output does not depend on float printing."""
+    return f"{x:.1f}"
+
+
+#: chart geometry in viewBox units
+CHART_W, CHART_LABEL, CHART_X0, CHART_X1, CHART_TOP, CHART_ROW = 720, 290, 300, 650, 30, 24
+
+
+def chart(rows: list[dict[str, Any]], chart_id: str, title: str, horizon: int) -> str:
+    """An inline SVG of the fill-rate bias of `rows` (one per model, in the order given) at `horizon`: a dot per
+    model with its 95% interval as a whisker, a line at 0, coloured `--over` / `--under` only when the interval
+    excludes 0. No script; every value is also in the table next to it. Empty without rows."""
+    pts = []
+    for r in rows:
+        v = _bias(r)
+        if v is None:
+            continue
+        lo, hi = r.get("fill_rate_bias_ci_lo"), r.get("fill_rate_bias_ci_hi")
+        ok = lo is not None and hi is not None and math.isfinite(lo) and math.isfinite(hi)
+        pts.append((r, 100 * v, 100 * lo if ok else None, 100 * hi if ok else None))
+    if not pts:
+        return ""
+    vals = [x for _, v, lo, hi in pts for x in (v, lo, hi) if x is not None]
+    dmin, dmax = min(0.0, *vals), max(0.0, *vals)
+    if dmax - dmin < 1e-9:
+        dmin, dmax = -1.0, 1.0
+    step = _tick_step(dmax - dmin)
+    a, b = math.floor(dmin / step - 1e-9) * step, math.ceil(dmax / step + 1e-9) * step
+    ticks = [a + i * step for i in range(round((b - a) / step) + 1)]
+
+    def x(v: float) -> float:
+        return CHART_X0 + (v - a) / (b - a) * (CHART_X1 - CHART_X0)
+
+    height = CHART_TOP + len(pts) * CHART_ROW + 30
+    bottom = CHART_TOP + len(pts) * CHART_ROW
+    out = [
+        f'<svg class="bias" viewBox="0 0 {CHART_W} {height}" role="img" aria-labelledby="{chart_id}-t {chart_id}-d">',
+        f'<title id="{chart_id}-t">{html.escape(title)}</title>',
+        f'<desc id="{chart_id}-d">Fill-rate bias of {len(pts)} models at {html.escape(duration(horizon))} in '
+        "percentage points, with 95% intervals; the same values are in the table below.</desc>",
+    ]
+    for t in ticks:
+        tx = _f(x(t))
+        label = "0" if abs(t) < step / 1e6 else f"{round(t, 6):+g}"
+        cls = "zero" if label == "0" else "grid"
+        out.append(f'<line class="{cls}" x1="{tx}" x2="{tx}" y1="{CHART_TOP - 6}" y2="{bottom}"/>')
+        out.append(f'<text class="tick" x="{tx}" y="{CHART_TOP - 12}" text-anchor="middle">{label}</text>')
+    for i, (r, v, lo, hi) in enumerate(pts):
+        cy = CHART_TOP + i * CHART_ROW + CHART_ROW / 2
+        cls = "over" if lo is not None and lo > 0 else ("under" if hi is not None and hi < 0 else "plain")
+        ci = f" [{lo:+.2f}, {hi:+.2f}]" if lo is not None else ""
+        label = short_label(r["model_id"])
+        out.append(f'<g class="{cls}"><title>{html.escape(label)}: {v:+.2f} pp{ci}</title>')
+        out.append(f'<text x="{CHART_LABEL}" y="{_f(cy + 4)}" text-anchor="end">{html.escape(label)}</text>')
+        if lo is not None:
+            out.append(f'<line class="ci" x1="{_f(x(lo))}" x2="{_f(x(hi))}" y1="{_f(cy)}" y2="{_f(cy)}"/>')
+        out.append(f'<circle class="dot" cx="{_f(x(v))}" cy="{_f(cy)}" r="5"/>')
+        out.append(f'<text x="{CHART_W - 4}" y="{_f(cy + 4)}" text-anchor="end">{v:+.2f}</text></g>')
+    out.append(
+        f'<text class="tick" x="{_f((CHART_X0 + CHART_X1) / 2)}" y="{height - 8}" text-anchor="middle">'
+        f"fill-rate bias within {html.escape(duration(horizon))}, percentage points (model minus exact)</text>"
+    )
+    out.append("</svg>")
+    return (
+        '<figure class="chart"><div class="wrap">'
+        + "".join(out)
+        + "</div>"
+        + (
+            '<figcaption class="muted">Dot: the bias; whisker: its 95% interval. Coloured only when the interval '
+            "excludes 0 (red: fills too many orders, blue: too few); grey: no clear difference. Bounds are in the "
+            "table, not drawn.</figcaption></figure>"
+        )
+    )
+
+
+def _chart_id(page_tier: str) -> str:
+    return "bias-" + re.sub(r"[^A-Za-z0-9_-]", "-", page_tier)
+
+
+def _cell(value: str, lo: str, hi: str, cls: str) -> str:
+    return f'<td class="{cls}">{value}<br><span class="ci">[{lo}, {hi}]</span></td>'
+
+
+def _cls(r: dict[str, Any], metric: str) -> str:
+    lo, hi = r.get(f"{metric}_ci_lo"), r.get(f"{metric}_ci_hi")
+    return "over" if lo is not None and lo > 0 else ("under" if hi is not None and hi < 0 else "")
+
+
+def _tier_section(
+    tier: str,
+    tr: list[dict[str, Any]],
+    horizons: list[int],
+    h: int,
+    pnl_at: dict[tuple[str, str], dict[str, Any]] | None,
+    ph: int,
+    chart_title: str,
+) -> tuple[str, list[dict[str, Any]], list[dict[str, Any]]]:
+    """A tier's heading, chart and table (models sorted by the size of the bias at `h`); with the rows shown."""
+    models = sorted({r["model_id"] for r in tr})
+    at = {(r["model_id"], r["horizon_ns"]): r for r in tr}
+
+    def key(m: str) -> tuple:
+        v = _bias(at.get((m, h)))
+        return (-(abs(v) if v is not None else -1.0), m)
+
+    order = sorted(models, key=key)
+    head = "".join(f"<th>{html.escape(duration(x))}</th>" for x in horizons)
+    shown, shown_pnl, body_rows = [], [], []
+    for m in order:
+        lib, name = describe(m)
+        cells = []
+        for x in horizons:
+            r = at.get((m, x))
+            if _bias(r) is None:
+                cells.append("<td>n/a</td>")
+                continue
+            assert r is not None
+            cells.append(
+                _cell(pp(r["fill_rate_bias_value"]), pp(r.get("fill_rate_bias_ci_lo")),
+                      pp(r.get("fill_rate_bias_ci_hi")), _cls(r, "fill_rate_bias"))
+            )  # fmt: skip
+            shown.append({k: r.get(k) for k in sorted(r)})
+        if pnl_at is not None:
+            pr = pnl_at.get((tier, m))
+            if pr is None or pr.get("pnl_bias_ticks_value") is None:
+                cells.append("<td>n/a</td>")
+            else:
+                cells.append(
+                    _cell(ticks(pr["pnl_bias_ticks_value"]), ticks(pr.get("pnl_bias_ticks_ci_lo")),
+                          ticks(pr.get("pnl_bias_ticks_ci_hi")), _cls(pr, "pnl_bias_ticks"))
+                )  # fmt: skip
+                shown_pnl.append({k: pr.get(k) for k in sorted(pr)})
+        share = (at.get((m, h)) or {}).get("flagged_share")
+        body_rows.append(
+            f"<tr><td>{html.escape(lib)}</td><td>{html.escape(name)}<br><code>{html.escape(m)}</code></td>"
+            + "".join(cells)
+            + f"<td>{'' if share is None else f'{100 * share:.1f}%'}</td></tr>"
+        )
+    n = max((r["n"] for r in tr), default=0)
+    pnl_head = f"<th>P&amp;L, ticks ({html.escape(duration(ph))})</th>" if pnl_at is not None else ""
+    drawn = [at[(m, h)] for m in order if (m, h) in at and describe(m)[0] != "bound"]
+    page = (
+        f'<h2>Tier {html.escape(tier)}</h2><p class="muted">{n:,} orders.</p>'
+        + chart(drawn, _chart_id(tier), chart_title, h)
+        + f'<div class="wrap"><table><thead><tr><th>library</th><th>model</th>{head}{pnl_head}<th>flagged</th>'
+        f"</tr></thead><tbody>{''.join(body_rows)}</tbody></table></div>"
+    )
+    return page, shown, shown_pnl
+
+
+def _best_section(
+    best: list[dict[str, Any]], h: int, pnl_at: dict[tuple[str, str], dict[str, Any]] | None, ph: int, lib: str | None
+) -> str:
+    """The "best setting by tier" table: per tier (and library on the index), the setting closest to the exact
+    fill rate at `h`, whether it is still clearly off, its P&L error and the config to paste."""
+    if not best:
+        return ""
+    rows = []
+    for b in best:
+        cfg = (
+            f'<span class="muted">{html.escape(b["snippet_kind"])}</span><br><code>{html.escape(b["snippet"])}</code>'
+            if b["snippet"]
+            else '<span class="muted">no library setting reproduces it: use the model id (see the guide)</span>'
+        )
+        pcell = ""
+        if pnl_at is not None:
+            pr = pnl_at.get((b["tier"], b["model_id"]))
+            pcell = (
+                "<td>n/a</td>"
+                if pr is None or pr.get("pnl_bias_ticks_value") is None
+                else _cell(ticks(pr["pnl_bias_ticks_value"]), ticks(pr.get("pnl_bias_ticks_ci_lo")),
+                           ticks(pr.get("pnl_bias_ticks_ci_hi")), _cls(pr, "pnl_bias_ticks"))
+            )  # fmt: skip
+        guide = LIBRARY_PAGES[b["library"]][0]
+        rows.append(
+            f"<tr><td>{html.escape(b['tier'])}</td>"
+            + ("" if lib else f'<td><a href="{guide}">{html.escape(b["library"])}</a></td>')
+            + f"<td>{html.escape(short_label(b['model_id']))}<br><code>{html.escape(b['model_id'])}</code></td>"
+            + _cell(pp(b["fill_rate_bias_value"]), pp(b["fill_rate_bias_ci_lo"]), pp(b["fill_rate_bias_ci_hi"]),
+                    _cls(b, "fill_rate_bias"))
+            + f"<td>{html.escape(verdict(b))}</td>{pcell}"
+            + f'<td class="cfg">{cfg}</td></tr>'
+        )  # fmt: skip
+    pnl_head = f"<th>P&amp;L, ticks ({html.escape(duration(ph))})</th>" if pnl_at is not None else ""
+    libs = sorted({b["library"] for b in best})
+    guides = ", ".join(f'<a href="{REPO}/{LIBRARY_PAGES[x][2]}">{html.escape(LIBRARY_PAGES[x][3])}</a>' for x in libs)
+    nt = (
+        " <code>FillModel</code> is <code>nautilus_trader.backtest.models.FillModel</code> in 1.x and "
+        "<code>nautilus_trader.execution.DefaultFillModel</code> in 2.x; the keywords go to "
+        "<code>BacktestEngine.add_venue</code> (2.x also needs a <code>fee_model</code>). The faithful models follow "
+        "nautilus_trader 1.231.0 on a delta-fed L2 book."
+        if "NautilusTrader" in libs
+        else ""
+    )
+    hbt = (
+        " The hftbacktest line goes on your <code>BacktestAsset()</code> chain in place of its queue model and "
+        "exchange (hftbacktest 2.4.4, which faithful mode reproduces)."
+        if "hftbacktest" in libs or "Databento" in libs
+        else ""
+    )
+    return (
+        f"<h2>{'Best setting by tier' if lib is None else f'Best {html.escape(lib)} setting by tier'}</h2>"
+        f"<p>Which setting fixes it: for each tier{'' if lib else ' and library'}, the setting whose fill-rate bias "
+        f"within {html.escape(duration(h))} is closest to 0. It is <em>still clearly off</em> when its 95% interval "
+        "excludes 0; otherwise the atlas cannot tell it from the exact replay at this sample size, which is not proof "
+        "that it is exact. hftbacktest's L3 FIFO model is left out: it needs order-level data.</p>"
+        '<div class="wrap"><table class="best"><thead><tr><th>tier</th>'
+        f"{'' if lib else '<th>library</th>'}<th>closest setting</th>"
+        f"<th>bias ({html.escape(duration(h))})</th><th>verdict</th>{pnl_head}<th>config to paste</th></tr></thead>"
+        f"<tbody>{''.join(rows)}</tbody></table></div>"
+        f'<p class="muted">The setting is the one closest at this venue, horizon and population; refit on your own '
+        f"data before relying on it ({guides}).{hbt}{nt}</p>"
+    )
+
+
+def _library_nav(present: list[str], here: str | None) -> str:
+    links = [
+        html.escape(lib) if lib == here else f'<a href="{LIBRARY_PAGES[lib][0]}">{html.escape(lib)}</a>'
+        for lib in present
+    ]
+    back = "" if here is None else '<a href="index.html">Fill-Realism Atlas</a> | '
+    return f'<nav class="libs">{back}By library: {", ".join(links)}</nav>'
+
+
 def build(
     atlas: Path,
     out: Path,
@@ -315,23 +784,20 @@ def build(
     if pnl and ph not in {r["horizon_ns"] for r in pnl}:
         have = ", ".join(duration(x) for x in sorted({r["horizon_ns"] for r in pnl}))
         raise SystemExit(f"site: P&L horizon {pnl_horizon} not in the atlas ({have})")
-    pnl_at = {(r["tier"], r["model_id"]): r for r in pnl if r["horizon_ns"] == ph}
+    pnl_at = {(r["tier"], r["model_id"]): r for r in pnl if r["horizon_ns"] == ph} if pnl else None
     days = manifest.get("days") or []
     first, last = (days[0]["date"], days[-1]["date"]) if days else ("?", "?")
     attribution = _attribution(source)
     venue = "IEX DEEP+" if source == "iex" else "Nasdaq TotalView-ITCH"
+    present = [lib for lib in LIBRARY_PAGES if any(describe(r["model_id"])[0] == lib for r in rows)]
+    best = best_settings(rows, h)
 
-    parts = [
-        "<h1>Fill-Realism Atlas</h1>",
-        f'<p class="muted">How far each backtester\'s fill model is from the exact replay of the real queue: '
+    about = (
         f"{html.escape(venue)}, {len(days)} day(s) from {html.escape(first)} to {html.escape(last)}, "
         f"{manifest.get('symbol_days', 0):,} symbol-days, {manifest.get('distinct_symbols', 0):,} symbols; "
         f"{html.escape(mode)} mode, shadow population {html.escape(population)} "
-        f'(<a href="{DOCS}/concepts/fill-realism-atlas.md">how to read it, how it is made, its limits</a>).</p>',
-    ]
-    leads = [x for x in (headline(rows, h), pnl_headline(pnl, ph)) if x]
-    for line in leads:
-        parts.append(f'<p class="lead">{html.escape(line, quote=False)}</p>')
+        f'(<a href="{DOCS}/concepts/fill-realism-atlas.md">how to read it, how it is made, its limits</a>).'
+    )
     pnl_days = manifest.get("pnl_days") or []
     some = ""
     if len(pnl_days) < len(days):
@@ -342,70 +808,40 @@ def build(
         if pnl
         else ""
     )
-    parts.append(
+    explain = (
         "<p>Positive bias: the model fills orders the real queue would not have filled (an optimistic backtest); "
         "negative: it misses fills. Intervals are 95%, from a bootstrap over dates and symbols. Rows are sorted by "
         f"the size of the bias at {html.escape(duration(h))}.{pnl_note} <em>flagged</em> is the share of a row's "
         "orders on symbol-days whose replay checks raised a flag or that were not in continuous trading.</p>"
     )
-    shown_pnl = []
-    shown = []
+    parts = [
+        "<h1>Fill-Realism Atlas</h1>",
+        '<p class="muted">How far each backtester\'s fill model is from the exact replay of the real queue: '
+        + about
+        + "</p>",
+    ]
+    if present:
+        parts.append(_library_nav(present, None))
+    leads = [x for x in (headline(rows, h), pnl_headline(pnl, ph)) if x]
+    for line in leads:
+        parts.append(f'<p class="lead">{html.escape(line, quote=False)}</p>')
+    parts.append(explain)
+    parts.append(_best_section(best, h, pnl_at, ph, None))
+    shown_pnl: list[dict[str, Any]] = []
+    shown: list[dict[str, Any]] = []
     for tier in tiers:
-        tr = [r for r in rows if r["tier"] == tier]
-        models = sorted({r["model_id"] for r in tr})
-        at = {(r["model_id"], r["horizon_ns"]): r for r in tr}
-
-        def key(m: str, at: dict = at) -> tuple:
-            v = (at.get((m, h)) or {}).get("fill_rate_bias_value")
-            return (-(abs(v) if v is not None else -1.0), m)
-
-        head = "".join(f"<th>{html.escape(duration(x))}</th>" for x in horizons)
-        body_rows = []
-        for m in sorted(models, key=key):
-            lib, name = describe(m)
-            cells = []
-            for x in horizons:
-                r = at.get((m, x))
-                if r is None or r.get("fill_rate_bias_value") is None:
-                    cells.append("<td>n/a</td>")
-                    continue
-                v = r["fill_rate_bias_value"]
-                cls = (
-                    "over"
-                    if r.get("fill_rate_bias_ci_lo", 0) > 0
-                    else ("under" if r.get("fill_rate_bias_ci_hi", 0) < 0 else "")
-                )
-                cells.append(
-                    f'<td class="{cls}">{pp(v)}<br><span class="ci">[{pp(r.get("fill_rate_bias_ci_lo"))}, '
-                    f"{pp(r.get('fill_rate_bias_ci_hi'))}]</span></td>"
-                )
-                shown.append({k: r.get(k) for k in sorted(r)})
-            if pnl:
-                pr = pnl_at.get((tier, m))
-                if pr is None or pr.get("pnl_bias_ticks_value") is None:
-                    cells.append("<td>n/a</td>")
-                else:
-                    lo, hi = pr.get("pnl_bias_ticks_ci_lo"), pr.get("pnl_bias_ticks_ci_hi")
-                    cls = "over" if lo is not None and lo > 0 else ("under" if hi is not None and hi < 0 else "")
-                    cells.append(
-                        f'<td class="{cls}">{ticks(pr["pnl_bias_ticks_value"])}<br><span class="ci">'
-                        f"[{ticks(lo)}, {ticks(hi)}]</span></td>"
-                    )
-                    shown_pnl.append({k: pr.get(k) for k in sorted(pr)})
-            ref = at.get((m, h)) or {}
-            share = ref.get("flagged_share")
-            body_rows.append(
-                f"<tr><td>{html.escape(lib)}</td><td>{html.escape(name)}<br><code>{html.escape(m)}</code></td>"
-                + "".join(cells)
-                + f"<td>{'' if share is None else f'{100 * share:.1f}%'}</td></tr>"
-            )
-        n = max((r["n"] for r in tr), default=0)
-        pnl_head = f"<th>P&amp;L, ticks ({html.escape(duration(ph))})</th>" if pnl else ""
-        parts.append(
-            f'<h2>Tier {html.escape(tier)}</h2><p class="muted">{n:,} orders.</p>'
-            f'<div class="wrap"><table><thead><tr><th>library</th><th>model</th>{head}{pnl_head}<th>flagged</th>'
-            f"</tr></thead><tbody>{''.join(body_rows)}</tbody></table></div>"
+        page, s, sp = _tier_section(
+            tier,
+            [r for r in rows if r["tier"] == tier],
+            horizons,
+            h,
+            pnl_at,
+            ph,
+            f"Fill-rate bias by model within {duration(h)}, tier {tier}",
         )
+        parts.append(page)
+        shown += s
+        shown_pnl += sp
     parts.append(
         "<h2>Check your own backtester</h2><ul>"
         f"<li>See it in a minute: <code>pipx run queuetruth demo --yes</code> places small orders in the real queue "
@@ -425,6 +861,12 @@ def build(
         f"<td>{d.get('units_valid', '')} / {d.get('units_planned', '')}</td></tr>"
         for d in days
     )
+    built = (
+        '<p class="muted">Built by <a href="https://github.com/sarptandoven/queuetruth">queuetruth</a> '
+        f"{html.escape(str((manifest.get('build') or {}).get('queuetruth', '')))} from "
+        '<code>scripts/scale/atlas.py</code> outputs. Data: <a href="data/leaderboard.json">leaderboard.json</a>, '
+        '<a href="data/atlas_manifest.json">atlas_manifest.json</a>.'
+    )
     parts.append(
         "<h2>Verify any number</h2>"
         f"<p>Atlas root <code>{html.escape(root)}</code> (Merkle root over the day roots in date order; flag policy "
@@ -433,10 +875,7 @@ def build(
         "<pre>uv run --frozen --no-sync python scripts/scale/verify_unit.py --help</pre>"
         f'<div class="wrap"><table><thead><tr><th>date</th><th>day root</th><th>units</th></tr></thead>'
         f"<tbody>{day_rows}</tbody></table></div>"
-        '<p class="muted">Built by <a href="https://github.com/sarptandoven/queuetruth">queuetruth</a> '
-        f"{html.escape(str((manifest.get('build') or {}).get('queuetruth', '')))} from "
-        '<code>scripts/scale/atlas.py</code> outputs. Data: <a href="data/leaderboard.json">leaderboard.json</a>, '
-        '<a href="data/atlas_manifest.json">atlas_manifest.json</a>.'
+        + built
         + (' Per symbol: <a href="symbols.html">symbols</a>.' if per_symbol else "")
         + "</p>"
     )
@@ -452,6 +891,7 @@ def build(
         "mode": mode,
         "population": population,
         "rows": sorted(shown, key=lambda r: (r["tier"], r["model_id"], r["horizon_ns"])),
+        "best_settings": best,
     }
     if pnl:
         data["pnl_horizon_ns"] = ph
@@ -463,9 +903,65 @@ def build(
         json.dumps(manifest, indent=1, sort_keys=True) + "\n", encoding="utf-8"
     )
     pages = ["index.html"]
+    for lib in present:
+        pages.append(
+            _library_page(
+                out, lib, rows, pnl, pnl_at, horizons, tiers, h, ph, best, present, about, explain, built, attribution
+            )
+        )
     if per_symbol:
         pages.append(_symbols(atlas, out, mode, population, h, attribution))
     return {"pages": pages, "rows": len(shown), "pnl_rows": len(shown_pnl), "atlas_root": root}
+
+
+def _library_page(
+    out: Path,
+    lib: str,
+    rows: list[dict[str, Any]],
+    pnl: list[dict[str, Any]],
+    pnl_at: dict[tuple[str, str], dict[str, Any]] | None,
+    horizons: list[int],
+    tiers: list[str],
+    h: int,
+    ph: int,
+    best: list[dict[str, Any]],
+    present: list[str],
+    about: str,
+    explain: str,
+    built: str,
+    attribution: str,
+) -> str:
+    """`hftbacktest.html` and the like: one library's models across tiers and horizons (fill rate and P&L), its
+    best setting by tier and a plain-words summary; titled with the question people search for."""
+    name, question, guide, guide_name = LIBRARY_PAGES[lib]
+    mine = [r for r in rows if describe(r["model_id"])[0] == lib]
+    my_pnl = [r for r in pnl if describe(r["model_id"])[0] == lib]
+    leads = [x for x in (library_headline(mine, lib, h), pnl_headline(my_pnl, ph, f"{lib}'s settings")) if x]
+    parts = [
+        _library_nav(present, lib),
+        f"<h1>{html.escape(question)}</h1>",
+        f'<p class="muted">{html.escape(lib)}\'s fill models against the exact replay of the real queue: {about}</p>',
+        *(f'<p class="lead">{html.escape(line, quote=False)}</p>' for line in leads),
+        explain,
+        _best_section([b for b in best if b["library"] == lib], h, pnl_at, ph, lib),
+    ]
+    for tier in tiers:
+        tr = [r for r in mine if r["tier"] == tier]
+        if tr:
+            parts.append(
+                _tier_section(tier, tr, horizons, h, pnl_at, ph, f"{lib}: fill-rate bias within {duration(h)}, "
+                              f"tier {tier}")[0]
+            )  # fmt: skip
+    parts.append(
+        f"<h2>Use it in {html.escape(lib)}</h2><ul>"
+        f'<li>Fit the setting on your own venue and data: <a href="{REPO}/{guide}">{html.escape(guide_name)}</a>.</li>'
+        f'<li>What each model does: <a href="{DOCS}/concepts/l2-model-zoo.md">the L2 model zoo</a>.</li>'
+        f'<li>Every library side by side: <a href="index.html">the Fill-Realism Atlas</a>.</li></ul>' + built + "</p>"
+    )
+    title = f"{question} Fill-Realism Atlas"
+    page = _page(title, "\n".join(parts), attribution, leads[0] if leads else SUMMARY)
+    (out / name).write_text(page, encoding="utf-8")
+    return name
 
 
 def _symbols(atlas: Path, out: Path, mode: str, population: str, h: int, attribution: str) -> str:

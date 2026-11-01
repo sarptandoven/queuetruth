@@ -38,6 +38,17 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   out and keeps the plan's run id as before. `evaluate_toxicity` returns the per-shadow terms (`PnlTerms`).
   [The Fill-Realism Atlas](docs/concepts/fill-realism-atlas.md) explains how to read the site, how a number is
   made and checked, and its limits; the site links to it and carries a description and link-preview tags.
+- **Atlas site: which setting fixes it, library pages, charts** (`scripts/scale/atlas_site.py`). A "Best setting by
+  tier" table names, for each tier and library, the setting whose fill-rate bias at the headline horizon is closest
+  to 0, says whether it is still clearly off (its 95% interval excludes 0) or not, gives its P&L error and the config
+  to paste: the hftbacktest `BacktestAsset` builder and exchange (as `queuetruth export hftbacktest` writes them) or
+  the NautilusTrader `add_venue` keywords (as the NautilusTrader integration sets them); no config is offered where
+  no released library reproduces the model (corrected mode, Databento with `k > 0`). `hftbacktest.html`,
+  `nautilustrader.html` and `databento.html` show one library's models across tiers and horizons, its best settings
+  and a plain-words summary, titled with the question people search for and linked from `index.html`. Each tier
+  has an inline SVG chart of every model's bias with its interval (no script, `role="img"` with a title and
+  description, themed with the page's colour variables). `data/leaderboard.json` adds `best_settings`. Long model
+  ids no longer widen the page on a phone, and links follow the page's colours in dark mode.
 - **Fill-Realism Atlas site** (`scripts/scale/atlas_site.py`, ROADMAP W1): a static site from an `atlas.py combine`
   directory. For each liquidity tier it shows every fill model's fill-rate bias against the exact replay at every
   horizon with its 95% interval, sorted by size, and leads with one plain-words sentence. It also shows the atlas and
