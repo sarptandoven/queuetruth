@@ -242,6 +242,14 @@ fn session_orders_match_run_dataset() {
     );
     ops.sort_by_key(Op::at);
     let mut session = qt_replay::Session::open_replay(&spec(serde_json::json!({}))).unwrap();
+    // a batch is accepted whole or not at all: a duplicate id or an order no partition covers refuses the batch and
+    // adds none of it (the replay below then matches `run_dataset` exactly, so nothing stray was added)
+    let s0 = shadows[0].clone();
+    assert!(session.submit_all(vec![s0.clone(), s0.clone()]).is_err());
+    let mut nowhere = shadows[1].clone();
+    nowhere.instrument_id = 99;
+    assert!(session.submit_all(vec![s0.clone(), nowhere]).is_err());
+    assert!(session.cancel(&s0.shadow_id, s0.ts_submit).is_err(), "s0 was not added");
     let mut fills = Vec::new();
     let mut results = Vec::new();
     for op in ops {
@@ -252,7 +260,12 @@ fn session_orders_match_run_dataset() {
             Op::Amend(id, t, q) => session.amend(&id, t, q),
         }
         .unwrap();
-        fills.extend(batch_to_shadow_fills(&session.take_fills().unwrap()).unwrap());
+        // pending rows stay pending until consumed (a failed hand-off loses nothing)
+        let (b, n) = session.pending_fills().unwrap();
+        assert_eq!(session.pending_fills().unwrap().1, n);
+        fills.extend(batch_to_shadow_fills(&b).unwrap());
+        session.consume_fills(n);
+        assert_eq!(session.pending_fills().unwrap().1, 0);
     }
     session.finish().unwrap();
     fills.extend(batch_to_shadow_fills(&session.take_fills().unwrap()).unwrap());

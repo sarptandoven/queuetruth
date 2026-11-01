@@ -85,6 +85,11 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ### Changed
 
+- **`Session.submit` is all or none, and `take_fills` / `take_results` lose nothing.** A batch with one refused row
+  (duplicate id, `ts_submit` before the position, no partition) used to leave the rows before it submitted; every
+  row is now checked before any is sent (`qt_replay::Session::submit_all`, `Engine::check_shadow`). The take methods
+  drop the rows only after the table reached Python (`pending_fills` / `consume_fills`), so a failed hand-off keeps
+  them for the next call. Found by the review of #8.
 - **The atlas site states only clear findings.** Its first sentence gives the exact fill rate, then the most
   optimistic and the most pessimistic fill model among those whose 95% interval excludes 0, each with its relative
   size, and the closest model; the P&L sentence names the largest clear error, or says that no model's P&L differs

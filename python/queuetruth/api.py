@@ -1571,7 +1571,8 @@ class Session:
         """Sends shadows, each with `ts_submit` at or after `position`: a `qt.shadow_spec` table (any Arrow stream)
         or a list of row dicts (`shadow_id`, `instrument_id`, `side` `"B"` or `"A"`, `qty`, `ts_submit` in ns, and
         `price` for an absolute price or `offset_ticks` for a touch-relative one; optional `latency_ns`, `group`,
-        `order_key`). A cancel or amend is sent later with `cancel` / `amend`."""
+        `order_key`). All or none: when any row is refused (a duplicate id, a `ts_submit` before `position`, no
+        partition for it), none of them is sent. A cancel or amend is sent later with `cancel` / `amend`."""
         if isinstance(shadows, list):
             shadows = _shadow_rows_table(shadows)
         self._wrap(self._s.submit, shadows)
@@ -1585,7 +1586,7 @@ class Session:
         self._wrap(self._s.amend, str(shadow_id), int(ts), int(new_qty))
 
     def take_fills(self) -> pa.Table:
-        """Shadow fills since the last call (`qt.shadow_fills`)."""
+        """Shadow fills since the last call (`qt.shadow_fills`); if building the table fails, they stay for the next."""
         return self._wrap(self._s.take_fills)
 
     def take_results(self) -> pa.Table:

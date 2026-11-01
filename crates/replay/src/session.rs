@@ -223,11 +223,41 @@ impl Session {
 
     /// Sends a shadow (`ts_submit` at or after the position), routed to the partition `replay` would give it.
     pub fn submit(&mut self, spec: ShadowSpec) -> QtResult<()> {
+        self.submit_all(vec![spec])
+    }
+
+    /// Sends several shadows, all or none: every shadow is checked (position, duplicates within the batch and
+    /// against the session, routing, the engine's own checks) before any is added, so a refused batch leaves the
+    /// session as it was.
+    pub fn submit_all(&mut self, specs: Vec<ShadowSpec>) -> QtResult<()> {
+        let mut routed = Vec::with_capacity(specs.len());
+        let mut seen = std::collections::HashSet::with_capacity(specs.len());
+        for spec in specs {
+            let k = self.route(&spec)?;
+            if !seen.insert(spec.shadow_id.clone()) {
+                return Err(QtError::Duplicate {
+                    what: "shadow_id".into(),
+                    id: spec.shadow_id,
+                });
+            }
+            self.cursors[k].engine.check_shadow(&spec)?;
+            routed.push((k, spec));
+        }
+        for (k, spec) in routed {
+            let id = spec.shadow_id.clone();
+            self.cursors[k].engine.add_shadow(spec)?;
+            self.owner.insert(id, k);
+        }
+        Ok(())
+    }
+
+    /// The cursor a new shadow goes to, after the session-level checks.
+    fn route(&self, spec: &ShadowSpec) -> QtResult<usize> {
         self.orders_check(spec.ts_submit, "ts_submit", &spec.shadow_id)?;
         if self.owner.contains_key(&spec.shadow_id) {
             return Err(QtError::Duplicate {
                 what: "shadow_id".into(),
-                id: spec.shadow_id,
+                id: spec.shadow_id.clone(),
             });
         }
         let p = self
@@ -241,15 +271,10 @@ impl Session {
                 ),
             })?;
         let key = (p.instrument_id, p.session_date);
-        let k = self
-            .cursors
+        self.cursors
             .iter()
             .position(|c| (c.instrument_id, c.session_date) == key)
-            .ok_or_else(|| QtError::Engine("session: partition without a cursor".into()))?;
-        let id = spec.shadow_id.clone();
-        self.cursors[k].engine.add_shadow(spec)?;
-        self.owner.insert(id, k);
-        Ok(())
+            .ok_or_else(|| QtError::Engine("session: partition without a cursor".into()))
     }
 
     /// Sends a cancel at `ts_cancel` (at or after the position) for a shadow without one.
@@ -271,12 +296,37 @@ impl Session {
 
     /// The shadow fills produced since the last call, as a `qt.shadow_fills` batch (schema 1.1 `liquidity`).
     pub fn take_fills(&mut self) -> QtResult<RecordBatch> {
-        FillFull::batch(&std::mem::take(&mut self.rows.fills))
+        let (b, n) = self.pending_fills()?;
+        self.consume_fills(n);
+        Ok(b)
     }
 
     /// The shadow results produced since the last call (shadows that ended), as a `qt.shadow_results` batch.
     pub fn take_results(&mut self) -> QtResult<RecordBatch> {
-        ResultFull::batch(&std::mem::take(&mut self.rows.results))
+        let (b, n) = self.pending_results()?;
+        self.consume_results(n);
+        Ok(b)
+    }
+
+    /// The fills not yet taken, as a batch, and how many there are; they stay pending until `consume_fills` (so a
+    /// caller whose hand-off fails loses nothing).
+    pub fn pending_fills(&self) -> QtResult<(RecordBatch, usize)> {
+        Ok((FillFull::batch(&self.rows.fills)?, self.rows.fills.len()))
+    }
+
+    /// Drops the first `n` pending fills (those a `pending_fills` batch held).
+    pub fn consume_fills(&mut self, n: usize) {
+        self.rows.fills.drain(..n.min(self.rows.fills.len()));
+    }
+
+    /// The results not yet taken, as a batch, and how many there are (see `pending_fills`).
+    pub fn pending_results(&self) -> QtResult<(RecordBatch, usize)> {
+        Ok((ResultFull::batch(&self.rows.results)?, self.rows.results.len()))
+    }
+
+    /// Drops the first `n` pending results.
+    pub fn consume_results(&mut self, n: usize) {
+        self.rows.results.drain(..n.min(self.rows.results.len()));
     }
 
     /// Ends the session at the end of its data: the shadows still open end as at the end of a `replay` (their

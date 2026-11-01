@@ -236,6 +236,16 @@ def test_session_orders_from_dicts_and_refusals(synth: Path) -> None:
         sess.submit([{"shadow_id": "o1", "instrument_id": 1, "side": "B", "price": bid[0], "qty": 1, "ts_submit": t}])
     with pytest.raises(qt.QtError, match="unknown shadow_id"):
         sess.cancel("nope", t)
+    # a batch is all or nothing: o4 is valid, but o1 again refuses the batch, so o4 was not added (cancelling it fails)
+    with pytest.raises(qt.QtError):
+        sess.submit(
+            [
+                {"shadow_id": "o4", "instrument_id": 1, "side": "B", "price": bid[0], "qty": 1, "ts_submit": t},
+                {"shadow_id": "o1", "instrument_id": 1, "side": "B", "price": bid[0], "qty": 1, "ts_submit": t},
+            ]
+        )
+    with pytest.raises(qt.QtError, match="unknown shadow_id"):
+        sess.cancel("o4", t)
     with pytest.raises(qt.QtError, match="book queries only"):
         qt.Session(str(synth)).submit(
             [{"shadow_id": "x", "instrument_id": 1, "side": "B", "price": 1, "qty": 1, "ts_submit": t}]
