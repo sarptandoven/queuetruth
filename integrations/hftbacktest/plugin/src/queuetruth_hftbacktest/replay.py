@@ -176,8 +176,9 @@ def prepare(
 ) -> Prepared:
     """Exact truth, hftbacktest event files and the hftbacktest replay script for `orders` on `data` (module doc).
 
-    `window_ns` is the replay's safety cancel of orders still open that long after entry (queuetruth's default, 300
-    s, when None); orders with an earlier planned cancel are cancelled at that time."""
+    `window_ns` is the life of an order after entry (queuetruth's replay default, 300 s, when None; 0 = until its
+    planned cancel). Each order's cancel is capped at entry plus `window_ns` in the schedule itself, so hftbacktest
+    (whose replay cancels at that time) and the exact truth (which follows the schedule) end every order together."""
     import pyarrow as pa
     import queuetruth as qt
     from queuetruth.api import export_replay_schedule
@@ -189,6 +190,11 @@ def prepare(
     _need(orders, "orders")
     if step_ns < 1:
         raise QtHbtError("QT-CONFIG-001", f"step_ns: expected >= 1, got {step_ns}")
+    from queuetruth.export.replay import DEFAULT_WINDOW_NS
+
+    window = int(DEFAULT_WINDOW_NS if window_ns is None else window_ns)
+    if window < 0:
+        raise QtHbtError("QT-CONFIG-001", f"window_ns: expected >= 0, got {window_ns}")
     out.mkdir(parents=True, exist_ok=True)
 
     # 1. resolve prices and entry times with the exact engine
@@ -213,6 +219,10 @@ def prepare(
             skipped[reason] = skipped.get(reason, 0) + 1
             continue
         src = given.get(sid, {})
+        ts_cancel = src.get("ts_cancel")
+        if window > 0:
+            cap = int(r["ts_live"]) + window
+            ts_cancel = cap if ts_cancel is None else min(int(ts_cancel), cap)
         legs.append(
             {
                 "shadow_id": sid,
@@ -224,7 +234,7 @@ def prepare(
                 "qty": int(r["qty"]),
                 "ts_submit": int(r["ts_live"]),
                 "latency_ns": 0,
-                "ts_cancel": src.get("ts_cancel"),
+                "ts_cancel": ts_cancel,
                 "group": src.get("group"),
                 "source": "user",
                 "order_key": order_key(sid),
@@ -272,12 +282,8 @@ def prepare(
         export_replay_schedule(
             "hftbacktest", out=str(script), schedule=str(out / "schedule.parquet"), dataset=str(data)
         )
-    if window_ns is not None or step_ns != STEP_NS:
-        text = script.read_text(encoding="utf-8")
-        if window_ns is not None:
-            text = _set_const(text, "WINDOW_NS", int(window_ns))
-        text = _set_const(text, "STEP_NS", int(step_ns))
-        script.write_text(text, encoding="utf-8")
+    text = _set_const(script.read_text(encoding="utf-8"), "WINDOW_NS", window)
+    script.write_text(_set_const(text, "STEP_NS", int(step_ns)), encoding="utf-8")
 
     doc = {
         "schema": PREPARED_SCHEMA,
@@ -292,6 +298,7 @@ def prepare(
         "n_orders": len(legs),
         "skipped": dict(sorted(skipped.items())),
         "step_ns": int(step_ns),
+        "window_ns": window,
     }
     (out / "prepared.json").write_text(json.dumps(doc, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return Prepared.load(out)

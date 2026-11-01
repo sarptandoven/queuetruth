@@ -40,6 +40,9 @@ BUILDERS = {
     "power3": "power_prob_queue_model3",
 }
 HORIZON_NS = 60_000_000_000
+#: queuetruth's default held-out horizons (`CalibrationSpec.horizons_ns`) and longest horizon (`h_max_ns`).
+DEFAULT_HORIZONS_NS = (100_000_000, 1_000_000_000, 10_000_000_000, 60_000_000_000)
+H_MAX_NS = 300_000_000_000
 #: `param_name`s of a power-family fit reported on the ln n scale (as `queuetruth.export`).
 LOG_N_NAMES = ("ln_n", "log_n", "theta")
 _DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
@@ -236,6 +239,13 @@ def select(fits: list[FamilyFit], horizon_ns: int, *, force: bool = False) -> tu
         ll = i_f[1].logloss(horizon_ns)
         return (math.inf if ll is None else ll, i_f[0])
 
+    if fits and all(f.logloss(horizon_ns) is None for f in fits):
+        raise QtHbtError(
+            "QT-CONFIG-001",
+            f"no fit has a held-out log loss at {_dur(horizon_ns)}, so none can be picked on it",
+            "the test window scores only orders whose planned life covers the horizon: use a shorter horizon or "
+            "orders that live longer",
+        )
     ok = [(i, f) for i, f in enumerate(fits) if f.exportable and f.n is not None]
     if ok:
         return min(ok, key=rank)[1], False
@@ -277,8 +287,12 @@ def calibrate(
         raise QtHbtError("QT-CONFIG-001", f"families: expected some of {list(BUILDERS)}, got {list(families)}")
     if exchange not in ("partial", "no_partial"):
         raise QtHbtError("QT-CONFIG-001", f"exchange: expected partial or no_partial, got {exchange!r}")
+    if horizon_ns < 1:
+        raise QtHbtError("QT-CONFIG-001", f"horizon_ns: expected >= 1, got {horizon_ns}")
     tr, te = window(train), window(test)
     out.mkdir(parents=True, exist_ok=True)
+    # a code file from an earlier run must not outlive a refusal in this one
+    (out / "hbt_queue_model.py").unlink(missing_ok=True)
     if orders is None:
         shadows = out / "shadows.parquet"
         qt.sample_shadows({"dataset": {"path": str(data)}, "n": int(n_orders), "seed": int(seed), "out": str(shadows)})
@@ -296,6 +310,8 @@ def calibrate(
             "train": tr,
             "test": te,
             "exchange": exchange,
+            "horizons_ns": sorted({*DEFAULT_HORIZONS_NS, int(horizon_ns)}),
+            "h_max_ns": max(H_MAX_NS, int(horizon_ns)),
             "seed": int(seed),
             "threads": int(threads),
             "out": str(out / f"cal-{fam}"),

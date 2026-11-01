@@ -31,7 +31,7 @@ hbt-venv/bin/pip install --no-deps hftbacktest==2.4.4
 ```
 
 Your data goes into a queuetruth dataset first (`queuetruth ingest`, see
-[Calibrate my hftbacktest queue model](../../../docs/how-to/calibrate-hftbacktest.md) for the formats).
+[Calibrate my hftbacktest queue model](https://github.com/sarptandoven/queuetruth/blob/main/docs/how-to/calibrate-hftbacktest.md) for the formats).
 
 ## 1. Score
 
@@ -65,13 +65,15 @@ with the exact replay of the same orders. In `hbt-check/`:
 | `npz/`, `hbt_replay.py`, `instrument_map.csv` | what hftbacktest ran on, and the units map back to the dataset |
 | `hbt_orders.jsonl` (+ `.summary.json`, `.engine.json`) | hftbacktest's order states, its replay summary and version |
 
-An order counts at horizon `h` only if its planned end is at or after entry plus `h`. hftbacktest records fills at
+Each order lives until its planned cancel or 5 minutes after entry, whichever is first (`prepare(window_ns=...)`, 0
+for no limit); the cap is written into the schedule, so hftbacktest and the exact replay end every order at the same
+time. An order counts at horizon `h` only if its planned end is at or after entry plus `h`. hftbacktest records fills at
 the end of each replay step (10 ms by default, `prepare(step_ns=...)`), so first-fill times are compared with a
 tolerance of one step.
 
 **hftbacktest #312.** With `partial_fill_exchange`, released hftbacktest 2.4.4 stops the whole backtest with error
 14 when an order completes through a fill equal to its leaves and is then hit again (see
-[UPSTREAM.md](../UPSTREAM.md)). `run` raises `QT-USAGE-001` naming the code (`allow_stop=True` returns instead), and
+[UPSTREAM.md](https://github.com/sarptandoven/queuetruth/blob/main/integrations/hftbacktest/UPSTREAM.md)). `run` raises `QT-USAGE-001` naming the code (`allow_stop=True` returns instead), and
 `score` scores only the orders entered before the stop, on horizons that end before it, with a warning. Use
 `no_partial_fill_exchange()` or a build with the fix to score a whole day.
 
@@ -141,7 +143,7 @@ The tests run on queuetruth's synthetic dataset. Those that run hftbacktest use 
   (replay those with `queuetruth export replay-schedule` and score with `queuetruth score --sim-log`).
 - Fill times have the resolution of the replay step; the per-horizon comparison is of first fills.
 - The calibration fits the allocation of cancels (teacher forced), not the fill rate itself; read its held-out
-  fill-rate bias next to the log loss, and see [Calibration](../../../docs/concepts/calibration.md).
+  fill-rate bias next to the log loss, and see [Calibration](https://github.com/sarptandoven/queuetruth/blob/main/docs/concepts/calibration.md).
 - A fitted `n` is specific to the venue, feed, depth and the orders it was fitted on. Refit when they change.
 
 ## License

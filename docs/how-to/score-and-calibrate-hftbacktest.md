@@ -84,6 +84,10 @@ entry plus the horizon. The first line gives the order-by-order referee counts: 
 orders only hftbacktest filled, and orders filled by both with another quantity. `hbt_score.json` has every number,
 with the McNemar p per horizon.
 
+Each order lives until its planned cancel or 5 minutes after entry, whichever comes first (`prepare(window_ns=...)`,
+`0` for no limit). The cap is written into the schedule, so hftbacktest and the exact replay end every order at the
+same time, and horizons longer than the window are not scored.
+
 `prepare` leaves out orders the exact engine rejects (a touch-relative price that would cross the book on arrival,
 or no touch to price against) and counts them in `prep.skipped`. If you run hftbacktest yourself instead of `run`,
 use the command `queuetruth-hftbacktest prepare` prints and pass its output file to `score`.

@@ -150,3 +150,39 @@ def test_errors(prepared: Prepared, synth: Path, tmp_path: Path) -> None:
     with pytest.raises(QtHbtError) as e:
         prepare(tmp_path, tmp_path / "x.parquet", tmp_path / "o")
     assert e.value.code == "QT-INPUT-001"
+
+
+def test_window_caps_the_schedule_so_truth_and_hftbacktest_end_together(
+    synth: Path, shadows: Path, tmp_path: Path
+) -> None:
+    """With a 60 s window the replay cancels each order 60 s after entry, and so does the schedule the exact truth
+    replays: no horizon beyond the window is scored, and an exact copy of the truth still scores zero."""
+    p = prepare(synth, shadows, tmp_path / "prep", window_ns=60_000_000_000)
+    assert "\nWINDOW_NS = 60000000000\n" in p.script.read_text()
+    sched = {r["shadow_id"]: r for r in rows(p.schedule)}
+    assert all(r["ts_cancel"] <= r["ts_submit"] + 60_000_000_000 for r in sched.values())
+    exact = rows(p.exact / "shadow_results.parquet")
+    assert all(r["ts_planned_end"] <= r["ts_live"] + 60_000_000_000 for r in exact)
+    assert max(r["ts_last_fill"] - r["ts_live"] for r in exact if r["ts_last_fill"] is not None) <= 60_000_000_000
+    s = score(p, exact_as_hbt(p, tmp_path / "hbt.jsonl"), out=tmp_path / "s")
+    by = {h.horizon_ns: h for h in s.horizons}
+    assert by[300_000_000_000].n == 0 and by[300_000_000_000].bias is None
+    assert by[60_000_000_000].n > 0 and by[60_000_000_000].bias == 0.0
+    assert s.referee["pass"] is True
+
+
+def test_orders_without_a_cancel_get_the_default_window(synth: Path, shadows: Path, tmp_path: Path) -> None:
+    import pyarrow.parquet as pq
+
+    t = qt.read_table(str(shadows))
+    r = [dict(x, ts_cancel=None) for x in rows(shadows)[:5]]
+    path = tmp_path / "open.parquet"
+    pq.write_table(pa.Table.from_pylist(r, schema=t.schema), path)
+    p = prepare(synth, path, tmp_path / "prep")
+    assert "\nWINDOW_NS = 300000000000\n" in p.script.read_text()
+    assert all(x["ts_cancel"] == x["ts_submit"] + 300_000_000_000 for x in rows(p.schedule))
+    p0 = prepare(synth, path, tmp_path / "prep0", window_ns=0)  # 0: no window, the orders stay open
+    assert all(x["ts_cancel"] is None for x in rows(p0.schedule))
+    with pytest.raises(QtHbtError) as e:
+        prepare(synth, path, tmp_path / "bad", window_ns=-1)
+    assert e.value.code == "QT-CONFIG-001"

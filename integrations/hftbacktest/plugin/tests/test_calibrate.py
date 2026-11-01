@@ -123,3 +123,29 @@ def test_argument_errors(synth: Path, tmp_path: Path) -> None:
     with pytest.raises(QtHbtError) as e:
         calibrate(tmp_path, "2026-06-15", out=tmp_path / "o")
     assert e.value.code == "QT-INPUT-001"
+
+
+def test_the_horizon_reaches_the_calibration(synth: Path, tmp_path: Path) -> None:
+    r = calibrate(synth, out=tmp_path, families=["power3"], horizon_ns=300_000_000_000, **EXPORTABLE)
+    spec = json.loads(r.fits[0].path.read_text())["spec"]
+    assert 300_000_000_000 in spec["horizons_ns"] and spec["h_max_ns"] == 300_000_000_000
+    assert r.fits[0].logloss(300_000_000_000) is not None
+    assert "log loss 5 min" in r.text()
+
+
+def test_a_horizon_without_metrics_is_refused(synth: Path, tmp_path: Path) -> None:
+    """The sampled orders live 5 minutes, so nothing is scored at 10 minutes: no silent pick."""
+    with pytest.raises(QtHbtError) as e:
+        calibrate(synth, out=tmp_path, families=["power3"], horizon_ns=600_000_000_000, **EXPORTABLE)
+    assert e.value.code == "QT-CONFIG-001" and "10 min" in e.value.message
+    with pytest.raises(QtHbtError):
+        select([_fit("power3", "exportable", None)], 60)
+
+
+def test_a_refused_rerun_removes_the_old_code(synth: Path, tmp_path: Path) -> None:
+    ok = calibrate(synth, out=tmp_path, families=["power3"], **EXPORTABLE)
+    assert ok.code_path is not None and ok.code_path.exists()
+    bad = calibrate(synth, "2026-06-16", "2026-06-15", out=tmp_path, families=["power3"], seed=2, n_orders=1500,
+                    bootstrap_b=20)  # fmt: skip
+    assert bad.best is None and not (tmp_path / "hbt_queue_model.py").exists()
+    assert json.loads((tmp_path / "hbt_calibration.json").read_text())["code"] is None

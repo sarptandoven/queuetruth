@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -15,8 +16,14 @@ from queuetruth_hftbacktest.cli import duration_ns, main
 
 
 def test_version() -> None:
-    out = subprocess.run([sys.executable, "-m", "queuetruth_hftbacktest", "--version"], capture_output=True, text=True,
-                         check=True, env={"PYTHONPATH": str(Path(__file__).parents[1] / "src")})  # fmt: skip
+    """The installed console script when there is one (the wheel jobs), else the source tree as a module."""
+    script = Path(sys.executable).parent / "queuetruth-hftbacktest"
+    if script.exists():
+        cmd, env = [str(script), "--version"], None
+    else:
+        cmd = [sys.executable, "-m", "queuetruth_hftbacktest", "--version"]
+        env = {**os.environ, "PYTHONPATH": str(Path(__file__).parents[1] / "src")}
+    out = subprocess.run(cmd, capture_output=True, text=True, check=True, env=env)
     assert out.stdout.strip() == f"queuetruth-hftbacktest {__version__}"
 
 
