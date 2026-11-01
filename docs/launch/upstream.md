@@ -25,9 +25,10 @@ Title: `L3FIFOQueueModel: an order priced better than the feed's best never fill
 > executions against hidden orders, which fill a real order resting at or behind their price.
 >
 > On a sample of the IEX day (26 of 130 work units, 1,165,575 orders), the model misses 18,915 fills the exact replay
-> makes (1.62% of orders): 58% are trade-throughs under the first rule (most of them orders at the touch whose level
-> was swept or emptied ahead of them) and 42% are fills from the queue at the order's price, which for this model can
-> only come from hidden executions. It never fills an order the exact replay does not.
+> makes (1.62% of orders): 58% are fills the exact replay makes by a trade-through (the first rule, or a hidden print
+> through the price, so this is an upper bound for the rule; most are orders at the touch whose level was swept or
+> emptied ahead of them) and 42% are fills from the queue at the order's price, which for this model can only come
+> from hidden executions. It never fills an order the exact replay does not.
 >
 > Tests that reproduce each case on hand-built books are in queuetruth's `crates/zoo/tests/l3_faithful_gap.rs`, and
 > the analysis is in `docs/concepts/l2-model-zoo.md` section (c). Comparing the execution price with the backtest

@@ -62,10 +62,11 @@ hftbacktest's fill rules as released (2.4.4), checked against its source:
    fill a real order but not a backtest one.
 
 On a sample of the day (26 of the 130 work units, 1.17 million orders), the L3 model misses 18,915 fills the exact
-replay makes, 1.62% of orders, the same gap as the full day. 58% of them are trade-throughs the first rule never
-fills, most of them orders at the touch whose price level was swept or emptied ahead of them. The other 42% are fills
-the exact replay makes from the queue at the order's price, which for this model can only come from hidden
-executions. The model never fills an order the exact replay does not.
+replay makes, 1.62% of orders, the same gap as the full day. 58% of them are trade-throughs (the first rule, or a
+hidden execution through the order's price), most of them orders at the touch whose price level was swept or emptied
+ahead of them. The other 42% are fills the exact replay makes from the queue at the order's price, which for this
+model can only come from hidden executions. So hidden executions account for at least 42% of the gap and the first
+rule for at most 58%. The model never fills an order the exact replay does not.
 
 The details, with tests that reproduce each rule, are in {{HFTBACKTEST_ISSUE_URL}}.
 
