@@ -291,14 +291,20 @@ impl ShadowEngine {
 
     /// Adds a shadow after construction (`Engine::add_shadow`): built and scheduled as at construction, appended to
     /// the input order. The caller keeps the replay at or before `ts_submit`.
-    pub(crate) fn add(&mut self, spec: ShadowSpec) -> QtResult<u32> {
+    /// Every check `add` makes, without adding: an order that passes is accepted by `add`.
+    pub(crate) fn check(&self, spec: &ShadowSpec) -> QtResult<()> {
         validate_id("shadow_id", &spec.shadow_id, &format!("shadow {}", self.st.len()))?;
         if self.by_id.contains_key(&spec.shadow_id) {
             return Err(QtError::Duplicate {
                 what: "shadow_id".into(),
-                id: spec.shadow_id,
+                id: spec.shadow_id.clone(),
             });
         }
+        timing::build_one(spec, &[], &self.cfg, &self.instruments).map(drop)
+    }
+
+    pub(crate) fn add(&mut self, spec: ShadowSpec) -> QtResult<u32> {
+        self.check(&spec)?;
         let i = u32::try_from(self.st.len()).map_err(|_| QtError::Config("more than 2^32 - 1 shadows".into()))?;
         let s = timing::build_one(&spec, &[], &self.cfg, &self.instruments)?;
         self.by_id.insert(spec.shadow_id.clone(), i);

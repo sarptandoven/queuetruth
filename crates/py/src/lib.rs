@@ -380,14 +380,15 @@ impl Session {
     fn submit(&self, py: Python<'_>, shadows: Bound<'_, PyAny>) -> PyResult<()> {
         let (batches, _) = arrow_ffi::stream_from_python(&shadows)?;
         let r = py.detach(|| {
-            self.with(|s| -> QtResult<()> {
-                for b in &batches {
-                    for spec in qt_schema::codec::batch_to_shadow_specs(b)? {
-                        s.submit(spec)?;
-                    }
+            // decode everything first, then submit all or none
+            let mut specs = Vec::new();
+            for b in &batches {
+                match qt_schema::codec::batch_to_shadow_specs(b) {
+                    Ok(v) => specs.extend(v),
+                    Err(e) => return Ok(Err(e)),
                 }
-                Ok(())
-            })
+            }
+            self.with(|s| s.submit_all(specs))
         })?;
         to_py(r)
     }
@@ -406,16 +407,20 @@ impl Session {
 
     /// The shadow fills since the last call, as a `qt.shadow_fills` pyarrow.Table.
     fn take_fills(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        let b = to_py(self.with(qt_replay::Session::take_fills)?)?;
+        let (b, n) = to_py(self.with(|s| s.pending_fills())?)?;
         let schema = b.schema();
-        Ok(arrow_ffi::table_to_pyarrow(py, vec![b], schema)?.unbind())
+        let t = arrow_ffi::table_to_pyarrow(py, vec![b], schema)?.unbind();
+        self.with(|s| s.consume_fills(n))?; // only once the table exists: a failed hand-off loses no fill
+        Ok(t)
     }
 
     /// The results of the shadows that ended since the last call, as a `qt.shadow_results` pyarrow.Table.
     fn take_results(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        let b = to_py(self.with(qt_replay::Session::take_results)?)?;
+        let (b, n) = to_py(self.with(|s| s.pending_results())?)?;
         let schema = b.schema();
-        Ok(arrow_ffi::table_to_pyarrow(py, vec![b], schema)?.unbind())
+        let t = arrow_ffi::table_to_pyarrow(py, vec![b], schema)?.unbind();
+        self.with(|s| s.consume_results(n))?;
+        Ok(t)
     }
 
     /// Replays to the end of the data and ends the shadows still open (their results join `take_results`).

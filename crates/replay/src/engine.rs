@@ -264,6 +264,12 @@ impl Engine {
         self.shadows.add(spec)
     }
 
+    /// The checks of `add_shadow` without adding the shadow (so a batch can be refused whole).
+    pub fn check_shadow(&self, spec: &ShadowSpec) -> QtResult<()> {
+        self.check_not_past(spec.ts_submit, "ts_submit", &spec.shadow_id)?;
+        self.shadows.check(spec)
+    }
+
     /// Sends a cancel at `ts_cancel` for a shadow without one (not before the last record applied).
     pub fn cancel_shadow(&mut self, shadow_id: &str, ts_cancel: Ts) -> QtResult<u32> {
         self.check_not_past(ts_cancel, "ts_cancel", shadow_id)?;
