@@ -6,6 +6,15 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-07
+
+The public Fill-Realism Atlas: each new IEX DEEP+ day runs through the scale pipeline on a GitHub runner and the site
+shows, per liquidity tier, how far each popular backtester fill model is from the exact queue in fill rate and P&L,
+which setting comes closest, and roots to verify any number; Nasdaq sample days can be added as a second venue. Also:
+trading halts censor shadows (finding F2), sessions that take orders while they replay and the agent sandbox on them
+(with blind episodes), the `queuetruth-hftbacktest` plugin, LEAN, Backtrader and VectorBT importers, the P&L gap in
+`score`, and arrow and parquet 60.1.0. Every schema change is additive.
+
 ### Added
 
 - **Blind episodes for the agent sandbox** (ROADMAP, Agent arena; `queuetruth.sandbox.blind`): an agent plays an
@@ -74,7 +83,7 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   without it the report computes it from `score_shortfall.parquet`.
   [Scorecard statistics](docs/concepts/scorecard.md#the-pl-gap) explains how to read it.
 - **`queuetruth-hftbacktest`** (`integrations/hftbacktest/plugin`, a separate package with its own `pyproject.toml`,
-  Apache-2.0, depends on `queuetruth>=0.2.0,<0.3`; ROADMAP "Plugins for more backtesters"): an hftbacktest user with
+  Apache-2.0, depends on `queuetruth>=0.2.0,<0.4`; ROADMAP "Plugins for more backtesters"): an hftbacktest user with
   order-level data scores a backtest against exact-queue truth and calibrates its ProbQueue model in one or two calls,
   wrapping queuetruth's own commands. `prepare(data, orders, out)` resolves the orders with the exact replay and
   writes their absolute-price schedule and exact truth, one hftbacktest event file per instrument-day
@@ -90,7 +99,7 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   (`make test-hftbacktest-plugin`, part of `make test`), with hftbacktest 2.4.4 itself when `QT_HBT_PY` names its
   venv; `make hftbacktest-plugin-wheel` runs them on the built wheel against queuetruth from PyPI. Release workflow
   `.github/workflows/release-hftbacktest.yml` (tags `queuetruth-hftbacktest-vX.Y.Z`: version checks, sdist and
-  wheel, the plugin's tests on the built wheel with queuetruth 0.2.0 and the newest 0.2.x and hftbacktest 2.4.4,
+  wheel, the plugin's tests on the built wheel with queuetruth 0.2.0 and the newest 0.3.x and hftbacktest 2.4.4,
   Trusted Publishing with attestations, a dry run on manual dispatch). Guide:
   [Score and calibrate my hftbacktest backtest with the plugin](docs/how-to/score-and-calibrate-hftbacktest.md).
 - `ROADMAP.md`: what is being worked on and in what order (the Fill-Realism Atlas is `W1`).

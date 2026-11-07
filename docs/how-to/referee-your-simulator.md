@@ -223,7 +223,7 @@ jobs:
       - uses: sarptandoven/queuetruth/actions/referee@main   # pin a release tag or commit
         id: referee
         with:
-          queuetruth-version: queuetruth==0.2.0
+          queuetruth-version: queuetruth==0.3.0
           simulator: mysim@${{ github.sha }}
           sim-command: python -m mysim.run --data "$QT_DATASET" --orders "$QT_SCHEDULE" --fills "$QT_FILLS"
           skip: "09,12,13,14"   # this simulator does not replay Nasdaq
