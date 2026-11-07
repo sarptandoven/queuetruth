@@ -147,17 +147,29 @@ uv run --frozen --no-sync python scripts/scale/runner_budget.py --workers 4 --un
 ## Verify a number
 
 The page shows the atlas root and every day's root. A day root is a Merkle root over the leaves of that day's
-units; a leaf holds the unit's spec, the sha256 of its input bucket and the content digests of its outputs. To check
-one unit, re-create its bucket from IEX's public file and re-run it:
+units. A leaf holds the unit's spec, the sha256 of its input bucket and of the files it wrote, and the content
+digests of its outputs. Every day is kept as `day-<date>.tar.gz` on the repository's `atlas-days` release: its
+reduced tables, its `day_manifest.json` (the day root and every leaf's proof) and the `plan.json` it ran. To check
+one unit:
+
+1. Download and unpack the day, and take `atlas_manifest.json` from the site's `data/` folder.
+2. Check out the commit the day was built at (the site's "built at" column, or `builds` in `day_manifest.json`)
+   and run `make develop`. The file sha256 values depend on the build's Parquet writer, so another commit can
+   compute the same numbers and still give a different leaf.
+3. Re-create the unit's bucket from IEX's public file (about 9 GB is streamed, never stored; the URL is the day's
+   `source.url` in `day_manifest.json`).
+4. Re-run the unit.
 
 <!-- check-docs: skip (needs the 9 GB IEX day file) -->
 ```bash
-uv run --frozen --no-sync python scripts/scale/verify_unit.py --plan plan.json \
-    --atlas atlas_manifest.json --unit-id 10092026-b000-u0001 --split split/10092026
+uv run --frozen --no-sync python scripts/scale/iex_split.py --url "$URL" --date 2026-10-09 --out split
+uv run --frozen --no-sync python scripts/scale/verify_unit.py --day day-2026-10-09 \
+    --atlas-manifest atlas_manifest.json --unit-id 10092026-b000-u0001 --split split/10092026
 ```
 
-It re-runs the unit, compares its leaf with the published one and checks the leaf's proof up to the root. Every
-day's reduced tables are kept as assets of the repository's `atlas-days` release.
+`verify_unit.py` checks that the unit's spec hashes to the leaf's, re-runs the unit and compares its leaf with the
+published one. It also checks the leaf's proof up to the day root, and that the atlas lists that day root and
+recomputes its own root from the day roots. It says when the checkout is not the commit the day was built at.
 
 ## Run a day yourself
 

@@ -365,6 +365,14 @@ def test_two_day_pipeline_reduce_and_combine(tmp_path) -> None:
     assert res["days"] == 2 and res["symbol_days"] == 10 and res["distinct_symbols"] == 5
     man = json.loads((tmp_path / "atlas" / "atlas_manifest.json").read_text())
     assert man["atlas_root"] == K.merkle_root([d["merkle_root"] for d in man["days"]])
+    # each reduced day carries the plan it ran and the builds that ran its units, and the atlas lists their commits
+    for d, entry in zip(day_dirs, man["days"], strict=True):
+        dm = json.loads((d / "day_manifest.json").read_text())
+        ran = json.loads((tmp_path / f"plan-{dm['date']}.json").read_text())
+        assert json.loads((d / "plan.json").read_text()) == ran
+        assert dm["plan_sha256"] == K.sha256_hex((d / "plan.json").read_bytes()) == entry["plan_sha256"]
+        assert sum(b["units"] for b in dm["builds"]) == dm["units_valid"]
+        assert entry["git_heads"] == [b["git_head"] for b in dm["builds"]] == [K.build_info()["git_head"]]
     lb = pq.read_table(tmp_path / "atlas" / "leaderboard_by_tier.parquet").to_pylist()
     row = next(r for r in lb if r["tier"] == "ALL" and r["horizon_ns"] == 10 * S1)
     assert row["n_dates"] == 2 and row["n_symbols"] == 5 and row["n"] > 0

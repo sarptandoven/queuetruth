@@ -89,7 +89,11 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 - **The scheduled public atlas** (`.github/workflows/atlas.yml`, `scripts/scale/iex_latest.py`): each new IEX
   DEEP+ day runs through the scale pipeline on one runner, its reduced tables are kept as an asset of the
   `atlas-days` release, and the site over the newest 20 days is published with GitHub Pages (a maintainer turns
-  Pages on once).
+  Pages on once). A kept day carries the `plan.json` it ran and the builds that ran its units (`day_manifest.json`
+  `plan_sha256` and `builds`; the atlas manifest lists each day's `git_heads`). So `verify_unit.py --day DAY_DIR
+  --atlas-manifest atlas_manifest.json` re-runs any unit from the published day and checks it up to the atlas root,
+  and it says when the checkout is not the commit the day was built at: a leaf's file digests depend on the build's
+  Parquet writer. The site shows each day's commit and the site's own version and commit.
 - **`referee` GitHub Action** (`actions/referee`, `uses: sarptandoven/queuetruth/actions/referee@<ref>`): runs a
   simulator's command on every referee bug-class fixture (`$QT_DATASET`, `$QT_SCHEDULE` in, `$QT_FILLS` out),
   referees each class against the exact FIFO engine with the usual tolerances, writes a table to the job summary,

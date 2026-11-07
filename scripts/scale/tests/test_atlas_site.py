@@ -56,10 +56,12 @@ def atlas(tmp_path: Path) -> Path:
     manifest = {
         "schema": "qt.scale.atlas_manifest", "schema_version": 1, "atlas_root": "ab" * 32,
         "days": [
-            {"date": "2019-12-30", "run_id": "r1", "merkle_root": "cd" * 32, "units_valid": 2, "units_planned": 2},
+            {"date": "2019-12-30", "run_id": "r1", "merkle_root": "cd" * 32, "units_valid": 2, "units_planned": 2,
+             "git_heads": ["1a" * 20]},
             {"date": "2020-01-30", "run_id": "r2", "merkle_root": "ef" * 32, "units_valid": 2, "units_planned": 2},
         ],
-        "symbol_days": 8, "distinct_symbols": 4, "flag_policy": "label", "build": {"queuetruth": "0.2.0"},
+        "symbol_days": 8, "distinct_symbols": 4, "flag_policy": "label",
+        "build": {"queuetruth_version": "0.2.0", "git_head": "2b" * 20},
     }  # fmt: skip
     (d / "atlas_manifest.json").write_text(json.dumps(manifest))
     return d
@@ -86,6 +88,13 @@ def test_nasdaq_site_reads_answer_first_and_is_deterministic(atlas: Path, tmp_pa
     assert t_all.index("front_of_queue") < t_all.index("nt_prob_touch") < t_all.index("hbt_power3")
     assert page.index("<h2>Tier ALL</h2>") < page.index("<h2>Tier T1_top100</h2>")
     assert "ab" * 32 in page and "cd" * 32 in page and "Data provided for free by IEX" not in page
+    # each day root with the commit its units ran at (a day from before builds were recorded says so), the site's
+    # own build, and a verify command that works on the published day
+    commit = "https://github.com/sarptandoven/queuetruth/commit/"
+    assert f'<a href="{commit}{"1a" * 20}"><code>{"1a" * 6}</code></a>' in page
+    assert page.count("not recorded") == 1 and f'queuetruth</a> 0.2.0 (<a href="{commit}{"2b" * 20}">' in page
+    assert "verify_unit.py --day DAY_DIR --atlas-manifest atlas_manifest.json" in page
+    assert "/releases/tag/atlas-days" in page and "fill-realism-atlas.md#verify-a-number" in page
     assert "<script" not in page and "http://" not in page.replace("https://", "")
     # the headline is the search and link-preview text
     assert '<meta property="og:description" content="Within 1 s, the exact replay' in page
