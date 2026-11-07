@@ -7,15 +7,19 @@
 # Actions are pinned by commit SHA (tag in the trailing comment).
 #
 # A manual run with venue nasdaq runs one Nasdaq TotalView-ITCH 5.0 sample day from emi.nasdaq.com instead
-# (local_day.py --source itch) and keeps it as an asset of its own release, `atlas-days-nasdaq`. A full Nasdaq day may
-# not fit one runner, so it runs with a symbol budget: above NASDAQ_BUDGET_CORE_H predicted core-hours the day runs
-# the same number of symbols in every liquidity tier, chosen by a hash (plan.py --sample-budget-core-h), and the
-# day's manifest and the site say so. The budget, NASDAQ_UNIT_CORE_S and NASDAQ_UNIT_MEM_GIB were sized with
+# (local_day.py --source itch) and keeps it as an asset of its own release, `atlas-days-nasdaq`, created as a draft:
+# only people with write access see it until a maintainer publishes it (gh release edit atlas-days-nasdaq
+# --draft=false), since docs/data-and-licensing.md does not settle whether its aggregates may be published. A full
+# Nasdaq day may not fit one runner, so it runs with a symbol budget: above NASDAQ_BUDGET_CORE_H predicted
+# core-hours the day runs the same number of symbols in every liquidity tier, chosen by a hash
+# (plan.py --sample-budget-core-h), and the day's manifest and the site say so. The budget, NASDAQ_UNIT_CORE_S and NASDAQ_UNIT_MEM_GIB were sized with
 # scripts/scale/runner_budget.py on synthetic ITCH (docs/concepts/fill-realism-atlas.md).
 #
 # The site shows the kept Nasdaq days next to IEX (IEX stays the default page; Nasdaq is under nasdaq/) only when a
-# maintainer sets the repository variable ATLAS_NASDAQ_SITE to true or a manual run asks with nasdaq_site. It is off
-# by default: docs/data-and-licensing.md does not settle whether aggregates of Nasdaq's sample files may be published.
+# maintainer sets the repository variable ATLAS_NASDAQ_SITE to true or a manual run asks with nasdaq_site (which
+# lasts until the next scheduled deploy: set the variable to keep it). It is off by default, for the same reason.
+# The Nasdaq part is best effort: when it cannot be built the IEX site still deploys. Before the first IEX day the
+# site is the compatibility page alone, without Nasdaq.
 #
 # One-time setup by a maintainer: Settings > Pages > Build and deployment > Source: GitHub Actions. Using IEX's data
 # means accepting IEX's Historical Data Terms of Use; every page carries IEX's attribution
@@ -32,7 +36,7 @@ on:
         required: false
         default: ""
       rebuild:
-        description: "Run the day again even when the atlas-days release already has it"
+        description: "Run the day again even when its release (atlas-days, or atlas-days-nasdaq) already has it"
         type: boolean
         default: false
       publish:
@@ -44,7 +48,7 @@ on:
         type: boolean
         default: false
       venue:
-        description: "The venue of the day to run: iex, or nasdaq for a TotalView-ITCH sample day (date is then ignored)"
+        description: "Venue of the day to run: iex, or nasdaq for a TotalView-ITCH sample day (date is then ignored)"
         type: choice
         options: [iex, nasdaq]
         default: iex
@@ -81,7 +85,7 @@ env:
   # sized with scripts/scale/runner_budget.py: about 10 predicted core-hours of units fit in 3.5 h on 4 cores
   NASDAQ_BUDGET_CORE_H: "10"
   NASDAQ_UNIT_CORE_S: "100"
-  NASDAQ_UNIT_MEM_GIB: "3.5"
+  NASDAQ_UNIT_MEM_GIB: "3"
   NASDAQ_SITE: ${{ (inputs.nasdaq_site || vars.ATLAS_NASDAQ_SITE == 'true') && 'true' || 'false' }}
   COMPAT_RELEASE: compat-results
 
@@ -91,7 +95,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 350
     permissions:
-      contents: write # the reduced day is kept as an asset of the atlas-days release
+      contents: write # the reduced day is kept as an asset of the atlas-days (or atlas-days-nasdaq) release
     outputs:
       site: ${{ steps.site.outputs.built }}
     env:
@@ -182,7 +186,8 @@ jobs:
           make sync
           make develop
       # local_day.py lowers --workers to what memory holds per unit: two IEX units of 6 GiB on a 16 GB runner; four
-      # Nasdaq units of 3.5 GiB, which smaller units (--unit-core-s 100) keep within (runner_budget.py)
+      # Nasdaq units of 3 GiB, which smaller units (--unit-core-s 100) keep within (runner_budget.py). With fewer
+      # workers than asked, local_day.py shrinks the Nasdaq sample budget in proportion before planning.
       - name: run the day (stream, split, units, reduce)
         if: steps.have.outputs.run_day == 'true'
         env:
@@ -214,9 +219,11 @@ jobs:
           RELEASE: ${{ steps.day.outputs.release }}
           PREFIX: ${{ steps.day.outputs.prefix }}
         run: |
-          if ! gh release view "$RELEASE" > /dev/null 2>&1; then
+          if ! bash scripts/nightly/release_assets.sh exists "$RELEASE"; then
             if [ "$VENUE" = nasdaq ]; then
-              gh release create "$RELEASE" --prerelease --title "Fill-Realism Atlas: reduced Nasdaq sample days" \
+              # a draft until a maintainer decides to publish Nasdaq-derived aggregates (docs/data-and-licensing.md)
+              gh release create "$RELEASE" --draft --prerelease \
+                --title "Fill-Realism Atlas: reduced Nasdaq sample days" \
                 --notes "Per-day reduced tables of Nasdaq TotalView-ITCH 5.0 sample days from emi.nasdaq.com (.github/workflows/atlas.yml, venue nasdaq). Aggregate statistics only; no Nasdaq file or message (docs/data-and-licensing.md)."
             else
               gh release create "$RELEASE" --prerelease --title "Fill-Realism Atlas: reduced IEX days" \
@@ -267,22 +274,32 @@ jobs:
             --flag-policy exclude
           # IEX first, so the default page stays IEX; the kept Nasdaq days go to nasdaq/ only when asked
           venues=(--venue iex=.atlas/atlas)
-          if [ "$NASDAQ_SITE" = true ]; then
-            ndays="$(bash scripts/nightly/release_assets.sh names "$ATLAS_NASDAQ_RELEASE")"
+          # best effort, like the compatibility page: a Nasdaq problem never blocks the IEX deploy
+          # (set -e does not apply inside a function called as an `if` condition, so every step checks itself)
+          nasdaq_atlas() {
+            local ndays name d
+            ndays="$(bash scripts/nightly/release_assets.sh names "$ATLAS_NASDAQ_RELEASE")" || return 1
             mapfile -t nwindow < <(grep -E '^nasdaq-day-.*\.tar\.gz$' <<< "$ndays" | sort | tail -n "$ATLAS_WINDOW")
-            if [ "${#nwindow[@]}" -gt 0 ]; then
-              bash scripts/nightly/release_assets.sh download "$ATLAS_NASDAQ_RELEASE" .atlas/dl "${nwindow[@]}"
-              nargs=()
-              for name in "${nwindow[@]}"; do
-                d=".atlas/nasdaq-days/${name%.tar.gz}"
-                mkdir -p "$d" && tar -C "$d" -xzf ".atlas/dl/$name"
-                nargs+=(--day "$d")
-              done
-              uv run --frozen --no-sync python scripts/scale/atlas.py combine "${nargs[@]}" --out .atlas/atlas-nasdaq \
-                --flag-policy exclude
+            if [ "${#nwindow[@]}" -eq 0 ]; then
+              echo "::warning::no Nasdaq day is kept yet"
+              return 1
+            fi
+            bash scripts/nightly/release_assets.sh download "$ATLAS_NASDAQ_RELEASE" .atlas/dl "${nwindow[@]}" \
+              || return 1
+            nargs=()
+            for name in "${nwindow[@]}"; do
+              d=".atlas/nasdaq-days/${name%.tar.gz}"
+              mkdir -p "$d" && tar -C "$d" -xzf ".atlas/dl/$name" || return 1
+              nargs+=(--day "$d")
+            done
+            uv run --frozen --no-sync python scripts/scale/atlas.py combine "${nargs[@]}" --out .atlas/atlas-nasdaq \
+              --flag-policy exclude || return 1
+          }
+          if [ "$NASDAQ_SITE" = true ]; then
+            if nasdaq_atlas; then
               venues+=(--venue nasdaq=.atlas/atlas-nasdaq)
             else
-              echo "::warning::no Nasdaq day is kept yet; the site shows IEX only"
+              echo "::warning::the Nasdaq days could not be combined; the site shows IEX only"
             fi
           fi
           link=()

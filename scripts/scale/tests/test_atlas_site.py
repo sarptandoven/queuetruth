@@ -94,7 +94,8 @@ def test_nasdaq_site_reads_answer_first_and_is_deterministic(atlas: Path, tmp_pa
     assert f'<a href="{commit}{"1a" * 20}"><code>{"1a" * 6}</code></a>' in page
     assert page.count("not recorded") == 1 and f'queuetruth</a> 0.2.0 (<a href="{commit}{"2b" * 20}">' in page
     assert "verify_unit.py --day DAY_DIR --atlas-manifest atlas_manifest.json" in page
-    assert "/releases/tag/atlas-days" in page and "fill-realism-atlas.md#verify-a-number" in page
+    # the default source is nasdaq: its days are verified from the Nasdaq release
+    assert "/releases/tag/atlas-days-nasdaq" in page and "fill-realism-atlas.md#verify-a-nasdaq-day" in page
     assert "<script" not in page and "http://" not in page.replace("https://", "")
     # the headline is the search and link-preview text
     assert '<meta property="og:description" content="Within 1 s, the exact replay' in page
@@ -220,11 +221,23 @@ def test_two_venues_get_their_own_pages_and_a_switch(atlas: Path, tmp_path: Path
     assert 'href="nasdaq/index.html">Nasdaq TotalView-ITCH</a>' in index and 'href="compat.html"' in index
     assert "Data provided for free by IEX" not in nindex and "99" * 32 in nindex and "compat.html" not in nindex
     assert "2020-01-30: 40 symbols per tier (T1_top100 40 of 100, T5_rest 40 of 4,900)" in nindex
-    assert (
-        "scripts/scale/itch_split.py --url https://emi.nasdaq.com/ITCH/Nasdaq%20ITCH/01302020.NASDAQ_ITCH50.gz "
-        "--date 01302020 --buckets 32 --out split" in nindex
-    )
+    # a pinned day is re-created with --date alone, so itch_split.py checks it against its pinned hashes
+    assert "scripts/scale/itch_split.py --date 01302020 --buckets 32 --out split" in nindex
     assert "Symbol sample." not in index
+    # each venue verifies from its own release and its own docs steps
+    assert 'releases/tag/atlas-days">atlas-days</a>' in index and "#verify-a-number" in index
+    assert 'releases/tag/atlas-days-nasdaq">atlas-days-nasdaq</a>' in nindex and "#verify-a-nasdaq-day" in nindex
+    assert "<code>nasdaq-day-&lt;date&gt;.tar.gz</code>" in nindex and 'releases/tag/atlas-days"' not in nindex
+    # an IEX-only site keeps its pages as before: no venue switch, its styles or the bucket paragraph
+    S.build(atlas, tmp_path / "iex_only", source="iex", horizon="1s")
+    alone = (tmp_path / "iex_only" / "index.html").read_text()
+    assert "nav.venues" not in alone and "venues" not in alone and "The buckets of" not in alone
+    assert "nav.venues" in index and "The buckets of" in index
+    # a day of another venue in the atlas is refused rather than published under the wrong attribution
+    man["days"][0]["venue"] = "iex"
+    (nasdaq / "atlas_manifest.json").write_text(json.dumps(man))
+    with pytest.raises(SystemExit, match="attribution is per venue"):
+        S.build(nasdaq, tmp_path / "wrong", source="nasdaq")
     # a venue given twice, or an unknown one, is refused
     with pytest.raises(SystemExit):
         S.build_site([("iex", atlas), ("iex", nasdaq)], tmp_path / "x")

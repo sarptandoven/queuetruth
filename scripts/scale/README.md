@@ -58,11 +58,13 @@ again (a manual run can force it, or pick a date). A maintainer turns Pages on o
 GitHub Actions.
 
 **Nasdaq sample days on a runner.** A manual run with `venue: nasdaq` and `nasdaq_day: MMDDYYYY` runs that
-emi.nasdaq.com day with `local_day.py --source itch --unit-core-s 100 --unit-mem-gib 3.5 --sample-budget-core-h 10`
-(four units at a time; the two pinned days are checked against their pinned hashes) and keeps it as
-`nasdaq-day-<YYYY-MM-DD>.tar.gz` on the `atlas-days-nasdaq` release. The site combines the kept Nasdaq days apart
-from the IEX days and shows them under `nasdaq/` only when the repository variable `ATLAS_NASDAQ_SITE` (or the
-run's `nasdaq_site`) is true; it is off by default (`docs/concepts/fill-realism-atlas.md`, two venues).
+emi.nasdaq.com day with `local_day.py --source itch --unit-core-s 100 --unit-mem-gib 3 --sample-budget-core-h 10`
+(four units at a time, the budget shrunk in proportion when memory holds fewer; the two pinned days are checked
+against their pinned hashes) and keeps it as `nasdaq-day-<YYYY-MM-DD>.tar.gz` on the `atlas-days-nasdaq` release,
+a draft until a maintainer publishes it (`release_assets.sh` finds a draft by its pending tag name). The site
+combines the kept Nasdaq days apart from the IEX days (`atlas.py combine` refuses days of two venues) and shows them
+under `nasdaq/` only when the repository variable `ATLAS_NASDAQ_SITE` (or the run's `nasdaq_site`) is true, best
+effort; it is off by default (`docs/concepts/fill-realism-atlas.md`, two venues).
 
 **P&L error.** Fill rates say how often a simulator is wrong; the P&L error says what that is worth. A unit replays
 each population's shadows exactly once more with quotes and trades (`bbo: change`, as `zoo-toxicity` does) and runs

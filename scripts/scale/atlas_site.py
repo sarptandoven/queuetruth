@@ -54,6 +54,18 @@ IEX_ATTRIBUTION = (
 IEX_TERMS_URL = "https://iextrading.com/iex-historical-data-terms/"
 #: Plain names of the venues a site can show.
 VENUES = {"iex": "IEX DEEP+", "nasdaq": "Nasdaq TotalView-ITCH"}
+#: Where `.github/workflows/atlas.yml` keeps each venue's reduced days: (release tag, asset name prefix, docs anchor
+#: of the verify steps).
+VENUE_DAYS = {
+    "iex": ("atlas-days", "day-", "verify-a-number"),
+    "nasdaq": ("atlas-days-nasdaq", "nasdaq-day-", "verify-a-nasdaq-day"),
+}
+#: The Nasdaq sample days `scripts/realdata/itch_subset.py` pins (`itch_split.py --date` checks them against their
+#: pinned hashes; `--url` would turn those checks off).
+PINNED_ITCH = ("12302019", "01302020")
+NASDAQ_SAMPLES_URL = "https://emi.nasdaq.com/ITCH/Nasdaq%20ITCH/"
+#: Styles only a page with a venue switch needs, so a single-venue site stays byte-identical.
+VENUE_CSS = "nav.venues { margin: 8px 0; }\n"
 #: The guides the page links to (docs on GitHub).
 DOCS = "https://github.com/sarptandoven/queuetruth/blob/main/docs"
 
@@ -541,7 +553,7 @@ code { background: var(--chip); padding: 1px 4px; border-radius: 4px; }
 pre { background: var(--chip); padding: 12px; border-radius: 6px; overflow-x: auto; }
 .attr { border-left: 3px solid var(--line); padding-left: 12px; }
 a { color: var(--fg); text-decoration-color: var(--muted); text-underline-offset: 2px; }
-a:hover { text-decoration-color: var(--fg); } nav.libs, nav.venues { margin: 8px 0; } p { overflow-wrap: anywhere; }
+a:hover { text-decoration-color: var(--fg); } nav.libs { margin: 8px 0; } p { overflow-wrap: anywhere; }
 table.best th, table.best td { text-align: left; white-space: normal; vertical-align: top; }
 table.best td.cfg { min-width: 18em; } table.best td code { overflow-wrap: anywhere; }
 figure.chart { margin: 8px 0 12px; } svg.bias { width: 100%; min-width: 560px; height: auto; display: block;
@@ -579,8 +591,8 @@ def _page(title: str, body: str, attribution: str, description: str = SUMMARY, e
 def _attribution(source: str) -> str:
     if source != "iex":
         return (
-            '<p class="muted attr">Aggregate statistics computed from Nasdaq TotalView-ITCH 5.0 sample files. '
-            "No market data is published here.</p>"
+            '<p class="muted attr">Aggregate statistics computed from Nasdaq TotalView-ITCH 5.0 sample files '
+            f'(<a href="{NASDAQ_SAMPLES_URL}">emi.nasdaq.com</a>). No market data is published here.</p>'
         )
     return (
         f'<p class="attr">{html.escape(IEX_ATTRIBUTION)} '
@@ -869,6 +881,8 @@ def recreate_command(source: str, day: dict[str, Any] | None) -> str:
     k = day.get("buckets") or 32
     if source == "iex":
         cmd = f"scripts/scale/iex_split.py --url {url} --date {iso_date(day['date'])} --buckets {k} --out split"
+    elif str(day["date"]) in PINNED_ITCH:
+        cmd = f"scripts/scale/itch_split.py --date {day['date']} --buckets {k} --out split"
     else:
         cmd = f"scripts/scale/itch_split.py --url {url} --date {day['date']} --buckets {k} --out split"
     return (
@@ -908,6 +922,9 @@ def build(
     if source not in ("nasdaq", "iex"):
         raise SystemExit(f"site: source must be nasdaq or iex, got {source!r}")
     manifest = json.loads((atlas / "atlas_manifest.json").read_text(encoding="utf-8"))
+    venues_seen = {d["venue"] for d in manifest.get("days") or [] if d.get("venue")}
+    if venues_seen - {source}:
+        raise SystemExit(f"site: the atlas holds {sorted(venues_seen)} days, not {source} (attribution is per venue)")
     rows, population = _rows(atlas, mode, population)
     horizons = sorted({r["horizon_ns"] for r in rows})
     if horizon is None:  # 60 s when the atlas has it: at 1 s too few orders fill for the differences to read
@@ -929,6 +946,8 @@ def build(
     attribution = _attribution(source)
     venue = VENUES[source]
     switch = venue_nav(venues, source) if venues else ""
+    css = VENUE_CSS if switch else ""
+    release, prefix, anchor = VENUE_DAYS[source]
     titled = f" ({venue})" if venues and venues[0][0] != source else ""
     present = [lib for lib in LIBRARY_PAGES if any(describe(r["model_id"])[0] == lib for r in rows)]
     best = best_settings(rows, h)
@@ -1018,10 +1037,10 @@ def build(
         "<h2>Verify any number</h2>"
         f"<p>Atlas root <code>{html.escape(root)}</code> (Merkle root over the day roots in date order; flag policy "
         f"<code>{html.escape(str(manifest.get('flag_policy')))}</code>). Each day root covers that day's shard leaves. "
-        "To check one, download the day (<code>day-&lt;date&gt;.tar.gz</code> on the repository's "
-        f'<a href="{REPO_HOME}/releases/tag/atlas-days">atlas-days</a> release: its tables, plan and manifest), check '
+        f"To check one, download the day (<code>{prefix}&lt;date&gt;.tar.gz</code> on the repository's "
+        f'<a href="{REPO_HOME}/releases/tag/{release}">{release}</a> release: its tables, plan and manifest), check '
         "out the commit the day was built at, re-create the unit's bucket from the public day file and re-run the "
-        f'unit (<a href="{DOCS}/concepts/fill-realism-atlas.md#verify-a-number">the steps</a>):</p>'
+        f'unit (<a href="{DOCS}/concepts/fill-realism-atlas.md#{anchor}">the steps</a>):</p>'
         "<pre>uv run --frozen --no-sync python scripts/scale/verify_unit.py --day DAY_DIR "
         "--atlas-manifest atlas_manifest.json --unit-id UNIT_ID --split SPLIT_DIR</pre>"
         '<div class="wrap"><table><thead><tr><th>date</th><th>day root</th><th>units</th><th>built at</th></tr>'
@@ -1036,10 +1055,13 @@ def build(
         )
         + "</p>"
     )
-    parts.append(recreate_command(source, days[-1] if days else None))
+    if switch or source != "iex":  # an IEX-only site keeps its pages as they were
+        parts.append(recreate_command(source, days[-1] if days else None))
     out.mkdir(parents=True, exist_ok=True)
     (out / "data").mkdir(exist_ok=True)
-    page = _page(f"Fill-Realism Atlas{titled}", "\n".join(parts), attribution, leads[0] if leads else SUMMARY)
+    page = _page(
+        f"Fill-Realism Atlas{titled}", "\n".join(parts), attribution, leads[0] if leads else SUMMARY, extra_css=css
+    )
     (out / "index.html").write_text(page, encoding="utf-8")
     data = {
         "schema": "qt.atlas_site_leaderboard",
@@ -1136,7 +1158,8 @@ def _library_page(
         f'<li>Every library side by side: <a href="index.html">the Fill-Realism Atlas</a>.</li></ul>' + built + "</p>"
     )
     title = f"{question} Fill-Realism Atlas{titled}"
-    page = _page(title, "\n".join(parts), attribution, leads[0] if leads else SUMMARY)
+    css = VENUE_CSS if switch else ""
+    page = _page(title, "\n".join(parts), attribution, leads[0] if leads else SUMMARY, extra_css=css)
     (out / name).write_text(page, encoding="utf-8")
     return name
 

@@ -228,6 +228,11 @@ def trading_state(
     return info, out
 
 
+def day_venue(day: dict[str, Any]) -> str:
+    """The venue of a reduced day: `iex` for an `iex_split.py` day (source format `iex_deep_plus`), else `nasdaq`."""
+    return "iex" if (day.get("source") or {}).get("format") == "iex_deep_plus" else "nasdaq"
+
+
 def day_builds(shards: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """The distinct builds (`queuetruth_version`, `git_head`, core extension sha256) of the shard manifests, with
     their unit counts, most units first."""
@@ -509,6 +514,10 @@ def combine(
         raise ValueError(f"flag_policy: one of {FLAG_POLICIES}, got {flag_policy!r}")
     days = [(json.loads((d / "day_manifest.json").read_text()), d) for d in day_dirs]
     days = sorted(days, key=lambda x: x[0]["date"][4:] + x[0]["date"][:4])  # MMDDYYYY -> chronological
+    # one venue per atlas: an IEX day and a Nasdaq day are separate atlases, each with its own attribution
+    by_venue = {day_venue(dm) for dm, _ in days}
+    if len(by_venue) > 1:
+        raise SystemExit(f"combine: days of more than one venue {sorted(by_venue)}; combine each venue on its own")
     no_symbols = [dm["date"] for dm, _ in days if "flagged_symbols" not in dm]
     no_trading = [dm["date"] for dm, _ in days if not (dm.get("trading_state") or {}).get("known")]
     if flag_policy == "exclude" and (no_symbols or no_trading) and not allow_legacy_days:
@@ -774,6 +783,7 @@ def combine(
                 "merkle_root": d["merkle_root"],
                 "units_valid": d["units_valid"],
                 "units_planned": d["units_planned"],
+                "venue": day_venue(d),
                 **({"symbol_sample": d["symbol_sample"]} if d.get("symbol_sample") else {}),
                 "buckets": (d.get("source") or {}).get("buckets"),
                 "problems": len(d["problems"]),

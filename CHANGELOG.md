@@ -10,16 +10,22 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 - **Nasdaq TotalView-ITCH sample days in the Fill-Realism Atlas** (ROADMAP W1): a manual run of
   `.github/workflows/atlas.yml` with `venue: nasdaq` runs one sample day from emi.nasdaq.com on a GitHub-hosted runner
-  (`local_day.py --source itch`) and keeps the reduced day on its own release, `atlas-days-nasdaq`. When the day's
-  predicted cost is above the budget, `plan.py --sample-budget-core-h` (or `--sample-per-tier`) keeps the same
-  number of symbols in every liquidity tier, chosen by a hash of seed, date and symbol, with tiers ranked on the
-  whole day. The plan, `day_manifest.json`, the atlas manifest and the site record the sample. A day that fits
-  keeps every symbol and its run id. `scripts/scale/runner_budget.py` measures a machine on synthetic ITCH and gave
-  the workflow's budget (10 predicted core-hours, units of 100 core-s at 3.5 GiB, four at a time).
-  `atlas_site.py --venue iex=DIR --venue nasdaq=DIR` builds one site with IEX as the default page and the Nasdaq
-  pages under `nasdaq/`. Each venue has its own tables, headlines, roots, bucket and verify commands and attribution,
-  and every page links the other venue. The workflow shows Nasdaq only when the `ATLAS_NASDAQ_SITE` variable or the
-  `nasdaq_site` input is true; it is off by default.
+  (`local_day.py --source itch`). It keeps the reduced day on its own release, `atlas-days-nasdaq`, created as a
+  draft: only people with write access see it until a maintainer publishes it, since whether its tables may be
+  published is not settled (`docs/data-and-licensing.md`). `release_assets.sh` finds a draft by its pending tag name.
+  When the day's predicted cost is above the budget, `plan.py --sample-budget-core-h` (or `--sample-per-tier`)
+  keeps the same number of symbols in every liquidity tier, chosen by a hash of seed, date and symbol, with tiers
+  ranked on the whole day. The plan, `day_manifest.json`, the atlas manifest and the site record the sample; only the
+  rule, the seed and the per-tier count (and the kept symbols) enter the run id. A day that fits keeps every symbol
+  and its run id. `scripts/scale/runner_budget.py` measures a machine on synthetic ITCH and gave the workflow's
+  budget (10 predicted core-hours, units of 100 core-s at 3 GiB, four at a time); `local_day.py` shrinks the budget in
+  proportion when memory holds fewer units. `atlas_site.py --venue iex=DIR --venue nasdaq=DIR` builds one site with
+  IEX as the default page and the Nasdaq pages under `nasdaq/`. Each venue has its own tables, headlines, roots,
+  release, bucket and verify commands and attribution, and every page links the other venue. The workflow shows
+  Nasdaq only when the `ATLAS_NASDAQ_SITE` variable or the `nasdaq_site` input is true (off by default), and a Nasdaq
+  problem never blocks the IEX deploy. The atlas manifest's days now carry their `venue` and `buckets`; `atlas.py
+  combine` refuses days of two venues and `atlas_site.py` refuses an atlas whose days are of another venue. IEX-only
+  pages are unchanged.
 - **The P&L gap next to the fill-rate gap in `score`** (ROADMAP, the one-line reality gap): under its `RESULT:` line
   `queuetruth score` prints a `P&L:` line, for example `the simulator's P&L is 5.78 USD per order too high (95% CI
   +3.40 to +8.75) at the 1 s markout, mostly from fills it grants that live did not get (+3.09 USD per order)`, and

@@ -21,9 +21,19 @@ def _hdr(t: bytes, loc: int, ts: int) -> bytes:
     return t + struct.pack(">HH", loc, 0) + ts.to_bytes(6, "big")
 
 
-def itch_day(symbols: list[str], orders_per_symbol: int = 400, seed: int = 3, max_step_ns: int = 50_000_000) -> bytes:
+def itch_day(
+    symbols: list[str],
+    orders_per_symbol: int = 400,
+    seed: int = 3,
+    max_step_ns: int = 50_000_000,
+    priority: bool = False,
+) -> bytes:
     """A framed ITCH 5.0 day: system events, one `R` per symbol, then interleaved adds, executions, partial cancels
-    and deletes around $100 (messages of all symbols mixed in time order, up to `max_step_ns` apart)."""
+    and deletes around $100 (messages of all symbols mixed in time order, up to `max_step_ns` apart).
+
+    Executions hit a random resting order, so the replay checks count price-priority violations; with `priority`
+    they hit the best price of a random side, oldest order first, so the day replays clean (the atlas's
+    `--flag-policy exclude` keeps its symbol-days). The default keeps the bytes of the days the tests pinned."""
     rng = random.Random(seed)
     out = bytearray()
 
@@ -57,10 +67,14 @@ def itch_day(symbols: list[str], orders_per_symbol: int = 400, seed: int = 3, ma
                 + symbols[loc - 1].encode().ljust(8)
                 + struct.pack(">I", px)
             )
-            book[ref] = [sh]
+            book[ref] = [sh, side, px]
             ref += 1
             continue
         oid = rng.choice(sorted(book))
+        if priority and op < 0.7:
+            side = book[oid][1]  # a random order's side, then that side's best price, oldest first
+            same = [(o, v) for o, v in book.items() if v[1] == side]
+            oid = min(same, key=lambda x: (-x[1][2] if side == ord("B") else x[1][2], x[0]))[0]
         left = book[oid][0]
         if op < 0.7:
             n = min(left, rng.choice([100, 200]))

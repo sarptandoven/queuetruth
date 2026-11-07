@@ -38,10 +38,10 @@ above `B` keeps, in every liquidity tier, the `N` symbols with the smallest `sha
 tier with fewer symbols keeps them all. With `B`, `N` is the largest count whose predicted cost fits in `B`. Tiers are
 ranked on the whole day first, so a kept symbol has the tier it has in the full day. The other symbols are
 excluded with the reason `outside the symbol sample`, so the sample enters `exclusions_sha256` and the `run_id`. The
-plan's `symbol_sample` (also in the source) records the rule, `N`, the budget, the full day's predicted cost and
-per tier how many symbols were kept of how many. The split and its buckets are the full day's, so a unit re-runs from
-a bucket re-created from the public file as for any day. A day that fits keeps every symbol and has no
-`symbol_sample`, so its plan and run id are unchanged.
+plan's `symbol_sample` records the rule, `N`, the budget, the full day's predicted cost and per tier how many symbols
+were kept of how many; the source (so the run id) holds only the rule id, the seed and `N`. The split and its
+buckets are the full day's, so a unit re-runs from a bucket re-created from the public file as for any day. A day
+that fits keeps every symbol and has no `symbol_sample`, so its plan and run id are unchanged.
 """
 
 from __future__ import annotations
@@ -131,6 +131,9 @@ def quotas_for(rule: str, pops: dict[str, dict[str, Any]], day: list[dict[str, A
     return out
 
 
+#: The id of the sample rule below; with the seed and the per-tier count it is all of the sample that enters the run
+#: id (the kept symbols enter through `exclusions_sha256`), so how the count was asked for does not change it.
+SAMPLE_RULE_ID = "per_tier_sha256_v1"
 SAMPLE_RULE = (
     "per liquidity tier (ranked on the whole day), the N symbols with the smallest sha256('<seed>:<date>:<symbol>'); "
     "a tier with fewer symbols keeps them all"
@@ -260,6 +263,7 @@ def make_plan(a: argparse.Namespace) -> dict[str, Any]:
                 of = {t: sum(1 for d in day if tier[d["symbol"]] == t) for t in sorted(set(tier.values()))}
                 kept_by = {t: sum(1 for s in keep if tier[s] == t) for t in of}
                 sample = {
+                    "rule_id": SAMPLE_RULE_ID,
                     "rule": SAMPLE_RULE,
                     "seed": a.seed,
                     "per_tier": n,
@@ -294,8 +298,10 @@ def make_plan(a: argparse.Namespace) -> dict[str, Any]:
                 "trading_state_recorded": trading is not None,
                 # an IEX DEEP+ split (iex_split.py); ITCH splits carry no format, so their run ids are unchanged
                 **({"format": sm["format"]} if "format" in sm else {}),
-                # a sampled day only: a day that fits keeps every symbol and its run id is unchanged
-                **({"symbol_sample": sample} if sample else {}),
+                # a sampled day only (a day that fits keeps every symbol and its run id is unchanged); the budget and
+                # the cost figures stay out, in the plan's `symbol_sample`, so a refit cost model or another budget
+                # that keeps the same symbols gives the same run id
+                **({"symbol_sample": {k: sample[k] for k in ("rule_id", "seed", "per_tier")}} if sample else {}),
             }
         )
         if sample:
