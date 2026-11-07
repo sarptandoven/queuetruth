@@ -457,6 +457,10 @@ def import_sim(
     synthetic / fixture_only)."""
     if kind not in SIM_IMPORTERS:
         raise QtError("QT-CONFIG-001", f"simulator kind must be one of {sorted(SIM_IMPORTERS)}, got {kind!r}")
+    if kind == "lean":
+        from queuetruth.live.importers.lean import check_append
+
+        check_append(out, append)
     paths = _paths([{"path": p} for p in inputs])
     imap = load_instrument_map(instrument_map) if instrument_map else None
     extra = dict(options)

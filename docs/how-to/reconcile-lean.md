@@ -51,27 +51,44 @@ twice is counted once. The events file alone works too: each order is then built
 How the files are read:
 
 - One order per order id. `submit_sent` at the order's `time`, `ack` at its first `submitted` event, one fill per
-  `partiallyFilled` or `filled` event (fee = `orderFeeAmount` when it is in the fill price's currency), `cancel_ack`
-  at `canceled` and `reject` at `invalid`, with LEAN's message. An order LEAN refused (`invalid`, for example for
-  lack of buying power) never rested: it gets `submit_sent` and `reject`, no `ack`. `new`, `none`,
-  `cancelPending` and `updateSubmitted` events are counted; the orders section holds the order's final price and
-  quantity.
+  `partiallyFilled` or `filled` event that has a fill quantity, `cancel_ack` at `canceled` and `reject` at
+  `invalid`, with LEAN's message.
+- An order LEAN refused before submitting it (`invalid`, for example for lack of buying power) never rested: it gets
+  `submit_sent` and `reject`, no `ack`. An order LEAN invalidates later, at fill time, keeps its `ack` and then gets
+  the `reject`.
+- A Day or GoodTilDate order past its expiry is cancelled by LEAN with the message "The order has expired.". It is
+  logged as `expire`, not `cancel_ack`.
+- `new`, `none`, `cancelPending` and `updateSubmitted` events are counted; the orders section holds the order's
+  final price and quantity. So is a `partiallyFilled` or `filled` event without a fill quantity: LEAN writes one
+  when the brokerage model refuses an order update.
+- An order below the lot size is rounded to quantity 0 and invalidated by LEAN (direction Hold). It is counted and
+  left out.
+- Fees: LEAN charges the whole order's fee on the final `filled` event; partial fills carry none. A fee in the fill
+  price's currency is kept. A crypto buy charged in its base asset (LEAN's Binance fee model charges BTC on a
+  BTCUSDT buy) has that fee subtracted from `fillQuantity` by LEAN: the importer logs the gross quantity
+  (`fillQuantity` plus the fee) and the fee in the quote currency at the fill price. A fee in any other currency is
+  left out, with a warning.
 - `Market`, `MarketOnOpen` and `MarketOnClose` are market orders, `Limit` a limit order at `limitPrice`,
   `StopMarket` and `TrailingStop` stop orders, `StopLimit` a stop-limit at `limitPrice`, and `LimitIfTouched` a
   stop-limit at `limitPrice` (as for Binance's `TAKE_PROFIT_LIMIT`). Option exercises and combo orders fail
-  `QT-INPUT-002`. Time in force is `gtc`, `day` or `gtd`, from `timeInForce`.
+  `QT-INPUT-002`. Time in force is `gtc`, `day` or `gtd`, from `timeInForce`. Contingent orders (OTO, OCO,
+  brackets) are warned: LEAN may hold one until its trigger, but its `ack` is its `submitted` event.
 - Enums are read as numbers or names. The C# property names of `OrderEvent` (`OrderId`, `Id`, `UtcTime`,
   `FillQuantity`, `OrderFee`, ...) and the hyphenated names of older releases (`order-id`, `order-event-id`, ...)
   read the same.
 - An order-events CSV whose header uses the JSON names (for example the events file passed through
   `pandas.read_json(...).to_csv(...)`) reads the same as the JSON. LEAN writes no CSV of its own.
-- The instrument is the symbol's ticker (`symbolValue`, or `symbol.value` in the orders section). Name it after the live instrument with `--option instrument=BTCUSDT` (every order) or
+- The instrument is the symbol's ticker (`symbolValue`, or `symbol.value` in the orders section). Name it after the
+  live instrument with `--option instrument=BTCUSDT` (every order) or
   `--option instruments=BTCUSDT:BTCUSDT,ETHUSDT:ETH-USDT` (per ticker; a ticker the backtest does not trade fails
   `QT-CONFIG-001`).
 - Times are UTC, as LEAN reports them, so there is no `data_tz` option. Unix seconds are rounded to the microsecond.
+- Without the orders section, an order takes the quantity and prices of its last event: LEAN stamps every event
+  with the order's current values, so an update shows there.
 - Order ids restart at 1 in every backtest, so one import holds one backtest. Two orders sections, events of two
   `algorithmId`s, the same file twice, fills beyond an order's quantity or an event for an order the orders section
-  does not hold fail with `QT-CONFIG-001` or `QT-INPUT-002`: the files come from different runs.
+  does not hold fail with `QT-CONFIG-001` or `QT-INPUT-002`: the files come from different runs. For the same
+  reason `--append` to an existing log is refused: write each backtest to its own `--out` directory.
 
 ## 2. Import the live fills
 
@@ -115,10 +132,10 @@ and then gives one line per order, for example:
 opening 2024-03-01T14:00:00.000Z (candle rule); the live order rested 59m28s and ended cancelled without a fill
 [timing] binance:main:7100006: order buy 0.01 BTCUSDT @ 61100: timing: live filled 2024-03-01T21:30:00.000Z,
 outside the backtest fill candle [2024-03-01T20:00:00.000Z, +1h)
-[no_live_twin] sim:lean:main:7: backtest order buy 0.01 BTCUSDT @ 61300 cancelled; no live order pairs with it: ...
+[no_live_twin] sim:lean:main:7: backtest order buy 0.01 BTCUSDT @ 61300 expired; no live order pairs with it: ...
 ```
 
-The backtest's order 7 was cancelled by its GoodTilDate time in force and has no live twin. The rest reads as in
+The backtest's order 7 expired at its GoodTilDate time and has no live twin. The rest reads as in
 the Backtrader guide: LEAN filled the 14:00 buy because the bar traded at its limit, while the live order rested
 an hour in the queue and was cancelled.
 
@@ -158,8 +175,8 @@ moved to that entry, with the bar time kept in the fill's `reason`.
 | `pair_with` | `live import` only: a canonical live-log directory to pair with (`reconcile` takes it as `--live`) |
 | `price_exp`, `size_exp` | scales of instruments missing from the instrument map (default -9, -8) |
 
-LEAN writes prices and quantities as decimals, but they pass through JSON numbers. They are read as decimals rounded
-to 15 significant digits, then rounded half-even to the instrument's tick and lot (counted in a warning).
+LEAN writes prices, quantities and fees as C# decimals. They are read exactly, then rounded half-even to the
+instrument's tick and lot (counted in a warning).
 
 ## 5. Import the backtest alone, then score
 
@@ -184,6 +201,7 @@ with this simulator log.
 
 - On bar data a LEAN fill time is a bar's end. Without `timeframe` it is read as an exact time, an hour late for an
   hourly limit fill. Give `timeframe` for bar data; leave it out for tick data.
+- Contingent orders are warned, not modelled: a child order's `ack` can come before its trigger.
 - The orders section holds an order's final price and quantity. An order updated while it rested
   (`updateSubmitted`) is logged at its last limit price.
 - Option exercises and combo orders are refused. Import a backtest of single-instrument orders.

@@ -12,7 +12,9 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   `orders`) and its `<algorithm id>-order-events.json` (or an order-events CSV with the same names), formats read
   from LEAN's source at release tag 18241; LEAN is not imported. Market, limit, stop-market and stop-limit orders
   (also market-on-open and -close, trailing stops and limit-if-touched), partial fills, cancels and invalid orders
-  map to the canonical log; option exercises and combo orders, and inputs from two backtests, are refused. Option
+  map to the canonical log, expiries as `expire`; a crypto buy's fee in the base asset, which LEAN subtracts from
+  the fill quantity, is added back and converted to quote. Option exercises and combo orders, and inputs from two
+  backtests, are refused. Option
   `timeframe` moves a fill stamped at the end of its bar (LEAN's time) to the bar's start. `queuetruth reconcile
   --kind lean --sim RESULT --sim EVENTS --live LIVE_LOG_DIR --out DIR` writes the same `qt.bot_reconcile` report as
   for Backtrader and VectorBT (`kind` gains `lean` and `LiveImportSpec.venue` gains `sim_lean`, both additive).

@@ -62,14 +62,18 @@ permtick}`, `time`, `type` and `status` and `direction` as numbers, signed `quan
 `quantity`, `limitPrice`, `orderFeeAmount`, `orderFeeCurrency`, `message`) from `<algorithm id>-order-events.json`,
 a result's `orderEvents`, or a CSV with those names. Names are matched without case, `-` or `_` (camelCase,
 hyphenated and C# property names); enums as numbers or names. One order per id: `submit_sent` at `time`, `ack` at
-the first `submitted` event, one fill per `partiallyFilled` / `filled` event (`fill_id = <order id>:<order event
-id>`, fee when its currency is the fill price's, else dropped and counted), `cancel_ack` at `canceled`, `reject` at
-`invalid` (an invalid order without a `submitted` event gets no `ack`); `new`, `none`, `cancelPending`,
-`updateSubmitted` are counted. Types: Market, MarketOnOpen, MarketOnClose -> market; Limit -> limit; StopMarket,
+the first `submitted` event, one fill per `partiallyFilled` / `filled` event with a non-zero fill quantity
+(`fill_id = <order id>:<order event id>`; a zero one, written after a refused update, is counted), `cancel_ack` at
+`canceled`, `expire` at `canceled` with "The order has expired.", `reject` at `invalid` (an invalid order without a
+`submitted` event gets no `ack`); `new`, `none`, `cancelPending`, `updateSubmitted` are counted, and so is an order
+rounded to quantity 0 and invalidated (left out). Fees: a fee in the fill price's currency is kept; a crypto buy's
+fee in its base asset (subtracted from `fillQuantity` by LEAN) is added back to the quantity and converted to quote
+at the fill price; other currencies are dropped and counted. Contingent orders are warned. Decimals are exact. Types: Market, MarketOnOpen, MarketOnClose -> market; Limit -> limit; StopMarket,
 TrailingStop -> stop; StopLimit, LimitIfTouched -> stop_limit at `limitPrice`; OptionExercise and the combo types
-fail `QT-INPUT-002`. Without an orders section the order is built from its first event (`orderType` required).
+fail `QT-INPUT-002`. Without an orders section the order is built from its events (`orderType` required; quantity and prices of the
+last event).
 Events given twice are counted once. `QT-CONFIG-001`: two orders sections, two `algorithmId`s, the same input twice,
-option `data_tz` (LEAN times are UTC). `QT-INPUT-002`: an orders section without any event, an event of an order the
+appending to an existing log, option `data_tz` (LEAN times are UTC). `QT-INPUT-002`: an orders section without any event, an event of an order the
 section does not hold, of another symbol, or the same event id with other content, fills beyond the order quantity,
 a final status (filled, canceled, invalid) without its event. With `timeframe`, a fill stamped after its order's
 submission (LEAN stamps the bar's end) moves one bar earlier, never before the submission (counted).

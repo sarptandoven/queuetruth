@@ -28,18 +28,31 @@ imported):
   through `pandas.read_json(...).to_csv(...)`) reads the same way. LEAN writes no CSV of its own.
 
 Mapping: one order per order id (ids restart at 1 in every backtest, so one import holds one backtest: a second
-orders section, events of another `algorithmId`, or the same input twice fail `QT-CONFIG-001`). `submit_sent` at
-the order's `time`, `ack` at its first `submitted` event (none for an order that ended `invalid` without one), one
-fill per `partiallyFilled` / `filled` event (`<order id>:<order event id>`, fee = `orderFeeAmount` when its currency
-is the fill price's), `cancel_ack` at `canceled`, `reject` at `invalid` (with LEAN's message). `new`, `none`,
-`cancelPending` and `updateSubmitted` events are counted: the orders section holds the order's final price and
-quantity. Order types: Market, MarketOnOpen and MarketOnClose -> market, Limit -> limit at `limitPrice`, StopMarket
-and TrailingStop -> stop, StopLimit -> stop_limit at `limitPrice`, LimitIfTouched -> stop_limit at `limitPrice` (as
-Binance's TAKE_PROFIT_LIMIT); OptionExercise and the combo types fail `QT-INPUT-002`. Time in force: `gtc`, `day`,
-`gtd` from `timeInForce`, `other` for market orders. Without an orders section the order comes from its events
-(`orderType`, `quantity`, `limitPrice`, `direction`); an event stream without `orderType` then fails. An orders
-section without any order event fails: the fills are in the events file. The instrument is the symbol's ticker
-(`symbol.value`, `symbolValue`), renamed with options `instrument` / `instruments`. LEAN reports every time in UTC.
+orders section, events of another `algorithmId`, the same input twice, or appending to an existing log fail
+`QT-CONFIG-001`). `submit_sent` at the order's `time`, `ack` at its first `submitted` event (none for an order
+refused before it was submitted), one fill per `partiallyFilled` / `filled` event with a fill quantity (`<order
+id>:<order event id>`), `cancel_ack` at `canceled`, `expire` at a `canceled` event with LEAN's expiry message ("The
+order has expired.", `BacktestingBrokerage` for Day and GoodTilDate orders), `reject` at `invalid` (with LEAN's
+message; an order invalidated after it rested keeps its `ack`). A fill-status event without a fill quantity
+(`new OrderEvent(order, ...)` after an update the brokerage model refused), and `new`, `none`, `cancelPending` and
+`updateSubmitted` events are counted: the orders section holds the order's final price and quantity. An order LEAN
+rounded to quantity 0 and invalidated (below the lot size: quantity 0, direction Hold, status Invalid) is counted
+and left out. Fees: LEAN charges the whole fee on the final `filled` event. A fee in the fill price's currency is
+kept; a crypto buy charged in its base asset (`BinanceFeeModel` and similar) has that fee subtracted from
+`fillQuantity` by LEAN (`BrokerageTransactionHandler.HandleOrderEvent`), so the gross quantity (`fillQuantity` +
+fee) is logged and the fee converted to the quote currency at the fill price; a fee in any other currency is left
+out (counted). Order types: Market, MarketOnOpen and MarketOnClose -> market, Limit -> limit at `limitPrice`,
+StopMarket and TrailingStop -> stop, StopLimit -> stop_limit at `limitPrice`, LimitIfTouched -> stop_limit at
+`limitPrice` (as Binance's TAKE_PROFIT_LIMIT); OptionExercise and the combo types fail `QT-INPUT-002`. Contingent
+orders (`contingency`: OTO, OCO, brackets) are warned: their ack is the Submitted event, though LEAN may hold a
+child until its trigger. Time in force: `gtc` (also `{}` and `[]`), `day`, `gtd` from `timeInForce`, `other` for
+market orders. Without an orders section the order comes from its events: `orderType` from any event, the quantity
+and prices of the last one (LEAN stamps every event with the order's current values); an event stream without
+`orderType` then fails. An orders section without any order event fails: the fills are in the events file. Prices,
+quantities and fees are LEAN's C# decimals, read exactly. Unix-second times are doubles, rounded to the microsecond;
+they all take the finest precision seen among them. The instrument is the symbol's ticker (`symbol.value`,
+`symbolValue`), renamed with options `instrument` / `instruments`; without either, the first word of the security
+identifier is a fallback (the ticker at listing, or an option's underlying). LEAN reports every time in UTC.
 
 LEAN stamps an event with the algorithm's time, which on bar data is the end of the bar it acted on. With option
 `timeframe`, a fill stamped later than its order's submission (a resting order the next bar traded through) is moved
@@ -145,8 +158,21 @@ def _enum(v: Any, names: tuple[str, ...] | dict[int, str], what: str, loc: str) 
     return s
 
 
+def _num(v: Any, what: str, loc: str) -> Decimal | None:
+    """A LEAN decimal: exact for JSON numbers and text (LEAN writes C# decimals), 15 significant digits for a float."""
+    if isinstance(v, float):
+        return num(v, what, loc)
+    if isinstance(v, str) and not v.strip():
+        return None
+    return dec(v, what, loc)
+
+
+def _direction(v: Any, loc: str) -> str:
+    return _enum(v, ("buy", "sell", "hold"), "OrderDirection", loc)
+
+
 def _side(v: Any, loc: str) -> str:
-    d = _enum(v, ("buy", "sell", "hold"), "OrderDirection", loc)
+    d = _direction(v, loc)
     if d == "hold":
         raise input_error(loc, "direction Hold: an order of quantity zero has no side")
     return d
@@ -159,7 +185,7 @@ def _time(v: Any, what: str, loc: str) -> tuple[int, str]:
         raise input_error(loc, f"{what}: {v!r} is not a time")
     d = None
     if isinstance(v, (int, float, Decimal)):
-        d = num(v, what, loc) if isinstance(v, float) else dec(v, what, loc)
+        d = _num(v, what, loc)
     elif isinstance(v, str) and v.strip().replace(".", "", 1).isdigit():
         d = dec(v.strip(), what, loc)
     if d is None:
@@ -192,8 +218,8 @@ def _tif(f: dict[str, Any], loc: str) -> str:
     t = _fields(props).get("timeinforce") if isinstance(props, dict) else None
     if t is None:
         t = f.get("timeinforce")
-    if t is None:
-        return "gtc"
+    if t is None or t == []:
+        return "gtc"  # LEAN's own reader takes [] as GoodTilCanceled (TimeInForceJsonConverter)
     if isinstance(t, dict):
         typ = str(_fields(t).get("$type") or "")
         if not typ:
@@ -223,7 +249,7 @@ def _order_type(v: Any, loc: str) -> tuple[str, bool, str]:
 class _Event:
     """One LEAN order event (normalised fields)."""
 
-    __slots__ = ("algo", "event_id", "f", "order_id", "prec", "rec", "status", "ts")
+    __slots__ = ("algo", "epoch", "event_id", "f", "order_id", "prec", "rec", "status", "ts")
 
     def __init__(self, obj: dict[str, Any], rec: Record) -> None:
         loc = rec.location
@@ -247,6 +273,8 @@ class _Event:
         self.status = _enum(f["status"], _STATUS_NAMES, "OrderStatus", loc)
         t = f.get("utctime") if f.get("utctime") is not None else f.get("time")
         self.ts, self.prec = _time(t, "time", loc)
+        #: a Unix-seconds time (a double): its precision is the file's, not the digits of this one value
+        self.epoch = not isinstance(t, str) or t.strip().replace(".", "", 1).isdigit()
         algo = f.get("algorithmid")
         self.algo = None if algo in (None, "") else str(algo)
 
@@ -268,9 +296,10 @@ class _Event:
             val = _fields(fee).get("value")
             vf = _fields(val) if isinstance(val, dict) else _fields(fee)
             amount, cur = vf.get("amount"), vf.get("currency")
-        if amount in (None, ""):
-            return None, None
-        return num(amount, "orderFeeAmount", loc), (None if cur in (None, "") else str(cur))
+        value = None if amount in (None, "") else _num(amount, "orderFeeAmount", loc)
+        if value is None or value == 0:
+            return None, None  # OrderFee.Zero (currency QCC): no fee on this event
+        return value, (None if cur in (None, "") else str(cur))
 
 
 def _csv_records(path: Path, file_idx: int) -> list[Record]:
@@ -348,7 +377,7 @@ def _new_order(
 ) -> SimOrder:
     kind, uses_limit, lean_name = otype
     loc = rec.location
-    limit = num(f.get("limitprice"), "limitPrice", loc) if uses_limit else None
+    limit = _num(f.get("limitprice"), "limitPrice", loc) if uses_limit else None
     if uses_limit and (limit is None or limit <= 0):
         raise input_error(loc, f"{lean_name} order without a positive limitPrice")
     return SimOrder(
@@ -368,7 +397,7 @@ def _new_order(
 
 
 def _signed_qty(v: Any, side: str, what: str, loc: str) -> Decimal:
-    q = num(v, what, loc)
+    q = _num(v, what, loc)
     if q is None or q == 0:
         raise input_error(loc, f"{what} must be non-zero")
     if (q < 0) != (side == "sell"):
@@ -376,8 +405,26 @@ def _signed_qty(v: Any, side: str, what: str, loc: str) -> Decimal:
     return abs(q)
 
 
-def _order_from_record(rec: Record) -> tuple[int, SimOrder, str]:
-    """(order id, order, the orders section's status name) of one `Order` object."""
+def _contingent(f: dict[str, Any]) -> bool:
+    """The order belongs to a contingent set (OTO, OCO, OUO, bracket; `Order.contingency`, LEAN 18241)."""
+    c = f.get("contingency")
+    if not isinstance(c, dict):
+        return False
+    cf = _fields(c)
+    links = cf.get("links")
+    return bool(links) if isinstance(links, list) else bool(cf.get("count"))
+
+
+def _zero_invalid(f: dict[str, Any], qty_key: str, status: str | None, loc: str) -> bool:
+    """An order LEAN rounded to quantity 0 and invalidated (`RoundOffOrder`, then `OrderResponse.ZeroQuantity`):
+    quantity 0, direction Hold, status Invalid."""
+    q = _num(f.get(qty_key), "quantity", loc)
+    return (q is None or q == 0) and status == "invalid"
+
+
+def _order_from_record(rec: Record) -> tuple[int, SimOrder | None, str, bool]:
+    """(order id, order or None for a zero-quantity Invalid order, the orders section's status name, contingent)
+    of one `Order` object."""
     loc = rec.location
     if not isinstance(rec.obj, dict):
         raise input_error(loc, "an order must be an object")
@@ -387,8 +434,11 @@ def _order_from_record(rec: Record) -> tuple[int, SimOrder, str]:
     oid = db_int(f["id"], "id", loc)
     if f.get("type") is None:
         raise input_error(loc, "order without type")
+    status = _enum(f.get("status", 0), _STATUS_NAMES, "OrderStatus", loc)
+    if _zero_invalid(f, "quantity", status, loc):
+        return oid, None, status, False
     otype = _order_type(f["type"], loc)
-    qty_raw = num(f.get("quantity"), "quantity", loc)
+    qty_raw = _num(f.get("quantity"), "quantity", loc)
     if f.get("direction") is not None:
         side = _side(f["direction"], loc)
     elif qty_raw is not None and qty_raw != 0:
@@ -398,27 +448,37 @@ def _order_from_record(rec: Record) -> tuple[int, SimOrder, str]:
     qty = _signed_qty(f.get("quantity"), side, "quantity", loc)
     t = f.get("createdtime") if f.get("time") is None else f.get("time")
     submit = _time(t, "time", loc)
-    status = _enum(f.get("status", 0), _STATUS_NAMES, "OrderStatus", loc)
     o = _new_order(str(oid), _symbol(f.get("symbol"), loc), side, otype, _tif(f, loc), qty, f, rec, submit)
-    return oid, o, status
+    return oid, o, status, _contingent(f)
 
 
-def _order_from_event(ev: _Event) -> SimOrder:
-    """An order known from its events only (no orders section): type, quantity and prices of its first event."""
-    f, loc = ev.f, ev.rec.location
-    if f.get("ordertype") in (None, ""):
+def _order_from_events(evs: list[_Event]) -> SimOrder | None:
+    """An order known from its events only (no orders section): its type, and the quantity and prices of its last
+    event (LEAN stamps every event with the order's current quantity and prices, so an update shows there); None for
+    a zero-quantity Invalid order. The submission is the first event's time."""
+    first, last = evs[0], evs[-1]
+    f, loc = first.f, first.rec.location
+    if all(e.status == "invalid" for e in evs) and _zero_invalid(last.f, "quantity", "invalid", loc):
+        return None
+    otype_raw = next((e.f["ordertype"] for e in evs if e.f.get("ordertype") not in (None, "")), None)
+    if otype_raw is None:
         raise input_error(
             loc,
             "order event without orderType and no orders section: give the backtest result JSON (with orders) too",
         )
-    otype = _order_type(f["ordertype"], loc)
+    otype = _order_type(otype_raw, loc)
     side = _side(f.get("direction"), loc)
-    qty = _signed_qty(f.get("quantity"), side, "quantity", loc)
-    # without the orders section the order's creation time is its first event's
-    return _new_order(str(ev.order_id), ev.symbol(), side, otype, "gtc", qty, f, ev.rec, (ev.ts, ev.prec))
+    lf = last.f
+    qty = _signed_qty(lf.get("quantity"), side, "quantity", last.rec.location)
+    prices = {**f, **{k: v for k, v in lf.items() if k in ("limitprice", "stopprice") and v is not None}}
+    return _new_order(str(first.order_id), first.symbol(), side, otype, "gtc", qty, prices, first.rec,
+                      (first.ts, first.prec))  # fmt: skip
 
 
-def _apply_events(o: SimOrder, evs: list[_Event], run: SimRun, fees: list[int]) -> None:
+_EXPIRED = "the order has expired"  # BacktestingBrokerage: Day and GoodTilDate orders past their expiry
+
+
+def _apply_events(o: SimOrder, evs: list[_Event], run: SimRun, fees: dict[str, int]) -> None:
     for ev in evs:
         f, loc = ev.f, ev.rec.location
         st = ev.status
@@ -428,15 +488,29 @@ def _apply_events(o: SimOrder, evs: list[_Event], run: SimRun, fees: list[int]) 
             else:
                 run.skip("second Submitted event of an order")
         elif st in ("partiallyfilled", "filled"):
-            q = _signed_qty(f.get("fillquantity"), o.side, "fillQuantity", loc)
-            px = num(f.get("fillprice"), "fillPrice", loc)
+            fq = _num(f.get("fillquantity"), "fillQuantity", loc)
+            if fq is None or fq == 0:
+                # `new OrderEvent(order, ...)` copies the order's status with no fill: an update the brokerage model
+                # refused, or a tag update of a filled order
+                run.skip(f"{st} event without a fill quantity (an order update, no fill)")
+                continue
+            q = _signed_qty(fq, o.side, "fillQuantity", loc)
+            px = _num(f.get("fillprice"), "fillPrice", loc)
             if px is None or px <= 0:
                 raise input_error(loc, "fillPrice must be positive")
             fee, cur = ev.fee()
-            pcur = f.get("fillpricecurrency")
-            if fee is not None and cur is not None and pcur not in (None, "") and cur != str(pcur):
-                fees[0] += 1
-                fee = None
+            pcur = None if f.get("fillpricecurrency") in (None, "") else str(f["fillpricecurrency"])
+            if fee is not None and cur is not None and pcur is not None and cur != pcur:
+                sym = ev.symbol() if (f.get("symbolvalue") or f.get("symbol")) else o.instrument
+                if o.side == "buy" and sym.upper() == f"{cur}{pcur}".upper():
+                    # a crypto buy charged in the base asset: LEAN subtracts the fee from fillQuantity
+                    # (BrokerageTransactionHandler.HandleOrderEvent), so the gross quantity is the sum
+                    q += fee
+                    fee *= px
+                    fees["base"] += 1
+                else:
+                    fees["other"] += 1
+                    fee = None
             o.fills.append(SimFill(ev.ts, ev.prec, q, px, fee, f"{o.ref}:{ev.event_id}", ev.rec))
         elif st in ("canceled", "invalid"):
             if o.end is not None:
@@ -444,6 +518,8 @@ def _apply_events(o: SimOrder, evs: list[_Event], run: SimRun, fees: list[int]) 
                 continue
             msg = str(f.get("message") or "").strip()
             et, label = ("cancel_ack", "Canceled") if st == "canceled" else ("reject", "Invalid")
+            if st == "canceled" and _EXPIRED in msg.lower():
+                et, label = "expire", "Expired"
             o.end = (ev.ts, ev.prec, et, f"{label}: {msg}" if msg else label)
         else:
             run.skip(_COUNTED[st])
@@ -494,6 +570,19 @@ def _bar_start(run: SimRun, opts: dict[str, Any]) -> None:
             f"timeframe={tf}: {moved} fill time(s) stamped at the end of their bar (LEAN's time) moved to the bar's "
             "start, never before the order's submission"
         )
+
+
+_FINER = {"s": 0, "ms": 1, "us": 2}
+
+
+def _file_precision(events: list[_Event]) -> None:
+    """Unix-second times are doubles: a whole-second value is not a coarser clock than its neighbours, so every such
+    time takes the finest precision seen among them."""
+    eps = [e for e in events if e.epoch]
+    if eps:
+        finest = max((e.prec for e in eps), key=lambda p: _FINER.get(p, 0))
+        for e in eps:
+            e.prec = finest
 
 
 def read_lean(paths: list[str], opts: dict[str, Any]) -> SimRun:
@@ -551,15 +640,25 @@ def read_lean(paths: list[str], opts: dict[str, Any]) -> SimRun:
     by_order: dict[int, list[_Event]] = {}
     for ev in sorted(uniq.values(), key=lambda e: (e.order_id, e.event_id, e.ts)):
         by_order.setdefault(ev.order_id, []).append(ev)
-    fees = [0]
+    _file_precision(list(uniq.values()))
+    fees = {"base": 0, "other": 0}
+    zero = 0
+    contingent = 0
     if order_recs:
         orders: dict[int, tuple[SimOrder, str, str]] = {}
+        seen_ids: set[int] = set()
         for rec in order_recs:
-            oid, o, status = _order_from_record(rec)
-            if oid in orders:
+            oid, o, status, cont = _order_from_record(rec)
+            if oid in seen_ids:
                 raise input_error(rec.location, f"order id {oid} twice in the orders section")
+            seen_ids.add(oid)
+            if o is None:
+                zero += 1
+                by_order.pop(oid, None)
+                continue
+            contingent += cont
             orders[oid] = (o, status, rec.location)
-        stray = sorted(set(by_order) - set(orders))
+        stray = sorted(set(by_order) - seen_ids)
         if stray:
             ev = by_order[stray[0]][0]
             raise input_error(
@@ -580,7 +679,10 @@ def read_lean(paths: list[str], opts: dict[str, Any]) -> SimRun:
         )
         for oid in sorted(by_order):
             evs = by_order[oid]
-            o = _order_from_event(evs[0])
+            o = _order_from_events(evs)
+            if o is None:
+                zero += 1
+                continue
             _apply_events(o, evs, run, fees)
             _check_fills(o, evs)
             run.orders.append(o)
@@ -588,8 +690,21 @@ def read_lean(paths: list[str], opts: dict[str, Any]) -> SimRun:
         if o.placed_ns is None and (o.end is None or o.end[2] != "reject") and (o.fills or o.end is not None):
             # no Submitted event but the order traded or was cancelled: it rested from its creation
             o.placed_ns, o.placed_precision = o.submit_ns, o.placed_precision
-    if fees[0]:
-        run.warn(f"{fees[0]} fill fee(s) in another currency than the fill price left out")
+    if zero:
+        run.skip("order LEAN rounded to quantity 0 and invalidated (below the lot size)", zero)
+    if contingent:
+        run.warn(
+            f"{contingent} contingent order(s) (OTO, OCO, bracket): LEAN may hold an order until its trigger, but the "
+            "ack is its Submitted event, so the log can show it resting before it could fill"
+        )
+    if fees["base"]:
+        run.warn(
+            f"{fees['base']} buy fill(s) charged in the base asset: LEAN subtracts that fee from fillQuantity, so the "
+            "gross quantity (fillQuantity + fee) is logged and the fee converted to the quote currency at the fill "
+            "price"
+        )
+    if fees["other"]:
+        run.warn(f"{fees['other']} fill fee(s) in another currency than the fill price left out")
     one, many = instrument_names(opts)
     check_labels({o.instrument for o in run.orders}, many, "symbols")
     for o in run.orders:
@@ -609,6 +724,17 @@ def import_lean_sim(paths: list[str], opts: ImportOptions) -> ImportResult:
     return import_backtest_sim(run, opts)
 
 
+def check_append(out: str | Path, append: bool) -> None:
+    """`QT-CONFIG-001` for appending a LEAN backtest to an existing log: order ids restart at 1 in every backtest, so
+    a second backtest's orders would merge into the first one's."""
+    if append and (Path(out) / "manifest.json").exists():
+        raise QtError(
+            "QT-CONFIG-001",
+            f"{out}: append is refused for LEAN backtests: order ids restart at 1 in every backtest, so one log holds "
+            "one backtest; write each backtest to its own --out directory",
+        )
+
+
 def import_lean(
     inputs: list[str] | str,
     out: str | Path,
@@ -626,6 +752,7 @@ def import_lean(
     for p in paths:
         if not Path(p).exists():
             raise QtError("QT-INPUT-001", f"{p}: input not found")
+    check_append(out, append)
     imap = load_instrument_map(instrument_map) if instrument_map else None
     res = import_lean_sim(paths, ImportOptions(account=account, imap=imap, extra=dict(options)))
     return finish_to_dir(LEAN_SIM, res, paths, Path(out), append=append, status="simulated")
@@ -678,6 +805,7 @@ __all__ = [
     "LEAN_OPTIONS",
     "LEAN_SIM",
     "LEAN_VERSION",
+    "check_append",
     "import_lean",
     "import_lean_sim",
     "read_lean",

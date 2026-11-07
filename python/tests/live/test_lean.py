@@ -136,6 +136,9 @@ def test_read_lean_result_and_events() -> None:
     )  # fmt: skip
     # placed and submitted at the end of the 09:00 bar; LEAN fills it at the end of the next bar
     assert first.submit_ns == first.placed_ns == T0 + 10 * H
+    # LEAN logged 0.00999 with a fee of 0.00001 BTC (BinanceFeeModel): the gross 0.01, the fee in USDT
+    raw = next(e for e in _events() if (e["orderId"], e["orderEventId"]) == (1, 2))
+    assert (raw["fillQuantity"], raw["orderFeeAmount"], raw["orderFeeCurrency"]) == (0.00999, 0.00001, "BTC")
     assert [(f.ts_ns, f.precision, f.qty, f.px, f.fee, f.fill_id) for f in first.fills] == [
         (T0 + 11 * H, "s", Decimal("0.01"), Decimal("61000.0"), Decimal("0.61"), "1:2")
     ]
@@ -145,8 +148,11 @@ def test_read_lean_result_and_events() -> None:
     assert market.fills[0].px == Decimal("61210.123456789")
     gtd = run.orders[6]
     assert gtd.fills == [] and gtd.tif == "gtd"
-    assert gtd.end == (T0 + 25 * H, "s", "cancel_ack", "Canceled: GoodTilDate time in force expired")
-    assert run.warnings == [] and run.skipped == {}
+    # BacktestingBrokerage cancels an order past its Day / GoodTilDate expiry with "The order has expired."
+    assert gtd.end == (T0 + 25 * H, "s", "expire", "Expired: The order has expired.")
+    assert run.skipped == {}
+    assert [w.split(":")[0] for w in run.warnings] == ["4 buy fill(s) charged in the base asset"]
+    assert all(f.qty == o.qty for o in run.orders for f in o.fills)
 
 
 def test_events_csv_and_events_only(tmp_path: Path) -> None:
@@ -167,14 +173,21 @@ def test_second_run_types_partials_invalid_and_csharp_names() -> None:
     limit = got["1"]
     assert (limit.order_type, limit.tif, limit.qty) == ("limit", "day", Decimal("0.03"))
     assert [(f.qty, f.fee, f.fill_id) for f in limit.fills] == [
-        (Decimal("0.01"), Decimal("0.605"), "1:2"),
-        (Decimal("0.005"), Decimal("0.3025"), "1:3"),
-        (Decimal("0.015"), Decimal("0.9075"), "1:4"),
+        (Decimal("0.01"), None, "1:2"),  # LEAN charges the whole fee on the final Filled event
+        (Decimal("0.005"), None, "1:3"),
+        (Decimal("0.015"), Decimal("1.815"), "1:4"),
     ]
     # the update moved the limit to 62400: the orders section holds the final price; the event is counted
     assert got["2"].limit_px == Decimal("62400.0") and got["2"].end is not None
     assert got["2"].end[2:] == ("cancel_ack", "Canceled: Canceled by the algorithm")
-    assert run.skipped == {"UpdateSubmitted event (the orders section holds the final price and quantity)": 1}
+    assert run.skipped == {
+        "UpdateSubmitted event (the orders section holds the final price and quantity)": 1,
+        "partiallyfilled event without a fill quantity (an order update, no fill)": 1,
+        "order LEAN rounded to quantity 0 and invalidated (below the lot size)": 1,
+    }
+    # order 8 (quantity 0, direction Hold, Invalid) is left out; order 9's refused update is no fill
+    assert "8" not in got and got["4"].end is not None and got["4"].end[2] == "expire"
+    assert [(f.qty, f.fee) for f in got["9"].fills] == [(Decimal("0.004"), None), (Decimal("0.006"), Decimal("0.602"))]
     assert (got["3"].order_type, got["3"].limit_px, got["3"].side) == ("stop", None, "sell")
     assert (got["4"].order_type, got["4"].limit_px, got["4"].tif) == ("stop_limit", Decimal("61050.0"), "gtd")
     refused = got["5"]
@@ -199,10 +212,11 @@ def test_import_lean_log(tmp_path: Path) -> None:
     assert by[("sim:lean:main:1", "fill")]["liquidity"] == "unknown"
     assert by[("sim:lean:main:1", "submit_sent")]["ts_local_send"] == T0 + 10 * H
     assert by[("sim:lean:main:1", "ack")]["ts_exchange"] == T0 + 10 * H
-    assert by[("sim:lean:main:7", "cancel_ack")]["reason"] == "Canceled: GoodTilDate time in force expired"
+    assert by[("sim:lean:main:7", "expire")]["reason"] == "Expired: The order has expired."
+    assert by[("sim:lean:main:1", "fill")]["qty"] == 1000 and by[("sim:lean:main:1", "fill")]["fee"] is not None
     s2 = qlive.import_sim("lean", [str(RESULT2), str(EVENTS2)], tmp_path / "s2", instrument_map=str(IMAP),
                           venue="binance")  # fmt: skip
-    assert (s2.n_orders, s2.n_fills) == (7, 6)
+    assert (s2.n_orders, s2.n_fills) == (8, 8)
     _, ev2 = _rows(tmp_path / "s2")
     kinds = [e["event_type"] for e in ev2 if e["order_key"] == "sim:lean:main:5"]
     assert kinds == ["submit_sent", "reject"]
@@ -291,6 +305,11 @@ def test_refusals_of_mixed_backtests(tmp_path: Path, w: Any) -> None:
     assert "import one backtest at a time" in str(e)
     # events of another backtest than the orders section
     e = _err("QT-INPUT-002", lean.read_lean, [str(RESULT), str(EVENTS2)], {})
+    assert "order id(s) [8, 9] that the orders section does not hold" in str(e)
+    over = _events()
+    over[1]["fillQuantity"] = 0.03
+    over[1].pop("orderFeeAmount")
+    e = _err("QT-INPUT-002", lean.read_lean, [str(RESULT), w(over)], {})
     assert "the fills of order 1 sum to 0.03, more than its quantity 0.01" in str(e)
     ev = [*_events(), dict(_events()[1], orderId=9, id="qtfixture0001-9-2")]
     e = _err("QT-INPUT-002", lean.read_lean, [str(RESULT), w(ev)], {})
@@ -326,7 +345,7 @@ def test_malformed(tmp_path: Path, w: Any) -> None:
         "no order id": ([str(RESULT), w(_bad_event(1, orderId=None))], "not LEAN backtest output"),
         "no event id": ([str(RESULT), w(_bad_event(1, orderEventId=None, id=None))], "orderEventId"),
         "fill sign": ([str(RESULT), w(_bad_event(1, fillQuantity=-0.01))], "contradicts"),
-        "zero fill": ([str(RESULT), w(_bad_event(1, fillQuantity=0))], "non-zero"),
+        "zero fill": ([str(RESULT), w(_bad_event(1, fillQuantity=0))], "no fill event"),
         "fill price": ([str(RESULT), w(_bad_event(1, fillPrice=0))], "fillPrice"),
         "time": ([str(RESULT), w(_bad_event(1, time="yesterday"))], "time"),
         "bool time": ([str(RESULT), w(_bad_event(1, time=True))], "time"),
@@ -346,7 +365,10 @@ def test_malformed(tmp_path: Path, w: Any) -> None:
             [str(RESULT), w([e for e in _events() if (e["orderId"], e["orderEventId"]) != (7, 2)])],
             "no canceled event",
         ),
-        "events only no type": ([w(_bad_event(0, orderType=None))], "orderType"),
+        "events only no type": (
+            [w([{k: v for k, v in e.items() if k != "orderType"} for e in _events()])],
+            "orderType",
+        ),
         "not lean": ([w({"trades": []})], "not LEAN backtest output"),
         "scalar": ([w([1, 2])], "expected a LEAN result object"),
         "orders type": ([w({"orders": 3})], "orders must be"),
@@ -358,8 +380,76 @@ def test_malformed(tmp_path: Path, w: Any) -> None:
     for name, (paths, msg) in cases.items():
         with pytest.raises(QtError) as e:
             lean.read_lean(paths, {})
+            pytest.fail(f"{name}: no error")
         assert e.value.code == "QT-INPUT-002", (name, str(e.value))
         assert msg in str(e.value), (name, str(e.value))
+
+
+def test_what_lean_emits_beyond_the_happy_path(w: Any) -> None:
+    """Outputs of LEAN 18241 the fixtures' main scenario does not show (review of the importer against its source)."""
+    # an update refused by the brokerage model: `new OrderEvent(order, ...)` copies status Filled with no fill
+    ev = _events()
+    refused = dict(ev[1], orderEventId=3, id="qtfixture0001-1-3", fillQuantity=0.0, fillPrice=0.0)
+    refused |= {"time": ev[1]["time"] + 60, "message": "BrokerageModel declared unable to update order"}
+    ev.insert(2, refused)
+    for k in ("orderFeeAmount", "orderFeeCurrency"):
+        ev[2].pop(k)
+    run = lean.read_lean([str(RESULT), w(ev)], {})
+    assert len(run.orders[0].fills) == 1
+    assert run.skipped == {"filled event without a fill quantity (an order update, no fill)": 1}
+    # an order rounded to quantity 0 and invalidated, with and without the orders section
+    orders = _orders()
+    orders["8"] = dict(orders["1"], id=8, quantity=0.0, direction=2, status=7)
+    zero = dict(ev[0], orderId=8, orderEventId=1, id="qtfixture0001-8-1", status="invalid", direction="hold",
+                quantity=0.0, message="Unable to submit order with id 8 that has zero quantity.")  # fmt: skip
+    for paths in ([w({"orders": orders}), w([*_events(), zero])], [w([*_events(), zero])]):
+        r = lean.read_lean(paths, {})
+        assert len(r.orders) == 7
+        assert r.skipped["order LEAN rounded to quantity 0 and invalidated (below the lot size)"] == 1
+    # events only: an update that grew the order from 0.01 to 0.02 (LEAN stamps every event with the current
+    # quantity and prices): the last event's quantity and limit
+    grown = _events()[:2]
+    grown[1] = dict(grown[1], quantity=0.02, limitPrice=61010.0, fillQuantity=0.02, orderFeeAmount=None)
+    g = lean.read_lean([w(grown)], {})
+    assert (g.orders[0].qty, g.orders[0].limit_px, g.orders[0].filled) == (
+        Decimal("0.02"), Decimal("61010.0"), Decimal("0.02"),
+    )  # fmt: skip
+    # timeInForce [] is GoodTilCanceled in LEAN's own reader
+    o2 = _orders()
+    o2["1"]["properties"] = {"timeInForce": []}
+    assert lean.read_lean([w({"orders": o2}), str(EVENTS)], {}).orders[0].tif == "gtc"
+    # a contingent order (OTO, OCO, bracket) is warned
+    o3 = _orders()
+    o3["2"]["contingency"] = {"id": 1, "count": 2, "links": [{"id": 1, "type": 1, "role": 1}], "orderIds": [1, 2]}
+    assert any(
+        x.startswith("1 contingent order(s)") for x in lean.read_lean([w({"orders": o3}), str(EVENTS)], {}).warnings
+    )
+    # a base-asset fee only on a buy of that base: a fee in another currency is left out
+    other = _events()
+    other[1]["orderFeeCurrency"] = "BNB"
+    r = lean.read_lean([str(RESULT), w(other)], {})
+    assert r.orders[0].fills[0].qty == Decimal("0.00999") and r.orders[0].fills[0].fee is None
+    assert any(x.startswith("1 fill fee(s) in another currency") for x in r.warnings)
+    # whole-second doubles take the file's precision
+    ms = _events()
+    ms[3]["time"] = ms[3]["time"] + 0.5
+    r = lean.read_lean([str(RESULT), w(ms)], {})
+    assert {f.precision for o in r.orders for f in o.fills} == {"ms"}
+    # C# decimals are kept exactly, not rounded to 15 significant digits
+    exact = _events()
+    exact[7]["fillPrice"] = Decimal("61210.1234567890123")
+    text = json.dumps(exact, default=str).replace('"61210.1234567890123"', "61210.1234567890123")
+    r = lean.read_lean([str(RESULT), w(text)], {})
+    assert r.orders[3].fills[0].px == Decimal("61210.1234567890123")
+
+
+def test_append_is_refused(tmp_path: Path) -> None:
+    out = tmp_path / "s"
+    qlive.import_sim("lean", [str(p) for p in SIM], out, instrument_map=str(IMAP), venue="binance")
+    e = _err("QT-CONFIG-001", qlive.import_sim, "lean", [str(RESULT2), str(EVENTS2)], out, instrument_map=str(IMAP),
+             venue="binance", append=True)  # fmt: skip
+    assert "one log holds one backtest" in str(e)
+    _err("QT-CONFIG-001", lean.import_lean, [str(p) for p in SIM], out, append=True)
 
 
 # ---- pairing with a live log, reconcile ----------------------------------------------------------------------------

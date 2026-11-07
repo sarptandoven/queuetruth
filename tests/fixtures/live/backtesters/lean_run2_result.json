@@ -195,6 +195,59 @@
       "value": 601.0,
       "isMarketable": false,
       "priceAdjustmentMode": 0
+    },
+    "8": {
+      "type": 1,
+      "limitPrice": 60000.0,
+      "id": 8,
+      "contingentId": 0,
+      "brokerId": [],
+      "symbol": {
+        "value": "BTCUSDT",
+        "id": "BTCUSDT 18N",
+        "permtick": "BTCUSDT"
+      },
+      "price": 0.0,
+      "priceCurrency": "USDT",
+      "time": "2024-03-01T05:00:00Z",
+      "createdTime": "2024-03-01T05:00:00Z",
+      "quantity": 0.0,
+      "status": 7,
+      "properties": {
+        "timeInForce": {}
+      },
+      "securityType": 7,
+      "direction": 2,
+      "value": 0.0,
+      "isMarketable": false,
+      "priceAdjustmentMode": 0
+    },
+    "9": {
+      "type": 1,
+      "limitPrice": 60200.0,
+      "id": 9,
+      "contingentId": 0,
+      "brokerId": [],
+      "symbol": {
+        "value": "BTCUSDT",
+        "id": "BTCUSDT 18N",
+        "permtick": "BTCUSDT"
+      },
+      "price": 60200.0,
+      "priceCurrency": "USDT",
+      "time": "2024-03-01T05:00:00Z",
+      "createdTime": "2024-03-01T05:00:00Z",
+      "lastFillTime": "2024-03-01T07:00:00Z",
+      "quantity": 0.01,
+      "status": 3,
+      "properties": {
+        "timeInForce": {}
+      },
+      "securityType": 7,
+      "direction": 0,
+      "value": 602.0,
+      "isMarketable": false,
+      "priceAdjustmentMode": 0
     }
   }
 }
