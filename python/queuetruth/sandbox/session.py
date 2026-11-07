@@ -43,6 +43,7 @@ import tempfile
 import threading
 import time
 import weakref
+from collections.abc import Callable
 from decimal import ROUND_CEILING, Decimal
 from pathlib import Path
 from typing import Any, TypeVar
@@ -82,6 +83,9 @@ from queuetruth.score._io import rows as table_rows
 from queuetruth.stats import stable_seed
 
 M = TypeVar("M", bound=BaseModel)
+#: Called with the sandbox and its first observation when a blind episode opens; returns the commitment its `open`
+#: entry records (`queuetruth.sandbox.blind`).
+BlindHook = Callable[[Any, SandboxObservation], dict[str, Any]]
 #: How a step brings the orders to the visible cut (module docstring); the outputs are identical.
 STEPPINGS = ("session", "replay")
 _CLIENT_ID = re.compile(r"[A-Za-z0-9_.:\-]{1,64}")
@@ -186,6 +190,7 @@ class Sandbox:
         keep_workdir: bool,
         session_id: str | None,
         stepping: str = "session",
+        blind: BlindHook | None = None,
     ) -> None:
         if stepping not in STEPPINGS:
             raise config_error(f"stepping: {stepping!r} is not one of {', '.join(STEPPINGS)}")
@@ -273,6 +278,10 @@ class Sandbox:
             self._open_session()
         self._sync()
         obs = self._observation()
+        #: The commitment of a blind episode (`queuetruth.sandbox.blind`): in the `open` entry, so the log root and
+        #: the certificate commit to it; None for an ordinary episode.
+        self.blind: dict[str, Any] | None = None if blind is None else dict(blind(self, obs))
+        opened: dict[str, Any] = {} if self.blind is None else {"blind": self.blind}
         self.log.append(
             "open",
             clock_ns=self.clock_ns,
@@ -288,6 +297,7 @@ class Sandbox:
                 "start_ns": self.start_ns,
                 "end_ns": self.end_ns,
                 "observation_sha256": digest(obs.model_dump(mode="json")),
+                **opened,
             },
         )
         self.session = SandboxSession.model_validate(
@@ -319,6 +329,7 @@ class Sandbox:
         session_id: str | None = None,
         contain: Contain | None = None,
         stepping: str = "session",
+        blind: BlindHook | None = None,
     ) -> Sandbox:
         """Opens an episode. `spec` is a `SandboxSpec` or a dict (friendly values allowed: `normalize_spec`).
         Scratch files go to a new temporary directory (inside `workdir` when given), removed by `close()`, `finish()`
@@ -327,7 +338,9 @@ class Sandbox:
         (`tape.open_source`). `stepping` chooses how each step brings the orders to the visible cut: `session` (one
         pass over the data for the whole episode) or `replay` (a replay of the episode's prefix at every step, the
         original method); both give identical observations, acks, logs and scorecards (module docstring). It is not
-        part of the spec, so it changes neither `spec_id` nor the log."""
+        part of the spec, so it changes neither `spec_id` nor the log. `blind` (used by `queuetruth.sandbox.blind`)
+        is called once with the sandbox and its first observation and returns the blind commitment that the `open`
+        entry and the certificate carry; it changes the log, not the spec or the simulation."""
         raw = spec.model_dump(mode="json") if isinstance(spec, BaseModel) else dict(spec)
         first = normalize_spec(raw, None)
         _validate(SandboxSpec, first)
@@ -353,6 +366,7 @@ class Sandbox:
                 keep_workdir=keep_workdir,
                 session_id=session_id,
                 stepping=stepping,
+                blind=blind,
             )
         except BaseException:
             if not keep_workdir:

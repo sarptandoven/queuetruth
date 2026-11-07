@@ -186,8 +186,8 @@ original files and returns a `qt.sandbox_scorecard` (also written to `out/scorec
   verdict;
 - `diagnostics`: your orders never see each other, so the scorecard counts same-price overlaps, taker fills that
   took the same displayed size in one event, and crossing pairs;
-- `certificate`: the dataset id, the engine version, the spec id, the root of the committed log, the run id and the
-  scorecard's sha256.
+- `certificate`: the dataset id, the engine version, the spec id, the root of the committed log, the run id, the
+  scorecard's sha256, and for a [blind episode](#blind-episodes) its id and the commitment to its transform.
 
 ## Certify an episode
 
@@ -351,12 +351,92 @@ QT_REALDATA_DS=.realdata/ds/nasdaq-2019-12-30 python -m pytest -m realdata pytho
 
 ## What the guarantee does not cover
 
-The sandbox controls what the agent is shown; it cannot control what the agent already knows. The session names the
-symbol, venue and date, and prices are absolute, so a language model whose training data covers that day may recall
+The sandbox controls what the agent is shown; it cannot control what the agent already knows. An ordinary session
+names the symbol, venue and date, and prices are absolute, so a language model whose training data covers that day may recall
 how the price moved, and so may an agent tuned on earlier episodes of the same day. A verified certificate proves the
 scorecard follows from the logged instructions on that data, not that they were made without such knowledge. For
 claims about language-model agents, use data after the model's training cutoff or a day held out from every earlier
-run, and name the dataset directory so its path does not give the day away (the agent passes it to
-`qt_sandbox_start`). A blind mode that hides the instrument-day from the agent is not built yet: it would need
-operator-pinned episodes, times relative to the session and rebased prices, not only a hidden symbol and date
-(the [design note](../design/extensions/agent-sandbox.md) has the details).
+run. To keep the agent from knowing which day it plays, play the episode blind (next section).
+
+## Blind episodes
+
+In a blind episode the agent cannot tell which instrument or day it is on, so it cannot recall how the day went.
+The operator pins the episode; the agent starts it by an opaque id and sees only blind values.
+
+| What the agent sees | How |
+|---|---|
+| Times | ns since the session open; `time_local` reads `+00:05:00.000000`; durations are real |
+| Prices | moved by a hidden whole number of ticks; the tick size and `price_exp` are real, so prices stay on the grid |
+| Sizes, PnL, fees, markouts in ticks and currency, execution edge | as they are |
+| Cash, notional, `avg_fill_price`, `mark_price`, `vwap_price` | computed at the rebased prices |
+| Basis points (`mo_bps`, `mean_bps`) | null: they would give the price level away |
+| Symbol, venue, date, rule set, time zone, dataset path and ids | nothing |
+
+The offset is drawn per episode from a secret: the best bid in view at the start (else the best ask, else the
+last print) becomes a price between 1,000 and 9,000 ticks. The agent's orders are mapped back exactly, so the
+operator's episode has the same orders, fills and scorecard numbers as a non-blind episode sent the true values.
+
+The operator pins episodes and keeps the book file; the agent gets only the episode id:
+
+<!-- check-docs: run -->
+```python
+import os
+
+from queuetruth.sandbox.blind import EpisodeBook
+
+book = EpisodeBook()
+eid = book.pin(
+    {
+        "dataset": {"path": os.path.join(os.environ["QT_FIXTURES"], "synth_small")},
+        "instrument_id": 1,
+        "session_date": "2026-06-15",
+        "start": "13:35",
+        "end": "13:50",
+        "latency": "1ms",
+        "fees": {"maker_per_unit": -0.2, "taker_per_unit": 0.3},
+    }
+)
+book.save("episodes.json")  # holds the secrets: keep it from the agent
+
+with book.start(eid) as sb:  # what the agent does
+    obs = sb.observe()
+    print(obs.time_local, "bid", sb.to_price(obs.book.bid[0]))
+    sb.submit("buy", 2, price=str(sb.to_price(obs.book.bid[0])))
+    sb.advance(by="1m")
+    fin = sb.finish(out="blind-episode")
+print("agent sees PnL net", fin.pnl.pnl_net, "| operator's scorecard on", sb.scorecard.instrument.symbol)
+```
+
+`finish` gives the agent a `qt.sandbox_blind_finish`: the scorecard's aggregates in blind units and the root of its
+own blind log (`order_log()`, a hash chain whose entries the ack receipts name). The operator's scorecard, in true
+values, is `sb.scorecard`, and `out` holds it with the order log, the replay tables and `blind.json`, the transform
+that opens the commitment. Errors are rewritten in blind units; one that would still name a hidden value keeps only
+its code and `details.reason`.
+
+**The certificate.** The log's `open` entry and the certificate's `blind` field hold the episode id and
+`transform_sha256`, the sha256 of the transform with a salt from the secret. The log root therefore commits to the
+transform without revealing it. `verify` checks a blind log like any other. `check_reveal(blind.json's transform,
+transform_sha256)` opens the commitment once the operator publishes the transform.
+
+**Over MCP.** Serve only the pinned episodes:
+
+```sh
+python -m queuetruth.mcp.sandbox_tools --episodes /operator/episodes.json --out /operator/sandbox-runs
+```
+
+With `--episodes` (or `register_sandbox_tools(app, episodes=book)`) the server lists only the eight sandbox tools,
+since the dataset, run and output tools could show the data. `qt_sandbox_start` takes only `episode_id`,
+`qt_sandbox_advance` takes `to` as a time since the open (`"+00:12:00"`), and every result is blind
+(`qt.sandbox_blind_session`, `qt.sandbox_blind_finish`, `qt.sandbox_blind_session_list`). An internal error says only
+its code. `qt_sandbox_finish` does not link the operator's files under `--out`; `include_log` returns the agent's
+blind log. Run the server in another process, under an account that cannot read the episode file or the datasets
+from the agent's side.
+
+**What stays visible.** The tick size, lot size, multiplier and currency are real, and so are sizes, volumes and the
+session length: together they narrow the instrument class (a 0.25 tick and a multiplier of 50 suggest an equity index
+future). Price moves in ticks are real, so a very distinctive day might still be recognised from its shape. A market
+order's collar price is not shown, since it is a fraction of the true price level. A market sweep that stops at the
+collar could still hint at the level. Fees in basis points are refused at pin time, since they would show the
+notional. `python/tests/sandbox/test_blind.py` runs a full blind episode through the Python API and through the MCP
+tools, scans every string and number the agent received for the symbol, venue, date, ids, absolute times and the
+day's true prices, and checks that a non-blind episode with the same instructions gives the same scorecard.

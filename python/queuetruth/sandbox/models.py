@@ -27,6 +27,9 @@ Hex16 = Annotated[str, Field(pattern=r"^[0-9a-f]{16}$")]
 #: Client order ids follow the shadow-id grammar of SPEC 0.1 (they end up in no engine table, but stay printable).
 ClientOrderId = Annotated[str, Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.:\-]+$")]
 OrderId = Annotated[str, Field(pattern=r"^o[1-9][0-9]*$")]
+#: Opaque id of an operator-pinned blind episode (`queuetruth.sandbox.blind`).
+EPISODE_ID_PATTERN = r"^ep_[0-9a-f]{16}$"
+EpisodeId = Annotated[str, Field(pattern=EPISODE_ID_PATTERN)]
 #: One displayed level: (price, size, order count).
 LevelTuple = tuple[int, int, int]
 DEFAULT_HORIZONS_NS = (1 * S_NS, 10 * S_NS, 60 * S_NS)
@@ -428,9 +431,19 @@ class Diagnostics(QtModel):
     rejected_instructions: int
 
 
+class BlindCommitment(QtModel):
+    """A blind episode (`queuetruth.sandbox.blind`): its opaque id and the sha256 of its transform (time origin,
+    price offset in ticks, salt), which commits to the transform without revealing it. The log's `open` entry holds
+    it, so the log root commits to it too."""
+
+    episode_id: EpisodeId
+    transform_sha256: Sha256
+
+
 class Certificate(QtModel):
     """What a third party needs to recompute this scorecard: the dataset, the engine, the spec identity and the root
-    of the committed log; `scorecard_sha256` covers the scorecard without `certificate`, `timings` and `files`."""
+    of the committed log; `scorecard_sha256` covers the scorecard without `certificate`, `timings` and `files`.
+    `blind` is set when the agent played the episode blind (null otherwise)."""
 
     dataset_id: Sha256
     engine_version: str
@@ -438,6 +451,7 @@ class Certificate(QtModel):
     log_root: Sha256
     run_id: Hex16
     scorecard_sha256: Sha256
+    blind: BlindCommitment | None = None
 
 
 class SandboxScorecard(QtDoc):
@@ -591,6 +605,131 @@ class SandboxVerification(QtDoc):
     problems: list[str]
 
 
+# ---- blind episodes (queuetruth.sandbox.blind) -------------------------------------------------------------------
+
+
+class BlindInstrument(QtModel):
+    """What a blind agent knows of the instrument: the units it needs to trade (tick, lot, fixed-point exponents)
+    and to read money (multiplier, currency). The symbol, venue, date, ids and session times are hidden."""
+
+    tick_size: int
+    lot_size: int
+    price_exp: int
+    size_exp: int
+    contract_multiplier: float
+    currency: str
+
+
+class SandboxBlindSession(QtDoc):
+    """`open` result of a blind episode. Times are ns since the session open (`time_origin`), prices are rebased by a
+    secret whole number of ticks, sizes are as recorded. `settings` are the simulation settings of the spec without
+    the dataset, instrument, date and window; `transform_sha256` commits to the transform."""
+
+    SCHEMA: ClassVar[str] = "qt.sandbox_blind_session"
+    schema_: Literal["qt.sandbox_blind_session"] = _tag("qt.sandbox_blind_session")
+    schema_version: Literal[1] = 1
+    session_id: str | None
+    episode_id: EpisodeId
+    engine_version: str
+    time_origin: Literal["session_open"]
+    instrument: BlindInstrument
+    settings: dict[str, Any]
+    start_ns: int
+    end_ns: int
+    transform_sha256: Sha256
+    rules: list[str]
+    observation: SandboxObservation
+
+
+class SandboxBlindFinish(QtDoc):
+    """`finish` result of a blind episode, for the agent: the scorecard's aggregates in blind units (times since the
+    open, rebased prices; `mean_bps` is null because basis points would give the price level away) and the root of
+    the agent's blind log. The operator's scorecard and certificate, in true values, are not shown to the agent."""
+
+    SCHEMA: ClassVar[str] = "qt.sandbox_blind_finish"
+    schema_: Literal["qt.sandbox_blind_finish"] = _tag("qt.sandbox_blind_finish")
+    schema_version: Literal[1] = 1
+    session_id: str | None
+    episode_id: EpisodeId
+    engine_version: str
+    start_ns: int
+    end_ns: int
+    finish_ns: int
+    steps: int
+    n_orders: int
+    n_fills: int
+    n_fills_maker: int
+    pnl: PnLView
+    fill_rates: list[FillRateRow]
+    markouts: list[MarkoutRow]
+    adverse_selection: list[AdverseSelection]
+    execution_cost: ExecutionCost
+    consistency: Consistency
+    diagnostics: Diagnostics
+    data_quality: str
+    warnings: list[str]
+    transform_sha256: Sha256
+    log_root: Sha256
+
+
+class BlindSessionItem(QtModel):
+    """One open blind session of an MCP server: its episode id, clock (ns since the open), step, orders and seconds
+    since its last tool call."""
+
+    session_id: str
+    episode_id: EpisodeId
+    clock_ns: int
+    time_local: str
+    step: int
+    n_orders: int
+    n_open: int
+    idle_s: float
+
+
+class SandboxBlindSessionList(QtDoc):
+    """`qt_sandbox_list` / `qt_sandbox_close` result of a blind server."""
+
+    SCHEMA: ClassVar[str] = "qt.sandbox_blind_session_list"
+    schema_: Literal["qt.sandbox_blind_session_list"] = _tag("qt.sandbox_blind_session_list")
+    schema_version: Literal[1] = 1
+    sessions: list[BlindSessionItem]
+    max_sessions: int
+    idle_timeout_s: float | None
+    closed: BlindSessionItem | None
+
+
+class SandboxBlindOrderLog(QtDoc):
+    """The agent's view of the committed log of a blind episode: one entry per entry of the operator's log, in blind
+    units (times since the open, rebased prices, `rows_seen` counted from the episode start, the requests as the
+    agent sent them), hash-chained like the operator's log from its own genesis. Ack receipts name these entries."""
+
+    SCHEMA: ClassVar[str] = "qt.sandbox_blind_order_log"
+    schema_: Literal["qt.sandbox_blind_order_log"] = _tag("qt.sandbox_blind_order_log")
+    schema_version: Literal[1] = 1
+    episode_id: EpisodeId
+    entries: list[LogEntry]
+    root: Sha256
+
+
+class EpisodePin(QtModel):
+    """One operator-pinned blind episode: its id, its spec (true dataset, instrument, day and window) and the secret
+    its transform derives from. Private to the operator."""
+
+    episode_id: EpisodeId
+    spec: dict[str, Any]
+    secret: Sha256
+
+
+class SandboxEpisodes(QtDoc):
+    """The operator's pinned blind episodes (`queuetruth.sandbox.blind.EpisodeBook`). Holds the secrets: never give
+    this file to the agent."""
+
+    SCHEMA: ClassVar[str] = "qt.sandbox_episodes"
+    schema_: Literal["qt.sandbox_episodes"] = _tag("qt.sandbox_episodes")
+    schema_version: Literal[1] = 1
+    episodes: list[EpisodePin]
+
+
 #: Every sandbox document by schema name.
 SANDBOX_DOC_MODELS: dict[str, type[QtDoc]] = {
     m.SCHEMA: m
@@ -603,6 +742,11 @@ SANDBOX_DOC_MODELS: dict[str, type[QtDoc]] = {
         SandboxVerification,
         SandboxFinish,
         SandboxSessionList,
+        SandboxBlindSession,
+        SandboxBlindFinish,
+        SandboxBlindSessionList,
+        SandboxBlindOrderLog,
+        SandboxEpisodes,
     )
 }
 SANDBOX_SPEC_MODELS: dict[str, type[SpecModel]] = {"qt.sandbox_spec": SandboxSpec}
@@ -628,13 +772,19 @@ def parse_sandbox_document(data: dict[str, Any]) -> QtDoc:
 
 __all__ = [
     "DEFAULT_HORIZONS_NS",
+    "EPISODE_ID_PATTERN",
     "SANDBOX_DOC_MODELS",
     "SANDBOX_SPEC_MODELS",
     "AdverseSelection",
+    "BlindCommitment",
+    "BlindInstrument",
+    "BlindSessionItem",
     "BookState",
     "Certificate",
     "Consistency",
     "Diagnostics",
+    "EpisodeId",
+    "EpisodePin",
     "ExecutionCost",
     "FeeSchedule",
     "FillRateRow",
@@ -647,6 +797,11 @@ __all__ = [
     "PnLView",
     "PositionView",
     "SandboxAck",
+    "SandboxBlindFinish",
+    "SandboxBlindOrderLog",
+    "SandboxBlindSession",
+    "SandboxBlindSessionList",
+    "SandboxEpisodes",
     "SandboxFinish",
     "SandboxObservation",
     "SandboxOrderLog",

@@ -1,0 +1,103 @@
+{
+  "sample": {
+    "schema": "qt.sandbox_blind_finish",
+    "schema_version": 1,
+    "session_id": "x",
+    "episode_id": "ep_0123456789abcdef",
+    "engine_version": "x",
+    "start_ns": 1,
+    "end_ns": 1,
+    "finish_ns": 1,
+    "steps": 1,
+    "n_orders": 1,
+    "n_fills": 1,
+    "n_fills_maker": 1,
+    "pnl": {
+      "currency": "x",
+      "position_end": 1,
+      "bought_qty": 1,
+      "sold_qty": 1,
+      "cash": 0.5,
+      "mark_ns": 1,
+      "mark_price": 0.5,
+      "mark_source": "mid",
+      "pnl_gross": 0.5,
+      "fees": 0.5,
+      "fees_maker": 0.5,
+      "fees_taker": 0.5,
+      "pnl_net": 0.5,
+      "pnl_net_at_touch": 0.5,
+      "notional_traded": 0.5
+    },
+    "fill_rates": [
+      {
+        "order_class": "passive_limit",
+        "n_orders": 1,
+        "n_live": 1,
+        "n_any_fill": 1,
+        "n_full_fill": 1,
+        "qty_live": 1,
+        "filled_qty": 1,
+        "rate_any": 0.5,
+        "rate_full": 0.5,
+        "rate_qty": 0.5,
+        "median_ttf_ns": 1
+      }
+    ],
+    "markouts": [
+      {
+        "horizon_ns": 1,
+        "liquidity": "all",
+        "n": 1,
+        "n_null": 1,
+        "mean_ticks": 0.5,
+        "mean_bps": 0.5,
+        "total_ccy": 0.5,
+        "n_adverse": 1
+      }
+    ],
+    "adverse_selection": [
+      {
+        "horizon_ns": 1,
+        "n_maker_fills": 1,
+        "cost_ccy": 0.5,
+        "mean_ticks": 0.5,
+        "adverse_fraction": 0.5
+      }
+    ],
+    "execution_cost": {
+      "n_fills": 1,
+      "edge_ccy": 0.5,
+      "edge_maker_ccy": 0.5,
+      "edge_taker_ccy": 0.5,
+      "mean_edge_ticks": 0.5
+    },
+    "consistency": {
+      "method": "x",
+      "steps": 1,
+      "window_replays": 1,
+      "fills_reported": 1,
+      "fills_matched": 1,
+      "fills_unreported": 1,
+      "fills_misattributed": 1,
+      "fills_after_last_cut": 1,
+      "statuses_checked": 1,
+      "statuses_mismatched": 1,
+      "timestamps_monotone": true,
+      "equal": true
+    },
+    "diagnostics": {
+      "same_price_overlaps": 1,
+      "taker_same_event_overlaps": 1,
+      "self_cross_pairs": 1,
+      "out_of_session_orders": 1,
+      "rejected_instructions": 1
+    },
+    "data_quality": "x",
+    "warnings": [
+      "x"
+    ],
+    "transform_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "log_root": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  }
+}

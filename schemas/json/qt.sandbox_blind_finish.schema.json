@@ -1,0 +1,674 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.sandbox_blind_finish",
+  "$defs": {
+    "AdverseSelection": {
+      "additionalProperties": false,
+      "description": "Adverse selection of passive (maker) fills at each horizon: `cost_ccy = -sum(maker mo_ccy)` (positive = the\nmarket moved against your resting orders after they filled) and the share of maker fills with a negative\nmarkout.",
+      "properties": {
+        "horizon_ns": {
+          "title": "Horizon Ns",
+          "type": "integer"
+        },
+        "n_maker_fills": {
+          "title": "N Maker Fills",
+          "type": "integer"
+        },
+        "cost_ccy": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Cost Ccy"
+        },
+        "mean_ticks": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Mean Ticks"
+        },
+        "adverse_fraction": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Adverse Fraction"
+        }
+      },
+      "required": [
+        "horizon_ns",
+        "n_maker_fills",
+        "cost_ccy",
+        "mean_ticks",
+        "adverse_fraction"
+      ],
+      "title": "AdverseSelection",
+      "type": "object"
+    },
+    "Consistency": {
+      "additionalProperties": false,
+      "description": "Runtime proof that the step-by-step session equals one exact replay of the committed orders: every fill\nreported during the session is a row of the single full replay (all columns equal), every fill of that replay\nthat was knowable by the last visible cut was reported, at the step whose cut first covered it, and every order\nwas shown working and shown ended at the steps whose cuts first covered its activation and the event that decided\nits end, with the replay's end (`statuses_mismatched` counts the orders where any of this differs).",
+      "properties": {
+        "method": {
+          "title": "Method",
+          "type": "string"
+        },
+        "steps": {
+          "title": "Steps",
+          "type": "integer"
+        },
+        "window_replays": {
+          "title": "Window Replays",
+          "type": "integer"
+        },
+        "fills_reported": {
+          "title": "Fills Reported",
+          "type": "integer"
+        },
+        "fills_matched": {
+          "title": "Fills Matched",
+          "type": "integer"
+        },
+        "fills_unreported": {
+          "title": "Fills Unreported",
+          "type": "integer"
+        },
+        "fills_misattributed": {
+          "title": "Fills Misattributed",
+          "type": "integer"
+        },
+        "fills_after_last_cut": {
+          "title": "Fills After Last Cut",
+          "type": "integer"
+        },
+        "statuses_checked": {
+          "title": "Statuses Checked",
+          "type": "integer"
+        },
+        "statuses_mismatched": {
+          "title": "Statuses Mismatched",
+          "type": "integer"
+        },
+        "timestamps_monotone": {
+          "title": "Timestamps Monotone",
+          "type": "boolean"
+        },
+        "equal": {
+          "title": "Equal",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "method",
+        "steps",
+        "window_replays",
+        "fills_reported",
+        "fills_matched",
+        "fills_unreported",
+        "fills_misattributed",
+        "fills_after_last_cut",
+        "statuses_checked",
+        "statuses_mismatched",
+        "timestamps_monotone",
+        "equal"
+      ],
+      "title": "Consistency",
+      "type": "object"
+    },
+    "Diagnostics": {
+      "additionalProperties": false,
+      "description": "Simulation limits made visible: your orders never see each other (SPEC 1.2), so two of them working at the\nsame price both assume the full queue, taker fills in one event can take the same displayed size twice, and a\nbuy and a sell at crossing prices would have traded with each other.",
+      "properties": {
+        "same_price_overlaps": {
+          "title": "Same Price Overlaps",
+          "type": "integer"
+        },
+        "taker_same_event_overlaps": {
+          "title": "Taker Same Event Overlaps",
+          "type": "integer"
+        },
+        "self_cross_pairs": {
+          "title": "Self Cross Pairs",
+          "type": "integer"
+        },
+        "out_of_session_orders": {
+          "title": "Out Of Session Orders",
+          "type": "integer"
+        },
+        "rejected_instructions": {
+          "title": "Rejected Instructions",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "same_price_overlaps",
+        "taker_same_event_overlaps",
+        "self_cross_pairs",
+        "out_of_session_orders",
+        "rejected_instructions"
+      ],
+      "title": "Diagnostics",
+      "type": "object"
+    },
+    "ExecutionCost": {
+      "additionalProperties": false,
+      "description": "Execution versus the mid you saw when you decided: `edge_ccy = sum d (mid_decision - P) q` (positive = you\nbought below / sold above that mid), by liquidity, over fills whose decision-time mid existed.",
+      "properties": {
+        "n_fills": {
+          "title": "N Fills",
+          "type": "integer"
+        },
+        "edge_ccy": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Edge Ccy"
+        },
+        "edge_maker_ccy": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Edge Maker Ccy"
+        },
+        "edge_taker_ccy": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Edge Taker Ccy"
+        },
+        "mean_edge_ticks": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Mean Edge Ticks"
+        }
+      },
+      "required": [
+        "n_fills",
+        "edge_ccy",
+        "edge_maker_ccy",
+        "edge_taker_ccy",
+        "mean_edge_ticks"
+      ],
+      "title": "ExecutionCost",
+      "type": "object"
+    },
+    "FillRateRow": {
+      "additionalProperties": false,
+      "description": "Fill rates of one order class over the orders that reached the venue (`n_live`).",
+      "properties": {
+        "order_class": {
+          "enum": [
+            "passive_limit",
+            "marketable_limit",
+            "ioc_limit",
+            "market",
+            "all"
+          ],
+          "title": "Order Class",
+          "type": "string"
+        },
+        "n_orders": {
+          "title": "N Orders",
+          "type": "integer"
+        },
+        "n_live": {
+          "title": "N Live",
+          "type": "integer"
+        },
+        "n_any_fill": {
+          "title": "N Any Fill",
+          "type": "integer"
+        },
+        "n_full_fill": {
+          "title": "N Full Fill",
+          "type": "integer"
+        },
+        "qty_live": {
+          "title": "Qty Live",
+          "type": "integer"
+        },
+        "filled_qty": {
+          "title": "Filled Qty",
+          "type": "integer"
+        },
+        "rate_any": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Rate Any"
+        },
+        "rate_full": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Rate Full"
+        },
+        "rate_qty": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Rate Qty"
+        },
+        "median_ttf_ns": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Median Ttf Ns"
+        }
+      },
+      "required": [
+        "order_class",
+        "n_orders",
+        "n_live",
+        "n_any_fill",
+        "n_full_fill",
+        "qty_live",
+        "filled_qty",
+        "rate_any",
+        "rate_full",
+        "rate_qty",
+        "median_ttf_ns"
+      ],
+      "title": "FillRateRow",
+      "type": "object"
+    },
+    "MarkoutRow": {
+      "additionalProperties": false,
+      "description": "Markouts at one horizon over fills of one liquidity (`all`, `maker`, `taker`): counts, means and the total in\ncurrency. `n_adverse` counts fills whose markout is negative (the price moved against you).",
+      "properties": {
+        "horizon_ns": {
+          "title": "Horizon Ns",
+          "type": "integer"
+        },
+        "liquidity": {
+          "enum": [
+            "all",
+            "maker",
+            "taker"
+          ],
+          "title": "Liquidity",
+          "type": "string"
+        },
+        "n": {
+          "title": "N",
+          "type": "integer"
+        },
+        "n_null": {
+          "title": "N Null",
+          "type": "integer"
+        },
+        "mean_ticks": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Mean Ticks"
+        },
+        "mean_bps": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Mean Bps"
+        },
+        "total_ccy": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Total Ccy"
+        },
+        "n_adverse": {
+          "title": "N Adverse",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "horizon_ns",
+        "liquidity",
+        "n",
+        "n_null",
+        "mean_ticks",
+        "mean_bps",
+        "total_ccy",
+        "n_adverse"
+      ],
+      "title": "MarkoutRow",
+      "type": "object"
+    },
+    "PnLView": {
+      "additionalProperties": false,
+      "description": "Episode PnL: cash flows of every fill (including fills while the final cancels were in flight), the end\nposition marked at the mid at `mark_ns` (else the last print), fees by liquidity, and the conservative mark at\nthe touch (long at the bid, short at the ask).",
+      "properties": {
+        "currency": {
+          "title": "Currency",
+          "type": "string"
+        },
+        "position_end": {
+          "title": "Position End",
+          "type": "integer"
+        },
+        "bought_qty": {
+          "title": "Bought Qty",
+          "type": "integer"
+        },
+        "sold_qty": {
+          "title": "Sold Qty",
+          "type": "integer"
+        },
+        "cash": {
+          "title": "Cash",
+          "type": "number"
+        },
+        "mark_ns": {
+          "title": "Mark Ns",
+          "type": "integer"
+        },
+        "mark_price": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Mark Price"
+        },
+        "mark_source": {
+          "anyOf": [
+            {
+              "enum": [
+                "mid",
+                "last_trade"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Mark Source"
+        },
+        "pnl_gross": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Pnl Gross"
+        },
+        "fees": {
+          "title": "Fees",
+          "type": "number"
+        },
+        "fees_maker": {
+          "title": "Fees Maker",
+          "type": "number"
+        },
+        "fees_taker": {
+          "title": "Fees Taker",
+          "type": "number"
+        },
+        "pnl_net": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Pnl Net"
+        },
+        "pnl_net_at_touch": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Pnl Net At Touch"
+        },
+        "notional_traded": {
+          "title": "Notional Traded",
+          "type": "number"
+        }
+      },
+      "required": [
+        "currency",
+        "position_end",
+        "bought_qty",
+        "sold_qty",
+        "cash",
+        "mark_ns",
+        "mark_price",
+        "mark_source",
+        "pnl_gross",
+        "fees",
+        "fees_maker",
+        "fees_taker",
+        "pnl_net",
+        "pnl_net_at_touch",
+        "notional_traded"
+      ],
+      "title": "PnLView",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`finish` result of a blind episode, for the agent: the scorecard's aggregates in blind units (times since the\nopen, rebased prices; `mean_bps` is null because basis points would give the price level away) and the root of\nthe agent's blind log. The operator's scorecard and certificate, in true values, are not shown to the agent.",
+  "properties": {
+    "schema": {
+      "const": "qt.sandbox_blind_finish",
+      "default": "qt.sandbox_blind_finish",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "session_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Session Id"
+    },
+    "episode_id": {
+      "pattern": "^ep_[0-9a-f]{16}$",
+      "title": "Episode Id",
+      "type": "string"
+    },
+    "engine_version": {
+      "title": "Engine Version",
+      "type": "string"
+    },
+    "start_ns": {
+      "title": "Start Ns",
+      "type": "integer"
+    },
+    "end_ns": {
+      "title": "End Ns",
+      "type": "integer"
+    },
+    "finish_ns": {
+      "title": "Finish Ns",
+      "type": "integer"
+    },
+    "steps": {
+      "title": "Steps",
+      "type": "integer"
+    },
+    "n_orders": {
+      "title": "N Orders",
+      "type": "integer"
+    },
+    "n_fills": {
+      "title": "N Fills",
+      "type": "integer"
+    },
+    "n_fills_maker": {
+      "title": "N Fills Maker",
+      "type": "integer"
+    },
+    "pnl": {
+      "$ref": "#/$defs/PnLView"
+    },
+    "fill_rates": {
+      "items": {
+        "$ref": "#/$defs/FillRateRow"
+      },
+      "title": "Fill Rates",
+      "type": "array"
+    },
+    "markouts": {
+      "items": {
+        "$ref": "#/$defs/MarkoutRow"
+      },
+      "title": "Markouts",
+      "type": "array"
+    },
+    "adverse_selection": {
+      "items": {
+        "$ref": "#/$defs/AdverseSelection"
+      },
+      "title": "Adverse Selection",
+      "type": "array"
+    },
+    "execution_cost": {
+      "$ref": "#/$defs/ExecutionCost"
+    },
+    "consistency": {
+      "$ref": "#/$defs/Consistency"
+    },
+    "diagnostics": {
+      "$ref": "#/$defs/Diagnostics"
+    },
+    "data_quality": {
+      "title": "Data Quality",
+      "type": "string"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    },
+    "transform_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Transform Sha256",
+      "type": "string"
+    },
+    "log_root": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Log Root",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "session_id",
+    "episode_id",
+    "engine_version",
+    "start_ns",
+    "end_ns",
+    "finish_ns",
+    "steps",
+    "n_orders",
+    "n_fills",
+    "n_fills_maker",
+    "pnl",
+    "fill_rates",
+    "markouts",
+    "adverse_selection",
+    "execution_cost",
+    "consistency",
+    "diagnostics",
+    "data_quality",
+    "warnings",
+    "transform_sha256",
+    "log_root"
+  ],
+  "type": "object"
+}

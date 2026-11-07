@@ -8,6 +8,21 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ### Added
 
+- **Blind episodes for the agent sandbox** (ROADMAP, Agent arena; `queuetruth.sandbox.blind`): an agent plays an
+  operator-pinned episode without being able to tell which instrument or day it is on. `EpisodeBook.pin(spec)`
+  returns an opaque episode id (the book, a `qt.sandbox_episodes` file, holds the secrets); `start(episode_id)`
+  gives a `BlindSandbox` whose observations, acks, fills, errors, log and text renderings show times since the
+  session open and prices moved by a secret whole number of ticks, with sizes as recorded and the symbol, venue,
+  date and ids hidden. Orders are mapped back exactly, so the operator's scorecard (true values) equals that of a
+  non-blind episode sent the same instructions. The log's `open` entry and the new optional `certificate.blind`
+  field of `qt.sandbox_scorecard` and `qt.sandbox_finish` record `{episode_id, transform_sha256}`, a commitment to
+  the transform that does not reveal it; `verify` checks it. Over MCP, `python -m queuetruth.mcp.sandbox_tools
+  --episodes FILE` (`register_sandbox_tools(app, episodes=book)`) serves only the sandbox tools, started by
+  `episode_id`. New documents `qt.sandbox_blind_session`, `qt.sandbox_blind_finish`,
+  `qt.sandbox_blind_session_list`, `qt.sandbox_blind_order_log` and `qt.sandbox_episodes`. Fees in basis points are
+  refused in a blind pin. A leak test scans everything a blind agent receives, through the Python API and the MCP
+  tools, for the fixture day's names, ids, absolute times and true prices. Guide:
+  [Blind episodes](docs/how-to/agent-sandbox.md#blind-episodes).
 - **The P&L gap next to the fill-rate gap in `score`** (ROADMAP, the one-line reality gap): under its `RESULT:` line
   `queuetruth score` prints a `P&L:` line, for example `the simulator's P&L is 5.78 USD per order too high (95% CI
   +3.40 to +8.75) at the 1 s markout, mostly from fills it grants that live did not get (+3.09 USD per order)`, and

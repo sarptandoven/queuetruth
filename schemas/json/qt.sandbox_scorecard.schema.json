@@ -58,9 +58,31 @@
       "title": "AdverseSelection",
       "type": "object"
     },
+    "BlindCommitment": {
+      "additionalProperties": false,
+      "description": "A blind episode (`queuetruth.sandbox.blind`): its opaque id and the sha256 of its transform (time origin,\nprice offset in ticks, salt), which commits to the transform without revealing it. The log's `open` entry holds\nit, so the log root commits to it too.",
+      "properties": {
+        "episode_id": {
+          "pattern": "^ep_[0-9a-f]{16}$",
+          "title": "Episode Id",
+          "type": "string"
+        },
+        "transform_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Transform Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "episode_id",
+        "transform_sha256"
+      ],
+      "title": "BlindCommitment",
+      "type": "object"
+    },
     "Certificate": {
       "additionalProperties": false,
-      "description": "What a third party needs to recompute this scorecard: the dataset, the engine, the spec identity and the root\nof the committed log; `scorecard_sha256` covers the scorecard without `certificate`, `timings` and `files`.",
+      "description": "What a third party needs to recompute this scorecard: the dataset, the engine, the spec identity and the root\nof the committed log; `scorecard_sha256` covers the scorecard without `certificate`, `timings` and `files`.\n`blind` is set when the agent played the episode blind (null otherwise).",
       "properties": {
         "dataset_id": {
           "pattern": "^[0-9a-f]{64}$",
@@ -90,6 +112,17 @@
           "pattern": "^[0-9a-f]{64}$",
           "title": "Scorecard Sha256",
           "type": "string"
+        },
+        "blind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BlindCommitment"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [

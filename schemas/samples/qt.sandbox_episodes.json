@@ -1,0 +1,15 @@
+{
+  "sample": {
+    "schema": "qt.sandbox_episodes",
+    "schema_version": 1,
+    "episodes": [
+      {
+        "episode_id": "ep_0123456789abcdef",
+        "spec": {
+          "k": 1
+        },
+        "secret": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      }
+    ]
+  }
+}

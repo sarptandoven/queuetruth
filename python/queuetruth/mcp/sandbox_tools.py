@@ -29,6 +29,14 @@ closed or evicted, or the server exits. Sessions are bounded
 after the server's headline, a plain-text rendering with decimal prices and local times for agents that read text.
 `python -m queuetruth.mcp.sandbox_tools [--root DIR] [--out DIR]` serves the local tools plus the sandbox tools over
 stdio.
+
+Blind mode (`episodes=EpisodeBook`, `--episodes FILE`): the agent plays operator-pinned episodes without learning the
+instrument or the day (`queuetruth.sandbox.blind`). `qt_sandbox_start` takes only an `episode_id`; every result is in
+blind units (`qt.sandbox_blind_session`, observations and acks with times since the open and rebased prices,
+`qt.sandbox_blind_finish`, `qt.sandbox_blind_session_list`); errors are rewritten so that they name no hidden value,
+and an internal error says nothing but its code. The server's own tools (datasets, runs, outputs) are removed, so
+the sandbox tools are the only ones listed. The operator's scorecard, order log and transform go to
+`<out_dir>/<session_id>/` and are not linked in the result; `include_log` returns the agent's blind log.
 """
 
 from __future__ import annotations
@@ -56,12 +64,17 @@ from queuetruth.errors import QtError
 from queuetruth.mcp.local import ENV_ROOT, LocalOutputs
 from queuetruth.mcp.tools import Args, LocalPath, ToolDef
 from queuetruth.sandbox import render
-from queuetruth.sandbox._util import local_time
+from queuetruth.sandbox._util import local_time, rel_time
+from queuetruth.sandbox.blind import BlindSandbox, EpisodeBook
 from queuetruth.sandbox.models import (
+    EPISODE_ID_PATTERN,
     ClientOrderId,
     FeeSchedule,
     OrderId,
     SandboxAck,
+    SandboxBlindFinish,
+    SandboxBlindSession,
+    SandboxBlindSessionList,
     SandboxFinish,
     SandboxObservation,
     SandboxSession,
@@ -116,6 +129,42 @@ SANDBOX_INSTRUCTIONS = (
     "state, and end with qt_sandbox_finish for the scorecard summary and its certificate. qt_sandbox_list shows the "
     "open sessions, qt_sandbox_close abandons one. They write only private scratch files."
 )
+BLIND_INSTRUCTIONS = (
+    "Blind sandbox tools (qt_sandbox_*): qt_sandbox_start opens the trading episode whose episode_id the operator "
+    "gave you, on order-level data in which your orders fill exactly as the recorded FIFO queue would have filled "
+    "them. The instrument and the day are hidden: times are ns since the session open and prices are shifted by a "
+    "hidden whole number of ticks (the tick size is real). Alternate qt_sandbox_submit / qt_sandbox_cancel with "
+    "qt_sandbox_advance (your clock only moves forward, you only see data up to it), and end with "
+    "qt_sandbox_finish for your results."
+)
+
+
+class BlindStartArgs(Args):
+    """`qt_sandbox_start` of a blind server."""
+
+    episode_id: Annotated[str, Field(pattern=EPISODE_ID_PATTERN, description="episode id given by the operator")]
+
+
+class BlindAdvanceArgs(Args):
+    """`qt_sandbox_advance` of a blind server: `to` is a time since the session open."""
+
+    session_id: SessionId
+    by: DurationArg | None = None
+    to: (
+        Annotated[
+            Annotated[int, Field(strict=True)]
+            | Annotated[str, Field(pattern=r"^\s*\+?[0-9]{1,2}:[0-9]{2}(:[0-9]{2}(\.[0-9]{1,9})?)?\s*$")],
+            Field(description="time since the session open: '+01:30', '+01:30:05.250' or ns"),
+        ]
+        | None
+    ) = None
+
+
+class BlindFinishArgs(Args):
+    """`qt_sandbox_finish` of a blind server."""
+
+    session_id: SessionId
+    include_log: bool = Field(default=False, description="also return your blind order log (it grows per step)")
 
 
 class StartArgs(Args):
@@ -296,6 +345,55 @@ SANDBOX_TOOLS: tuple[tuple[ToolDef, type[BaseModel]], ...] = (
     ),
 )
 
+
+def _blind_tools() -> tuple[tuple[ToolDef, type[BaseModel]], ...]:
+    """The tools of a blind server: the same names, the blind start and finish arguments and the blind documents."""
+    out = []
+    for t, model in SANDBOX_TOOLS:
+        if t.name == "qt_sandbox_start":
+            t = ToolDef(
+                t.name,
+                t.title,
+                "Opens the trading episode the operator pinned under episode_id. Your orders become shadow orders in "
+                "the real recorded FIFO queue and fill exactly as it would have filled them, with order-entry "
+                "latency and no look-ahead. The instrument and the day are hidden: times are ns since the session "
+                "open, prices are shifted by a hidden whole number of ticks. Returns the session id, the units, the "
+                "rules and the first observation.",
+                BlindStartArgs,
+                "qt.sandbox_blind_session",
+            )
+            model = SandboxBlindSession
+        elif t.name == "qt_sandbox_finish":
+            t = ToolDef(
+                t.name,
+                t.title,
+                "Ends the episode: cancels open orders, runs one exact replay of every order you sent, and returns "
+                "your results (PnL after fees, fill rates, markouts, adverse selection, the proof that they equal "
+                "what you were shown) in blind units. include_log adds your blind order log.",
+                BlindFinishArgs,
+                "qt.sandbox_blind_finish",
+            )
+            model = SandboxBlindFinish
+        elif t.name in ("qt_sandbox_list", "qt_sandbox_close"):
+            t = ToolDef(t.name, t.title, t.description, t.args, "qt.sandbox_blind_session_list")
+            model = SandboxBlindSessionList
+        elif t.name == "qt_sandbox_advance":
+            t = ToolDef(
+                t.name,
+                t.title,
+                "Moves your clock forward by a duration ('500ms', '5s') or to a time since the session open "
+                "('+01:30:05' or ns), never past the episode end, and returns the new observation with the fills, "
+                "queue positions and markouts it brought.",
+                BlindAdvanceArgs,
+                t.output,
+            )
+        out.append((t, model))
+    return tuple(out)
+
+
+#: The tools of a blind server (`episodes=`), in listing order, with their output document model.
+BLIND_SANDBOX_TOOLS = _blind_tools()
+
 _READ_ONLY = {"qt_sandbox_observe", "qt_sandbox_list"}
 _DESTRUCTIVE = {"qt_sandbox_close"}
 Result = tuple[dict[str, Any], list[types.ContentBlock]]
@@ -312,6 +410,7 @@ class SandboxTools:
         workdir: str | os.PathLike[str] | None = None,
         out_dir: str | os.PathLike[str] | None = None,
         idle_timeout_s: float | None = DEFAULT_IDLE_TIMEOUT_S,
+        episodes: EpisodeBook | None = None,
     ) -> None:
         if max_sessions < 1:
             raise QtError("QT-CONFIG-001", f"max_sessions must be >= 1 (got {max_sessions})")
@@ -332,11 +431,15 @@ class SandboxTools:
                 )
             out.mkdir(parents=True, exist_ok=True)
             self.out_dir = out
-        self.sessions: dict[str, Sandbox] = {}
+        #: The operator's pinned episodes of a blind server (None: an ordinary server).
+        self.episodes = episodes
+        self.blind = episodes is not None
+        self._tools = BLIND_SANDBOX_TOOLS if self.blind else SANDBOX_TOOLS
+        self.sessions: dict[str, Sandbox | BlindSandbox] = {}
         self._last_used: dict[str, float] = {}
         self._lock = threading.Lock()
-        self._schemas = {t.name: {"$schema": DRAFT, **t.args.model_json_schema()} for t, _ in SANDBOX_TOOLS}
-        self._outputs = {t.name: json_schema(t.output, model) for t, model in SANDBOX_TOOLS}
+        self._schemas = {t.name: {"$schema": DRAFT, **t.args.model_json_schema()} for t, _ in self._tools}
+        self._outputs = {t.name: json_schema(t.output, model) for t, model in self._tools}
         self.handlers: dict[str, Callable[[ToolDef, Any], Awaitable[Result]]] = {
             "qt_sandbox_start": self._start,
             "qt_sandbox_observe": self._observe,
@@ -347,14 +450,32 @@ class SandboxTools:
             "qt_sandbox_list": self._list,
             "qt_sandbox_close": self._close,
         }
+        if self.blind:
+            self.handlers = {k: self._withheld(v) for k, v in self.handlers.items()}
         atexit.register(self.close_all)
+
+    @staticmethod
+    def _withheld(fn: Callable[[ToolDef, Any], Awaitable[Result]]) -> Callable[[ToolDef, Any], Awaitable[Result]]:
+        """A blind handler whose internal errors say nothing but their code (a traceback text can name a path)."""
+
+        async def handler(tool: ToolDef, args: Any) -> Result:
+            try:
+                return await fn(tool, args)
+            except QtError:
+                raise  # already in blind units (`BlindSandbox`)
+            except Exception:
+                log.exception("blind sandbox tool %s failed", tool.name)
+                msg = f"{tool.name}: internal error (details withheld in a blind episode)"
+                raise QtError("QT-ENGINE-001", msg) from None
+
+        return handler
 
     # ---- listing ------------------------------------------------------------------------------------------------
 
     @property
     def tool_defs(self) -> list[ToolDef]:
         """The tool definitions in listing order."""
-        return [t for t, _ in SANDBOX_TOOLS]
+        return [t for t, _ in self._tools]
 
     def tool_list(self) -> list[types.Tool]:
         """The MCP tool entries with input and output schemas and annotations."""
@@ -378,7 +499,7 @@ class SandboxTools:
 
     # ---- sessions -----------------------------------------------------------------------------------------------
 
-    def _get(self, session_id: str) -> Sandbox:
+    def _get(self, session_id: str) -> Any:
         with self._lock:
             sb = self.sessions.get(session_id)
             if sb is not None:
@@ -391,12 +512,24 @@ class SandboxTools:
             )
         return sb
 
-    def _pop(self, session_id: str) -> Sandbox | None:
+    def _pop(self, session_id: str) -> Any:
         with self._lock:
             self._last_used.pop(session_id, None)
             return self.sessions.pop(session_id, None)
 
-    def _item(self, session_id: str, sb: Sandbox, now: float) -> dict[str, Any]:
+    def _item(self, session_id: str, sb: Any, now: float) -> dict[str, Any]:
+        idle = round(max(0.0, now - self._last_used.get(session_id, now)), 3)
+        if isinstance(sb, BlindSandbox):
+            return {
+                "session_id": session_id,
+                "episode_id": sb.episode_id,
+                "clock_ns": sb.clock_ns,
+                "time_local": rel_time(sb.clock_ns),
+                "step": sb.step,
+                "n_orders": sb.n_orders,
+                "n_open": sb.n_open,
+                "idle_s": idle,
+            }
         i = sb.instrument
         return {
             "session_id": session_id,
@@ -408,7 +541,7 @@ class SandboxTools:
             "step": sb.step,
             "n_orders": len(sb.orders),
             "n_open": sum(1 for o in sb.orders if not o.final),
-            "idle_s": round(max(0.0, now - self._last_used.get(session_id, now)), 3),
+            "idle_s": idle,
         }
 
     def list_doc(self, closed: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -416,9 +549,10 @@ class SandboxTools:
         now = time.monotonic()
         with self._lock:
             items = [self._item(sid, sb, now) for sid, sb in self.sessions.items()]
-        return SandboxSessionList.model_validate(
+        model = SandboxBlindSessionList if self.blind else SandboxSessionList
+        return model.model_validate(
             {
-                "schema": "qt.sandbox_session_list",
+                "schema": model.SCHEMA,
                 "schema_version": 1,
                 "sessions": items,
                 "max_sessions": self.max_sessions,
@@ -468,15 +602,21 @@ class SandboxTools:
                     f"{len(self.sessions)} sandbox sessions are open (max {self.max_sessions})",
                     "finish one with qt_sandbox_finish or close one with qt_sandbox_close first",
                 )
-        path = self.outputs.resolve(args.dataset_path)
-        spec: dict[str, Any] = {
-            "dataset": {"path": str(path)},
-            **args.model_dump(mode="json", exclude_none=True, exclude={"dataset_path"}),
-        }
         session_id = "sbx_" + secrets.token_hex(8)
-        sb = await self._run(
-            partial(Sandbox.open, spec, session_id=session_id, workdir=self.workdir, contain=self.outputs.contain)
-        )
+        sb: Any
+        if self.episodes is not None:
+            sb = await self._run(
+                partial(self.episodes.start, args.episode_id, session_id=session_id, workdir=self.workdir)
+            )
+        else:
+            path = self.outputs.resolve(args.dataset_path)
+            spec: dict[str, Any] = {
+                "dataset": {"path": str(path)},
+                **args.model_dump(mode="json", exclude_none=True, exclude={"dataset_path"}),
+            }
+            sb = await self._run(
+                partial(Sandbox.open, spec, session_id=session_id, workdir=self.workdir, contain=self.outputs.contain)
+            )
         with self._lock:
             if len(self.sessions) >= self.max_sessions:
                 sb.close()
@@ -486,12 +626,18 @@ class SandboxTools:
             self.sessions[session_id] = sb
             self._last_used[session_id] = time.monotonic()
         doc = sb.session.model_dump(mode="json")
-        return doc, [types.TextContent(text=render.session_text(doc))]
+        text = render.blind_session_text(doc) if self.blind else render.session_text(doc)
+        return doc, [types.TextContent(text=text)]
+
+    @staticmethod
+    def _inst(sb: Any) -> dict[str, Any]:
+        """The instrument dict the text renderings use."""
+        return render.blind_instrument(sb.instrument) if isinstance(sb, BlindSandbox) else sb.instrument
 
     async def _observe(self, tool: ToolDef, args: SessionArgs) -> Result:
         sb = self._get(args.session_id)
         doc = (await self._run(sb.observe)).model_dump(mode="json")
-        return doc, [types.TextContent(text=render.observation_text(doc, sb.instrument, sb.end_ns))]
+        return doc, [types.TextContent(text=render.observation_text(doc, self._inst(sb), sb.end_ns))]
 
     async def _submit(self, tool: ToolDef, args: SubmitArgs) -> Result:
         sb = self._get(args.session_id)
@@ -506,19 +652,19 @@ class SandboxTools:
             client_order_id=args.client_order_id,
         )
         doc = (await self._run(fn)).model_dump(mode="json")
-        return doc, [types.TextContent(text=render.ack_text(doc, sb.instrument))]
+        return doc, [types.TextContent(text=render.ack_text(doc, self._inst(sb)))]
 
     async def _cancel(self, tool: ToolDef, args: CancelArgs) -> Result:
         sb = self._get(args.session_id)
         doc = (await self._run(partial(sb.cancel, args.order_id, args.qty))).model_dump(mode="json")
-        return doc, [types.TextContent(text=render.ack_text(doc, sb.instrument))]
+        return doc, [types.TextContent(text=render.ack_text(doc, self._inst(sb)))]
 
     async def _advance(self, tool: ToolDef, args: AdvanceArgs) -> Result:
         sb = self._get(args.session_id)
         by = args.by.strip() if isinstance(args.by, str) else args.by
         to = args.to.strip() if isinstance(args.to, str) else args.to
         doc = (await self._run(partial(sb.advance, by=by, to=to))).model_dump(mode="json")
-        return doc, [types.TextContent(text=render.observation_text(doc, sb.instrument, sb.end_ns))]
+        return doc, [types.TextContent(text=render.observation_text(doc, self._inst(sb), sb.end_ns))]
 
     async def _finish(self, tool: ToolDef, args: FinishArgs) -> Result:
         sb = self._get(args.session_id)
@@ -530,6 +676,13 @@ class SandboxTools:
             raise
         finally:
             self._pop(args.session_id)
+        if isinstance(sb, BlindSandbox):
+            # The operator's files stay unlinked: their paths and contents name the instrument-day.
+            doc = card.model_dump(mode="json")
+            blind_extra: list[types.ContentBlock] = [types.TextContent(text=render.blind_finish_text(doc))]
+            if args.include_log:
+                blind_extra.append(self._log_resource(args.session_id, sb.order_log()))
+            return doc, blind_extra
         doc = finish_summary(
             card, session_id=args.session_id, out_dir=None if out is None else str(out), detail=args.detail
         ).model_dump(mode="json")
@@ -539,24 +692,27 @@ class SandboxTools:
                 p = out / name
                 extra.append(types.ResourceLink(name=name, uri=p.as_uri(), mime_type=mime, size=p.stat().st_size))
         if args.include_log:
-            log_doc = sb.log.document().model_dump(mode="json")
-            extra.append(
-                types.EmbeddedResource(
-                    resource=types.TextResourceContents(
-                        uri=f"queuetruth://sandbox/{args.session_id}/order_log.json",
-                        mime_type="application/json",
-                        text=json.dumps(log_doc, separators=(",", ":")),
-                    )
-                )
-            )
+            extra.append(self._log_resource(args.session_id, sb.log.document().model_dump(mode="json")))
         return doc, extra
+
+    @staticmethod
+    def _log_resource(session_id: str, log_doc: dict[str, Any]) -> types.EmbeddedResource:
+        return types.EmbeddedResource(
+            resource=types.TextResourceContents(
+                uri=f"queuetruth://sandbox/{session_id}/order_log.json",
+                mime_type="application/json",
+                text=json.dumps(log_doc, separators=(",", ":")),
+            )
+        )
 
     async def _list(self, tool: ToolDef, args: ListArgs) -> Result:
         doc = self.list_doc()
         n = len(doc["sessions"])
         lines = [f"{n} open sandbox session(s) of at most {doc['max_sessions']}"]
         lines += [
-            f"{s['session_id']}: {s['symbol']} {s['session_date']} at {s['time_local']}, step {s['step']}, "
+            f"{s['session_id']}: "
+            + (f"episode {s['episode_id']}" if self.blind else f"{s['symbol']} {s['session_date']}")
+            + f" at {s['time_local']}, step {s['step']}, "
             f"{s['n_open']} open of {s['n_orders']} orders, idle {s['idle_s']:.0f} s"
             for s in doc["sessions"]
         ]
@@ -579,18 +735,27 @@ def register_sandbox_tools(
     workdir: str | os.PathLike[str] | None = None,
     out_dir: str | os.PathLike[str] | None = None,
     idle_timeout_s: float | None = DEFAULT_IDLE_TIMEOUT_S,
+    episodes: EpisodeBook | None = None,
 ) -> SandboxTools:
     """Adds the sandbox tools to a `QtMcpServer` (listed after its own tools; datasets resolved against `root`,
     default the server's `QT_MCP_ROOT`) and appends their instructions to the server's. `out_dir` (outside the root)
     receives each finished session's scorecard, order log and replay tables. Returns the registry (its `sessions`,
-    `list_doc()` and `close_all()`); `app.sandbox_tools` refers to it too."""
+    `list_doc()` and `close_all()`); `app.sandbox_tools` refers to it too.
+
+    With `episodes` the server is blind (module docstring): its own tools are removed, its instructions replaced,
+    and the sandbox tools start only the pinned episodes."""
     tools = SandboxTools(
         root=root if root is not None else app.outputs.root,
         max_sessions=max_sessions,
         workdir=workdir,
         out_dir=out_dir,
         idle_timeout_s=idle_timeout_s,
+        episodes=episodes,
     )
+    if tools.blind:
+        for t in app.tools:
+            app._by_name.pop(t.name, None)
+        app.tools = []
     for t in tools.tool_defs:
         if t.name in app._by_name:
             raise QtError("QT-CONFIG-001", f"tool {t.name} is already registered")
@@ -598,16 +763,20 @@ def register_sandbox_tools(
         app._handlers[t.name] = tools.handlers[t.name]
     base: Callable[[], list[types.Tool]] = app.tool_list
     app.tool_list = lambda: [*base(), *tools.tool_list()]
-    app.server.instructions = (
-        f"{app.server.instructions} {SANDBOX_INSTRUCTIONS}" if app.server.instructions else SANDBOX_INSTRUCTIONS
-    )
+    if tools.blind:
+        app.server.instructions = BLIND_INSTRUCTIONS
+    else:
+        app.server.instructions = (
+            f"{app.server.instructions} {SANDBOX_INSTRUCTIONS}" if app.server.instructions else SANDBOX_INSTRUCTIONS
+        )
     app.sandbox_tools = tools
     return tools
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """`python -m queuetruth.mcp.sandbox_tools [--root DIR] [--out DIR] [--max-sessions N] [--idle-timeout S]`: the
-    local tools plus the sandbox tools over stdio."""
+    """`python -m queuetruth.mcp.sandbox_tools [--root DIR] [--out DIR] [--max-sessions N] [--idle-timeout S]
+    [--episodes FILE]`: the local tools plus the sandbox tools over stdio; with `--episodes` (a `qt.sandbox_episodes`
+    file) only the blind sandbox tools."""
     from queuetruth.mcp.server import build_server, run_stdio
 
     parser = argparse.ArgumentParser(prog="python -m queuetruth.mcp.sandbox_tools", description=__doc__.split("\n")[0])
@@ -622,6 +791,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=DEFAULT_IDLE_TIMEOUT_S,
         help="seconds after which an idle session may be evicted to make room (negative: never)",
     )
+    parser.add_argument(
+        "--episodes",
+        default=None,
+        help="serve blind episodes only: the operator's qt.sandbox_episodes file (keep it from the agent)",
+    )
     ns = parser.parse_args(argv)
     logging.basicConfig(stream=sys.stderr, level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
     app = build_server(local=True, root=ns.root)
@@ -630,6 +804,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         max_sessions=ns.max_sessions,
         out_dir=ns.out,
         idle_timeout_s=None if ns.idle_timeout < 0 else ns.idle_timeout,
+        episodes=None if ns.episodes is None else EpisodeBook.load(ns.episodes),
     )
     try:
         anyio.run(run_stdio, app)
@@ -639,6 +814,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 __all__ = [
+    "BLIND_INSTRUCTIONS",
+    "BLIND_SANDBOX_TOOLS",
     "DEFAULT_IDLE_TIMEOUT_S",
     "DEFAULT_MAX_SESSIONS",
     "SANDBOX_INSTRUCTIONS",
