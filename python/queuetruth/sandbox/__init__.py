@@ -10,10 +10,12 @@ real queue would have filled them, with no look-ahead.
         obs = sb.advance(by="5s")                        # fills, queue position, markouts so far
         card = sb.finish(out="episode")                  # PnL after fees, fill rates, adverse selection
 
-The agent's clock moves only forward; it sees the market and its orders up to `clock - feed_latency_ns`; every
-replay the session runs reads a scratch dataset that physically ends at that cut (`queuetruth.sandbox.tape`). Each
-`advance` re-runs the exact replay of the episode's prefix with the open orders (decide-then-replay windows), and
-`finish` runs one full replay of every committed order and proves that its fills equal what the session reported.
+The agent's clock moves only forward; it sees the market and its orders up to `clock - feed_latency_ns`, the whole
+events a forward-only reader released (`queuetruth.sandbox.tape`). By default one `queuetruth.api.Session` that takes
+orders while it runs is advanced by whole events to each cut, so an episode reads the data once; with
+`Sandbox.open(..., stepping="replay")` each `advance` re-runs the exact replay of a scratch copy of the episode's
+prefix instead (identical outputs, quadratic cost). `finish` runs one full replay of every committed order and proves
+that its fills equal what the session reported.
 The committed log (`order_log()`, `scorecard.json`'s certificate) can be re-executed by anyone with `verify`.
 MCP tools: `queuetruth.mcp.sandbox_tools.register_sandbox_tools`. Design: docs/design/extensions/agent-sandbox.md.
 """

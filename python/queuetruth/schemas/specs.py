@@ -434,7 +434,8 @@ class LiveImportSpec(SpecModel):
     """`live import`: venue exports -> canonical live log (SPEC 3.8)."""
 
     #: 1.1 (3.11 #13) adds `sim_hftbacktest` and `sim_nautilus` (simulator outputs; log venue `sim:<name>`); 1.2
-    #: adds the trading bots `freqtrade` and `hummingbot` (live arm; venue = the exchange) and their `sim_*` arms.
+    #: adds the trading bots `freqtrade` and `hummingbot` (live arm; venue = the exchange) and their `sim_*` arms;
+    #: 1.3 adds the backtesters `sim_backtrader` and `sim_vectorbt` (simulator arm only; additive).
     venue: Literal[
         "binance",
         "bybit",
@@ -451,6 +452,8 @@ class LiveImportSpec(SpecModel):
         "hummingbot",
         "sim_freqtrade",
         "sim_hummingbot",
+        "sim_backtrader",
+        "sim_vectorbt",
     ]
     inputs: Annotated[list[FileRef], Field(min_length=1)]
     out: str | None = None

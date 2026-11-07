@@ -147,10 +147,10 @@ pub fn own_orders(out: &SynthOutput, per_partition: usize, seed: u64) -> Vec<Own
                 }
                 b'R' => {
                     for id in open_by_inst.remove(&r.instrument_id).unwrap_or_default() {
-                        if let Some(l) = lives.get_mut(&id) {
-                            if !l.done {
-                                l.ok = false;
-                            }
+                        if let Some(l) = lives.get_mut(&id)
+                            && !l.done
+                        {
+                            l.ok = false;
                         }
                     }
                 }

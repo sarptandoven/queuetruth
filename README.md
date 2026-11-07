@@ -76,6 +76,7 @@ Every term (shadow, zoo, exact arm, faithful and corrected) is in the
 | Your live orders and fills: Binance, Bybit, OKX, Coinbase, Kraken, Deribit, Hyperliquid, IBKR Flex, FIX 4.4 drop copies, QuickFIX logs | the sim-vs-live scorecard, `calibrate-live`, a latency fit | `queuetruth live import --venue <venue>` |
 | Your backtest's output: hftbacktest or NautilusTrader | your simulator scored order by order against your live fills | `live import --venue sim-hftbacktest` or `sim-nautilus`, then `score --sim-log` |
 | A Freqtrade backtest or dry run, or a Hummingbot paper bot, next to the bot's live run | each order paired with its twin, why it differs, and the scorecard | `queuetruth reconcile --kind freqtrade` or `hummingbot` |
+| A Backtrader or VectorBT backtest (an analyzer's JSON lines, or `records_readable` CSV / JSON) and your live log | the same per-order account, and the backtest scored against live or exact queues | `queuetruth reconcile --kind backtrader` or `vectorbt`; `live import --venue sim-backtrader` or `sim-vectorbt` |
 
 queuetruth ships no market data and fetches none except `demo`'s public sample day, after you agree. You need a
 licence for the data you process: [Data and licensing](https://github.com/sarptandoven/queuetruth/blob/main/docs/data-and-licensing.md).
@@ -114,7 +115,7 @@ pip install 'queuetruth[client]'       # + HTTP client for a self-hosted service
 pip install 'queuetruth[mcp]'          # + MCP server for agents
 ```
 
-CPython 3.11 or later. Other platforms build from source with Rust 1.85 or later. `queuetruth-core`, a standalone
+CPython 3.11 or later. Other platforms build from source with Rust 1.88 or later. `queuetruth-core`, a standalone
 binary for the native commands, is attached to each GitHub release. Interfaces: CLI, Python API, self-contained
 HTML reports, a self-hostable HTTP service and an MCP server, all sharing published JSON Schemas.
 

@@ -294,6 +294,22 @@ pub struct ShadowState {
     pub end_state: Option<EndState>,
 }
 
+/// One shadow of an interactive session as a replay ending now would report it (`Session::shadow_peek`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ShadowPeek {
+    /// Status.
+    pub status: ShadowStatus,
+    /// Its `qt.shadow_results` row as of now: `end_state` is `open_at_end` while it has not ended (`status` tells),
+    /// `dq_flags` is 0 (the verdict is known only at the end of the data).
+    pub result: ShadowResultRow,
+    /// When it ended: the `ts_event` of its trajectory `end` row.
+    pub ts_end: Option<Ts>,
+    /// Queue ahead after the last processed event (from activation on; what a trajectory row would show).
+    pub queue_ahead: Option<Qty>,
+    /// Rank after the last processed event (from activation on).
+    pub rank: Option<u32>,
+}
+
 /// Replay counters (et `Stats`).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Stats {

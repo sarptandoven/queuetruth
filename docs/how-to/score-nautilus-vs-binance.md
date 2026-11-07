@@ -49,8 +49,9 @@ queuetruth score --live synth/own_orders/live --sim exact --data synth --out sc-
 stderr shows the match first, for example `warning: self_exclusion: matched 200/200 live orders to MBO order ids
 (100.0%; by id 200, heuristic 0)`: on this data every order matches by venue order id, because the synthetic log
 stores the MBO order id there. Then stdout gives the answer first: a `RESULT:` line with the direction and size of the
-fill-rate difference, its 95% interval and the cluster-robust p, the equivalence result, the order counts, the gate
-status and the 2x2 table of orders by fill outcome. `--verbose` prints every statistic; `summary.json` and the report
+fill-rate difference, its 95% interval and the cluster-robust p, a `P&L:` line with the P&L difference per order
+and its 95% interval (see [the P&L gap](../concepts/scorecard.md#the-pl-gap)), the equivalence result, the order
+counts, the gate status and the 2x2 table of orders by fill outcome. `--verbose` prints every statistic; `summary.json` and the report
 hold them too.
 
 The expected scorecard for this case is zero discordance, `two_by_two.live_only = 0` and `two_by_two.sim_only = 0`,

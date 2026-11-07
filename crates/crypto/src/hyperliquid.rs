@@ -232,10 +232,11 @@ fn parse_event(e: &J, block: Option<Block>, no: u64, cfg: &Config, p: &mut Parse
     }
     if let (Some(s), Some(o)) = (e.get("status").and_then(J::as_str), e.get("order")) {
         bump(st, "order_statuses");
-        if let Some(oid) = o.get("oid").and_then(J::as_u64) {
-            if s != "open" && s != "triggered" {
-                p.statuses.insert(oid, s.to_string());
-            }
+        if let Some(oid) = o.get("oid").and_then(J::as_u64)
+            && s != "open"
+            && s != "triggered"
+        {
+            p.statuses.insert(oid, s.to_string());
         }
         return Ok(());
     }
@@ -381,20 +382,20 @@ pub fn convert_full(lines: impl Iterator<Item = QtResult<String>>, cfg: &Config)
             let b = Block { number, ts, recv };
             for e in evs {
                 // de-duplicate fills seen twice (overlapping files)
-                if let Some(key) = fill_key(e) {
-                    if !seen_fills.insert(key) {
-                        bump(&mut st, "duplicate_fills_dropped");
-                        continue;
-                    }
+                if let Some(key) = fill_key(e)
+                    && !seen_fills.insert(key)
+                {
+                    bump(&mut st, "duplicate_fills_dropped");
+                    continue;
                 }
                 parse_event(e, Some(b), no, cfg, &mut p, &mut st)?;
             }
         } else {
-            if let Some(key) = fill_key(&v) {
-                if !seen_fills.insert(key) {
-                    bump(&mut st, "duplicate_fills_dropped");
-                    continue;
-                }
+            if let Some(key) = fill_key(&v)
+                && !seen_fills.insert(key)
+            {
+                bump(&mut st, "duplicate_fills_dropped");
+                continue;
             }
             parse_event(&v, None, no, cfg, &mut p, &mut st)?;
         }
@@ -436,10 +437,11 @@ pub fn convert_full(lines: impl Iterator<Item = QtResult<String>>, cfg: &Config)
     let mut time_gaps: Vec<(i64, i64)> = Vec::new();
     for d in &p.diffs {
         if prev_block.is_none_or(|(b, _)| b != d.block) {
-            if let Some((_, pts)) = prev_block {
-                if gap_ns > 0 && d.ts - pts > gap_ns {
-                    time_gaps.push((pts, d.ts));
-                }
+            if let Some((_, pts)) = prev_block
+                && gap_ns > 0
+                && d.ts - pts > gap_ns
+            {
+                time_gaps.push((pts, d.ts));
             }
             prev_block = Some((d.block, d.ts));
         }

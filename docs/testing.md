@@ -248,8 +248,8 @@ in [Results](RESULTS.md), section 7; a quiet-machine baseline for the regression
 - The ITCH reader on more than the two raw public days and four symbols above.
 - Three parser faults that fuzzing found are known and not fixed: the pinned `dbn` 0.71.0 decoder panics on a DBN
   prelude announcing 100 to 103 metadata bytes and allocates the announced metadata length (up to 256 MiB) before
-  reading it, and the Parquet reader panics on some corrupt file metadata (five sites in `arrow-ipc` / `parquet`
-  59.3.0). A panic surfaces as a Python `PanicException` or a service job's `QT-ENGINE-001` instead of
+  reading it, and the Parquet reader panics on corrupt file metadata with a negative column chunk range (one site in
+  `parquet` 60.0.0; arrow 60 fixed the four `arrow-ipc` sites). A panic surfaces as a Python `PanicException` or a service job's `QT-ENGINE-001` instead of
   `QT-INPUT-002`. The reproducers are in `fuzz/known-crashes/`.
 - The Rust fuzz harness tests (`make fuzz-rust`) run in the local gate (`make gate-3`), not in CI; the libFuzzer
   campaigns themselves (`fuzz/run.sh`, nightly toolchain) are run by hand.

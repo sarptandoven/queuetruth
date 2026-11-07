@@ -295,7 +295,7 @@ fn inject(venue: Venue, events: &[MboEvent], insts: &[Instrument], seed: u64) ->
         }
         if roll < 4 {
             // Lock or cross: an ask at or below the best bid, or a bid at or above the best ask.
-            let ask = r.next_u64() % 2 == 0;
+            let ask = r.next_u64().is_multiple_of(2);
             let deep = (r.next_u64() % 2) as i64 * tick;
             let (px, sb) = if ask { (bb - deep, b'A') } else { (ba + deep, b'B') };
             let size = 1 + r.next_u64() % 300;
@@ -324,7 +324,7 @@ fn inject(venue: Venue, events: &[MboEvent], insts: &[Instrument], seed: u64) ->
             crosses += 1;
         } else if roll < 8 {
             // Duplicate add of a resting order near the touch (no snapshot flag).
-            let side = if r.next_u64() % 2 == 0 {
+            let side = if r.next_u64().is_multiple_of(2) {
                 BookSide::Bid
             } else {
                 BookSide::Ask
@@ -336,7 +336,7 @@ fn inject(venue: Venue, events: &[MboEvent], insts: &[Instrument], seed: u64) ->
             let (lp, _, _) = levels[(r.next_u64() % levels.len().min(3) as u64) as usize];
             let orders = book.orders_at(side, lp);
             let o = orders[(r.next_u64() % orders.len() as u64) as usize];
-            let shift = if r.next_u64() % 4 == 0 { tick } else { 0 };
+            let shift = if r.next_u64().is_multiple_of(4) { tick } else { 0 };
             let px = match side {
                 BookSide::Bid => lp - shift,
                 BookSide::Ask => lp + shift,
@@ -356,7 +356,7 @@ fn inject(venue: Venue, events: &[MboEvent], insts: &[Instrument], seed: u64) ->
         } else if roll < 11 && rules(venue).modify_records_present {
             // Partial execution reported by `F` and the order's `M` in one event (CME priority after fills, A6b):
             // the new size is below, at or above the post-fill remainder.
-            let side = if r.next_u64() % 2 == 0 {
+            let side = if r.next_u64().is_multiple_of(2) {
                 BookSide::Bid
             } else {
                 BookSide::Ask

@@ -93,10 +93,10 @@ impl<T: FixedRow> Parts<T> {
 
     #[inline]
     fn slot(&mut self, key: (i32, u32)) -> usize {
-        if let Some((k, i)) = self.last {
-            if k == key {
-                return i;
-            }
+        if let Some((k, i)) = self.last
+            && k == key
+        {
+            return i;
         }
         let i = match self.index.get(&key) {
             Some(&i) => i,

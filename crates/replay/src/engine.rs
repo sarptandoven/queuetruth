@@ -19,7 +19,7 @@ use crate::util::{DAY_NS, InstrumentTable, SEC_NS, utc_days};
 use crate::why::Tracer;
 use crate::{
     BboMode, EngineConfig, EngineReport, EventEnd, EventObserver, FillRule, HiddenPrintPolicy, PlannedEnd,
-    ShadowDiagnostics, ShadowState, Sink, Stats, TradingHalt,
+    ShadowDiagnostics, ShadowPeek, ShadowState, Sink, Stats, TradingHalt,
 };
 
 type BboKey = (Option<Px>, Qty, u32, Option<Px>, Qty, u32);
@@ -264,6 +264,12 @@ impl Engine {
         self.shadows.add(spec)
     }
 
+    /// The checks of `add_shadow` without adding the shadow (so a batch can be refused whole).
+    pub fn check_shadow(&self, spec: &ShadowSpec) -> QtResult<()> {
+        self.check_not_past(spec.ts_submit, "ts_submit", &spec.shadow_id)?;
+        self.shadows.check(spec)
+    }
+
     /// Sends a cancel at `ts_cancel` for a shadow without one (not before the last record applied).
     pub fn cancel_shadow(&mut self, shadow_id: &str, ts_cancel: Ts) -> QtResult<u32> {
         self.check_not_past(ts_cancel, "ts_cancel", shadow_id)?;
@@ -300,10 +306,10 @@ impl Engine {
 
     #[inline]
     fn slot(&mut self, id: u32, ts: Ts) -> usize {
-        if let Some((i, s)) = self.last {
-            if i == id {
-                return s;
-            }
+        if let Some((i, s)) = self.last
+            && i == id
+        {
+            return s;
         }
         let slot = match self.slots.get(&id) {
             Some(&s) => s,
@@ -691,13 +697,21 @@ impl Engine {
         Ok((r, self.shadows.why.take()))
     }
 
-    fn finish_inner(&mut self, sink: &mut dyn Sink) -> QtResult<EngineReport> {
+    /// Ends every event still open (no `LAST` record yet) as `finish` does at the end of input, without ending the
+    /// shadows: an interactive session at the end of its data (`Session::advance_events_to`), where shadows can still
+    /// be added and cancelled until `finish`.
+    pub fn end_open_events(&mut self, sink: &mut dyn Sink) -> QtResult<()> {
         for slot in 0..self.insts.len() {
             if self.insts[slot].open {
                 self.stats.unterminated_events += 1;
                 self.end_event(slot, sink)?;
             }
         }
+        Ok(())
+    }
+
+    fn finish_inner(&mut self, sink: &mut dyn Sink) -> QtResult<EngineReport> {
+        self.end_open_events(sink)?;
         if let Some(o) = self.oracle.as_mut() {
             for inst in &mut self.insts {
                 o.flush(&mut inst.sweeps, inst.id, sink)?;
@@ -815,6 +829,11 @@ impl Engine {
             }
         }
         st
+    }
+
+    /// A shadow as a replay ending now would report it (panics on an index not returned by `shadow_index`).
+    pub fn shadow_peek(&self, idx: u32) -> ShadowPeek {
+        self.shadows.peek(idx)
     }
 
     /// Ends every shadow as `censored_gap` without replaying (their partition does not exist).

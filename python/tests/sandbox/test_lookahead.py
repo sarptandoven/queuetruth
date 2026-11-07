@@ -1,12 +1,13 @@
 """No look-ahead, enforced structurally and checked from outside.
 
-1. Structure: after every step the scratch dataset (the only input of every replay the session runs) holds exactly
-   the source records of the cut at the visible time, its source prints and feed gaps end there too (a gap is listed
-   once it has started, its end clamped to the cut), and every replay of the session reads the scratch dataset, never
-   the original files.
-2. Behaviour: two datasets that agree up to `T*` and differ after it give byte-identical observations, acks and log
-   entries for every step before `T*` to an agent whose decisions depend on what it sees; the difference shows
-   after `T*`. A future price spike never appears in anything the agent receives before it.
+1. Structure: with `replay` stepping, after every step the scratch dataset (the only input of every replay the
+   session runs) holds exactly the source records of the cut at the visible time, its source prints and feed gaps end
+   there too (a gap is listed once it has started, its end clamped to the cut), and every replay of the session reads
+   the scratch dataset, never the original files. With `session` stepping the one-pass session's engine holds exactly
+   the records the tape released (`test_stepping.py`).
+2. Behaviour (both steppings): two datasets that agree up to `T*` and differ after it give byte-identical
+   observations, acks and log entries for every step before `T*` to an agent whose decisions depend on what it sees;
+   the difference shows after `T*`. A future price spike never appears in anything the agent receives before it.
 3. Interface: instructions carry the agent's clock and nothing else in time; nothing fills from an event at or
    before the decision; markouts appear only once their horizon is visible; with feed latency the agent sees the
    market exactly `feed_latency_ns` late.
@@ -29,6 +30,7 @@ import pytest
 import queuetruth.api
 from queuetruth.sandbox import Sandbox
 from queuetruth.sandbox.tape import GAP_IN_PROGRESS
+from queuetruth.schemas.arrow import SCHEMAS
 from queuetruth.schemas.io import write_table
 from queuetruth.schemas.runid import canonical_json
 from sandbox.sbx_helpers import (
@@ -85,7 +87,7 @@ def test_the_tape_holds_exactly_the_cut_and_every_replay_reads_it(monkeypatch: p
         return real(spec, **kw)
 
     monkeypatch.setattr(queuetruth.api, "replay", spy)
-    sb = Sandbox.open(SPEC)
+    sb = Sandbox.open(SPEC, stepping="replay")
     obs = [sb.observe()]
     rng = random.Random(3)
     for _ in range(40):
@@ -117,7 +119,7 @@ def test_feed_gaps_enter_the_tape_once_started_and_end_at_the_cut(tmp_path: Path
         {"instrument_id": 2, "ts_start": at(11), "ts_end": at(12), "reason": "another instrument"},
     ]
     ds = write_dataset(tmp_path / "ds", t, feed_gaps=gaps)
-    with Sandbox.open(base_spec(ds, start=at(10), end=at(19))) as sb:
+    with Sandbox.open(base_spec(ds, start=at(10), end=at(19)), stepping="replay") as sb:
         for to, want in (
             (12, []),
             (13, []),
@@ -152,16 +154,17 @@ def _perturbed(src: Path, out: Path, iid: int, day: int, t_star: int) -> Path:
     tab = tab.set_column(tab.schema.get_field_index("price"), "price", pa.array(price, pa.int64()))
     tab = tab.set_column(tab.schema.get_field_index("size"), "size", pa.array(size, pa.uint64()))
     f.unlink()
-    write_table(tab, f, tab.schema)
+    write_table(tab, f, SCHEMAS["qt.mbo"])
     return out
 
 
+@pytest.mark.parametrize("stepping", ["session", "replay"])
 @pytest.mark.parametrize(
     ("dataset", "date", "start", "end"),
     [(SYNTH, "2026-06-15", "13:32", "13:44"), (SYNTH_NASDAQ, "2026-06-15", "10:02", "10:14")],
 )
 def test_the_future_cannot_change_what_the_agent_saw(
-    tmp_path: Path, dataset: Path, date: str, start: str, end: str
+    tmp_path: Path, dataset: Path, date: str, start: str, end: str, stepping: str
 ) -> None:
     spec = {**SPEC, "dataset": {"path": str(dataset)}, "session_date": date, "start": start, "end": end}
     probe = Sandbox.open(spec)
@@ -172,7 +175,7 @@ def test_the_future_cannot_change_what_the_agent_saw(
     alt = _perturbed(dataset, tmp_path / "alt", 1, int(day), t_star)
     runs = []
     for ds in (dataset, alt):
-        sb = Sandbox.open({**spec, "dataset": {"path": str(ds)}})
+        sb = Sandbox.open({**spec, "dataset": {"path": str(ds)}}, stepping=stepping)
         seen = random_agent(sb, random.Random(17), steps=200, step_ns=(500 * MS, 9_000 * MS))
         runs.append(([o.model_dump(mode="json") for o in seen], sb.order_log()["entries"]))
         sb.close()

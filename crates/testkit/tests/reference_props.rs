@@ -70,11 +70,10 @@ proptest! {
             };
             let ts_submit = t0 + (t1 - t0) / 1000 * i64::from(r.at);
             let id = format!("p{i}");
-            if let Some((dt, q)) = r.amend {
-                if q < r.qty {
+            if let Some((dt, q)) = r.amend
+                && q < r.qty {
                     amends.push(ShadowAmend { shadow_id: id.clone(), ts_send: ts_submit + dt, new_qty: q });
                 }
-            }
             shadows.push(ShadowSpec {
                 shadow_id: id,
                 instrument_id: 1,

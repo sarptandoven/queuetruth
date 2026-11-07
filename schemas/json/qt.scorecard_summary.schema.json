@@ -948,6 +948,196 @@
       "title": "McNemar",
       "type": "object"
     },
+    "PnlGap": {
+      "additionalProperties": false,
+      "description": "1.2: the scorecard's P&L gap in one currency at one markout horizon (`queuetruth.score.pnl_gap`): the per-order\nmean of `qt.score_shortfall.total_ccy` (simulator minus live, net of fees; positive = the simulator's P&L is too\nhigh) with its 95% block-bootstrap CI, the direction (a finding only when the CI excludes 0), why it is not\ncomputable or not answerable, the parts (per-order means that add up to the gap) with their CIs on the same\ndraws, the part a finding mostly comes from, and the plain sentence.",
+      "properties": {
+        "horizon_ns": {
+          "title": "Horizon Ns",
+          "type": "integer"
+        },
+        "currency": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Currency"
+        },
+        "n_valued": {
+          "title": "N Valued",
+          "type": "integer"
+        },
+        "n_unvalued": {
+          "title": "N Unvalued",
+          "type": "integer"
+        },
+        "mean_ccy": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Mean Ccy"
+        },
+        "ci_lo": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ci Lo"
+        },
+        "ci_hi": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ci Hi"
+        },
+        "direction": {
+          "enum": [
+            "sim_too_high",
+            "sim_too_low",
+            "no_significant_difference",
+            "not_computable",
+            "not_answerable"
+          ],
+          "title": "Direction",
+          "type": "string"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reason"
+        },
+        "parts_ccy": {
+          "$ref": "#/$defs/PnlGapParts"
+        },
+        "parts_ci_lo": {
+          "$ref": "#/$defs/PnlGapParts"
+        },
+        "parts_ci_hi": {
+          "$ref": "#/$defs/PnlGapParts"
+        },
+        "main_part": {
+          "anyOf": [
+            {
+              "enum": [
+                "granted",
+                "denied",
+                "timing",
+                "fees"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Main Part"
+        },
+        "headline": {
+          "title": "Headline",
+          "type": "string"
+        }
+      },
+      "required": [
+        "horizon_ns",
+        "currency",
+        "n_valued",
+        "n_unvalued",
+        "mean_ccy",
+        "ci_lo",
+        "ci_hi",
+        "direction",
+        "reason",
+        "parts_ccy",
+        "parts_ci_lo",
+        "parts_ci_hi",
+        "main_part",
+        "headline"
+      ],
+      "title": "PnlGap",
+      "type": "object"
+    },
+    "PnlGapParts": {
+      "additionalProperties": false,
+      "description": "1.2: one value per part of the P&L gap (`queuetruth.score.pnl_gap`): fills the simulator grants that live did\nnot get, fills live got that it misses, the timing of fills both arms got, and fees.",
+      "properties": {
+        "granted": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Granted"
+        },
+        "denied": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Denied"
+        },
+        "timing": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Timing"
+        },
+        "fees": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Fees"
+        }
+      },
+      "required": [
+        "granted",
+        "denied",
+        "timing",
+        "fees"
+      ],
+      "title": "PnlGapParts",
+      "type": "object"
+    },
     "SimSource": {
       "additionalProperties": false,
       "description": "Which simulator arm was scored.",
@@ -1413,6 +1603,21 @@
       ],
       "default": null,
       "title": "Fills Only"
+    },
+    "pnl_gap": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/PnlGap"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Pnl Gap"
     }
   },
   "required": [

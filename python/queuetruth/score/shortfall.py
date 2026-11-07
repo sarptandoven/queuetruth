@@ -686,6 +686,42 @@ def shortfall_rows(
     return [dict(zip(cols, vals, strict=True)) for vals in zip(*cols.values(), strict=True)]
 
 
+def stream_id(currency: str | None, horizon_ns: int) -> str:
+    """The bootstrap stream of one (horizon, currency) of `qt.score_shortfall` (every component shares it)."""
+    return f"score_shortfall:{currency or '-'}:{int(horizon_ns)}"
+
+
+def block_mean_cis(
+    orders: Sequence[Mapping[str, Any]],
+    values: Mapping[str, Sequence[float]],
+    b: int,
+    kind: str,
+    seed: int,
+    test_id: str,
+) -> tuple[dict[str, tuple[float | None, float | None]], int, str]:
+    """95% percentile CIs of the per-order mean of each column of `values` (one value per order of `orders`) by the
+    scorer's clustered block bootstrap, every column on the same draws of stream `test_id`; with the number of
+    blocks and the block kind. The shortfall totals use it, and so does `queuetruth.score.pnl_gap` for the parts."""
+    labels, kind_ = block_labels(list(orders), kind)
+    _, inv = np.unique(labels, return_inverse=True)
+    k = int(inv.max()) + 1
+    counts = stats.block_counts(k, b, stats.bootstrap_seed(seed, test_id)).astype(float)
+    den = counts @ np.bincount(inv, minlength=k).astype(float)
+    out: dict[str, tuple[float | None, float | None]] = {}
+    with np.errstate(all="ignore"):
+        for c, vals in values.items():
+            x = np.asarray(vals, dtype=float)
+            reps = (counts @ np.bincount(inv, weights=x, minlength=k)) / den
+            a, z = stats.percentile_ci(reps, 0.05)
+            out[c] = (a if math.isfinite(a) else None, z if math.isfinite(z) else None)
+    return out, k, kind_
+
+
+def bootstrap_args(bootstrap: Any) -> tuple[int, str, int]:
+    """(`b`, `block`, `seed`) of a `BootstrapSpec` or mapping (defaults 1000, auto, 0)."""
+    return _bootstrap_args(bootstrap)
+
+
 def _total_rows(
     h: int, cur: str | None, g: _Group, b: int, kind: str, seed: int, scope_notes: list[str]
 ) -> list[dict[str, Any]]:
@@ -717,21 +753,12 @@ def _total_rows(
         sums[c] = math.fsum(vals)  # type: ignore[arg-type]
         means[c] = sums[c] / n  # type: ignore[operator]
     if n:
-        labels, kind_ = block_labels(g.orders, kind)
-        _, inv = np.unique(labels, return_inverse=True)
-        k = int(inv.max()) + 1
-        test_id = f"score_shortfall:{cur or '-'}:{h}"
-        counts = stats.block_counts(k, b, stats.bootstrap_seed(seed, test_id)).astype(float)
-        den = counts @ np.bincount(inv, minlength=k).astype(float)
-        with np.errstate(all="ignore"):
-            for c in cols:
-                if means[c] is None:
-                    continue
-                x = np.asarray(g.cols[c], dtype=float)
-                reps = (counts @ np.bincount(inv, weights=x, minlength=k)) / den
-                a, z = stats.percentile_ci(reps, 0.05)
-                lo[c] = a if math.isfinite(a) else None
-                hi[c] = z if math.isfinite(z) else None
+        test_id = stream_id(cur, h)
+        cis, k, kind_ = block_mean_cis(
+            g.orders, {c: g.cols[c] for c in cols if means[c] is not None}, b, kind, seed, test_id
+        )
+        for c, (a, z) in cis.items():
+            lo[c], hi[c] = a, z
         notes.append(
             f"95% percentile CI of the per-order mean; block bootstrap over {k} {kind_} block(s), B = {b}, "
             f"stream {test_id}"

@@ -96,8 +96,9 @@ Every DBN version (1 to 3) and both encodings (plain, and zstd, which `DbnReader
 reach it, on the calling thread, before any record is read. Lengths of 104 and more are bounds-checked by the decoder.
 
 Reproducers (fixed after 0.2.0, now in `fuzz/regressions/dbn/`): `fuzz_metadata_len_100` (the minimized fuzzer find, DBN v3),
-`v3_metadata_len_100_zeros`, `v1_metadata_len_103` and `zstd_v3_metadata_len_100`; test
-`fuzz/tests/replay.rs::known_dbn_crashes_still_reproduce`; filter `qt_fuzz::dbn_known_metadata_panic`.
+`v3_metadata_len_100_zeros`, `v1_metadata_len_103` and `zstd_v3_metadata_len_100`; tests
+`crates/ingest/tests/dbn_metadata_guard.rs::known_dbn_decoder_faults_are_input_errors` and
+`fuzz/tests/replay.rs::regressions_stay_fixed`.
 
 Suggested fix in `crates/ingest/src/dbn.rs`: `FrameCheck::observe` already parses the decompressed prelude (plain or
 zstd) before the decoder sees it and rejects a metadata length above `MAX_METADATA_BYTES`. One more bound in its
@@ -137,6 +138,10 @@ review found the second one by mutating footer bytes):
 | `arrow-ipc-59.3.0/src/convert.rs:354` | `FloatingPoint type with precision of <UNKNOWN 64> not supported` |
 | `arrow-ipc-59.3.0/src/convert.rs:514` | `not implemented: Type NONE not supported` |
 | `parquet-59.3.0/src/file/metadata/mod.rs:1063` | `column start and length should not be negative` |
+
+Update: arrow 60.0.0 fixed the four `arrow-ipc` sites (their reproducers moved to `fuzz/regressions/parquet/` and
+`fixed_parquet_crashes_stay_fixed` replays them without the filter). The `parquet` site remains, now
+`parquet-60.0.0/src/file/metadata/mod.rs:1040`.
 
 The four `arrow-ipc` sites decode the Arrow schema that Parquet writers embed in the footer (`ARROW:schema`). Every
 path that reads Parquet reaches them: a `parquet` ingest input, its `instruments` file, and any file of a dataset

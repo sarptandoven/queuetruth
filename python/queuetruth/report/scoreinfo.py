@@ -2,12 +2,13 @@
 
 Schema 1.1 summaries (SPEC 3.11 #9) carry them natively and are read first: `discordance_clustered` (the
 cluster-robust primary discordance test, audit ruling A10), `fills_only`, `n_taker_fills` (ruling A5),
-`n_twin_unmatched` / `twin_match_rate` (self-exclusion, ruling A1). For v0.1 outputs (those fields null) the report
-falls back to what the scorer recorded elsewhere: the `qt.score_tests` row `discordance_clustered` or the
-`clusters: ...` summary warning; the `fills_only: ...` warning / `not computable` headline; taker fills from
-`qt.score_fills.liquidity = taker`; the `self_exclusion: matched ...` warning. Taker markouts are `qt.score_tests`
-rows `markout_mean_taker` (stratum kind = arm, stratum = `<ref>:<horizon_ns>`); markouts in bps and net of fees
-(review F10) are rows `markout_mean_bps` / `markout_mean_net_ccy` of the same shape."""
+`n_twin_unmatched` / `twin_match_rate` (self-exclusion, ruling A1), and from 1.2 `pnl_gap` (the P&L gap). For
+older outputs (those fields null) the report falls back to what the scorer recorded elsewhere: the `qt.score_tests`
+row `discordance_clustered` or the `clusters: ...` summary warning; the `fills_only: ...` warning / `not computable`
+headline; taker fills from `qt.score_fills.liquidity = taker`; the `self_exclusion: matched ...` warning; the P&L gap
+from `qt.score_shortfall`. Taker markouts are `qt.score_tests` rows `markout_mean_taker` (stratum kind = arm,
+stratum = `<ref>:<horizon_ns>`); markouts in bps and net of fees (review F10) are rows `markout_mean_bps` /
+`markout_mean_net_ccy` of the same shape."""
 
 from __future__ import annotations
 
@@ -17,7 +18,8 @@ from typing import Any
 
 from queuetruth.report import cols
 from queuetruth.report.load import RunDir
-from queuetruth.schemas.models import ScorecardSummary
+from queuetruth.schemas.models import PnlGap, ScorecardSummary
+from queuetruth.score.pnl_gap import pnl_gap_table
 
 NOT_COMPUTABLE = "not computable: fills-only source"
 
@@ -291,3 +293,16 @@ def markout_rows(run: RunDir, test_id: str) -> list[dict[str, Any]]:
             }
         )
     return sorted(out, key=lambda x: (x["ref"], x["arm"], x["horizon_ns"]))
+
+
+def pnl_gaps(run: RunDir, s: ScorecardSummary) -> list[PnlGap]:
+    """The scorecard's P&L gap per currency (`queuetruth.score.pnl_gap`): the 1.2 summary field `pnl_gap`, else
+    computed from the run's `qt.score_shortfall` table at the markout equivalence horizon (without the scorer's order
+    rows, so no part has a CI and none is named); [] without either."""
+    if s.pnl_gap is not None:
+        return list(s.pnl_gap)
+    t = run.table("qt.score_shortfall")
+    if t is None:
+        return []
+    gaps = pnl_gap_table(t.read(), s.equivalence.markout_horizon_ns, fills_only=fills_only(s))
+    return [PnlGap.model_validate(g) for g in gaps]
