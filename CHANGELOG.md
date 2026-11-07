@@ -27,9 +27,12 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   (`crates/py/src/arrow_ffi.rs`) instead of `pyo3-arrow`, which has no release for arrow 60; `Cargo.lock` lists 26
   fewer crates. `read_table`, `arrow_schema` and `write_table` behave as before, and `write_table` still accepts any
   object with `__arrow_c_stream__`.
-- **Parquet files are written by `parquet` 60.0.0.** Data pages are unchanged; for some tables the footer is a few
-  bytes smaller (in a sample run `zoo_fills`, `zoo_predictions` and `zoo_trajectory`; every `replay` output was
-  byte-identical), so their sha256 in summaries differs from 0.2.0's for the same rows.
+- **Parquet files are written by `parquet` 60.1.0.** Data pages are unchanged, but the footer is not, so a file's
+  sha256 in summaries differs from 0.2.0's for the same rows: a dictionary-encoded column lists its dictionary page
+  first in its page encoding stats (Arrow C++ expects that order), and floating-point columns carry IEEE 754
+  total-order statistics with a NaN count, whose min and max pyarrow 25 does not read back. Some footers
+  are also a few bytes smaller. The committed test fixtures are regenerated with `make fixtures`; every regenerated
+  table reads back to the same rows, schema and metadata.
 
 ### Fixed
 
