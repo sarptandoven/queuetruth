@@ -11,6 +11,11 @@ Three things for people who backtest with [hftbacktest](https://github.com/nkaz0
 3. **hftbacktest #312**: a minimal reproduction and a proposed fix with tests, not submitted
    ([UPSTREAM.md](UPSTREAM.md)).
 
+For the short path (score your own hftbacktest settings against the exact queue, or fit `n` and get the code to
+paste, in one or two calls) use the pip-installable plugin in [`plugin/`](plugin/README.md),
+`queuetruth-hftbacktest`. This directory is the research side: the multi-model export, the order-by-order engine
+parity and the #312 evidence.
+
 ## Where it lives
 
 The integration is in the queuetruth repository, not in the `queuetruth` wheel on PyPI: use a clone at a version
@@ -301,6 +306,7 @@ hftbacktest 2.4.4
 | `evidence/` | `synthetic_regression.py` and `driver_parity.py` (the O-ZOO-3 regression and driver parity), `pos316.py` (#316), `readme_tables.py` (the tables above), `results.json` (aggregates of the documented runs) |
 | `upstream/` | #312: patch, reproduction, `verify.sh`, the wheel build's pinned `Cargo.lock` |
 | `tests/` | pytest suite; the tests that need hftbacktest run it in the venvs and skip with a reason when they are missing |
+| `plugin/` | the `queuetruth-hftbacktest` package (`prepare`, `run`, `score`, `calibrate`), its tests (`make test-hftbacktest-plugin`) and README |
 
 ## Tests
 
