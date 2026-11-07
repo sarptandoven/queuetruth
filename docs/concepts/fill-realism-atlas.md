@@ -3,7 +3,8 @@
 The atlas is a public table that answers one question for every popular backtester fill model: on a real market
 day, how far are its fills and its P&L from what the real order queue would have given? It is rebuilt from public
 data each trading day by `.github/workflows/atlas.yml`, and every number on it can be re-run and checked against a
-published Merkle root.
+published Merkle root. The daily venue is IEX. Nasdaq TotalView-ITCH sample days can sit next to it
+([two venues](#two-venues)).
 
 ## How to read it
 
@@ -63,6 +64,66 @@ and horizon (fill rate and P&L), its best settings by tier with the configs, a c
 summary: the exact fill rate, how many of the library's settings fill clearly more or fewer orders, its closest point
 estimate with whether it is still clearly off, and the settings it cannot be ranked against. The index links to them.
 
+## Two venues
+
+The site can show two venues: IEX DEEP+ at its top address (the default) and Nasdaq TotalView-ITCH under
+`nasdaq/`. A line at the top of every page switches venue. Each venue has its own pages: its own tables,
+headlines, library pages, atlas and day roots, the command that re-creates a day's buckets from its public file,
+and its own attribution line. The two are never pooled: a model's error on IEX and on Nasdaq are separate rows on
+separate pages.
+
+The Nasdaq days are the free TotalView-ITCH 5.0 sample days Nasdaq publishes at
+[emi.nasdaq.com](https://emi.nasdaq.com/ITCH/Nasdaq%20ITCH/). The site shows them only when a maintainer turns them
+on (the repository variable `ATLAS_NASDAQ_SITE`, or `nasdaq_site` on a manual run). It is off by default, because
+[Data and licensing](../data-and-licensing.md) does not settle whether aggregates of the sample files may be
+published.
+
+## A Nasdaq day on one runner
+
+A manual run of `.github/workflows/atlas.yml` with `venue: nasdaq` and a day such as `01302020` runs that sample day
+on one GitHub-hosted runner (4 cores, 16 GB, a 6 h job). It keeps the reduced day as
+`nasdaq-day-<date>.tar.gz` on the `atlas-days-nasdaq` release, apart from the IEX days.
+
+A Nasdaq day is far larger than an IEX day: 2020-01-30 has 423 million messages and about 8,900 symbols, and its
+plan predicts about 8 to 12 core-hours of units. When the plan predicts more than the workflow's budget (10
+core-hours), the day runs a symbol sample:
+
+- Symbols are ranked into the liquidity tiers on the whole day first.
+- Every tier keeps the same number of symbols, the largest number that fits the budget. A tier with fewer symbols
+  keeps them all.
+- Within a tier, the kept symbols are the ones with the smallest `sha256("<seed>:<date>:<symbol>")`. The choice
+  depends on the symbol and the date only, never on a result.
+- The other symbols are excluded with the reason `outside the symbol sample`, so the sample is part of the run id.
+- The plan, the day's `day_manifest.json` (`symbol_sample`), the atlas manifest and the venue's pages say how many
+  symbols each tier kept of how many.
+
+The buckets are still the whole day's, so a unit re-runs from buckets re-created from the public file as for any
+day. A day whose prediction fits the budget runs every symbol and has no `symbol_sample`. In a sampled day the
+`ALL` rows pool the sampled symbols, so each tier counts with its sample size, not with its share of the market.
+Read the tier tables for a market-wide picture.
+
+**How the budget was sized.** `scripts/scale/runner_budget.py` runs synthetic ITCH days
+(`python/tests/scale/scale_itch.py`, no market data) through the same split, plan and units on a given machine.
+On a 4-core, 15 GiB machine like the runner, four units at a time with one thread each:
+
+- Unit CPU time was 0.38 to 0.56 of the cost model's prediction (three runs). The prediction carries a x1.5
+  safety, so the slow end was used.
+- The units kept the cores about 82% busy.
+- Peak memory was about 0.42 GB plus 40 MB per 1,000 orders and 0.15 to 0.22 GB per million records.
+- With a margin of 2 for real order flow, which is busier than synthetic, 3.5 h of units hold
+  `3.5 x 4 x 0.82 / (0.56 x 2)`, about 10 predicted core-hours. That leaves more than 2 h of the job for the
+  build, the stream and split of the 5.6 GB file, and the reduce.
+- Units of at most 100 predicted core-seconds (`--unit-core-s 100`) held about 40,000 orders and peaked near 2 GB.
+  So four fit at 3.5 GiB each (`--unit-mem-gib 3.5`). A single symbol gets a unit of its own and fits 3.5 GiB up to
+  about 13 million records.
+
+Re-run the measurement on another machine before changing the budget:
+
+<!-- check-docs: skip (runs about two minutes of synthetic units) -->
+```bash
+uv run --frozen --no-sync python scripts/scale/runner_budget.py --workers 4 --unit-hours 3.5
+```
+
 ## How a number is made
 
 1. **Data.** One full IEX DEEP+ day: every order book update of every symbol on IEX, which IEX publishes and
@@ -109,13 +170,24 @@ uv run --frozen --no-sync python scripts/scale/local_day.py --source iex --date 
     --url https://storage.googleapis.com/iex/data/feeds/20261009/20261009_IEXTP1_DPLS1.0.pcap.gz --site
 ```
 
+A Nasdaq sample day runs the same way, on a symbol sample when the whole day is above the budget (the 5.6 GB file is
+streamed, never stored; its buckets need about 7 GB of disk):
+
+<!-- check-docs: skip (streams a 5.6 GB public file) -->
+```bash
+uv run --frozen --no-sync python scripts/scale/local_day.py --source itch --date 01302020 \
+    --workers 4 --threads 1 --unit-core-s 100 --unit-mem-gib 3.5 --sample-budget-core-h 10 --site
+```
+
 To score your own simulator rather than the ones in the zoo, start from [getting started](../getting-started.md):
 `pipx run queuetruth demo --yes` places orders in the real queue of a public day in about a minute.
 
 ## Limits
 
-- **One venue.** IEX carries a few percent of US equity volume and has its own order types and speed bump. Its
-  queues are thinner than Nasdaq's, so the size of a model's error can differ elsewhere; the method does not.
+- **One venue by default.** IEX carries a few percent of US equity volume and has its own order types and speed
+  bump. Its queues are thinner than Nasdaq's, so the size of a model's error can differ elsewhere; the method does
+  not. Nasdaq sample days can be shown next to it ([two venues](#two-venues)), but they are a few old days, often
+  on a symbol sample, not a daily series.
 - **Your orders do not move the market.** A shadow order rests in the real queue without changing it: there is no
   market impact and no reaction by other traders ([what a shadow does not do](shadow-orders.md#what-a-shadow-does-not-do)).
   Large orders (`large`) are the least realistic for that reason.

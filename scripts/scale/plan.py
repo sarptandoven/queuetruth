@@ -32,6 +32,16 @@ replay checks `1.6e-6 x records`; per population and mode `1.45e-6 x records + 1
 + 0.8e-3 x shadows` (each shadow sees ~1.28% of a 300 s life in a 23,400 s session; the per-shadow term, the zoo's
 17 model pairs plus the block statistics, dominates a full-market day). Units hold the symbols of one bucket,
 first-fit decreasing by cost up to `--unit-core-s`; a symbol above it gets a unit of its own.
+
+Symbol sample (`--sample-budget-core-h B` or `--sample-per-tier N`; one split only): a day whose predicted cost is
+above `B` keeps, in every liquidity tier, the `N` symbols with the smallest `sha256("<seed>:<date>:<symbol>")`, and a
+tier with fewer symbols keeps them all. With `B`, `N` is the largest count whose predicted cost fits in `B`. Tiers are
+ranked on the whole day first, so a kept symbol has the tier it has in the full day. The other symbols are
+excluded with the reason `outside the symbol sample`, so the sample enters `exclusions_sha256` and the `run_id`. The
+plan's `symbol_sample` (also in the source) records the rule, `N`, the budget, the full day's predicted cost and
+per tier how many symbols were kept of how many. The split and its buckets are the full day's, so a unit re-runs from
+a bucket re-created from the public file as for any day. A day that fits keeps every symbol and has no
+`symbol_sample`, so its plan and run id are unchanged.
 """
 
 from __future__ import annotations
@@ -121,6 +131,56 @@ def quotas_for(rule: str, pops: dict[str, dict[str, Any]], day: list[dict[str, A
     return out
 
 
+SAMPLE_RULE = (
+    "per liquidity tier (ranked on the whole day), the N symbols with the smallest sha256('<seed>:<date>:<symbol>'); "
+    "a tier with fewer symbols keeps them all"
+)
+
+
+def sample_order(seed: int, date: str, symbol: str) -> str:
+    """The sort key of a symbol in the symbol sample: fixed for a (seed, date, symbol), whatever else is in the day."""
+    return K.sha256_hex(f"{seed}:{date}:{symbol}".encode())
+
+
+def sample_symbols(
+    day: list[dict[str, Any]],
+    tier: dict[str, str],
+    cost: dict[str, float],
+    *,
+    seed: int,
+    date: str,
+    budget_core_s: float | None = None,
+    per_tier: int | None = None,
+) -> tuple[set[str], int | None]:
+    """The symbols a day keeps and the per-tier count `N` (None: the whole day, no sample).
+
+    With `per_tier`, `N` is that count. With `budget_core_s`, the whole day is kept when its predicted cost fits;
+    else `N` is the largest count whose kept symbols' predicted cost fits (at least 1, so a day never comes out
+    empty)."""
+    by_tier: dict[str, list[str]] = {}
+    for d in day:
+        by_tier.setdefault(tier[d["symbol"]], []).append(d["symbol"])
+    for t in by_tier:
+        by_tier[t].sort(key=lambda s: sample_order(seed, date, s))
+
+    def kept(n: int) -> set[str]:
+        return {s for names in by_tier.values() for s in names[:n]}
+
+    biggest = max((len(v) for v in by_tier.values()), default=0)
+    if per_tier is not None:
+        return kept(per_tier), per_tier
+    if budget_core_s is None or sum(cost.values()) <= budget_core_s:
+        return kept(biggest), None
+    lo, hi = 1, biggest  # the cost of kept(n) grows with n: the largest n that fits, by bisection
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if sum(cost[s] for s in kept(mid)) <= budget_core_s:
+            lo = mid
+        else:
+            hi = mid - 1
+    return kept(lo), lo
+
+
 def pack(items: list[tuple[str, float]], cap: float) -> list[list[str]]:
     """First-fit decreasing; ties by name."""
     bins: list[tuple[float, list[str]]] = []
@@ -155,6 +215,9 @@ def make_plan(a: argparse.Namespace) -> dict[str, Any]:
     if a.pnl:  # absent without P&L, so such a plan's units and run id are what they were before P&L existed
         run_spec["pnl_horizons_ns"] = list(K.PNL_HORIZONS_NS)
     sources, universe, exclusions, units = [], [], [], []
+    symbol_sample: dict[str, dict[str, Any]] = {}
+    if (a.sample_budget_core_h is not None or a.sample_per_tier is not None) and len(a.split) != 1:
+        raise SystemExit("plan: a symbol sample is for one day: give one --split")
     total_cost = 0.0
     for split in a.split:
         sm = json.loads((split / "split_manifest.json").read_text())
@@ -180,6 +243,42 @@ def make_plan(a: argparse.Namespace) -> dict[str, Any]:
                     continue
                 day.append({"symbol": sym, "locate": loc, "messages": msgs, "executions": ex})
                 bucket_of[sym] = b
+        quotas = quotas_for(a.quota_rule, pops, day)
+        ranked = sorted(day, key=lambda d: (-d["executions"], d["symbol"]))
+        tier = {d["symbol"]: tier_of(i + 1) for i, d in enumerate(ranked)}
+        cost = {
+            d["symbol"]: symbol_cost(d["messages"], {p: quotas[p].get(d["symbol"], 0) for p in pops}, len(a.modes))
+            for d in day
+        }
+        sample = None
+        if a.sample_budget_core_h is not None or a.sample_per_tier is not None:
+            budget = None if a.sample_budget_core_h is None else a.sample_budget_core_h * 3600
+            keep, n = sample_symbols(
+                day, tier, cost, seed=a.seed, date=date, budget_core_s=budget, per_tier=a.sample_per_tier
+            )
+            if n is not None:
+                of = {t: sum(1 for d in day if tier[d["symbol"]] == t) for t in sorted(set(tier.values()))}
+                kept_by = {t: sum(1 for s in keep if tier[s] == t) for t in of}
+                sample = {
+                    "rule": SAMPLE_RULE,
+                    "seed": a.seed,
+                    "per_tier": n,
+                    "budget_core_h": a.sample_budget_core_h,
+                    "full_day_core_h": round(sum(cost.values()) / 3600, 3),
+                    "sample_core_h": round(sum(cost[s] for s in keep) / 3600, 3),
+                    "tiers": {t: {"kept": kept_by[t], "of": of[t]} for t in of},
+                }
+                for d in day:
+                    if d["symbol"] not in keep:
+                        t = tier[d["symbol"]]
+                        day_exclusions.append(
+                            {
+                                "date": date,
+                                "symbol": d["symbol"],
+                                "reason": f"outside the symbol sample ({t}: {kept_by[t]} of {of[t]} kept)",
+                            }
+                        )
+                day = [d for d in day if d["symbol"] in keep]
         exclusions += day_exclusions
         sources.append(
             {
@@ -195,16 +294,17 @@ def make_plan(a: argparse.Namespace) -> dict[str, Any]:
                 "trading_state_recorded": trading is not None,
                 # an IEX DEEP+ split (iex_split.py); ITCH splits carry no format, so their run ids are unchanged
                 **({"format": sm["format"]} if "format" in sm else {}),
+                # a sampled day only: a day that fits keeps every symbol and its run id is unchanged
+                **({"symbol_sample": sample} if sample else {}),
             }
         )
-        quotas = quotas_for(a.quota_rule, pops, day)
+        if sample:
+            symbol_sample[date] = sample
         by_bucket: dict[int, list[tuple[str, float]]] = {}
         info = {d["symbol"]: d for d in day}
-        ranked = sorted(day, key=lambda d: (-d["executions"], d["symbol"]))
-        tier = {d["symbol"]: tier_of(i + 1) for i, d in enumerate(ranked)}
         for d in day:
             sq = {p: quotas[p].get(d["symbol"], 0) for p in pops}
-            c = symbol_cost(d["messages"], sq, len(a.modes))
+            c = cost[d["symbol"]]
             total_cost += c
             by_bucket.setdefault(bucket_of[d["symbol"]]["bucket"], []).append((d["symbol"], c))
             universe.append(
@@ -261,6 +361,7 @@ def make_plan(a: argparse.Namespace) -> dict[str, Any]:
         "universe": universe,
         "exclusions": exclusions,
         "units": units,
+        **({"symbol_sample": next(iter(symbol_sample.values()))} if symbol_sample else {}),
     }
 
 
@@ -290,12 +391,24 @@ def main(argv: list[str] | None = None) -> int:
         action="store_false",
         help="leave out the P&L error (units then skip the exact replay with quotes and `evaluate_toxicity`)",
     )
+    ap.add_argument(
+        "--sample-budget-core-h",
+        type=float,
+        default=None,
+        help="keep a deterministic per-tier symbol sample when the day's predicted core-h (this cost model, safety "
+        "included) is above this budget; the day is kept whole when it fits",
+    )
+    ap.add_argument("--sample-per-tier", type=int, default=None, help="keep this many symbols per tier (a sample)")
     ap.add_argument("--one-symbol-per-unit", action="store_true")
     ap.add_argument("--exclude", default="", help="symbols to exclude (comma separated)")
     a = ap.parse_args(argv)
     a.populations = [p for p in a.populations.split(",") if p]
     a.modes = [m for m in a.modes.split(",") if m]
     a.exclude = {s for s in a.exclude.split(",") if s}
+    if a.sample_budget_core_h is not None and a.sample_per_tier is not None:
+        ap.error("give --sample-budget-core-h or --sample-per-tier, not both")
+    if a.sample_per_tier is not None and a.sample_per_tier < 1:
+        ap.error("--sample-per-tier: at least 1")
     plan = make_plan(a)
     a.out.parent.mkdir(parents=True, exist_ok=True)
     a.out.write_text(json.dumps(plan, indent=1) + "\n")
@@ -304,6 +417,12 @@ def main(argv: list[str] | None = None) -> int:
         f"plan {plan['run_id']}: {e['symbol_days']} symbol-days in {e['units']} units, ~{e['core_h']} core-h, "
         f"~${e['modal_usd']} on Modal; {len(plan['exclusions'])} exclusions -> {a.out}"
     )
+    if "symbol_sample" in plan:
+        ss = plan["symbol_sample"]
+        print(
+            f"  symbol sample: {ss['per_tier']} per tier ({ss['sample_core_h']} of {ss['full_day_core_h']} core-h): "
+            + ", ".join(f"{t} {v['kept']}/{v['of']}" for t, v in ss["tiers"].items())
+        )
     return 0 if math.isfinite(e["core_h"]) else 1
 
 

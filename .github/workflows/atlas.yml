@@ -6,9 +6,20 @@
 # compat.yml dispatches this workflow with site_only after each new result, since a repository has one Pages site.
 # Actions are pinned by commit SHA (tag in the trailing comment).
 #
+# A manual run with venue nasdaq runs one Nasdaq TotalView-ITCH 5.0 sample day from emi.nasdaq.com instead
+# (local_day.py --source itch) and keeps it as an asset of its own release, `atlas-days-nasdaq`. A full Nasdaq day may
+# not fit one runner, so it runs with a symbol budget: above NASDAQ_BUDGET_CORE_H predicted core-hours the day runs
+# the same number of symbols in every liquidity tier, chosen by a hash (plan.py --sample-budget-core-h), and the
+# day's manifest and the site say so. The budget, NASDAQ_UNIT_CORE_S and NASDAQ_UNIT_MEM_GIB were sized with
+# scripts/scale/runner_budget.py on synthetic ITCH (docs/concepts/fill-realism-atlas.md).
+#
+# The site shows the kept Nasdaq days next to IEX (IEX stays the default page; Nasdaq is under nasdaq/) only when a
+# maintainer sets the repository variable ATLAS_NASDAQ_SITE to true or a manual run asks with nasdaq_site. It is off
+# by default: docs/data-and-licensing.md does not settle whether aggregates of Nasdaq's sample files may be published.
+#
 # One-time setup by a maintainer: Settings > Pages > Build and deployment > Source: GitHub Actions. Using IEX's data
 # means accepting IEX's Historical Data Terms of Use; every page carries IEX's attribution
-# (docs/data-and-licensing.md). Pages show aggregates only; no IEX file or message is republished.
+# (docs/data-and-licensing.md). Pages show aggregates only; no IEX or Nasdaq file or message is republished.
 name: atlas
 
 on:
@@ -32,14 +43,28 @@ on:
         description: "Only rebuild the site from the kept days and compatibility results (compat.yml uses this)"
         type: boolean
         default: false
+      venue:
+        description: "The venue of the day to run: iex, or nasdaq for a TotalView-ITCH sample day (date is then ignored)"
+        type: choice
+        options: [iex, nasdaq]
+        default: iex
+      nasdaq_day:
+        description: "With venue nasdaq: the sample day on emi.nasdaq.com, MMDDYYYY"
+        required: false
+        default: "01302020"
+      nasdaq_site:
+        description: "Show the kept Nasdaq days on the site (off unless this or the ATLAS_NASDAQ_SITE variable is true)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
-# A group keeps one pending run and a newer one replaces it, so the site-only rebuilds compat.yml dispatches get a
-# group of their own and can never drop a pending IEX day; the deploy job's own group orders the deployments.
+# A group keeps one pending run and a newer one replaces it, so the site-only rebuilds compat.yml dispatches and the
+# Nasdaq days get groups of their own and can never drop a pending IEX day; the deploy job's own group orders the
+# deployments.
 concurrency:
-  group: ${{ inputs.site_only && 'atlas-site' || 'atlas' }}
+  group: ${{ inputs.site_only && 'atlas-site' || inputs.venue == 'nasdaq' && 'atlas-nasdaq' || 'atlas' }}
   cancel-in-progress: false
 
 env:
@@ -50,7 +75,14 @@ env:
   PYTHON_VERSION: "3.13"
   RUST_TOOLCHAIN: "1.97.1"
   ATLAS_RELEASE: atlas-days
+  ATLAS_NASDAQ_RELEASE: atlas-days-nasdaq
   ATLAS_WINDOW: "20"
+  NASDAQ_BASE: "https://emi.nasdaq.com/ITCH/Nasdaq%20ITCH/"
+  # sized with scripts/scale/runner_budget.py: about 10 predicted core-hours of units fit in 3.5 h on 4 cores
+  NASDAQ_BUDGET_CORE_H: "10"
+  NASDAQ_UNIT_CORE_S: "100"
+  NASDAQ_UNIT_MEM_GIB: "3.5"
+  NASDAQ_SITE: ${{ (inputs.nasdaq_site || vars.ATLAS_NASDAQ_SITE == 'true') && 'true' || 'false' }}
   COMPAT_RELEASE: compat-results
 
 jobs:
@@ -71,14 +103,35 @@ jobs:
         if: ${{ !inputs.site_only }}
         env:
           DATE_INPUT: ${{ inputs.date }}
+          VENUE: ${{ inputs.venue || 'iex' }}
+          NASDAQ_DAY: ${{ inputs.nasdaq_day }}
         run: |
+          if [ "$VENUE" = nasdaq ]; then
+            if ! [[ "$NASDAQ_DAY" =~ ^[0-9]{8}$ ]]; then
+              echo "::error::nasdaq_day must be MMDDYYYY, got '$NASDAQ_DAY'"
+              exit 1
+            fi
+            date="${NASDAQ_DAY:4:4}-${NASDAQ_DAY:0:2}-${NASDAQ_DAY:2:2}"
+            {
+              echo "date=$date"
+              echo "mmdd=$NASDAQ_DAY"
+              echo "url=${NASDAQ_BASE}${NASDAQ_DAY}.NASDAQ_ITCH50.gz"
+              echo "venue=nasdaq"
+              echo "release=$ATLAS_NASDAQ_RELEASE"
+              echo "prefix=nasdaq-"
+            } | tee -a "$GITHUB_OUTPUT"
+            exit 0
+          fi
           args=()
           if [ -n "$DATE_INPUT" ]; then args=(--date "$DATE_INPUT"); fi
           python3 scripts/scale/iex_latest.py "${args[@]}" | tee -a "$GITHUB_OUTPUT"
+          printf 'venue=iex\nrelease=%s\nprefix=\n' "$ATLAS_RELEASE" | tee -a "$GITHUB_OUTPUT"
       - name: already in the atlas?
         id: have
         env:
           DATE: ${{ steps.day.outputs.date }}
+          RELEASE: ${{ steps.day.outputs.release }}
+          PREFIX: ${{ steps.day.outputs.prefix }}
           REBUILD: ${{ inputs.rebuild }}
           SITE_ONLY: ${{ inputs.site_only }}
         run: |
@@ -89,7 +142,7 @@ jobs:
             exit 0
           fi
           have=false
-          if bash scripts/nightly/release_assets.sh names "$ATLAS_RELEASE" | grep -qx "day-$DATE.tar.gz"; then
+          if bash scripts/nightly/release_assets.sh names "$RELEASE" | grep -qx "${PREFIX}day-$DATE.tar.gz"; then
             have=true
           fi
           run_day=true
@@ -99,7 +152,14 @@ jobs:
           if [ "$run_day" = false ] && [ "${{ github.event_name }}" = schedule ]; then run_site=false; fi
           echo "run_day=$run_day" >> "$GITHUB_OUTPUT"
           echo "run_site=$run_site" >> "$GITHUB_OUTPUT"
-          echo "day $DATE: in the release: $have; run the day: $run_day; build the site: $run_site"
+          echo "day $DATE: in $RELEASE: $have; run the day: $run_day; build the site: $run_site"
+      # a whole Nasdaq day splits into about 7 GB of buckets: make room before the build fills the disk
+      - name: free disk for the Nasdaq buckets
+        if: steps.have.outputs.run_day == 'true' && steps.day.outputs.venue == 'nasdaq'
+        run: |
+          df -h /
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup
+          df -h /
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master 2026-10-16
         if: steps.have.outputs.run_site == 'true'
         with:
@@ -121,28 +181,49 @@ jobs:
           uv venv --python "${{ steps.py.outputs.python-path }}" .venv
           make sync
           make develop
-      # local_day.py lowers --workers to what memory holds at 6 GiB a unit: two on a 16 GB runner
+      # local_day.py lowers --workers to what memory holds per unit: two IEX units of 6 GiB on a 16 GB runner; four
+      # Nasdaq units of 3.5 GiB, which smaller units (--unit-core-s 100) keep within (runner_budget.py)
       - name: run the day (stream, split, units, reduce)
         if: steps.have.outputs.run_day == 'true'
         env:
           DATE: ${{ steps.day.outputs.date }}
           URL: ${{ steps.day.outputs.url }}
+          VENUE: ${{ steps.day.outputs.venue }}
+          MMDD: ${{ steps.day.outputs.mmdd }}
+          PREFIX: ${{ steps.day.outputs.prefix }}
         run: |
-          uv run --frozen --no-sync python scripts/scale/local_day.py --source iex --date "$DATE" --url "$URL" \
-            --out .atlas/run --workers 4 --threads 1 --min-free-gib 2
+          if [ "$VENUE" = nasdaq ]; then
+            # the two days itch_subset.py pins are checked against their pinned hashes; another day streams its URL
+            url=()
+            case "$MMDD" in 12302019 | 01302020) ;; *) url=(--url "$URL") ;; esac
+            uv run --frozen --no-sync python scripts/scale/local_day.py --source itch --date "$MMDD" "${url[@]}" \
+              --out .atlas/run --workers 4 --threads 1 --min-free-gib 2 --unit-core-s "$NASDAQ_UNIT_CORE_S" \
+              --unit-mem-gib "$NASDAQ_UNIT_MEM_GIB" --sample-budget-core-h "$NASDAQ_BUDGET_CORE_H"
+          else
+            uv run --frozen --no-sync python scripts/scale/local_day.py --source iex --date "$DATE" --url "$URL" \
+              --out .atlas/run --workers 4 --threads 1 --min-free-gib 2
+          fi
           day_dir=".atlas/run/$(date -d "$DATE" +%m%d%Y)"
-          tar -C "$day_dir/day" -czf "day-$DATE.tar.gz" .
-          cp "$day_dir/local_day.json" "local_day-$DATE.json"
+          tar -C "$day_dir/day" -czf "${PREFIX}day-$DATE.tar.gz" .
+          cp "$day_dir/local_day.json" "${PREFIX}local_day-$DATE.json"
       - name: keep the reduced day
         if: steps.have.outputs.run_day == 'true'
         env:
           DATE: ${{ steps.day.outputs.date }}
+          VENUE: ${{ steps.day.outputs.venue }}
+          RELEASE: ${{ steps.day.outputs.release }}
+          PREFIX: ${{ steps.day.outputs.prefix }}
         run: |
-          if ! gh release view "$ATLAS_RELEASE" > /dev/null 2>&1; then
-            gh release create "$ATLAS_RELEASE" --prerelease --title "Fill-Realism Atlas: reduced IEX days" \
-              --notes "Per-day reduced tables of the public atlas (.github/workflows/atlas.yml). Aggregates of IEX DEEP+ data; IEX's attribution and terms apply (docs/data-and-licensing.md)."
+          if ! gh release view "$RELEASE" > /dev/null 2>&1; then
+            if [ "$VENUE" = nasdaq ]; then
+              gh release create "$RELEASE" --prerelease --title "Fill-Realism Atlas: reduced Nasdaq sample days" \
+                --notes "Per-day reduced tables of Nasdaq TotalView-ITCH 5.0 sample days from emi.nasdaq.com (.github/workflows/atlas.yml, venue nasdaq). Aggregate statistics only; no Nasdaq file or message (docs/data-and-licensing.md)."
+            else
+              gh release create "$RELEASE" --prerelease --title "Fill-Realism Atlas: reduced IEX days" \
+                --notes "Per-day reduced tables of the public atlas (.github/workflows/atlas.yml). Aggregates of IEX DEEP+ data; IEX's attribution and terms apply (docs/data-and-licensing.md)."
+            fi
           fi
-          gh release upload "$ATLAS_RELEASE" "day-$DATE.tar.gz" "local_day-$DATE.json" --clobber
+          gh release upload "$RELEASE" "${PREFIX}day-$DATE.tar.gz" "${PREFIX}local_day-$DATE.json" --clobber
       - name: combine the newest days and build the site
         id: site
         if: steps.have.outputs.run_site == 'true'
@@ -184,10 +265,29 @@ jobs:
           done
           uv run --frozen --no-sync python scripts/scale/atlas.py combine "${args[@]}" --out .atlas/atlas \
             --flag-policy exclude
+          # IEX first, so the default page stays IEX; the kept Nasdaq days go to nasdaq/ only when asked
+          venues=(--venue iex=.atlas/atlas)
+          if [ "$NASDAQ_SITE" = true ]; then
+            ndays="$(bash scripts/nightly/release_assets.sh names "$ATLAS_NASDAQ_RELEASE")"
+            mapfile -t nwindow < <(grep -E '^nasdaq-day-.*\.tar\.gz$' <<< "$ndays" | sort | tail -n "$ATLAS_WINDOW")
+            if [ "${#nwindow[@]}" -gt 0 ]; then
+              bash scripts/nightly/release_assets.sh download "$ATLAS_NASDAQ_RELEASE" .atlas/dl "${nwindow[@]}"
+              nargs=()
+              for name in "${nwindow[@]}"; do
+                d=".atlas/nasdaq-days/${name%.tar.gz}"
+                mkdir -p "$d" && tar -C "$d" -xzf ".atlas/dl/$name"
+                nargs+=(--day "$d")
+              done
+              uv run --frozen --no-sync python scripts/scale/atlas.py combine "${nargs[@]}" --out .atlas/atlas-nasdaq \
+                --flag-policy exclude
+              venues+=(--venue nasdaq=.atlas/atlas-nasdaq)
+            else
+              echo "::warning::no Nasdaq day is kept yet; the site shows IEX only"
+            fi
+          fi
           link=()
           if [ "$compat" = true ]; then link=(--compat-link); fi
-          uv run --frozen --no-sync python scripts/scale/atlas_site.py --atlas .atlas/atlas --out .atlas/site \
-            --source iex "${link[@]}"
+          uv run --frozen --no-sync python scripts/scale/atlas_site.py "${venues[@]}" --out .atlas/site "${link[@]}"
           echo "built=true" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         if: steps.site.outputs.built == 'true'

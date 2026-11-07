@@ -19,6 +19,10 @@ records the policy). Writes `<out>/local_day.json`.
 `--source iex` splits an IEX DEEP+ capture with `iex_split.py` (`--input FILE` or `--url URL`; `--date` is the
 session date YYYY-MM-DD, the day's directory is its MMDDYYYY form as for ITCH). `--site` builds the Fill-Realism
 Atlas site of the day into `<out>/site` (`atlas_site.py`; IEX's attribution on every page for an IEX day).
+
+`--sample-budget-core-h B` (or `--sample-per-tier N`) passes the symbol sample to `plan.py`: a day whose predicted
+cost is above `B` runs a deterministic sample of symbols per liquidity tier, recorded in the plan, the reduced day's
+`day_manifest.json` and the site. `.github/workflows/atlas.yml` runs a Nasdaq sample day this way on one runner.
 """
 
 from __future__ import annotations
@@ -141,6 +145,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--min-free-gib", type=float, default=10.0)
     ap.add_argument("--keep-buckets", action="store_true")
     ap.add_argument(
+        "--sample-budget-core-h",
+        type=float,
+        help="plan.py: run a per-tier symbol sample when the day's predicted core-h is above this budget",
+    )
+    ap.add_argument("--sample-per-tier", type=int, help="plan.py: run this many symbols per tier")
+    ap.add_argument(
         "--flag-policy",
         choices=["exclude", "label"],
         default="exclude",
@@ -217,10 +227,19 @@ def main(argv: list[str] | None = None) -> int:
                 "scale",
                 "--unit-core-s",
                 str(a.unit_core_s),
+                *(["--sample-budget-core-h", str(a.sample_budget_core_h)] if a.sample_budget_core_h else []),
+                *(["--sample-per-tier", str(a.sample_per_tier)] if a.sample_per_tier else []),
             ]
         )
         plan = json.loads(plan_path.read_text())
-        stage("plan", t0, run_id=plan["run_id"], units=len(plan["units"]), estimate=plan["estimate"])
+        stage(
+            "plan",
+            t0,
+            run_id=plan["run_id"],
+            units=len(plan["units"]),
+            estimate=plan["estimate"],
+            **({"symbol_sample": plan["symbol_sample"]} if "symbol_sample" in plan else {}),
+        )
 
         t0 = time.perf_counter()
         shards = out / "shards"
