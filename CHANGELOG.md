@@ -8,6 +8,25 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ### Added
 
+- **Nasdaq TotalView-ITCH sample days in the Fill-Realism Atlas** (ROADMAP W1): a manual run of
+  `.github/workflows/atlas.yml` with `venue: nasdaq` runs one sample day from emi.nasdaq.com on a GitHub-hosted runner
+  (`local_day.py --source itch`). It keeps the reduced day on its own release, `atlas-days-nasdaq`, created as a
+  draft: only people with write access see it until a maintainer publishes it, since whether its tables may be
+  published is not settled (`docs/data-and-licensing.md`). `release_assets.sh` finds a draft by its pending tag name.
+  When the day's predicted cost is above the budget, `plan.py --sample-budget-core-h` (or `--sample-per-tier`)
+  keeps the same number of symbols in every liquidity tier, chosen by a hash of seed, date and symbol, with tiers
+  ranked on the whole day. The plan, `day_manifest.json`, the atlas manifest and the site record the sample; only the
+  rule, the seed and the per-tier count (and the kept symbols) enter the run id. A day that fits keeps every symbol
+  and its run id. `scripts/scale/runner_budget.py` measures a machine on synthetic ITCH and gave the workflow's
+  budget (10 predicted core-hours, units of 100 core-s at 3 GiB, four at a time); `local_day.py` shrinks the budget in
+  proportion when memory holds fewer units. `atlas_site.py --venue iex=DIR --venue nasdaq=DIR` builds one site with
+  IEX as the default page and the Nasdaq pages under `nasdaq/`. Each venue has its own tables, headlines, roots,
+  release, bucket and verify commands and attribution, and every page links the other venue. The workflow shows
+  Nasdaq only when the `ATLAS_NASDAQ_SITE` variable or the `nasdaq_site` input is true (off by default) and the
+  release is published, and a Nasdaq problem never blocks the IEX deploy: the IEX site is then built alone.
+  `release_assets.sh` treats a failed draft lookup as an error, never as a missing release. The atlas manifest's days now carry their `venue` and `buckets`; `atlas.py
+  combine` refuses days of two venues and `atlas_site.py` refuses an atlas whose days are of another venue. IEX-only
+  pages are unchanged.
 - **QuantConnect LEAN backtests.** `live import --venue sim-lean` reads a LEAN backtest's result JSON (its
   `orders`) and its `<algorithm id>-order-events.json` (or an order-events CSV with the same names), formats read
   from LEAN's source at release tag 18241; LEAN is not imported. Market, limit, stop-market and stop-limit orders

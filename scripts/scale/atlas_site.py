@@ -20,6 +20,13 @@ Reads `atlas_manifest.json` and `leaderboard_by_tier.parquet` (`pnl_by_tier.parq
   as combined (day roots, atlas root, flag policy, flagged symbol-days);
 - `symbols.html` with `--per-symbol`: per-symbol cross-day bias with empirical-Bayes shrinkage.
 
+Two venues in one site: `--venue iex=ATLAS_DIR --venue nasdaq=ATLAS_DIR` (instead of `--atlas` and `--source`)
+writes the first venue's pages at the top of `--out` and each other venue's pages, with their own `data/`, into
+`<out>/<source>/`. Every venue has its own tables, headlines, roots, verify commands and attribution, and every page
+links the other venues' index (no script: a link per venue). `.github/workflows/atlas.yml` puts IEX first, so the
+IEX atlas is what the address shows by default. A day run on a symbol sample (`plan.py --sample-budget-core-h`) is
+named on its venue's pages with the symbols it kept per tier.
+
 With `--compat-link` the index links `compat.html`, the upstream compatibility page that
 `scripts/nightly/compat_site.py` writes into the same directory (`.github/workflows/atlas.yml` does both).
 
@@ -45,6 +52,20 @@ IEX_ATTRIBUTION = (
     "Terms of Use."
 )
 IEX_TERMS_URL = "https://iextrading.com/iex-historical-data-terms/"
+#: Plain names of the venues a site can show.
+VENUES = {"iex": "IEX DEEP+", "nasdaq": "Nasdaq TotalView-ITCH"}
+#: Where `.github/workflows/atlas.yml` keeps each venue's reduced days: (release tag, asset name prefix, docs anchor
+#: of the verify steps).
+VENUE_DAYS = {
+    "iex": ("atlas-days", "day-", "verify-a-number"),
+    "nasdaq": ("atlas-days-nasdaq", "nasdaq-day-", "verify-a-nasdaq-day"),
+}
+#: The Nasdaq sample days `scripts/realdata/itch_subset.py` pins (`itch_split.py --date` checks them against their
+#: pinned hashes; `--url` would turn those checks off).
+PINNED_ITCH = ("12302019", "01302020")
+NASDAQ_SAMPLES_URL = "https://emi.nasdaq.com/ITCH/Nasdaq%20ITCH/"
+#: Styles only a page with a venue switch needs, so a single-venue site stays byte-identical.
+VENUE_CSS = "nav.venues { margin: 8px 0; }\n"
 #: The guides the page links to (docs on GitHub).
 DOCS = "https://github.com/sarptandoven/queuetruth/blob/main/docs"
 
@@ -570,8 +591,8 @@ def _page(title: str, body: str, attribution: str, description: str = SUMMARY, e
 def _attribution(source: str) -> str:
     if source != "iex":
         return (
-            '<p class="muted attr">Aggregate statistics computed from Nasdaq TotalView-ITCH 5.0 sample files. '
-            "No market data is published here.</p>"
+            '<p class="muted attr">Aggregate statistics computed from Nasdaq TotalView-ITCH 5.0 sample files '
+            f'(<a href="{NASDAQ_SAMPLES_URL}">emi.nasdaq.com</a>). No market data is published here.</p>'
         )
     return (
         f'<p class="attr">{html.escape(IEX_ATTRIBUTION)} '
@@ -818,6 +839,59 @@ def _overlap_note(b: dict[str, Any]) -> str:
     return f'<br><span class="ci">interval overlaps: {html.escape(names)}</span>'
 
 
+def venue_nav(venues: list[tuple[str, str]], here: str) -> str:
+    """The venue switch: `venues` = [(source, href of its index from this page)], `here` the page's own venue."""
+    links = [
+        f'<span aria-current="page">{html.escape(VENUES[src])}</span>'
+        if src == here
+        else f'<a href="{html.escape(href)}">{html.escape(VENUES[src])}</a>'
+        for src, href in venues
+    ]
+    return f'<nav class="venues">Venue: {" | ".join(links)}</nav>'
+
+
+def sample_note(days: list[dict[str, Any]]) -> str:
+    """Which days ran on a symbol sample and what each kept per tier; empty when every day ran every symbol."""
+    said = []
+    for d in days:
+        ss = d.get("symbol_sample")
+        if not ss:
+            continue
+        tiers = ", ".join(f"{html.escape(t)} {v['kept']:,} of {v['of']:,}" for t, v in ss["tiers"].items())
+        said.append(f"{html.escape(iso_date(d['date']))}: {ss['per_tier']:,} symbols per tier ({tiers})")
+    if not said:
+        return ""
+    return (
+        '<p class="muted sample"><em>Symbol sample.</em> To fit one runner, these days ran a '
+        "fixed sample of symbols in every liquidity tier, chosen by a hash of the symbol and the date, not by any "
+        "result: "
+        + "; ".join(said)
+        + ". Tiers are ranked on the whole day. The ALL rows pool the sampled symbols, so each tier counts with its "
+        "sample, not with its share of the market "
+        f'(<a href="{DOCS}/concepts/fill-realism-atlas.md#a-nasdaq-day-on-one-runner">how the sample is made</a>).</p>'
+    )
+
+
+def recreate_command(source: str, day: dict[str, Any] | None) -> str:
+    """The command that re-creates the buckets of `day` from the venue's public file (the input `verify_unit.py`
+    re-runs a unit from); empty without a day."""
+    if not day:
+        return ""
+    url = day.get("source_url") or "URL"
+    k = day.get("buckets") or 32
+    if source == "iex":
+        cmd = f"scripts/scale/iex_split.py --url {url} --date {iso_date(day['date'])} --buckets {k} --out split"
+    elif str(day["date"]) in PINNED_ITCH:
+        cmd = f"scripts/scale/itch_split.py --date {day['date']} --buckets {k} --out split"
+    else:
+        cmd = f"scripts/scale/itch_split.py --url {url} --date {day['date']} --buckets {k} --out split"
+    return (
+        f"<p>The buckets of {html.escape(iso_date(day['date']))}, re-created from the public "
+        f"{html.escape(VENUES[source])} file (streamed, never stored):</p>"
+        f"<pre>uv run --frozen --no-sync python {html.escape(cmd)}</pre>"
+    )
+
+
 def _library_nav(present: list[str], here: str | None) -> str:
     links = [
         f'<span aria-current="page">{html.escape(lib)}</span>'
@@ -840,12 +914,17 @@ def build(
     per_symbol: bool = False,
     pnl_horizon: str = "60s",
     compat_link: bool = False,
+    venues: list[tuple[str, str]] | None = None,
 ) -> dict[str, Any]:
     """Writes the site; returns {pages, rows, pnl_rows, atlas_root}. `compat_link` links `compat.html`, the upstream
-    compatibility page `scripts/nightly/compat_site.py` writes next to it."""
+    compatibility page `scripts/nightly/compat_site.py` writes next to it. `venues` ([(source, href of its index)],
+    `build_site`) adds the venue switch to every page and names the venue in the titles of all but the first."""
     if source not in ("nasdaq", "iex"):
         raise SystemExit(f"site: source must be nasdaq or iex, got {source!r}")
     manifest = json.loads((atlas / "atlas_manifest.json").read_text(encoding="utf-8"))
+    venues_seen = {d["venue"] for d in manifest.get("days") or [] if d.get("venue")}
+    if venues_seen - {source}:
+        raise SystemExit(f"site: the atlas holds {sorted(venues_seen)} days, not {source} (attribution is per venue)")
     rows, population = _rows(atlas, mode, population)
     horizons = sorted({r["horizon_ns"] for r in rows})
     if horizon is None:  # 60 s when the atlas has it: at 1 s too few orders fill for the differences to read
@@ -865,7 +944,11 @@ def build(
     first, last = (iso_date(days[0]["date"]), iso_date(days[-1]["date"])) if days else ("?", "?")
     span = first if len(days) == 1 else f"{len(days)} days from {first} to {last}"
     attribution = _attribution(source)
-    venue = "IEX DEEP+" if source == "iex" else "Nasdaq TotalView-ITCH"
+    venue = VENUES[source]
+    switch = venue_nav(venues, source) if venues else ""
+    css = VENUE_CSS if switch else ""
+    release, prefix, anchor = VENUE_DAYS[source]
+    titled = f" ({venue})" if venues and venues[0][0] != source else ""
     present = [lib for lib in LIBRARY_PAGES if any(describe(r["model_id"])[0] == lib for r in rows)]
     best = best_settings(rows, h)
 
@@ -897,6 +980,11 @@ def build(
         + about
         + "</p>",
     ]
+    if switch:
+        parts.insert(0, switch)
+    note = sample_note(days)
+    if note:
+        parts.append(note)
     if present:
         parts.append(_library_nav(present, None))
     leads = [x for x in (headline(rows, h), pnl_headline(pnl, ph)) if x]
@@ -949,10 +1037,10 @@ def build(
         "<h2>Verify any number</h2>"
         f"<p>Atlas root <code>{html.escape(root)}</code> (Merkle root over the day roots in date order; flag policy "
         f"<code>{html.escape(str(manifest.get('flag_policy')))}</code>). Each day root covers that day's shard leaves. "
-        "To check one, download the day (<code>day-&lt;date&gt;.tar.gz</code> on the repository's "
-        f'<a href="{REPO_HOME}/releases/tag/atlas-days">atlas-days</a> release: its tables, plan and manifest), check '
+        f"To check one, download the day (<code>{prefix}&lt;date&gt;.tar.gz</code> on the repository's "
+        f'<a href="{REPO_HOME}/releases/tag/{release}">{release}</a> release: its tables, plan and manifest), check '
         "out the commit the day was built at, re-create the unit's bucket from the public day file and re-run the "
-        f'unit (<a href="{DOCS}/concepts/fill-realism-atlas.md#verify-a-number">the steps</a>):</p>'
+        f'unit (<a href="{DOCS}/concepts/fill-realism-atlas.md#{anchor}">the steps</a>):</p>'
         "<pre>uv run --frozen --no-sync python scripts/scale/verify_unit.py --day DAY_DIR "
         "--atlas-manifest atlas_manifest.json --unit-id UNIT_ID --split SPLIT_DIR</pre>"
         '<div class="wrap"><table><thead><tr><th>date</th><th>day root</th><th>units</th><th>built at</th></tr>'
@@ -967,9 +1055,13 @@ def build(
         )
         + "</p>"
     )
+    if switch or source != "iex":  # an IEX-only site keeps its pages as they were
+        parts.append(recreate_command(source, days[-1] if days else None))
     out.mkdir(parents=True, exist_ok=True)
     (out / "data").mkdir(exist_ok=True)
-    page = _page("Fill-Realism Atlas", "\n".join(parts), attribution, leads[0] if leads else SUMMARY)
+    page = _page(
+        f"Fill-Realism Atlas{titled}", "\n".join(parts), attribution, leads[0] if leads else SUMMARY, extra_css=css
+    )
     (out / "index.html").write_text(page, encoding="utf-8")
     data = {
         "schema": "qt.atlas_site_leaderboard",
@@ -994,7 +1086,23 @@ def build(
     for lib in present:
         pages.append(
             _library_page(
-                out, lib, rows, pnl, pnl_at, horizons, tiers, h, ph, best, present, about, explain, built, attribution
+                out,
+                lib,
+                rows,
+                pnl,
+                pnl_at,
+                horizons,
+                tiers,
+                h,
+                ph,
+                best,
+                present,
+                about,
+                explain + note,
+                built,
+                attribution,
+                switch,
+                titled,
             )
         )
     if per_symbol:
@@ -1018,6 +1126,8 @@ def _library_page(
     explain: str,
     built: str,
     attribution: str,
+    switch: str = "",
+    titled: str = "",
 ) -> str:
     """`hftbacktest.html` and the like: one library's models across tiers and horizons (fill rate and P&L), its
     best setting by tier and a plain-words summary; titled with the question people search for."""
@@ -1026,6 +1136,7 @@ def _library_page(
     my_pnl = [r for r in pnl if describe(r["model_id"])[0] == lib]
     leads = [x for x in (library_headline(mine, lib, h), pnl_headline(my_pnl, ph, f"{lib}'s models")) if x]
     parts = [
+        *([switch] if switch else []),
         _library_nav(present, lib),
         f"<h1>{html.escape(question)}</h1>",
         f'<p class="muted">{html.escape(lib)}\'s fill models against the exact replay of the real queue: {about}</p>',
@@ -1046,8 +1157,9 @@ def _library_page(
         f'<li>What each model does: <a href="{DOCS}/concepts/l2-model-zoo.md">the L2 model zoo</a>.</li>'
         f'<li>Every library side by side: <a href="index.html">the Fill-Realism Atlas</a>.</li></ul>' + built + "</p>"
     )
-    title = f"{question} Fill-Realism Atlas"
-    page = _page(title, "\n".join(parts), attribution, leads[0] if leads else SUMMARY)
+    title = f"{question} Fill-Realism Atlas{titled}"
+    css = VENUE_CSS if switch else ""
+    page = _page(title, "\n".join(parts), attribution, leads[0] if leads else SUMMARY, extra_css=css)
     (out / name).write_text(page, encoding="utf-8")
     return name
 
@@ -1078,9 +1190,34 @@ def _symbols(atlas: Path, out: Path, mode: str, population: str, h: int, attribu
     return "symbols.html"
 
 
+def build_site(atlases: list[tuple[str, Path]], out: Path, *, compat_link: bool = False, **kw: Any) -> dict:
+    """One site over several venues: `atlases` = [(source, combine dir)], the first at the top of `out` (the default
+    venue), each other in `out/<source>/`; every page links every venue's index. `compat_link` goes to the first
+    venue's index only. Returns {venues: {source: what `build` returned, with its `dir`}}."""
+    sources = [src for src, _ in atlases]
+    if not atlases or len(set(sources)) != len(sources) or any(src not in VENUES for src in sources):
+        raise SystemExit(f"site: give each venue once, from {sorted(VENUES)} (got {sources})")
+    first = sources[0]
+    res = {}
+    for i, (src, atlas) in enumerate(atlases):
+        up = "../" if i else ""  # the other venues sit one directory down from the first
+        links = [(s, f"{up}index.html" if s == first else f"{up}{s}/index.html") for s in sources]
+        switch = links if len(sources) > 1 else None  # one venue: the single-venue site, no switch
+        r = build(atlas, out / src if i else out, source=src, compat_link=compat_link and i == 0, venues=switch, **kw)
+        res[src] = {**r, "dir": f"{src}/" if i else "."}
+    return {"venues": res}
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--atlas", type=Path, required=True, help="an `atlas.py combine` output directory")
+    ap.add_argument("--atlas", type=Path, help="an `atlas.py combine` output directory (one venue)")
+    ap.add_argument(
+        "--venue",
+        action="append",
+        default=[],
+        metavar="SOURCE=ATLAS_DIR",
+        help="one venue of a multi-venue site (repeat; the first is the default venue at the top of --out)",
+    )
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--source", choices=("nasdaq", "iex"), default="nasdaq")
     ap.add_argument("--mode", default="faithful")
@@ -1094,10 +1231,9 @@ def main(argv: list[str] | None = None) -> int:
         "--compat-link", action="store_true", help="link compat.html (scripts/nightly/compat_site.py) from the index"
     )
     a = ap.parse_args(argv)
-    r = build(
-        a.atlas,
-        a.out,
-        source=a.source,
+    if bool(a.atlas) == bool(a.venue):
+        ap.error("give --atlas (one venue) or --venue SOURCE=ATLAS_DIR (one or more), not both")
+    kw = dict(
         mode=a.mode,
         population=a.population,
         horizon=a.horizon,
@@ -1105,6 +1241,16 @@ def main(argv: list[str] | None = None) -> int:
         pnl_horizon=a.pnl_horizon,
         compat_link=a.compat_link,
     )
+    if a.venue:
+        pairs = []
+        for v in a.venue:
+            src, sep, path = v.partition("=")
+            if not sep or not path:
+                ap.error(f"--venue {v!r}: expected SOURCE=ATLAS_DIR")
+            pairs.append((src, Path(path)))
+        r = build_site(pairs, a.out, **kw)
+    else:
+        r = build(a.atlas, a.out, source=a.source, **kw)
     print(json.dumps(r, indent=1))
     return 0
 

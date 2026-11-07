@@ -24,3 +24,11 @@ def test_workers_fit_in_memory() -> None:
 def test_available_memory_is_read_here() -> None:
     mem = D.avail_mem_gib()
     assert mem is None or mem > 0
+
+
+def test_sample_budget_follows_the_workers_that_fit() -> None:
+    # a budget sized for four units at a time shrinks in proportion when memory holds three, and is kept otherwise
+    assert D.scaled_budget(10.0, 4, 3) == 7.5
+    assert D.scaled_budget(10.0, 4, 4) == 10.0 and D.scaled_budget(None, 4, 1) is None
+    # a budget of 0 is a budget (one symbol per tier), not "no budget"
+    assert D.scaled_budget(0.0, 4, 2) == 0.0

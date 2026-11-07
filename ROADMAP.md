@@ -31,8 +31,11 @@ an issue to argue for one. Ids (`W1`, ...) are referenced from code and scripts.
   statistics. The pipeline (`scripts/scale/`), the site generator (`scripts/scale/atlas_site.py`) and the IEX DEEP+
   splitter (`scripts/scale/iex_split.py`; `local_day.py --source iex --site` runs a day from capture to site) exist,
   and `.github/workflows/atlas.yml` runs each new IEX day and publishes the site over the newest 20 days with
-  GitHub Pages. The P&L error is computed next to the fill-rate bias (done after 0.2.0). Next are turning Pages on
-  and the cloud run over the 19 public Nasdaq days.
+  GitHub Pages. The P&L error is computed next to the fill-rate bias (done after 0.2.0). A manual run of the same
+  workflow runs one Nasdaq TotalView-ITCH sample day on a runner, on a per-tier symbol sample when the whole day
+  does not fit, and the site can show it next to IEX with a venue switch (done after 0.2.0; off until the terms of
+  Nasdaq's sample files are settled). Next are turning Pages on, the first Nasdaq day and the cloud run over the 19
+  public Nasdaq days.
 - **Upstream compatibility dashboard.** `scripts/nightly` made public: every new hftbacktest and NautilusTrader
   release checked against the exact queue within a day. `.github/workflows/compat.yml` runs the engine checks daily
   on the synthetic day against the newest release of each major line and the pinned versions, keeps each result on
