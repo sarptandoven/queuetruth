@@ -668,3 +668,209 @@ fn only_the_halt_changes_anything_on_random_streams() {
         }
     }
 }
+
+// ---- the same day from DBN status records and NYSE Security Status --------------------------------------------
+
+/// The F2 day's shadows of instrument `iid` (`S1` rests from 10:00:10 into the halt, `S2` arrives in it).
+fn f2_shadows(d: &Path, iid: u32) -> PathBuf {
+    let cancel = MIDNIGHT + 10 * HOUR + 6 * MIN;
+    let s1_live = MIDNIGHT + 10 * HOUR + 10 * NS;
+    let s2_live = MIDNIGHT + 10 * HOUR + 2 * MIN + 30 * NS;
+    let csv = d.join("shadows.csv");
+    std::fs::write(
+        &csv,
+        format!(
+            "shadow_id,instrument_id,side,price,qty,ts_submit,latency_ns,ts_cancel\n\
+             S1,{iid},B,10000000000,100,{s1_live},0,{cancel}\n\
+             S2,{iid},B,10030000000,100,{s2_live},0,{cancel}\n"
+        ),
+    )
+    .unwrap();
+    csv
+}
+
+/// The dataset `ds` of the F2 day from another source records the halt as one span `[HALT, RESUME)` labelled
+/// `state` / `reason`, its default replay censors `S1` at the halt and `S2` at its `ts_live` with no fill, and the
+/// same dataset without the span fills both (the defect).
+fn check_source_halt(d: &Path, ds: &Path, state: &str, reason: &str) {
+    let dataset = qt_ingest::Dataset::open(ds).unwrap();
+    let parts = dataset.partitions();
+    assert_eq!(parts.len(), 1);
+    let iid = parts[0].instrument_id;
+    let dq = qt_replay::ingest_dq(&dataset).unwrap();
+    assert_eq!(
+        qt_replay::halts_of(&dq),
+        vec![TradingHalt {
+            instrument_id: iid,
+            ts_start: MIDNIGHT + HALT,
+            ts_end: MIDNIGHT + RESUME,
+        }]
+    );
+    assert_eq!(
+        (dq.trading_halts[0].state.as_str(), dq.trading_halts[0].reason.as_str()),
+        (state, reason)
+    );
+    // A halt is venue state, not a data defect (the DBN day has no symbology, which is its only warning).
+    assert!(
+        !dq.reasons
+            .iter()
+            .any(|r| r.contains("status") || r.contains("halt") || r.contains("skipped")),
+        "{:?}",
+        dq.reasons
+    );
+    let csv = f2_shadows(d, iid);
+
+    let old = d.join("ds-no-spans");
+    copy_dir(ds, &old);
+    let dq_path = old.join("data_quality.json");
+    let mut doc: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&dq_path).unwrap()).unwrap();
+    doc.as_object_mut().unwrap().remove("trading_halts").unwrap();
+    std::fs::write(&dq_path, serde_json::to_string_pretty(&doc).unwrap()).unwrap();
+    let before = replay(&old, &csv, &d.join("no-state"), &ReplayOptions::default());
+    let filled: Vec<_> = before.fills.iter().map(|f| (f.shadow_id.as_str(), f.reason)).collect();
+    assert_eq!(
+        filled,
+        vec![("S1", FillReason::Crossed), ("S2", FillReason::CrossedAtLive)],
+        "without the span both shadows fill during the halt"
+    );
+
+    let after = replay(ds, &csv, &d.join("state"), &ReplayOptions::default());
+    assert!(after.fills.is_empty(), "{:?}", after.fills);
+    let s1 = after.result("S1");
+    assert_eq!(
+        (s1.end_state, s1.filled_qty, s1.queue_ahead_at_live),
+        (EndState::CensoredGap, 0, Some(0))
+    );
+    assert_eq!(after.end_ts("S1"), MIDNIGHT + HALT);
+    let s2 = after.result("S2");
+    assert_eq!((s2.end_state, s2.ts_activated_event), (EndState::CensoredGap, None));
+    assert_eq!(after.end_ts("S2"), MIDNIGHT + 10 * HOUR + 2 * MIN + 30 * NS);
+}
+
+/// The F2 day as DBN MBO records (XNAS.ITCH, instrument id 7, prices at 1e-9).
+fn dbn_day() -> Vec<MboEvent> {
+    let rec = |seq: u64, ts: i64, action: u8, side: u8, order_id: u64, price: i64| MboEvent {
+        ts_event: MIDNIGHT + ts,
+        ts_recv: MIDNIGHT + ts,
+        instrument_id: 7,
+        action,
+        side,
+        price,
+        size: 100,
+        order_id,
+        flags: qt_types::flags::LAST,
+        sequence: seq,
+        channel_id: 0,
+        publisher_id: 2,
+    };
+    vec![
+        rec(1, 10 * HOUR, b'A', b'B', 1, 9_980_000_000),
+        rec(2, 10 * HOUR + 1_000_000, b'A', b'A', 2, 10_020_000_000),
+        rec(3, 10 * HOUR + 2 * MIN, b'A', b'A', 3, 9_990_000_000),
+        rec(4, 10 * HOUR + 3 * MIN, b'C', b'A', 3, 9_990_000_000),
+        rec(5, 10 * HOUR + 10 * MIN, b'C', b'B', 1, 9_980_000_000),
+        rec(6, 10 * HOUR + 10 * MIN + 1, b'C', b'A', 2, 10_020_000_000),
+    ]
+}
+
+/// Status records of the F2 day: trading at the open, a halt (news pending) with a price indication inside it,
+/// the resumption, and a short-sale restriction change after it (neither changes the state).
+fn dbn_status_day() -> Vec<qt_testkit::StatusRecord> {
+    let st = |ts: i64, action: u16, reason: u16, is_trading: u8| qt_testkit::StatusRecord {
+        instrument_id: 7,
+        publisher_id: 2,
+        ts_event: MIDNIGHT + ts,
+        ts_recv: MIDNIGHT + ts,
+        action,
+        reason,
+        is_trading,
+    };
+    vec![
+        st(9 * HOUR + 30 * MIN, 7, 1, b'Y'),
+        st(HALT, 8, 30, b'N'),
+        st(10 * HOUR + 4 * MIN, 6, 0, b'N'),
+        st(RESUME, 7, 0, b'Y'),
+        st(11 * HOUR, 14, 0, b'~'),
+    ]
+}
+
+fn dbn_ingest(files: &[PathBuf], out: &Path) -> qt_schema::json::IngestSummary {
+    let spec = json!({"format": "dbn", "venue": "nasdaq", "out": out.display().to_string(),
+                      "inputs": files.iter().map(|f| json!({"path": f.display().to_string()})).collect::<Vec<_>>(),
+                      "price_exp": -9, "tick_size": "0.01", "lot_size": "1", "tz": "America/New_York"});
+    qt_ingest::ingest(&serde_json::from_value(spec).unwrap()).unwrap()
+}
+
+/// H.5: DBN `status` records halt the instrument as ITCH `H` messages do, from a `status` file next to the MBO file
+/// and from status records inside the MBO file alike.
+#[test]
+fn dbn_status_records_censor_shadows() {
+    for layout in ["status_file", "in_mbo_file"] {
+        let d = scratch(&format!("dbn-{layout}"));
+        let mbo = d.join("mbo.dbn");
+        let files = if layout == "status_file" {
+            qt_testkit::encode_dbn(&dbn_day(), &mbo).unwrap();
+            let status = d.join("status.dbn.zst");
+            qt_testkit::encode_dbn_status(&dbn_status_day(), &status).unwrap();
+            vec![mbo, status]
+        } else {
+            qt_testkit::encode_dbn_with_status(&dbn_day(), &dbn_status_day(), &mbo).unwrap();
+            vec![mbo]
+        };
+        let ds = d.join("ds");
+        let s = dbn_ingest(&files, &ds);
+        assert_eq!(s.data_quality.source_specific.get("dbn_status_records"), Some(&5));
+        check_source_halt(&d, &ds, "dbn_status:8", "30");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+}
+
+/// Datasets without status records are written exactly as before: no span, no new counter.
+#[test]
+fn dbn_without_status_records_has_no_spans() {
+    let d = scratch("dbn-none");
+    let mbo = d.join("mbo.dbn");
+    qt_testkit::encode_dbn(&dbn_day(), &mbo).unwrap();
+    let s = dbn_ingest(std::slice::from_ref(&mbo), &d.join("ds"));
+    assert!(s.data_quality.trading_halts.is_empty());
+    assert!(!s.data_quality.source_specific.contains_key("dbn_status_records"));
+    let doc = std::fs::read_to_string(d.join("ds").join("data_quality.json")).unwrap();
+    assert!(!doc.contains("trading_halts"), "{doc}");
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+/// The F2 day as a NYSE Arca TAQ Integrated Feed file (prices in dollars, times after midnight New York).
+fn nyse_day(halt: &str) -> String {
+    [
+        "3,1,HLTX,3,1,P,C,100,10.00,1000000,0,Y,1,100",
+        "34,2,06:30:00.000000000,HLTX,1,P,~,,,,,,~,P",
+        "34,3,09:30:00.000000000,HLTX,2,O,~,,,,,,~,O",
+        "100,4,10:00:00.000000000,HLTX,3,1,9.98,100,B,,",
+        "100,5,10:00:00.001000000,HLTX,4,2,10.02,100,S,,",
+        halt,
+        "100,7,10:02:00.000000000,HLTX,6,3,9.99,100,S,,",
+        "34,8,10:04:00.000000000,HLTX,7,I,P,,,,,,~,O",
+        "102,9,10:03:00.000000000,HLTX,8,3,",
+        "34,10,10:05:00.000000000,HLTX,9,5,~,,,,,,~,O",
+        "102,11,10:10:00.000000000,HLTX,10,1,",
+        "102,12,10:10:00.000000001,HLTX,11,2,",
+        "34,13,16:01:00.000000000,HLTX,12,X,~,,,,,,~,X",
+    ]
+    .join("\n")
+        + "\n"
+}
+
+/// H.5: NYSE Security Status `4` (trading halt) opens the span and `5` (resume) closes it; the price indication
+/// inside the halt and the session statuses change nothing.
+#[test]
+fn nyse_security_status_halt_censors_shadows() {
+    let d = scratch("nyse");
+    let src = d.join("EQY_US_ARCA_IBF_1_20200102.csv");
+    std::fs::write(&src, nyse_day("34,6,10:01:00.000000000,HLTX,5,4,P,,,,,,~,O")).unwrap();
+    let ds = d.join("ds");
+    let spec = json!({"format": "nyse_ibf", "venue": "nyse", "out": ds.display().to_string(),
+                      "inputs": [{"path": src.display().to_string()}]});
+    qt_ingest::ingest(&serde_json::from_value(spec).unwrap()).unwrap();
+    check_source_halt(&d, &ds, "nyse_34:4", "P");
+    let _ = std::fs::remove_dir_all(&d);
+}

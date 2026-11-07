@@ -8,6 +8,21 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ### Added
 
+- **Halts censor shadows on DBN and NYSE data** (ROADMAP "Now", halt censoring H.5): the DBN reader reads `status`
+  records (`StatusMsg`) from `status` files, which it refused before, and from MBO and mixed-schema files, where it
+  skipped them. Actions `Halt`, `Pause`, `Suspend`, and `Quoting` while not trading, open a trading-halt span;
+  `Trading` closes it; other actions change nothing; a halt past a session date's midnight carries on in the
+  symbol's partition of the next date when that date has status records of the symbol. The NYSE TAQ Integrated Feed
+  reader turns Security Status (type 34) into spans: `4` (trading halt) or `6` (suspend) opens one and `5` (resume)
+  closes it; before a symbol's first of them that day, its Halt Condition decides (a halt carried over from the
+  previous day), and later disagreements are counted in the new INFO counter `nyse_halt_condition_disagreements`. The spans go to
+  `qt.data_quality.trading_halts` and every engine censors shadows there, as on Nasdaq ITCH and IEX DEEP+. New INFO
+  counter `dbn_status_records`. Datasets without status records are written exactly as before. With status records,
+  besides the spans: status records inside an `mbo`-schema file no longer count in `dbn_other_records_skipped` (so
+  they no longer raise the verdict to `warnings`), and those in a mixed-schema file no longer count in
+  `dbn_mixed_schema_other_records`. Testkit: `encode_dbn_with_status`, `encode_dbn_status` and `StatusRecord` write synthetic DBN status
+  records. See [halt censoring](docs/design/extensions/halt-censoring.md) H.6 for the mappings.
+
 - **Blind episodes for the agent sandbox** (ROADMAP, Agent arena; `queuetruth.sandbox.blind`): an agent plays an
   operator-pinned episode without being able to tell which instrument or day it is on. `EpisodeBook.pin(spec)` returns
   an opaque episode id (the book, a `qt.sandbox_episodes` file, holds the secrets); `start(episode_id)` gives a
