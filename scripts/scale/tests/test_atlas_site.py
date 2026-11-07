@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import sys
 from pathlib import Path
 
@@ -93,7 +94,8 @@ def test_nasdaq_site_reads_answer_first_and_is_deterministic(atlas: Path, tmp_pa
     assert f'<a href="{commit}{"1a" * 20}"><code>{"1a" * 6}</code></a>' in page
     assert page.count("not recorded") == 1 and f'queuetruth</a> 0.2.0 (<a href="{commit}{"2b" * 20}">' in page
     assert "verify_unit.py --day DAY_DIR --atlas-manifest atlas_manifest.json" in page
-    assert "/releases/tag/atlas-days" in page and "fill-realism-atlas.md#verify-a-number" in page
+    # the default source is nasdaq: its days are verified from the Nasdaq release
+    assert "/releases/tag/atlas-days-nasdaq" in page and "fill-realism-atlas.md#verify-a-nasdaq-day" in page
     assert "<script" not in page and "http://" not in page.replace("https://", "")
     # the headline is the search and link-preview text
     assert '<meta property="og:description" content="Within 1 s, the exact replay' in page
@@ -197,6 +199,50 @@ def test_compat_link_only_when_asked(atlas: Path, tmp_path: Path) -> None:
     assert 'Upstream compatibility: <a href="compat.html">' in page
     assert S.main(["--atlas", str(atlas), "--out", str(tmp_path / "cli"), "--horizon", "1s", "--compat-link"]) == 0
     assert (tmp_path / "cli" / "index.html").read_text() == page
+
+
+def test_two_venues_get_their_own_pages_and_a_switch(atlas: Path, tmp_path: Path) -> None:
+    # a second venue whose newest day ran on a symbol sample
+    nasdaq = tmp_path / "nasdaq_atlas"
+    shutil.copytree(atlas, nasdaq)
+    man = json.loads((nasdaq / "atlas_manifest.json").read_text())
+    man["atlas_root"] = "99" * 32
+    man["days"][-1] |= {
+        "date": "01302020", "source_url": "https://emi.nasdaq.com/ITCH/Nasdaq%20ITCH/01302020.NASDAQ_ITCH50.gz",
+        "buckets": 32, "symbol_sample": {"per_tier": 40, "tiers": {"T1_top100": {"kept": 40, "of": 100},
+                                                                    "T5_rest": {"kept": 40, "of": 4900}}},
+    }  # fmt: skip
+    (nasdaq / "atlas_manifest.json").write_text(json.dumps(man))
+    r = S.build_site([("iex", atlas), ("nasdaq", nasdaq)], tmp_path / "site", horizon="1s", compat_link=True)
+    assert r["venues"]["iex"]["dir"] == "." and r["venues"]["nasdaq"]["dir"] == "nasdaq/"
+    index = (tmp_path / "site" / "index.html").read_text()
+    nindex = (tmp_path / "site" / "nasdaq" / "index.html").read_text()
+    assert S.IEX_ATTRIBUTION in index and "ab" * 32 in index and "99" * 32 not in index
+    assert 'href="nasdaq/index.html">Nasdaq TotalView-ITCH</a>' in index and 'href="compat.html"' in index
+    assert "Data provided for free by IEX" not in nindex and "99" * 32 in nindex and "compat.html" not in nindex
+    assert "2020-01-30: 40 symbols per tier (T1_top100 40 of 100, T5_rest 40 of 4,900)" in nindex
+    # a pinned day is re-created with --date alone, so itch_split.py checks it against its pinned hashes
+    assert "scripts/scale/itch_split.py --date 01302020 --buckets 32 --out split" in nindex
+    assert "Symbol sample." not in index
+    # each venue verifies from its own release and its own docs steps
+    assert 'releases/tag/atlas-days">atlas-days</a>' in index and "#verify-a-number" in index
+    assert 'releases/tag/atlas-days-nasdaq">atlas-days-nasdaq</a>' in nindex and "#verify-a-nasdaq-day" in nindex
+    assert "<code>nasdaq-day-&lt;date&gt;.tar.gz</code>" in nindex and 'releases/tag/atlas-days"' not in nindex
+    # an IEX-only site keeps its pages as before: no venue switch, its styles or the bucket paragraph
+    S.build(atlas, tmp_path / "iex_only", source="iex", horizon="1s")
+    alone = (tmp_path / "iex_only" / "index.html").read_text()
+    assert "nav.venues" not in alone and "venues" not in alone and "The buckets of" not in alone
+    assert "nav.venues" in index and "The buckets of" in index
+    # a day of another venue in the atlas is refused rather than published under the wrong attribution
+    man["days"][0]["venue"] = "iex"
+    (nasdaq / "atlas_manifest.json").write_text(json.dumps(man))
+    with pytest.raises(SystemExit, match="attribution is per venue"):
+        S.build(nasdaq, tmp_path / "wrong", source="nasdaq")
+    # a venue given twice, or an unknown one, is refused
+    with pytest.raises(SystemExit):
+        S.build_site([("iex", atlas), ("iex", nasdaq)], tmp_path / "x")
+    with pytest.raises(SystemExit):
+        S.build_site([("cme", atlas)], tmp_path / "x")
 
 
 def test_a_finding_needs_its_estimate_and_interval_on_one_side() -> None:

@@ -21,7 +21,8 @@ content digests), then writes
 - `pnl_cells.parquet` (when the plan's units computed the P&L error, `plan.py` without `--no-pnl`): the units'
   `pnl_stats` summed over blocks, one row per (mode, shadow population, model, markout horizon, symbol-day) with
   the `blocks.PNL_SUMS` and the same `tier`, `replay_ok`, `trading_ok` and `exact_ok`;
-- `day_manifest.json`: run id, date, the day's Merkle root over its leaves (with proofs), invalid / missing shards,
+- `day_manifest.json`: run id, date, `symbol_sample` (when the plan ran a symbol sample), the day's Merkle root
+  over its leaves (with proofs), invalid / missing shards,
   units whose replay checks flagged anything, `flagged_symbols` (per symbol-day that is not `exact_ok`: unit, replay
   flags, how they were attributed: `leaf`, `symbol_flags` or the whole `unit`, the causes a `trace_flags.py` sidecar
   found, the non-T spans that overlap the session), `trading_state` (whether the day's trading state is known and
@@ -227,6 +228,11 @@ def trading_state(
     return info, out
 
 
+def day_venue(day: dict[str, Any]) -> str:
+    """The venue of a reduced day: `iex` for an `iex_split.py` day (source format `iex_deep_plus`), else `nasdaq`."""
+    return "iex" if (day.get("source") or {}).get("format") == "iex_deep_plus" else "nasdaq"
+
+
 def day_builds(shards: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """The distinct builds (`queuetruth_version`, `git_head`, core extension sha256) of the shard manifests, with
     their unit counts, most units first."""
@@ -367,6 +373,8 @@ def reduce_day(
         "trading_state": ts_info,
         "symbol_days": len(plan["universe"]),
         "symbols_by_tier": {t: sum(1 for u in plan["universe"] if u["tier"] == t) for t in sorted(set(tier.values()))},
+        # a day run on a symbol sample (plan.py --sample-budget-core-h): which symbols of each tier it kept
+        **({"symbol_sample": plan["symbol_sample"]} if plan.get("symbol_sample") else {}),
         "exclusions": len(plan["exclusions"]),
         "exactness_overall": sum_exactness([m["leaf"]["exactness"] for m in ok]),
         "exactness_note": "per-tier sums count a unit holding several tiers in each of them; overall is exact",
@@ -506,6 +514,10 @@ def combine(
         raise ValueError(f"flag_policy: one of {FLAG_POLICIES}, got {flag_policy!r}")
     days = [(json.loads((d / "day_manifest.json").read_text()), d) for d in day_dirs]
     days = sorted(days, key=lambda x: x[0]["date"][4:] + x[0]["date"][:4])  # MMDDYYYY -> chronological
+    # one venue per atlas: an IEX day and a Nasdaq day are separate atlases, each with its own attribution
+    by_venue = {day_venue(dm) for dm, _ in days}
+    if len(by_venue) > 1:
+        raise SystemExit(f"combine: days of more than one venue {sorted(by_venue)}; combine each venue on its own")
     no_symbols = [dm["date"] for dm, _ in days if "flagged_symbols" not in dm]
     no_trading = [dm["date"] for dm, _ in days if not (dm.get("trading_state") or {}).get("known")]
     if flag_policy == "exclude" and (no_symbols or no_trading) and not allow_legacy_days:
@@ -771,6 +783,9 @@ def combine(
                 "merkle_root": d["merkle_root"],
                 "units_valid": d["units_valid"],
                 "units_planned": d["units_planned"],
+                "venue": day_venue(d),
+                **({"symbol_sample": d["symbol_sample"]} if d.get("symbol_sample") else {}),
+                "buckets": (d.get("source") or {}).get("buckets"),
                 "problems": len(d["problems"]),
                 "flagged_units": len(d["flagged_units"]),
                 "symbol_days": d["symbol_days"],
