@@ -133,6 +133,69 @@ order resting behind it at its price executes, or when the opposite best is at o
 event. Fills are always whole-order, which overstates fill size for orders larger than one lot. Corrected: fill
 quantities follow the exact engine and must equal it (O-ZOO-4).
 
+**Why faithful fills fewer orders than the exact replay.** The two modes share the activation event, the price, the
+latency, the population and the label (filled means first fill by the deadline, for `p_fill` and for
+`truth_filled` alike), and the corrected mode equals the exact replay. So the gap comes from the fill rules alone.
+Three of hftbacktest's rules give fewer fills:
+
+1. **Trade-through is measured against the feed's best price on the order's side, not against the order's price.**
+   hftbacktest fills better-priced backtest bids only when an execution is strictly below the feed's best bid
+   (`if exec_price_tick < depth.best_bid_tick()` in `L3FIFOQueueModel::fill_market_feed_order`, asks likewise).
+   Its source says it assumes that "the fill event should occur before the cancel event which may update the best
+   price". In Nasdaq ITCH and IEX DEEP+ an execution does come before the removal of the same order, but each
+   execution message carries its own removal, so a sweep's earlier order has left the book before the next execution
+   arrives. The executed order is therefore always at the feed's best. A shadow priced better than every feed order
+   on its side therefore never fills by trade-through. That happens when it improved the touch (the `+1` placement)
+   or when the orders at and above its price executed or left, as in a sweep through its level. Only a cross of
+   the opposite side fills it. The exact replay fills it at the first execution through its price, since that seller
+   or buyer would have met the better order first. When the feed best is still on the book (an execution below it),
+   hftbacktest's tick-range shortcut fills an order above that best only if the execution is at least 3 ticks below it.
+2. **Hidden prints are ignored.** hftbacktest acts only on fills with a side. On Nasdaq and IEX the exact replay
+   also fills from a usable hidden print at the price once no displayed order is ahead, or through the price
+   ([hidden prints](shadow-orders.md#hidden-prints)).
+3. **An order that crosses at activation expires.** A GTX order expires unfilled, while the exact replay takes
+   liquidity. This needs a locked or crossed book when the order goes live, because the zoo rejects a `+1`
+   placement that would cross.
+
+Whole-order fills do not count here: they change how much fills, not whether or when an order first fills. Neither
+do hftbacktest #312 aborts: those come from the L2 probability models, never this one, and `common_population`
+drops those shadows for every model and for the exact arm alike. In the other direction, faithful counts an
+execution behind the shadow at a price other than its resting price (ruling A4b), and a price-improved execution
+below the feed best, as fills.
+
+On the synthetic Nasdaq fixture days (`crates/zoo/tests/l3_faithful_gap.rs`), 5,655 one-lot shadows are placed
+with the `standard` weights (60% at the touch, 20% one tick behind, 10% two behind, 10% one tick better) and live
+60 s each. Faithful fills 56.66% of them within 60 s and the exact replay 58.73%. Of the 123 orders only the exact
+replay fills, 118 (95.9%) are rule 1 and 5 (4.1%) are rule 2. Of the rule 1 misses, 103 were placed at or behind
+the touch and 15 at `+1`. That split is by placement: at the missed execution, both kinds rest above every feed
+order on their side. Rule 3 is not measured, because the harness activates orders only on uncrossed books. Faithful
+has 6 fills the exact replay lacks: 5 price-improved executions and 1 cross. The test pins these counts.
+
+These are shares on a synthetic Nasdaq tape. To bucket a real run's misses, read the
+`hbt_l3_fifo[mode=corrected]` rows of `zoo_fills`: corrected equals the exact replay, and `zoo_fills` holds only
+model fills, not the exact arm's. A miss's first-fill `reason` there is `trade_through` for rule 1 or a hidden print
+through the price, `queue` for rule 2, and `crossed_at_live` for rule 3. A `queue` miss is a hidden print by
+elimination, not by observation: faithful also fills on every displayed execution behind the order, so a corrected
+`queue` fill that faithful lacks can only come from a hidden print at the price.
+
+**The IEX DEEP+ day 2026-10-09, sample.** This bucketing ran on 26 of the atlas plan's 130 units (every fifth unit
+by id), with each unit's own `standard` population, 60 s horizon, `h_max` 300 s, and uncensored rows with a label.
+Of 1,165,575 orders, faithful misses 18,915 (1.62% of orders) and has no extra fills. On the full day (all 130 units, `standard` population,
+flag policy `exclude`) the atlas has an exact fill rate of 10.76% within 60 s and faithful `hbt_l3_fifo` at
+-1.62 pp (95% interval -1.68 to -1.56). In the top-100 tier those figures are 45.67% and -2.99 pp (-3.76 to
+-2.26).
+
+| corrected first-fill `reason` | missed orders | share |
+|---|---|---|
+| `trade_through` (rule 1, or a hidden print through the price) | 10,902 | 57.6% |
+| `queue` (rule 2: a hidden print at the price, by elimination) | 8,013 | 42.4% |
+| `crossed_at_live` (rule 3) | 0 | 0% |
+
+By placement, the `trade_through` misses are 6,015 at the touch, 2,360 at `+1`, 1,767 at `-1` and 760 at `-2`.
+Most are orders whose level was swept or emptied ahead of them, not orders that improved the touch. Hidden
+executions are about 42% of the IEX gap against 4% on the synthetic tape, which carries far fewer hidden prints. The
+faithful rules stay hftbacktest's.
+
 ### (d) `nt_queue_l2`
 
 NautilusTrader-style queue position on L2 (`queue_position=True`), re-implemented from NautilusTrader's public

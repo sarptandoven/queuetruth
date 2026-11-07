@@ -68,6 +68,15 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   `queuetruth-nautilus-vX.Y.Z` release (version checks, sdist and wheel, the plugin's tests on the built wheel with
   nautilus_trader 1.231.0 and the newest 2.x, Trusted Publishing with attestations; a dry run on manual dispatch).
   `release.yml` now runs only for `vX.Y.Z` tags.
+- **Why faithful `hbt_l3_fifo` fills fewer orders than the exact replay** (docs/concepts/l2-model-zoo.md (c),
+  `crates/zoo/tests/l3_faithful_gap.rs`, `python/tests/zoo/test_l3_faithful_gap.py`). hftbacktest fills a
+  better-priced order by trade-through only when the execution is below the feed's best on its side. On ITCH and
+  DEEP+ every executed order is at that best, so an order that improved the touch, or that is left alone above the
+  feed best, misses those fills. It also ignores hidden prints, and a GTX order that crosses at activation expires.
+  On synthetic Nasdaq days the first two rules cover every missed fill (95.9% the first; the third is not measured
+  there). On a sample of the 2026-10-09 IEX day, about 58% of the misses are trade-throughs and 42% hidden
+  executions. Both arms are scored on the same rows with the same "filled" label, so the comparison needed no fix;
+  faithful semantics are unchanged.
 
 ### Changed
 
