@@ -28,6 +28,17 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   refused in a blind pin; a peg beyond 1,000,000 ticks is a `QT-CONFIG-001` in every sandbox. A leak test scans
   everything a blind agent receives, through the Python API and the MCP tools, for the fixture day's names, ids,
   absolute times and true prices. Guide: [Blind episodes](docs/how-to/agent-sandbox.md#blind-episodes).
+- **QuantConnect LEAN backtests.** `live import --venue sim-lean` reads a LEAN backtest's result JSON (its
+  `orders`) and its `<algorithm id>-order-events.json` (or an order-events CSV with the same names), formats read
+  from LEAN's source at release tag 18241; LEAN is not imported. Market, limit, stop-market and stop-limit orders
+  (also market-on-open and -close, trailing stops and limit-if-touched), partial fills, cancels and invalid orders
+  map to the canonical log, expiries as `expire`; a crypto buy's fee in the base asset, which LEAN subtracts from
+  the fill quantity, is added back and converted to quote. Option exercises and combo orders, and inputs from two
+  backtests, are refused. Option
+  `timeframe` moves a fill stamped at the end of its bar (LEAN's time) to the bar's start. `queuetruth reconcile
+  --kind lean --sim RESULT --sim EVENTS --live LIVE_LOG_DIR --out DIR` writes the same `qt.bot_reconcile` report as
+  for Backtrader and VectorBT (`kind` gains `lean` and `LiveImportSpec.venue` gains `sim_lean`, both additive).
+  Guide: `docs/how-to/reconcile-lean.md`.
 - **The P&L gap next to the fill-rate gap in `score`** (ROADMAP, the one-line reality gap): under its `RESULT:` line
   `queuetruth score` prints a `P&L:` line, for example `the simulator's P&L is 5.78 USD per order too high (95% CI
   +3.40 to +8.75) at the 1 s markout, mostly from fills it grants that live did not get (+3.09 USD per order)`, and
@@ -97,7 +108,11 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 - **The scheduled public atlas** (`.github/workflows/atlas.yml`, `scripts/scale/iex_latest.py`): each new IEX
   DEEP+ day runs through the scale pipeline on one runner, its reduced tables are kept as an asset of the
   `atlas-days` release, and the site over the newest 20 days is published with GitHub Pages (a maintainer turns
-  Pages on once).
+  Pages on once). A kept day carries the `plan.json` it ran and the builds that ran its units (`day_manifest.json`
+  `plan_sha256` and `builds`; the atlas manifest lists each day's `git_heads`). So `verify_unit.py --day DAY_DIR
+  --atlas-manifest atlas_manifest.json` re-runs any unit from the published day and checks it up to the atlas root,
+  and it says when the checkout is not the commit the day was built at: a leaf's file digests depend on the build's
+  Parquet writer. The site shows each day's commit and the site's own version and commit.
 - **`referee` GitHub Action** (`actions/referee`, `uses: sarptandoven/queuetruth/actions/referee@<ref>`): runs a
   simulator's command on every referee bug-class fixture (`$QT_DATASET`, `$QT_SCHEDULE` in, `$QT_FILLS` out),
   referees each class against the exact FIFO engine with the usual tolerances, writes a table to the job summary,

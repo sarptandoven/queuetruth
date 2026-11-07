@@ -1,4 +1,4 @@
-"""Writes the Backtrader and VectorBT fixtures of this directory (deterministic; run from anywhere):
+"""Writes the Backtrader, VectorBT and LEAN fixtures of this directory (deterministic; run from anywhere):
 
     python tests/fixtures/live/backtesters/make_fixtures.py
 
@@ -22,6 +22,20 @@ as a backtest in each library. Outputs:
   records with `.to_json(..., orient="records")` (epoch milliseconds, pandas' default) and
   `pf.trades.records_readable.to_csv(...)` (VectorBT 0.28.1 column titles). The market sell carries slippage, so
   its price is not on the 0.01 tick.
+- `lean_result.json`, `lean_order_events.json`: the same backtest in QuantConnect LEAN (release tag 18241), as a
+  local run writes it: the result JSON's `orders` section (`Order`, camelCase, enums as numbers) and the
+  `<algorithm id>-order-events.json` array (`SerializedOrderEvent`: Unix-second times, camelCase enum names). LEAN
+  stamps events with the end of the bar, so each order is submitted an hour after Backtrader creates it and a limit
+  fill comes on the next bar's end; the market sell fills on the bar it is placed on. The expiring order is
+  cancelled at its GoodTilDate expiry with LEAN's message. Buys pay their fee in BTC, as LEAN's BinanceFeeModel
+  charges them, so LEAN logs a fill quantity net of that fee; sells pay in USDT. `lean_order_events.csv`: the same
+  events as a CSV with the JSON names.
+- `lean_run2_result.json`, `lean_run2_order_events.json`: a second LEAN backtest earlier that day, its events with
+  the C# property names of `OrderEvent` (enums as numbers, `UtcTime` text, `OrderFee` objects, `QCC` for no fee): a
+  limit with two partial fills (the whole fee on the final Filled event, as LEAN charges it), an updated then
+  cancelled limit, a stop market, an expired stop-limit, a refused (Invalid) order, a trailing stop, a market-on-open
+  order, an order LEAN rounded to quantity 0 and invalidated, and a partial fill followed by a refused update (a
+  PartiallyFilled event with no fill quantity).
 
 Every number is invented; none comes from market data.
 """
@@ -307,6 +321,213 @@ def vectorbt_naive_json() -> str:
     return json.dumps(rows) + "\n"
 
 
+# ---- LEAN ----------------------------------------------------------------------------------------------------------
+
+LEAN_ALGO = "qtfixture0001"
+LEAN_SID = "BTCUSDT 18N"
+#: LEAN `OrderType`, `OrderStatus` and `OrderDirection` numbers (Common/Orders/OrderTypes.cs)
+LEAN_TYPE = {"market": 0, "limit": 1, "stopMarket": 2, "stopLimit": 3, "marketOnOpen": 4, "trailingStop": 11}
+LEAN_STATUS = {"submitted": 1, "partiallyFilled": 2, "filled": 3, "canceled": 5, "invalid": 7, "updateSubmitted": 9}
+
+
+def _utc(hour: float) -> str:
+    return (DAY + dt.timedelta(hours=hour)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _unix(hour: float) -> float:
+    return (DAY + dt.timedelta(hours=hour)).timestamp()
+
+
+def _lean_order(
+    oid: int,
+    typ: str,
+    qty: float,
+    status: str,
+    hour: float,
+    *,
+    limit: float | None = None,
+    stop: float | None = None,
+    tif: dict[str, str] | None = None,
+    last_fill: float | None = None,
+    price: float = 0.0,
+    extra: dict[str, object] | None = None,
+) -> dict[str, object]:
+    """One `Order` of the result JSON's `orders` section (camelCase names, enums as numbers)."""
+    o: dict[str, object] = {"type": LEAN_TYPE[typ]}
+    if limit is not None:
+        o["limitPrice"] = limit
+    if stop is not None:
+        o["stopPrice"] = stop
+        o["stopTriggered"] = status == "filled"
+    o |= extra or {}
+    o |= {
+        "id": oid, "contingentId": 0, "brokerId": [],
+        "symbol": {"value": "BTCUSDT", "id": LEAN_SID, "permtick": "BTCUSDT"},
+        "price": price, "priceCurrency": "USDT", "time": _utc(hour), "createdTime": _utc(hour),
+    }  # fmt: skip
+    if last_fill is not None:
+        o["lastFillTime"] = _utc(last_fill)
+    o |= {
+        "quantity": qty, "status": LEAN_STATUS[status], "properties": {"timeInForce": tif or {}},
+        "securityType": 7, "direction": 0 if qty > 0 else 1, "value": abs(qty) * price,
+        "isMarketable": False, "priceAdjustmentMode": 0,
+    }  # fmt: skip
+    return o
+
+
+def _lean_event(
+    oid: int,
+    eid: int,
+    typ: str,
+    qty: float,
+    status: str,
+    hour: float,
+    *,
+    fill: tuple[float, float] | None = None,
+    limit: float | None = None,
+    stop: float | None = None,
+    message: str = "",
+    fee: tuple[float, str] | bool = True,
+) -> dict[str, object]:
+    """One `SerializedOrderEvent` of the order-events file. `fee`: True for the order's fee in the quote currency,
+    False for none (LEAN charges the whole fee on the final Filled event only), or (amount, currency)."""
+    e: dict[str, object] = {
+        "id": f"{LEAN_ALGO}-{oid}-{eid}", "algorithmId": LEAN_ALGO, "orderId": oid, "orderEventId": eid,
+        "symbol": LEAN_SID, "symbolValue": "BTCUSDT", "symbolPermtick": "BTCUSDT", "time": _unix(hour),
+        "status": status,
+    }  # fmt: skip
+    fq, fp = fill if fill is not None else (0.0, 0.0)
+    if fill is not None and fee is True:
+        e |= {"orderFeeAmount": abs(fq) * fp * COMM, "orderFeeCurrency": "USDT"}
+    elif isinstance(fee, tuple):
+        e |= {"orderFeeAmount": fee[0], "orderFeeCurrency": fee[1]}
+    side = "buy" if qty > 0 else "sell" if qty < 0 else "hold"
+    e |= {"fillPrice": fp, "fillPriceCurrency": "USDT", "fillQuantity": fq, "direction": side, "orderType": typ}
+    if message:
+        e["message"] = message
+    e |= {"isAssignment": False, "quantity": qty}
+    if stop is not None:
+        e["stopPrice"] = stop
+    if limit is not None:
+        e["limitPrice"] = limit
+    return e
+
+
+def lean() -> tuple[str, str, str]:
+    """The backtest of `BACKTEST` in LEAN: (result JSON, order-events JSON, order-events CSV)."""
+    orders: dict[str, object] = {}
+    events: list[dict[str, object]] = []
+    for oid, (side, ex, size, price, created, fill_h, fill_px, end) in enumerate(BACKTEST, start=1):
+        typ = "market" if ex == "Market" else "limit"
+        qty = size if side == "Buy" else -size
+        sub = created + 1  # LEAN acts at the end of the bar Backtrader labels by its open
+        # a resting order fills at the end of the next bar; a market order on the bar it is placed on
+        at = None if fill_h is None else (sub if typ == "market" else fill_h + 1)
+        tif = {"$type": "QuantConnect.Orders.TimeInForces.GoodTilDateTimeInForce", "expiry": _utc(25)} if end else None
+        status = "filled" if at is not None else "canceled"
+        o = _lean_order(oid, typ, qty, status, sub, limit=price, tif=tif, last_fill=at,
+                        price=fill_px if fill_px is not None else price or 0.0)  # fmt: skip
+        if end:
+            o["canceledTime"] = _utc(25)
+        orders[str(oid)] = o
+        events.append(_lean_event(oid, 1, typ, qty, "submitted", sub, limit=price))
+        if at is not None:
+            assert fill_px is not None
+            if qty > 0:
+                # BinanceFeeModel charges a buy in the base asset, and LEAN subtracts it from the fill quantity
+                base_fee = round(qty * COMM, 10)
+                fill = (round(qty - base_fee, 10), fill_px)
+                events.append(_lean_event(oid, 2, typ, qty, "filled", at, fill=fill, limit=price,
+                                          fee=(base_fee, "BTC")))  # fmt: skip
+            else:
+                events.append(_lean_event(oid, 2, typ, qty, "filled", at, fill=(qty, fill_px), limit=price))
+        else:
+            events.append(_lean_event(oid, 2, typ, qty, "canceled", 25, limit=price,
+                                      message="The order has expired."))  # fmt: skip
+    result = {
+        "orders": orders,
+        "statistics": {"Total Orders": str(len(orders))},
+        "algorithmConfiguration": {"name": "QtFixtureAlgorithm", "accountCurrency": "USDT"},
+    }
+    buf = io.StringIO()
+    cols: list[str] = []
+    for e in events:
+        cols += [k for k in e if k not in cols]
+    w = csv.DictWriter(buf, fieldnames=cols, lineterminator="\n")
+    w.writeheader()
+    for e in events:
+        w.writerow({k: ("true" if v is True else "false" if v is False else v) for k, v in e.items()})
+    return json.dumps(result, indent=2) + "\n", json.dumps(events) + "\n", buf.getvalue()
+
+
+def _pascal(e: dict[str, object]) -> dict[str, object]:
+    """A `SerializedOrderEvent` with the C# property names of `OrderEvent`: enums as numbers, `UtcTime` text,
+    `OrderFee` as `{Value: {Amount, Currency}}`, `Symbol` as a symbol object."""
+    t = dt.datetime.fromtimestamp(float(e["time"]), dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")  # type: ignore[arg-type]
+    out: dict[str, object] = {
+        "OrderId": e["orderId"], "Id": e["orderEventId"],
+        "Symbol": {"Value": e["symbolValue"], "ID": e["symbol"], "Permtick": e["symbolPermtick"]},
+        "UtcTime": t, "Status": LEAN_STATUS[str(e["status"])],
+        "OrderFee": {"Value": {"Amount": e.get("orderFeeAmount", 0.0), "Currency": e.get("orderFeeCurrency", "QCC")}},
+        "FillPrice": e["fillPrice"], "FillPriceCurrency": "USDT", "FillQuantity": e["fillQuantity"],
+        "Direction": {"buy": 0, "sell": 1, "hold": 2}[str(e["direction"])], "OrderType": LEAN_TYPE[str(e["orderType"])],
+        "Message": e.get("message", ""), "IsAssignment": False, "Quantity": e["quantity"],
+    }  # fmt: skip
+    for k in ("stopPrice", "limitPrice"):
+        if k in e:
+            out[k[0].upper() + k[1:]] = e[k]
+    return out
+
+
+def lean_second_run() -> tuple[str, str]:
+    """A second LEAN backtest earlier that day (order ids restart at 1), its events with the C# property names."""
+    day = {"$type": "QuantConnect.Orders.TimeInForces.DayTimeInForce"}
+    gtd = {"$type": "QuantConnect.Orders.TimeInForces.GoodTilDateTimeInForce", "expiry": _utc(5)}
+    orders = [
+        _lean_order(1, "limit", 0.03, "filled", 2, limit=60500.0, tif=day, last_fill=4, price=60500.0),
+        _lean_order(2, "limit", -0.01, "canceled", 2, limit=62400.0, extra={}),
+        _lean_order(3, "stopMarket", -0.01, "filled", 3, stop=60000.0, last_fill=4, price=59990.0),
+        _lean_order(4, "stopLimit", 0.01, "canceled", 3, stop=61000.0, limit=61050.0, tif=gtd),
+        _lean_order(5, "limit", 5.0, "invalid", 4, limit=60000.0),
+        _lean_order(6, "trailingStop", -0.01, "filled", 4, stop=59000.0, last_fill=5, price=59100.0,
+                    extra={"trailingAmount": 500.0, "trailingAsPercentage": False}),
+        _lean_order(7, "marketOnOpen", 0.01, "filled", 4, last_fill=5, price=60100.0),
+        _lean_order(8, "limit", 0.0, "invalid", 5, limit=60000.0),
+        _lean_order(9, "limit", 0.01, "filled", 5, limit=60200.0, last_fill=7, price=60200.0),
+    ]  # fmt: skip
+    orders[7]["direction"] = 2  # quantity 0: OrderDirection.Hold
+    ev = _lean_event
+    events = [
+        ev(1, 1, "limit", 0.03, "submitted", 2, limit=60500.0),
+        ev(1, 2, "limit", 0.03, "partiallyFilled", 3, fill=(0.01, 60500.0), limit=60500.0, fee=False),
+        ev(1, 3, "limit", 0.03, "partiallyFilled", 3, fill=(0.005, 60500.0), limit=60500.0, fee=False),
+        ev(1, 4, "limit", 0.03, "filled", 4, fill=(0.015, 60500.0), limit=60500.0,
+           fee=(0.03 * 60500.0 * COMM, "USDT")),
+        ev(2, 1, "limit", -0.01, "submitted", 2, limit=62500.0),
+        ev(2, 2, "limit", -0.01, "updateSubmitted", 3, limit=62400.0),
+        ev(2, 3, "limit", -0.01, "canceled", 5, limit=62400.0, message="Canceled by the algorithm"),
+        ev(3, 1, "stopMarket", -0.01, "submitted", 3, stop=60000.0),
+        ev(3, 2, "stopMarket", -0.01, "filled", 4, fill=(-0.01, 59990.0), stop=60000.0),
+        ev(4, 1, "stopLimit", 0.01, "submitted", 3, stop=61000.0, limit=61050.0),
+        ev(4, 2, "stopLimit", 0.01, "canceled", 5, stop=61000.0, limit=61050.0, message="The order has expired."),
+        ev(5, 1, "limit", 5.0, "invalid", 4, limit=60000.0,
+           message="Order Error: id: 5, Insufficient buying power to complete order"),
+        ev(6, 1, "trailingStop", -0.01, "submitted", 4, stop=59000.0),
+        ev(6, 2, "trailingStop", -0.01, "filled", 5, fill=(-0.01, 59100.0), stop=59000.0),
+        ev(7, 1, "marketOnOpen", 0.01, "submitted", 4),
+        ev(7, 2, "marketOnOpen", 0.01, "filled", 5, fill=(0.01, 60100.0)),
+        ev(8, 1, "limit", 0.0, "invalid", 5, limit=60000.0,
+           message="Unable to submit order with id 8 that has zero quantity."),
+        ev(9, 1, "limit", 0.01, "submitted", 5, limit=60200.0),
+        ev(9, 2, "limit", 0.01, "partiallyFilled", 6, fill=(0.004, 60200.0), limit=60200.0, fee=False),
+        ev(9, 3, "limit", 0.01, "partiallyFilled", 6.5, limit=60200.0, fee=False,
+           message="BrokerageModel declared unable to update order"),
+        ev(9, 4, "limit", 0.01, "filled", 7, fill=(0.006, 60200.0), limit=60200.0, fee=(0.01 * 60200.0 * COMM, "USDT")),
+    ]  # fmt: skip
+    result = {"orders": {str(o["id"]): o for o in orders}}
+    return json.dumps(result, indent=2) + "\n", json.dumps([_pascal(e) for e in events], indent=1) + "\n"
+
+
 IMAP = (
     "venue,instrument,instrument_id,session_date,price_exp,size_exp,tick_size,lot_size\n"
     "binance,BTCUSDT,1,,-2,-5,0.01,0.00001\n"
@@ -326,6 +547,13 @@ def main() -> None:
     (HERE / "bt_orders_run2.jsonl").write_text(backtrader_second_run())
     (HERE / "vbt_sweep_orders.csv").write_text(vectorbt_sweep())
     (HERE / "vbt_orders_naive_ny.json").write_text(vectorbt_naive_json())
+    l_result, l_events, l_csv = lean()
+    (HERE / "lean_result.json").write_text(l_result)
+    (HERE / "lean_order_events.json").write_text(l_events)
+    (HERE / "lean_order_events.csv").write_text(l_csv)
+    l2_result, l2_events = lean_second_run()
+    (HERE / "lean_run2_result.json").write_text(l2_result)
+    (HERE / "lean_run2_order_events.json").write_text(l2_events)
 
 
 if __name__ == "__main__":

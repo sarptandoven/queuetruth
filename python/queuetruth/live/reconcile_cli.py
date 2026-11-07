@@ -1,19 +1,19 @@
 """`queuetruth reconcile`: a trading bot's simulator arm against its live (or dry-run) run, or a backtest against a
 canonical live log, order by order.
 
-    queuetruth reconcile --kind freqtrade|hummingbot|backtrader|vectorbt --sim PATH [--sim PATH ...]
+    queuetruth reconcile --kind freqtrade|hummingbot|backtrader|vectorbt|lean --sim PATH [--sim PATH ...]
         --live PATH [--live PATH ...] --out DIR [--account NAME] [--instrument-map FILE] [--window DURATION]
         [--price-tol-bps X] [--time-tol DURATION] [--no-score] [--arms-as-given] [--option KEY=VALUE ...]
         [--max-rows N]
 
-Runs `reconcile_freqtrade` / `reconcile_hummingbot` / `reconcile_backtrader` / `reconcile_vectorbt`
-(`queuetruth.live.importers`; for the backtesters `--live` is one canonical live-log directory): writes
-`<out>/live` and `<out>/sim` (canonical live logs), `<out>/score` (`queuetruth score` with the simulator arm) and
-`<out>/reconcile.json` (`qt.bot_reconcile`) with `reconcile_orders.csv`, and prints the report answer first
+Runs `reconcile_freqtrade` / `reconcile_hummingbot` / `reconcile_backtrader` / `reconcile_vectorbt` /
+`reconcile_lean` (`queuetruth.live.importers`; for the backtesters `--live` is one canonical live-log directory):
+writes `<out>/live` and `<out>/sim` (canonical live logs), `<out>/score` (`queuetruth score` with the simulator arm)
+and `<out>/reconcile.json` (`qt.bot_reconcile`) with `reconcile_orders.csv`, and prints the report answer first
 (`--format json`: the `qt.bot_reconcile` document). Options are the importer options of the guides
-(docs/how-to/reconcile-freqtrade-hummingbot.md, docs/how-to/reconcile-backtrader-vectorbt.md), e.g.
-`--option timeframe=5m`, `--option dry_run=true`. A Python-only group: `queuetruth.cli.main` runs it before the clap
-grammar, which lists it (crates/cli/gen_python_commands.py).
+(docs/how-to/reconcile-freqtrade-hummingbot.md, docs/how-to/reconcile-backtrader-vectorbt.md,
+docs/how-to/reconcile-lean.md), e.g. `--option timeframe=5m`, `--option dry_run=true`. A Python-only group:
+`queuetruth.cli.main` runs it before the clap grammar, which lists it (crates/cli/gen_python_commands.py).
 
 Exit codes (SPEC 0.2): 0 success, 2 any error.
 """
@@ -53,13 +53,13 @@ def parser() -> argparse.ArgumentParser:
         "reconcile",
         help="a bot's or backtester's simulated orders against the live run, order by order",
         description="A trading bot's simulator arm (Freqtrade backtest or dry run, Hummingbot paper bot) against its "
-        "live run, or a Backtrader or VectorBT backtest against a canonical live log: paired orders, why each "
+        "live run, or a Backtrader, VectorBT or LEAN backtest against a canonical live log: paired orders, why each "
         "differs, and the sim-vs-live scorecard.",
     )
     p.add_argument(
         "--kind",
         required=True,
-        choices=["freqtrade", "hummingbot", "backtrader", "vectorbt"],
+        choices=["freqtrade", "hummingbot", "backtrader", "vectorbt", "lean"],
         help="the bot or backtester",
     )
     p.add_argument(
@@ -68,15 +68,15 @@ def parser() -> argparse.ArgumentParser:
         required=True,
         metavar="PATH",
         help="simulator arm: backtest result, dry-run database and logs, paper-bot database, Backtrader notification "
-        "lines or VectorBT records (repeatable)",
+        "lines, VectorBT records or LEAN result and order-events JSON (repeatable)",
     )
     p.add_argument(
         "--live",
         action="append",
         required=True,
         metavar="PATH",
-        help="live arm: the bot's database, logs or trades CSV (repeatable); for backtrader and vectorbt one canonical "
-        "live-log directory (queuetruth live import)",
+        help="live arm: the bot's database, logs or trades CSV (repeatable); for backtrader, vectorbt and lean one "
+        "canonical live-log directory (queuetruth live import)",
     )
     p.add_argument("--out", required=True, metavar="DIR", help="output directory")
     p.add_argument("--account", default="main", help="account label of both logs (default main)")
@@ -157,6 +157,8 @@ def run(args: argparse.Namespace) -> tuple[dict[str, Any], str]:
         from queuetruth.live.importers.hummingbot import reconcile_hummingbot as reconcile
     elif args.kind == "backtrader":
         from queuetruth.live.importers.backtrader import reconcile_backtrader as reconcile
+    elif args.kind == "lean":
+        from queuetruth.live.importers.lean import reconcile_lean as reconcile
     else:
         from queuetruth.live.importers.vectorbt import reconcile_vectorbt as reconcile
     from queuetruth.live.importers.freqtrade import render_reconcile

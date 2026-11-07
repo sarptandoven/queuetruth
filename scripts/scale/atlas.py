@@ -25,7 +25,9 @@ content digests), then writes
   units whose replay checks flagged anything, `flagged_symbols` (per symbol-day that is not `exact_ok`: unit, replay
   flags, how they were attributed: `leaf`, `symbol_flags` or the whole `unit`, the causes a `trace_flags.py` sidecar
   found, the non-T spans that overlap the session), `trading_state` (whether the day's trading state is known and
-  from where), summed exactness per tier, #312 abort counts, telemetry totals.
+  from where), summed exactness per tier, #312 abort counts, telemetry totals, `plan_sha256` and `builds` (the
+  builds that ran the units: version, `git_head`, core extension sha256);
+- `plan.json`: the plan the day ran, so `verify_unit.py --day` can re-run any unit from the published day.
 
 combine (any number of days; `--flag-policy label`, the default, keeps the flagged symbol-days and marks them,
 `exclude` leaves them out of every table and refuses days that cannot say which symbol-days are flagged unless
@@ -225,6 +227,19 @@ def trading_state(
     return info, out
 
 
+def day_builds(shards: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The distinct builds (`queuetruth_version`, `git_head`, core extension sha256) of the shard manifests, with
+    their unit counts, most units first."""
+    n: dict[tuple, int] = defaultdict(int)
+    for m in shards:
+        b = m.get("build") or {}
+        n[(b.get("queuetruth_version"), b.get("git_head"), (b.get("core_extension") or {}).get("sha256"))] += 1
+    rows = [
+        {"queuetruth_version": v, "git_head": g, "core_extension_sha256": c, "units": k} for (v, g, c), k in n.items()
+    ]
+    return sorted(rows, key=lambda r: (-r["units"], str(r["git_head"])))
+
+
 def reduce_day(
     plan: dict[str, Any],
     shards: Path,
@@ -372,6 +387,15 @@ def reduce_day(
             "max_peak_rss_mb": max((t["peak_rss_mb"] for t in tel), default=None),
         },
     }
+    # the plan holds every unit spec (verify_unit.py needs it to re-run a unit), so the published day carries it
+    plan_bytes = (json.dumps(plan, separators=(",", ":")) + "\n").encode()
+    (out / "plan.json").write_bytes(plan_bytes)
+    doc["plan_sha256"] = K.sha256_hex(plan_bytes)
+    doc["builds"] = day_builds(ok)
+    doc["builds_note"] = (
+        "the builds that ran the day's units (`build` of each shard manifest). A leaf holds sha256 digests of Parquet "
+        "files the build wrote, which depend on its Parquet writer, so re-run a unit at the same `git_head`"
+    )
     (out / "day_manifest.json").write_text(json.dumps(doc, indent=1) + "\n")
     res = {k: doc[k] for k in ("run_id", "date", "merkle_root", "units_valid", "units_planned", "symbol_days")}
     return {
@@ -752,6 +776,8 @@ def combine(
                 "symbol_days": d["symbol_days"],
                 "source_url": (d.get("source") or {}).get("url"),
                 "source_sha256": (d.get("source") or {}).get("compressed_sha256"),
+                "plan_sha256": d.get("plan_sha256"),
+                "git_heads": [b["git_head"] for b in d.get("builds") or []],
             }
             for d, _ in days
         ],

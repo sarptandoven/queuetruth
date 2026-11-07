@@ -13,6 +13,9 @@ projects' public source (Backtrader 1.9.78.123, VectorBT 0.28.1); the fixtures i
 `tests/fixtures/live/backtesters/` are written from that source by `make_fixtures.py`, not exported from a real
 run, so check the counts against your own records the first time.
 
+For a QuantConnect LEAN backtest, see [Reconcile a LEAN backtest](reconcile-lean.md): the same report, from LEAN's
+result and order-events JSON.
+
 **From the command line or Python.** `queuetruth live import --venue sim-backtrader | sim-vectorbt` writes the
 backtest as a simulator log (venue `sim:backtrader` / `sim:vectorbt`, `validation_status = simulated`), with options
 through `--option KEY=VALUE`. `queuetruth reconcile --kind backtrader | vectorbt --sim EXPORT --live LIVE_LOG_DIR

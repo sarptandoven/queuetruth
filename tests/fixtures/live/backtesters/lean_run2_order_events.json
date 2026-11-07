@@ -1,0 +1,548 @@
+[
+ {
+  "OrderId": 1,
+  "Id": 1,
+  "Symbol": {
+   "Value": "BTCUSDT",
+   "ID": "BTCUSDT 18N",
+   "Permtick": "BTCUSDT"
+  },
+  "UtcTime": "2024-03-01T02:00:00Z",
+  "Status": 1,
+  "OrderFee": {
+   "Value": {
+    "Amount": 0.0,
+    "Currency": "QCC"
+   }
+  },
+  "FillPrice": 0.0,
+  "FillPriceCurrency": "USDT",
+  "FillQuantity": 0.0,
+  "Direction": 0,
+  "OrderType": 1,
+  "Message": "",
+  "IsAssignment": false,
+  "Quantity": 0.03,
+  "LimitPrice": 60500.0
+ },
+ {
+  "OrderId": 1,
+  "Id": 2,
+  "Symbol": {
+   "Value": "BTCUSDT",
+   "ID": "BTCUSDT 18N",
+   "Permtick": "BTCUSDT"
+  },
+  "UtcTime": "2024-03-01T03:00:00Z",
+  "Status": 2,
+  "OrderFee": {
+   "Value": {
+    "Amount": 0.0,
+    "Currency": "QCC"
+   }
+  },
+  "FillPrice": 60500.0,
+  "FillPriceCurrency": "USDT",
+  "FillQuantity": 0.01,
+  "Direction": 0,
+  "OrderType": 1,
+  "Message": "",
+  "IsAssignment": false,
+  "Quantity": 0.03,
+  "LimitPrice": 60500.0
+ },
+ {
+  "OrderId": 1,
+  "Id": 3,
+  "Symbol": {
+   "Value": "BTCUSDT",
+   "ID": "BTCUSDT 18N",
+   "Permtick": "BTCUSDT"
+  },
+  "UtcTime": "2024-03-01T03:00:00Z",
+  "Status": 2,
+  "OrderFee": {
+   "Value": {
+    "Amount": 0.0,
+    "Currency": "QCC"
+   }
+  },
+  "FillPrice": 60500.0,
+  "FillPriceCurrency": "USDT",
+  "FillQuantity": 0.005,
+  "Direction": 0,
+  "OrderType": 1,
+  "Message": "",
+  "IsAssignment": false,
+  "Quantity": 0.03,
+  "LimitPrice": 60500.0
+ },
+ {
+  "OrderId": 1,
+  "Id": 4,
+  "Symbol": {
+   "Value": "BTCUSDT",
+   "ID": "BTCUSDT 18N",
+   "Permtick": "BTCUSDT"
+  },
+  "UtcTime": "2024-03-01T04:00:00Z",
+  "Status": 3,
+  "OrderFee": {
+   "Value": {
+    "Amount": 1.815,
+    "Currency": "USDT"
+   }
+  },
+  "FillPrice": 60500.0,
+  "FillPriceCurrency": "USDT",
+  "FillQuantity": 0.015,
+  "Direction": 0,
+  "OrderType": 1,
+  "Message": "",
+  "IsAssignment": false,
+  "Quantity": 0.03,
+  "LimitPrice": 60500.0
+ },
+ {
+  "OrderId": 2,
+  "Id": 1,
+  "Symbol": {
+   "Value": "BTCUSDT",
+   "ID": "BTCUSDT 18N",
+   "Permtick": "BTCUSDT"
+  },
+  "UtcTime": "2024-03-01T02:00:00Z",
+  "Status": 1,
+  "OrderFee": {
+   "Value": {
+    "Amount": 0.0,
+    "Currency": "QCC"
+   }
+  },
+  "FillPrice": 0.0,
+  "FillPriceCurrency": "USDT",
+  "FillQuantity": 0.0,
+  "Direction": 1,
+  "OrderType": 1,
+  "Message": "",
+  "IsAssignment": false,
+  "Quantity": -0.01,
+  "LimitPrice": 62500.0
+ },
+ {
+  "OrderId": 2,
+  "Id": 2,
+  "Symbol": {
+   "Value": "BTCUSDT",
+   "ID": "BTCUSDT 18N",
+   "Permtick": "BTCUSDT"
+  },
+  "UtcTime": "2024-03-01T03:00:00Z",
+  "Status": 9,
+  "OrderFee": {
+   "Value": {
+    "Amount": 0.0,
+    "Currency": "QCC"
+   }
+  },
+  "FillPrice": 0.0,
+  "FillPriceCurrency": "USDT",
+  "FillQuantity": 0.0,
+  "Direction": 1,
+  "OrderType": 1,
+  "Message": "",
+  "IsAssignment": false,
+  "Quantity": -0.01,
+  "LimitPrice": 62400.0
+ },
+ {
+  "OrderId": 2,
+  "Id": 3,
+  "Symbol": {
+   "Value": "BTCUSDT",
+   "ID": "BTCUSDT 18N",
+   "Permtick": "BTCUSDT"
+  },
+  "UtcTime": "2024-03-01T05:00:00Z",
+  "Status": 5,
+  "OrderFee": {
+   "Value": {
+    "Amount": 0.0,
+    "Currency": "QCC"
+   }
+  },
+  "FillPrice": 0.0,
+  "FillPriceCurrency": "USDT",
+  "FillQuantity": 0.0,
+  "Direction": 1,
+  "OrderType": 1,
+  "Message": "Canceled by the algorithm",
+  "IsAssignment": false,
+  "Quantity": -0.01,
+  "LimitPrice": 62400.0
+ },
+ {
+  "OrderId": 3,
+  "Id": 1,
+  "Symbol": {
+   "Value": "BTCUSDT",
+   "ID": "BTCUSDT 18N",
+   "Permtick": "BTCUSDT"
+  },
+  "UtcTime": "2024-03-01T03:00:00Z",
+  "Status": 1,
+  "OrderFee": {
+   "Value": {
+    "Amount": 0.0,
+    "Currency": "QCC"
+   }
+  },
+  "FillPrice": 0.0,
+  "FillPriceCurrency": "USDT",
+  "FillQuantity": 0.0,
+  "Direction": 1,
+  "OrderType": 2,
+  "Message": "",
+  "IsAssignment": false,
+  "Quantity": -0.01,
+  "StopPrice": 60000.0
+ },
+ {
+  "OrderId": 3,
+  "Id": 2,
+  "Symbol": {
+   "Value": "BTCUSDT",
+   "ID": "BTCUSDT 18N",
+   "Permtick": "BTCUSDT"
+  },
+  "UtcTime": "2024-03-01T04:00:00Z",
+  "Status": 3,
+  "OrderFee": {
+   "Value": {
+    "Amount": 0.5999,
+    "Currency": "USDT"
+   }
+  },
+  "FillPrice": 59990.0,
+  "FillPriceCurrency": "USDT",
+  "FillQuantity": -0.01,
+  "Direction": 1,
+  "OrderType": 2,
+  "Message": "",
+  "IsAssignment": false,
+  "Quantity": -0.01,
+  "StopPrice": 60000.0
+ },
+ {
+  "OrderId": 4,
+  "Id": 1,
+  "Symbol": {
+   "Value": "BTCUSDT",
+   "ID": "BTCUSDT 18N",
+   "Permtick": "BTCUSDT"
+  },
+  "UtcTime": "2024-03-01T03:00:00Z",
+  "Status": 1,
+  "OrderFee": {
+   "Value": {
+    "Amount": 0.0,
+    "Currency": "QCC"
+   }
+  },
+  "FillPrice": 0.0,
+  "FillPriceCurrency": "USDT",
+  "FillQuantity": 0.0,
+  "Direction": 0,
+  "OrderType": 3,
+  "Message": "",
+  "IsAssignment": false,
+  "Quantity": 0.01,
+  "StopPrice": 61000.0,
+  "LimitPrice": 61050.0
+ },
+ {
+  "OrderId": 4,
+  "Id": 2,
+  "Symbol": {
+   "Value": "BTCUSDT",
+   "ID": "BTCUSDT 18N",
+   "Permtick": "BTCUSDT"
+  },
+  "UtcTime": "2024-03-01T05:00:00Z",
+  "Status": 5,
+  "OrderFee": {
+   "Value": {
+    "Amount": 0.0,
+    "Currency": "QCC"
+   }
+  },
+  "FillPrice": 0.0,
+  "FillPriceCurrency": "USDT",
+  "FillQuantity": 0.0,
+  "Direction": 0,
+  "OrderType": 3,
+  "Message": "The order has expired.",
+  "IsAssignment": false,
+  "Quantity": 0.01,
+  "StopPrice": 61000.0,
+  "LimitPrice": 61050.0
+ },
+ {
+  "OrderId": 5,
+  "Id": 1,
+  "Symbol": {
+   "Value": "BTCUSDT",
+   "ID": "BTCUSDT 18N",
+   "Permtick": "BTCUSDT"
+  },
+  "UtcTime": "2024-03-01T04:00:00Z",
+  "Status": 7,
+  "OrderFee": {
+   "Value": {
+    "Amount": 0.0,
+    "Currency": "QCC"
+   }
+  },
+  "FillPrice": 0.0,
+  "FillPriceCurrency": "USDT",
+  "FillQuantity": 0.0,
+  "Direction": 0,
+  "OrderType": 1,
+  "Message": "Order Error: id: 5, Insufficient buying power to complete order",
+  "IsAssignment": false,
+  "Quantity": 5.0,
+  "LimitPrice": 60000.0
+ },
+ {
+  "OrderId": 6,
+  "Id": 1,
+  "Symbol": {
+   "Value": "BTCUSDT",
+   "ID": "BTCUSDT 18N",
+   "Permtick": "BTCUSDT"
+  },
+  "UtcTime": "2024-03-01T04:00:00Z",
+  "Status": 1,
+  "OrderFee": {
+   "Value": {
+    "Amount": 0.0,
+    "Currency": "QCC"
+   }
+  },
+  "FillPrice": 0.0,
+  "FillPriceCurrency": "USDT",
+  "FillQuantity": 0.0,
+  "Direction": 1,
+  "OrderType": 11,
+  "Message": "",
+  "IsAssignment": false,
+  "Quantity": -0.01,
+  "StopPrice": 59000.0
+ },
+ {
+  "OrderId": 6,
+  "Id": 2,
+  "Symbol": {
+   "Value": "BTCUSDT",
+   "ID": "BTCUSDT 18N",
+   "Permtick": "BTCUSDT"
+  },
+  "UtcTime": "2024-03-01T05:00:00Z",
+  "Status": 3,
+  "OrderFee": {
+   "Value": {
+    "Amount": 0.591,
+    "Currency": "USDT"
+   }
+  },
+  "FillPrice": 59100.0,
+  "FillPriceCurrency": "USDT",
+  "FillQuantity": -0.01,
+  "Direction": 1,
+  "OrderType": 11,
+  "Message": "",
+  "IsAssignment": false,
+  "Quantity": -0.01,
+  "StopPrice": 59000.0
+ },
+ {
+  "OrderId": 7,
+  "Id": 1,
+  "Symbol": {
+   "Value": "BTCUSDT",
+   "ID": "BTCUSDT 18N",
+   "Permtick": "BTCUSDT"
+  },
+  "UtcTime": "2024-03-01T04:00:00Z",
+  "Status": 1,
+  "OrderFee": {
+   "Value": {
+    "Amount": 0.0,
+    "Currency": "QCC"
+   }
+  },
+  "FillPrice": 0.0,
+  "FillPriceCurrency": "USDT",
+  "FillQuantity": 0.0,
+  "Direction": 0,
+  "OrderType": 4,
+  "Message": "",
+  "IsAssignment": false,
+  "Quantity": 0.01
+ },
+ {
+  "OrderId": 7,
+  "Id": 2,
+  "Symbol": {
+   "Value": "BTCUSDT",
+   "ID": "BTCUSDT 18N",
+   "Permtick": "BTCUSDT"
+  },
+  "UtcTime": "2024-03-01T05:00:00Z",
+  "Status": 3,
+  "OrderFee": {
+   "Value": {
+    "Amount": 0.601,
+    "Currency": "USDT"
+   }
+  },
+  "FillPrice": 60100.0,
+  "FillPriceCurrency": "USDT",
+  "FillQuantity": 0.01,
+  "Direction": 0,
+  "OrderType": 4,
+  "Message": "",
+  "IsAssignment": false,
+  "Quantity": 0.01
+ },
+ {
+  "OrderId": 8,
+  "Id": 1,
+  "Symbol": {
+   "Value": "BTCUSDT",
+   "ID": "BTCUSDT 18N",
+   "Permtick": "BTCUSDT"
+  },
+  "UtcTime": "2024-03-01T05:00:00Z",
+  "Status": 7,
+  "OrderFee": {
+   "Value": {
+    "Amount": 0.0,
+    "Currency": "QCC"
+   }
+  },
+  "FillPrice": 0.0,
+  "FillPriceCurrency": "USDT",
+  "FillQuantity": 0.0,
+  "Direction": 2,
+  "OrderType": 1,
+  "Message": "Unable to submit order with id 8 that has zero quantity.",
+  "IsAssignment": false,
+  "Quantity": 0.0,
+  "LimitPrice": 60000.0
+ },
+ {
+  "OrderId": 9,
+  "Id": 1,
+  "Symbol": {
+   "Value": "BTCUSDT",
+   "ID": "BTCUSDT 18N",
+   "Permtick": "BTCUSDT"
+  },
+  "UtcTime": "2024-03-01T05:00:00Z",
+  "Status": 1,
+  "OrderFee": {
+   "Value": {
+    "Amount": 0.0,
+    "Currency": "QCC"
+   }
+  },
+  "FillPrice": 0.0,
+  "FillPriceCurrency": "USDT",
+  "FillQuantity": 0.0,
+  "Direction": 0,
+  "OrderType": 1,
+  "Message": "",
+  "IsAssignment": false,
+  "Quantity": 0.01,
+  "LimitPrice": 60200.0
+ },
+ {
+  "OrderId": 9,
+  "Id": 2,
+  "Symbol": {
+   "Value": "BTCUSDT",
+   "ID": "BTCUSDT 18N",
+   "Permtick": "BTCUSDT"
+  },
+  "UtcTime": "2024-03-01T06:00:00Z",
+  "Status": 2,
+  "OrderFee": {
+   "Value": {
+    "Amount": 0.0,
+    "Currency": "QCC"
+   }
+  },
+  "FillPrice": 60200.0,
+  "FillPriceCurrency": "USDT",
+  "FillQuantity": 0.004,
+  "Direction": 0,
+  "OrderType": 1,
+  "Message": "",
+  "IsAssignment": false,
+  "Quantity": 0.01,
+  "LimitPrice": 60200.0
+ },
+ {
+  "OrderId": 9,
+  "Id": 3,
+  "Symbol": {
+   "Value": "BTCUSDT",
+   "ID": "BTCUSDT 18N",
+   "Permtick": "BTCUSDT"
+  },
+  "UtcTime": "2024-03-01T06:30:00Z",
+  "Status": 2,
+  "OrderFee": {
+   "Value": {
+    "Amount": 0.0,
+    "Currency": "QCC"
+   }
+  },
+  "FillPrice": 0.0,
+  "FillPriceCurrency": "USDT",
+  "FillQuantity": 0.0,
+  "Direction": 0,
+  "OrderType": 1,
+  "Message": "BrokerageModel declared unable to update order",
+  "IsAssignment": false,
+  "Quantity": 0.01,
+  "LimitPrice": 60200.0
+ },
+ {
+  "OrderId": 9,
+  "Id": 4,
+  "Symbol": {
+   "Value": "BTCUSDT",
+   "ID": "BTCUSDT 18N",
+   "Permtick": "BTCUSDT"
+  },
+  "UtcTime": "2024-03-01T07:00:00Z",
+  "Status": 3,
+  "OrderFee": {
+   "Value": {
+    "Amount": 0.602,
+    "Currency": "USDT"
+   }
+  },
+  "FillPrice": 60200.0,
+  "FillPriceCurrency": "USDT",
+  "FillQuantity": 0.006,
+  "Direction": 0,
+  "OrderType": 1,
+  "Message": "",
+  "IsAssignment": false,
+  "Quantity": 0.01,
+  "LimitPrice": 60200.0
+ }
+]
