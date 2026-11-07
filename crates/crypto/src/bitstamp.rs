@@ -805,11 +805,11 @@ pub(crate) fn convert_full(lines: impl Iterator<Item = QtResult<String>>, cfg: &
                     bump(&mut st, "deferred_opened", 1);
                     book.insert(poid, (pside, ppx, psz));
                     b.add(pside, ppx);
-                    if rows.len() > n_before {
-                        if let Some(last) = rows.last_mut() {
-                            last.flags &= !flags::LAST;
-                            last.sequence = seq;
-                        }
+                    if rows.len() > n_before
+                        && let Some(last) = rows.last_mut()
+                    {
+                        last.flags &= !flags::LAST;
+                        last.sequence = seq;
                     }
                     rows.push(rec(ts, recv, inst, b'A', pside, ppx, psz, poid, flags::LAST, seq));
                 }
@@ -824,10 +824,10 @@ pub(crate) fn convert_full(lines: impl Iterator<Item = QtResult<String>>, cfg: &
         checked += 1;
         if !has_pre {
             restarts += 1;
-        } else if let Some(Some(prev)) = last.get(mk) {
-            if pre.as_ref() != Some(prev) {
-                gaps += 1;
-            }
+        } else if let Some(Some(prev)) = last.get(mk)
+            && pre.as_ref() != Some(prev)
+        {
+            gaps += 1;
         }
         last.insert(mk.clone(), eid.clone());
     }

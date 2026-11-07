@@ -62,7 +62,8 @@ it after each target and removes it on exit; `cargo test` removes each test's di
     `qt_ingest::dbn::FrameCheck` now rejects both as `QT-INPUT-002` before the decoder runs (a block shorter than
     `MIN_METADATA_BYTES`, or longer than the file can hold), tested in `crates/ingest/tests/dbn_metadata_guard.rs`
     and `tests/dbn_alloc.rs`.
-  - `parquet/`: corrupt Parquet metadata panics inside the `arrow-ipc` and `parquet` crates. With
+  - `parquet/`: corrupt Parquet metadata (a negative column chunk range) panics inside the `parquet` crate; the
+    four `arrow-ipc` sites arrow 60 fixed are in `regressions/parquet/`. With
     `QT_FUZZ_KNOWN_DIR=<dir>`, the `parquet` target saves one input per distinct panic site there.
 
 A new finding: `cargo +nightly fuzz tmin <target> <artifact>`, copy the minimized file to `regressions/<target>/`

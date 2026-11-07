@@ -132,12 +132,12 @@ impl SeqGaps {
         self.n += 1;
         let snapshot = e.flags & flags::SNAPSHOT != 0;
         let ch = self.chans.entry((date, e.channel_id)).or_default();
-        if let Some(p) = ch.clear.take() {
-            if snapshot {
-                match p {
-                    Provisional::Gap(i) => self.gaps[i].void = true,
-                    Provisional::Regression => self.regressions -= 1,
-                }
+        if let Some(p) = ch.clear.take()
+            && snapshot
+        {
+            match p {
+                Provisional::Gap(i) => self.gaps[i].void = true,
+                Provisional::Regression => self.regressions -= 1,
             }
         }
         if snapshot {

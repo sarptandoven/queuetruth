@@ -188,8 +188,7 @@ def test_features_schema_dynamic_columns() -> None:
     assert ADDED_COLUMNS["qt.features"] == ("midnight_utc_ns",)
 
 
-def test_pyarrow_round_trip_with_schema(tmp_path: Path) -> None:
-    sch = SCHEMAS["qt.shadow_spec"]
+def _shadow_spec_table() -> pa.Table:
     rows = {
         "shadow_id": ["s1"],
         "instrument_id": [1],
@@ -205,7 +204,12 @@ def test_pyarrow_round_trip_with_schema(tmp_path: Path) -> None:
         "source": pa.array(["user"]).dictionary_encode().cast(pa.dictionary(pa.int8(), pa.utf8())),
         "order_key": [None],
     }
-    table = pa.table(rows, schema=sch)
+    return pa.table(rows, schema=SCHEMAS["qt.shadow_spec"])
+
+
+def test_pyarrow_round_trip_with_schema(tmp_path: Path) -> None:
+    sch = SCHEMAS["qt.shadow_spec"]
+    table = _shadow_spec_table()
     entry = write_table(table, tmp_path / "s.parquet")
     assert entry["rows"] == 1 and entry["name"] == "s.parquet" and len(entry["sha256"]) == 64
     md = pq.ParquetFile(tmp_path / "s.parquet").metadata
@@ -214,6 +218,24 @@ def test_pyarrow_round_trip_with_schema(tmp_path: Path) -> None:
     back = pq.read_table(tmp_path / "s.parquet")
     assert back.schema.metadata[b"qt.schema"] == b"qt.shadow_spec"
     assert back.cast(sch).equals(table)
+
+
+@pytest.mark.requires_core
+def test_core_tables_cross_the_arrow_capsule_interface(tmp_path: Path) -> None:
+    """`_core.write_table` takes any `__arrow_c_stream__` object and `_core.read_table` returns a pyarrow.Table with
+    the schema metadata (crates/py/src/arrow_ffi.rs)."""
+    from queuetruth import _core
+
+    table = _shadow_spec_table()
+    reader = pa.RecordBatchReader.from_batches(table.schema, table.to_batches())
+    entry = json.loads(_core.write_table(reader, str(tmp_path / "s.parquet")))
+    assert entry["rows"] == 1
+    back = _core.read_table(str(tmp_path / "s.parquet"), "qt.shadow_spec")
+    assert isinstance(back, pa.Table) and back.schema.metadata[b"qt.schema"] == b"qt.shadow_spec"
+    assert back.equals(table)
+    assert json.loads(_core.write_table(back, str(tmp_path / "t.parquet")))["sha256"] == entry["sha256"]
+    with pytest.raises(TypeError, match="__arrow_c_stream__"):
+        _core.write_table({"shadow_id": ["s1"]}, str(tmp_path / "u.parquet"))
 
 
 # ---- JSON documents and specs ------------------------------------------------------------------------------------

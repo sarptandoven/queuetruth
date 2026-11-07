@@ -275,23 +275,23 @@ pub fn bbo_trades_from_rows(rows: impl IntoIterator<Item = QtResult<L2Row>>) -> 
     for r in rows {
         let r = r?;
         vb.apply(&r);
-        if r.kind == L2Kind::Trade {
-            if let Some(px) = r.price {
-                trades.push(TradeRow {
-                    ts_event: r.ts_event,
-                    instrument_id: r.instrument_id,
-                    sequence: r.sequence,
-                    price: px,
-                    size: r.trade_qty,
-                    aggressor_side: r.aggressor,
-                    kind: if r.flags & l2flags::HIDDEN_TRADE != 0 {
-                        TradeKind::Hidden
-                    } else {
-                        TradeKind::Displayed
-                    },
-                    maker_order_id: None,
-                });
-            }
+        if r.kind == L2Kind::Trade
+            && let Some(px) = r.price
+        {
+            trades.push(TradeRow {
+                ts_event: r.ts_event,
+                instrument_id: r.instrument_id,
+                sequence: r.sequence,
+                price: px,
+                size: r.trade_qty,
+                aggressor_side: r.aggressor,
+                kind: if r.flags & l2flags::HIDDEN_TRADE != 0 {
+                    TradeKind::Hidden
+                } else {
+                    TradeKind::Displayed
+                },
+                maker_order_id: None,
+            });
         }
         if r.flags & l2flags::LAST_IN_BATCH != 0 {
             let (bp, bq, bc) = top(&vb, BookSide::Bid);

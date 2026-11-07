@@ -114,7 +114,7 @@ pip install 'queuetruth[client]'       # + HTTP client for a self-hosted service
 pip install 'queuetruth[mcp]'          # + MCP server for agents
 ```
 
-CPython 3.11 or later. Other platforms build from source with Rust 1.85 or later. `queuetruth-core`, a standalone
+CPython 3.11 or later. Other platforms build from source with Rust 1.88 or later. `queuetruth-core`, a standalone
 binary for the native commands, is attached to each GitHub release. Interfaces: CLI, Python API, self-contained
 HTML reports, a self-hostable HTTP service and an MCP server, all sharing published JSON Schemas.
 
