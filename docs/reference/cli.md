@@ -740,7 +740,7 @@ venue exports -> canonical live log
 Usage: queuetruth live import [OPTIONS] --venue <venue> --in <PATH> --out <VALUE>
 
 Options:
-      --venue <venue>                  venue [possible values: binance, bybit, okx, coinbase, kraken, deribit, hyperliquid, ibkr-flex, fix44, sim-hftbacktest, sim-nautilus, freqtrade, hummingbot, sim-freqtrade, sim-hummingbot, sim-backtrader, sim-vectorbt]
+      --venue <venue>                  venue [possible values: binance, bybit, okx, coinbase, kraken, deribit, hyperliquid, ibkr-flex, fix44, sim-hftbacktest, sim-nautilus, freqtrade, hummingbot, sim-freqtrade, sim-hummingbot, sim-backtrader, sim-vectorbt, sim-lean]
       --in <PATH>                      input file (repeatable)
       --out <VALUE>                    output live-log directory
       --account <VALUE>                account label
@@ -754,7 +754,7 @@ Options:
       --fix-data-dictionary <VALUE>    QuickFIX data dictionary XML (custom tags and enums; repeatable)
       --fix-session-venue <KEY=VALUE>  SESSION=VENUE: venue of a FIX session (file stem or counterparty CompID; repeatable)
       --fix-instrument-tag <N>         tag holding the instrument instead of Symbol(55), e.g. 107
-      --option <KEY=VALUE>             importer option KEY=VALUE (sim-* venues: venue, size_exp, key_from_client_id; freqtrade, hummingbot: dry_run, log_tz, timeframe, pair_with, ...; sim-backtrader, sim-vectorbt: pair_with, timeframe, instrument, ...)
+      --option <KEY=VALUE>             importer option KEY=VALUE (sim-* venues: venue, size_exp, key_from_client_id; freqtrade, hummingbot: dry_run, log_tz, timeframe, pair_with, ...; sim-backtrader, sim-vectorbt, sim-lean: pair_with, timeframe, instrument, ...)
   -h, --help                           Print help
       --log-level <log_level>          stderr log level (default warn) [possible values: error, warn, info, debug]
       --output-format <human|json>     output format (also --format human|json) [possible values: human, json]
@@ -2412,7 +2412,7 @@ Options:
 ## queuetruth reconcile
 
 ```text
-A trading bot's simulator arm (Freqtrade backtest or dry run, Hummingbot paper bot) against its live run, or a Backtrader or VectorBT backtest against a canonical live log: paired orders, why each differs, and the sim-vs-live scorecard.
+A trading bot's simulator arm (Freqtrade backtest or dry run, Hummingbot paper bot) against its live run, or a Backtrader, VectorBT or LEAN backtest against a canonical live log: paired orders, why each differs, and the sim-vs-live scorecard.
 
 Usage: queuetruth reconcile [OPTIONS] --kind <kind> --sim <PATH> --live <PATH> --out <DIR>
 
@@ -2420,13 +2420,13 @@ Options:
       --kind <kind>
           the bot or backtester
           
-          [possible values: freqtrade, hummingbot, backtrader, vectorbt]
+          [possible values: freqtrade, hummingbot, backtrader, vectorbt, lean]
 
       --sim <PATH>
-          simulator arm: backtest result, dry-run database and logs, paper-bot database, Backtrader notification lines or VectorBT records (repeatable)
+          simulator arm: backtest result, dry-run database and logs, paper-bot database, Backtrader notification lines, VectorBT records or LEAN result and order-events JSON (repeatable)
 
       --live <PATH>
-          live arm: the bot's database, logs or trades CSV (repeatable); for backtrader and vectorbt one canonical live-log directory (queuetruth live import)
+          live arm: the bot's database, logs or trades CSV (repeatable); for backtrader, vectorbt and lean one canonical live-log directory (queuetruth live import)
 
       --out <DIR>
           output directory

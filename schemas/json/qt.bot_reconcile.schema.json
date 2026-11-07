@@ -397,7 +397,8 @@
         "freqtrade",
         "hummingbot",
         "backtrader",
-        "vectorbt"
+        "vectorbt",
+        "lean"
       ],
       "title": "Kind",
       "type": "string"

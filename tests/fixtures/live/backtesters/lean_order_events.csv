@@ -1,0 +1,15 @@
+id,algorithmId,orderId,orderEventId,symbol,symbolValue,symbolPermtick,time,status,fillPrice,fillPriceCurrency,fillQuantity,direction,orderType,isAssignment,quantity,limitPrice,orderFeeAmount,orderFeeCurrency,message
+qtfixture0001-1-1,qtfixture0001,1,1,BTCUSDT 18N,BTCUSDT,BTCUSDT,1709287200.0,submitted,0.0,USDT,0.0,buy,limit,false,0.01,61000.0,,,
+qtfixture0001-1-2,qtfixture0001,1,2,BTCUSDT 18N,BTCUSDT,BTCUSDT,1709290800.0,filled,61000.0,USDT,0.00999,buy,limit,false,0.01,61000.0,1e-05,BTC,
+qtfixture0001-2-1,qtfixture0001,2,1,BTCUSDT 18N,BTCUSDT,BTCUSDT,1709294400.0,submitted,0.0,USDT,0.0,sell,limit,false,-0.01,61500.0,,,
+qtfixture0001-2-2,qtfixture0001,2,2,BTCUSDT 18N,BTCUSDT,BTCUSDT,1709298000.0,filled,61500.0,USDT,-0.01,sell,limit,false,-0.01,61500.0,0.615,USDT,
+qtfixture0001-3-1,qtfixture0001,3,1,BTCUSDT 18N,BTCUSDT,BTCUSDT,1709301600.0,submitted,0.0,USDT,0.0,buy,limit,false,0.01,60800.0,,,
+qtfixture0001-3-2,qtfixture0001,3,2,BTCUSDT 18N,BTCUSDT,BTCUSDT,1709305200.0,filled,60800.0,USDT,0.00999,buy,limit,false,0.01,60800.0,1e-05,BTC,
+qtfixture0001-4-1,qtfixture0001,4,1,BTCUSDT 18N,BTCUSDT,BTCUSDT,1709308800.0,submitted,0.0,USDT,0.0,sell,market,false,-0.01,,,,
+qtfixture0001-4-2,qtfixture0001,4,2,BTCUSDT 18N,BTCUSDT,BTCUSDT,1709308800.0,filled,61210.123456789,USDT,-0.01,sell,market,false,-0.01,,0.61210123456789,USDT,
+qtfixture0001-5-1,qtfixture0001,5,1,BTCUSDT 18N,BTCUSDT,BTCUSDT,1709316000.0,submitted,0.0,USDT,0.0,buy,limit,false,0.02,60900.0,,,
+qtfixture0001-5-2,qtfixture0001,5,2,BTCUSDT 18N,BTCUSDT,BTCUSDT,1709319600.0,filled,60900.0,USDT,0.01998,buy,limit,false,0.02,60900.0,2e-05,BTC,
+qtfixture0001-6-1,qtfixture0001,6,1,BTCUSDT 18N,BTCUSDT,BTCUSDT,1709323200.0,submitted,0.0,USDT,0.0,buy,limit,false,0.01,61100.0,,,
+qtfixture0001-6-2,qtfixture0001,6,2,BTCUSDT 18N,BTCUSDT,BTCUSDT,1709326800.0,filled,61100.0,USDT,0.00999,buy,limit,false,0.01,61100.0,1e-05,BTC,
+qtfixture0001-7-1,qtfixture0001,7,1,BTCUSDT 18N,BTCUSDT,BTCUSDT,1709334000.0,submitted,0.0,USDT,0.0,buy,limit,false,0.01,61300.0,,,
+qtfixture0001-7-2,qtfixture0001,7,2,BTCUSDT 18N,BTCUSDT,BTCUSDT,1709341200.0,canceled,0.0,USDT,0.0,buy,limit,false,0.01,61300.0,,,The order has expired.

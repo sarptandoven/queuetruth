@@ -1,6 +1,6 @@
-"""Backtrader and VectorBT from the CLI: `live import --venue sim-backtrader | sim-vectorbt` with `--option`, and
-`queuetruth reconcile --kind backtrader | vectorbt` against a canonical live log. The CLI gives the same logs and
-reports as the Python API on the committed fixtures (tests/fixtures/live/backtesters)."""
+"""Backtrader, VectorBT and LEAN from the CLI: `live import --venue sim-backtrader | sim-vectorbt | sim-lean` with
+`--option`, and `queuetruth reconcile --kind backtrader | vectorbt | lean` against a canonical live log. The CLI
+gives the same logs and reports as the Python API on the committed fixtures (tests/fixtures/live/backtesters)."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ import pytest
 from queuetruth import cli
 from queuetruth.live import read_log, table_rows
 from queuetruth.live.importers import backtrader as bt
+from queuetruth.live.importers import lean
 from queuetruth.live.importers import vectorbt as vb
 
 pytestmark = pytest.mark.requires_core
@@ -108,6 +109,46 @@ def test_reconcile_backtesters_match_the_python_api(tmp_path: Path, run: Any, li
     assert out.rstrip().endswith(f"5 more orders in {tmp_path / 'human'}/reconcile_orders.csv")
 
 
+def test_lean_from_the_cli_matches_the_python_api(tmp_path: Path, run: Any, live: Path) -> None:
+    sim = [str(FIX / "lean_result.json"), str(FIX / "lean_order_events.json")]
+    code, out, err = run(
+        "--format", "json", "live", "import", "--venue", "sim-lean", "--in", sim[0], "--in", sim[1],
+        "--out", str(tmp_path / "lean-cli"), "--instrument-map", str(IMAP), "--option", f"pair_with={live}",
+        "--option", "timeframe=1h",
+    )  # fmt: skip
+    assert code == 0, err
+    doc = json.loads(out)
+    api = lean.import_lean(sim, tmp_path / "lean-api", instrument_map=str(IMAP), pair_with=str(live), timeframe="1h")
+    assert (doc["venue"], doc["n_orders"], doc["validation_status"]) == ("sim:lean", api.n_orders, "simulated")
+    assert _rows(tmp_path / "lean-cli") == _rows(tmp_path / "lean-api")
+    code, out, err = run(
+        "--format", "json", "reconcile", "--kind", "lean", "--sim", sim[0], "--sim", sim[1], "--live", str(live),
+        "--out", str(tmp_path / "rec-cli"), "--option", "timeframe=1h",
+    )  # fmt: skip
+    assert code == 0, err
+    doc = json.loads(out)
+    rep = lean.reconcile_lean(sim, live, tmp_path / "rec-api", timeframe="1h")
+    assert doc["schema"] == "qt.bot_reconcile" and doc["kind"] == "lean"
+    assert doc["counts"] == rep.counts and doc["run_id"] == rep.run_id and doc["n_paired"] == 6
+    code, out, err = run(
+        "reconcile", "--kind", "lean", "--sim", sim[0], "--sim", sim[1], "--live", str(live),
+        "--out", str(tmp_path / "human"), "--option", "timeframe=1h", "--max-rows", "2",
+    )  # fmt: skip
+    assert code == 0, err
+    assert out.splitlines()[0] == "reconcile (lean): 7 live orders, 7 simulator orders, 6 paired (86% of live orders)"
+    # the result JSON alone has no fills: refused, naming the events file
+    code, out, _ = run(
+        "--format", "json", "live", "import", "--venue", "sim-lean", "--in", sim[0], "--out", str(tmp_path / "x"),
+    )  # fmt: skip
+    doc = json.loads(out)
+    assert code == 2 and doc["code"] == "QT-INPUT-002" and "order-events.json" in doc["message"]
+    code, out, _ = run(
+        "--format", "json", "reconcile", "--kind", "lean", "--sim", sim[0], "--sim", sim[1], "--live", str(live),
+        "--out", str(tmp_path / "y"), "--option", "data_tz=UTC",
+    )  # fmt: skip
+    assert code == 2 and json.loads(out)["code"] == "QT-CONFIG-001"
+
+
 def test_reconcile_backtester_errors(tmp_path: Path, run: Any, live: Path) -> None:
     code, out, _ = run(
         "--format", "json", "reconcile", "--kind", "backtrader", "--sim", str(FIX / "bt_orders.jsonl"),
@@ -120,7 +161,7 @@ def test_reconcile_backtester_errors(tmp_path: Path, run: Any, live: Path) -> No
     )  # fmt: skip
     assert code == 2 and json.loads(out)["code"] == "QT-CONFIG-001"
     code, out, _ = run("help", "reconcile")
-    assert code == 0 and "backtrader" in out and "vectorbt" in out
+    assert code == 0 and "backtrader" in out and "vectorbt" in out and "lean" in out
 
 
 def test_backtest_against_exact_queue_shadows(tmp_path: Path, run: Any) -> None:
