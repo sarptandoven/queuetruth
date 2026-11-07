@@ -157,6 +157,7 @@ def write_dataset(
     open_s: int = 0,
     close_s: int = 86_400,
     feed_gaps: list[dict[str, Any]] | None = None,
+    trading_halts: list[dict[str, Any]] | None = None,
     with_prints: bool = True,
     symbol: str = "TST",
     size_exp: int = 0,
@@ -230,6 +231,8 @@ def write_dataset(
         "verdict": "clean",
         "reasons": [],
     }
+    if trading_halts:
+        dq["trading_halts"] = trading_halts
     (root / "data_quality.json").write_text(json.dumps(dq, indent=2) + "\n")
     man = {
         "schema": "qt.dataset_manifest",

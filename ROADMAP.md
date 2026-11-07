@@ -50,8 +50,9 @@ an issue to argue for one. Ids (`W1`, ...) are referenced from code and scripts.
 ## Later
 
 - **Agent arena.** The agent sandbox as a repeatable, look-ahead-free benchmark for trading agents: the sandbox on
-  the one-pass sessions that take orders (`qt.Session.with_orders`, done after 0.2.0; linear rather than quadratic
-  in episode length), a blind mode that hides instrument and date, event-driven wake-ups, multi-instrument
+  the one-pass sessions that take orders (done after 0.2.0: `stepping="session"`, the default, is linear rather than
+  quadratic in episode length and gives the same outputs as the per-step prefix replay), a blind mode that hides
+  instrument and date, event-driven wake-ups (now cheap: a step no longer replays the prefix), multi-instrument
   episodes and certified results on days after the agents' training data.
 - **Hosted service.** Accounts, a web interface and a hosted MCP endpoint on top of the existing multi-tenant
   service, with the same rules as the self-hosted one: customers' data only, no pooling, no vendor credentials.

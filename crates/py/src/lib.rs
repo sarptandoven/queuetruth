@@ -333,6 +333,13 @@ impl Session {
         to_py(r)
     }
 
+    /// Replays whole events up to `ts` (complete events whose records are all at or before `ts`; the end of the data
+    /// also applies and ends an unterminated tail).
+    fn advance_events_to(&self, py: Python<'_>, ts: i64) -> PyResult<()> {
+        let r = py.detach(|| self.with(|s| s.advance_events_to(ts)))?;
+        to_py(r)
+    }
+
     /// `{"bid": (price, qty, count) | None, "ask": ...}` or None before the instrument's first record.
     fn bbo<'py>(&self, py: Python<'py>, instrument_id: u32) -> PyResult<Option<Bound<'py, PyDict>>> {
         let Some(b) = self.with(|s| s.bbo(instrument_id))? else {
@@ -403,6 +410,49 @@ impl Session {
     fn amend(&self, py: Python<'_>, shadow_id: &str, ts: i64, new_qty: u64) -> PyResult<()> {
         let r = py.detach(|| self.with(|s| s.amend(shadow_id, ts, new_qty)))?;
         to_py(r)
+    }
+
+    /// Each shadow as a replay ending now would report it: a dict per id with `status` (`pending`, `live`,
+    /// `done`), the `qt.shadow_results` columns the state determines (`end_state` None until done), `ts_end`,
+    /// `queue_ahead` and `rank`.
+    fn shadow_states<'py>(&self, py: Python<'py>, shadow_ids: Vec<String>) -> PyResult<Vec<Bound<'py, PyDict>>> {
+        let peeks = to_py(self.with(|s| {
+            shadow_ids
+                .iter()
+                .map(|id| s.shadow_peek(id))
+                .collect::<QtResult<Vec<_>>>()
+        })?)?;
+        let mut out = Vec::with_capacity(peeks.len());
+        for p in peeks {
+            let r = &p.result;
+            let d = PyDict::new(py);
+            let status = match p.status {
+                qt_replay::ShadowStatus::Pending => "pending",
+                qt_replay::ShadowStatus::Live => "live",
+                qt_replay::ShadowStatus::Done => "done",
+            };
+            d.set_item("shadow_id", &r.shadow_id)?;
+            d.set_item("status", status)?;
+            let done = p.status == qt_replay::ShadowStatus::Done;
+            d.set_item("end_state", done.then(|| r.end_state.to_string()))?;
+            d.set_item("price", r.price)?;
+            d.set_item("qty", r.qty)?;
+            d.set_item("ts_submit", r.ts_submit)?;
+            d.set_item("ts_live", r.ts_live)?;
+            d.set_item("ts_activated_event", r.ts_activated_event)?;
+            d.set_item("ts_cancel_effective", r.ts_cancel_effective)?;
+            d.set_item("ts_first_fill", r.ts_first_fill)?;
+            d.set_item("ts_last_fill", r.ts_last_fill)?;
+            d.set_item("ts_full_fill", r.ts_full_fill)?;
+            d.set_item("filled_qty", r.filled_qty)?;
+            d.set_item("n_fills", r.n_fills)?;
+            d.set_item("out_of_session", r.out_of_session)?;
+            d.set_item("ts_end", p.ts_end)?;
+            d.set_item("queue_ahead", p.queue_ahead)?;
+            d.set_item("rank", p.rank)?;
+            out.push(d);
+        }
+        Ok(out)
     }
 
     /// The shadow fills since the last call, as a `qt.shadow_fills` pyarrow.Table.

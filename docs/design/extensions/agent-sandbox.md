@@ -25,7 +25,8 @@ One instrument per episode.
   episode on a liquid instrument spans millions of records); while more than 4,000,000 records are pending, all at or
   before `t`, it releases their complete events early, so memory holds one buffer plus the cut
   (`test_a_cut_larger_than_the_pending_cap_is_released_whole`).
-- **Tape.** The source partition is read forward only (`SourceCursor`); each cut's new records are appended as a new
+- **Tape.** The source partition is read forward only (`SourceCursor`); with `replay` stepping (S.4) each cut's new
+  records are appended as a new
   `part-NNNNNN.parquet` of a scratch dataset (manifest listing the parts in order, `dataset_id` by the SPEC 3.10 rule,
   compaction every 32 parts), with the source prints (`trades_source`, needed for OC-28 cross prints) of
   `ts_event <= t` and a `data_quality.json` whose counters are zero and whose `feed_gaps` are the instrument's gaps
@@ -36,10 +37,19 @@ One instrument per episode.
   inside them, which ingest writes (crypto warmup gaps from the first event to the warm time, Hyperliquid partitions
   without an L4 snapshot, sequence gaps spanning non-monotone times); `test_equivalence.py` checks a fill inside a
   gap and an order working inside one against independent prefix replays. No time past the cut enters a replay
-  input. The scratch dataset is the only input of every replay run during the episode. Records past the cut stay in
-  the cursor's private buffer. The guarantee is about the interface and the replay inputs: in-process Python can
-  always read private attributes or the dataset itself, so an agent that must not see the future is driven through
-  the MCP tools from another process.
+  input. With `replay` stepping the scratch dataset is the only input of every replay run during the episode. Records
+  past the cut stay in the cursor's private buffer.
+- **The guarantee, for both steppings.** Nothing the session returns depends on data past the visible cut. With
+  `replay` stepping this holds physically: every replay during the episode reads the scratch dataset. With `session`
+  stepping (S.4) there is no scratch dataset: the one-pass session opens the original files of the partition through
+  the certification view and holds the day's feed gaps and trading halts, but its engine applies only the whole events
+  of the cut (`Session::advance_events_to`, the cut rule above), acts on a gap or halt only at an event it applied, and
+  every field the sandbox reads from it (`Session.shadow_states`, `take_fills`) is fixed when the order is sent or
+  comes from those events; the one rule that reads a halt without an event (a pending order arriving in a halt) uses
+  the halts as the tape lists them at the cut. `test_stepping.py` checks the session engine's book against the
+  released records at every step, and the look-ahead tests run on both steppings. Either way the guarantee is about
+  the interface: in-process Python can always read private attributes or the dataset itself, so an agent that must
+  not see the future is driven through the MCP tools from another process.
 - **Opening.** Every dataset file and directory is resolved to its real path, and in MCP mode checked against the
   server root, before it is read or listed (manifest, instruments, data quality, trades directory, partition files);
   the partition's files are later opened, and linked by the certification view, only through the real paths resolved
@@ -115,11 +125,27 @@ full replay whose knowable time is at or before `visible_k`, attributed to the f
 and every order's first working step, ended step and end against the full replay; exact when timestamps never
 decrease and each event's records share one timestamp, which the tape counts).
 
+**Session stepping (the default).** The window replays above are what `stepping="replay"` does, and what defines
+every step. `stepping="session"` computes the same thing in one pass: a `qt.Session.with_orders` opened on the
+certification view (the episode's partition alone, its feed gaps and trading halts, the seed and hidden-print policy
+of every replay) receives each submit (its `qt.shadow_spec` row, an IOC's cancel at `ts_submit + 1` included), cancel
+and partial cancel (an amend) at the agent's clock, and is advanced at every step with `Session.advance_events_to`
+(the cut rule above, implemented in the engine: whole events, the unterminated tail ended once the data ends) while
+the tape releases the same records to the market view without writing a scratch dataset. Under the same condition
+as a window replay (an order open and records new since the last one), `Session.shadow_states` gives each open order's
+state; `_window_view` turns it into the `shadow_results` row and last `queue_trajectory` row the window replay would
+give (an order not ended is `open_at_end` with its queue ahead and rank, except a pending order whose `ts_live` falls in
+a trading halt as the tape lists them at the cut, which the end of a prefix replay ends `censored_gap` at `ts_live`),
+and the same `absorb` maps them. `window_replays` counts these reads. The finish cancels are not sent to the session;
+the certification replay decides every end as before. `test_stepping.py` runs seeded random agents and scripted edge
+cases (a halt, an event straddling the cut, an unterminated tail, orders after the data, a book clear, a feed gap)
+through both steppings and compares every document, the log and the scorecard; `crates/replay/tests/incremental.rs`
+checks `advance_events_to` and `shadow_peek` against one batch run.
+
 **Wake-ups.** A step ends at the time the agent asks for. Waking at the next market event, or at the agent's own
 fill, would be causal (the wake time depends only on data up to it, and real systems are woken by exactly those
-messages), but while every step costs a replay of the whole prefix, event-driven steps would cost a replay per event.
-A later `advance(until="event", by=cap)` can wake at the next released event cheaply once the engine accepts shadow
-orders into a running replay.
+messages). With the session stepping a step no longer costs a replay of the prefix, so an
+`advance(until="event", by=cap)` that wakes at the next released event is cheap; it is not built yet.
 
 ## S.5 Finish and scorecard
 
@@ -207,13 +233,16 @@ idle_timeout_s=3600)`, listed after the server's tools: `qt_sandbox_start` -> `q
 ## S.9 Measurements
 
 On the TSLA partition of Nasdaq 2019-12-30 (678,438 records), a touch-quoting agent from 10:00 to 10:30 ET with 5 s
-steps: 33.2 s for the episode, of which 360 window replays took 24.1 s (67 ms each, over prefixes of 169,195 to
-233,747 records), the tape 3.7 s and the market view 0.55 s; finish 0.4 s; `verify` 34.5 s (shared laptop, Low Power
-Mode; an earlier run under heavier load measured 114 ms per window replay and 64.1 s for `verify`). Every one of the
-537 reported fills and every one of the 511 orders equals the single full replay; `test_realdata_demo.py` asserts
-the scorecard. The `qt.sandbox_finish` summary of that episode is 6,583 bytes of JSON; its full scorecard is 341,629
-and its order log (1,152 entries) 471,554. The per-step cost is the replay of the prefix: linear in the prefix,
-quadratic over an episode.
+steps: 33.2 s for the episode, of which 360 window replays took 24.1 s (67 ms each, over prefixes of 169,195 to 233,747
+records), the tape 3.7 s and the market view 0.55 s; finish 0.4 s; `verify` 34.5 s (shared laptop, Low Power Mode; an
+earlier run under heavier load measured 114 ms per window replay and 64.1 s for `verify`). Every one of the 537 reported
+fills and every one of the 511 orders equals the single full replay; `test_realdata_demo.py` asserts the scorecard. The
+`qt.sandbox_finish` summary of that episode is 6,583 bytes of JSON; its full scorecard is 341,629 and its order log
+(1,152 entries) 471,554. These numbers are for `replay` stepping, whose per-step cost is the replay of the prefix:
+linear in the prefix, quadratic over an episode. Session stepping on the synthetic fixture day: a quoting agent in 5 s
+steps took 1.7 to 1.9 ms per step at each episode length measured (250 to 4,000 steps, median of 3 runs; 7.7 s for
+4,000 steps with 2,478 orders), against 30 to 35 ms per step with `replay` stepping (139.1 s), with the same log root
+and scorecard (`benches/sandbox_stepping.py`).
 
 ## S.10 What the guarantee does not cover
 

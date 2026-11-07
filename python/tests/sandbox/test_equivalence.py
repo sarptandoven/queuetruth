@@ -244,10 +244,10 @@ def gap_scenario(tmp_path: Path, *, trade: bool) -> Path:
     return write_dataset(tmp_path / f"ds-{trade}", t, feed_gaps=gaps)
 
 
-def _gap_episode(ds: Path) -> tuple[Sandbox, list[Any], Any]:
+def _gap_episode(ds: Path, stepping: str = "session") -> tuple[Sandbox, list[Any], Any]:
     """o1 rests from 11 s, ahead of b1, into the gap; o2 is sent inside the gap (13.5 s) and goes live at the 14 s
     event, after the gap has censored o1 there (the engine runs a due gap before activations)."""
-    sb = Sandbox.open(base_spec(ds, start=at(10), end=at(17.5), latency="1ms"))
+    sb = Sandbox.open(base_spec(ds, start=at(10), end=at(17.5), latency="1ms"), stepping=stepping)
     sb.submit("buy", 1, price="100.00")
     seen = [sb.observe(), sb.advance(to=at(12)), sb.advance(to=at(13.5))]
     sb.submit("buy", 1, price="100.00")
@@ -284,7 +284,8 @@ def test_the_runtime_check_catches_gaps_that_enter_the_tape_too_late(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """With the earlier rule (a gap entered the tape only once it had ended), o1 was reported filled inside the gap
-    and shown working after the full replay had censored it; `finish` must report that as a difference."""
+    and shown working after the full replay had censored it; `finish` must report that as a difference. The rule is
+    the scratch dataset's, which only `replay` stepping reads."""
     real = tape_mod._gap_doc
 
     def ended_only(src: Any, cut: int | None) -> Any:
@@ -296,7 +297,7 @@ def test_the_runtime_check_catches_gaps_that_enter_the_tape_too_late(
 
     monkeypatch.setattr(tape_mod, "_gap_doc", ended_only)
     for trade in (True, False):
-        _, _, card = _gap_episode(gap_scenario(tmp_path, trade=trade))
+        _, _, card = _gap_episode(gap_scenario(tmp_path, trade=trade), stepping="replay")
         c = card.consistency
         assert not c.equal and c.statuses_mismatched >= 1, trade
         assert any(w.startswith("consistency:") and "o1" in w for w in card.warnings)
