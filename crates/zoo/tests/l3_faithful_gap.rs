@@ -287,7 +287,7 @@ fn attribution() -> (BTreeMap<&'static str, usize>, usize, [usize; 2]) {
                     (Some(b), Some(a)) => b.price < a.price,
                     _ => false,
                 };
-                if n_events % EVERY == 0 && open {
+                if n_events.is_multiple_of(EVERY) && open {
                     let off = draw_offset(unit());
                     let side = if unit() < 0.5 { BookSide::Bid } else { BookSide::Ask };
                     if let Some(px) = touch_price(side, off, cfg.tick, &book) {
