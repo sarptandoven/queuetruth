@@ -571,6 +571,7 @@ fn finish_counters(
     scan.add_source("nyse_trade_cancels", st.trade_cancels);
     scan.add_source("nyse_cross_corrections", st.cross_corrections);
     scan.add_source("nyse_failover_books_kept", st.failover_books_kept);
+    scan.add_source("nyse_halt_condition_disagreements", st.halt_condition_disagreements);
     if unknown > 0 {
         warnings.push(format!(
             "{unknown} instrument-day(s) of symbols whose market is unknown (the file names do not follow \
@@ -680,6 +681,13 @@ pub(crate) fn ingest(spec: &IngestSpec, inputs: &[PathBuf], out: &Path) -> QtRes
             label: label.clone(),
         });
         mapper = ingest_file(mapper, input, &mut w, &mut scan, &mut seen)?;
+        // Trading-halt spans of the file (SPEC 1.2): only those of an instrument with records on the file's date.
+        let halts = mapper.take_trading_halts();
+        scan.counters_mut().trading_halts.extend(
+            halts
+                .into_iter()
+                .filter(|h| seen.contains(&(input.date, h.instrument_id))),
+        );
         if let Some(msg) = clock_warning(&label, mapper.file_core_opens(), plan.tz, input.date) {
             warnings.push(msg);
         }
@@ -705,7 +713,9 @@ pub(crate) fn ingest(spec: &IngestSpec, inputs: &[PathBuf], out: &Path) -> QtRes
     for msg in &warnings {
         w.add_warning(msg.clone());
     }
-    let mut summary = w.finish(scan.finish())?;
+    let mut dq = scan.finish();
+    crate::halts::sort(&mut dq.trading_halts);
+    let mut summary = w.finish(dq)?;
     summary.warnings = warnings;
     Ok(summary)
 }

@@ -9,9 +9,9 @@ an issue to argue for one. Ids (`W1`, ...) are referenced from code and scripts.
 
 ## Now
 
-- **Halts censor shadows end to end (F2).** Done after 0.2.0: ingest records Nasdaq ITCH and IEX DEEP+ trading
-  halts and every engine censors shadows there
-  ([halt censoring](docs/design/extensions/halt-censoring.md)). Next: DBN `status` records and NYSE security status.
+- **Halts censor shadows end to end (F2).** Done after 0.2.0: ingest records Nasdaq ITCH, IEX DEEP+, DBN `status`
+  and NYSE Security Status trading halts and every engine censors shadows there
+  ([halt censoring](docs/design/extensions/halt-censoring.md)). Next: check the DBN and NYSE mappings on real files.
 - **First real own-account fills.** Score a simulator against real fills from a real account (Bitstamp via
   `tools/livefill`, then Hyperliquid), and publish the scorecard. Every live-log importer is still checked on
   fixtures only; this is the most important missing proof.

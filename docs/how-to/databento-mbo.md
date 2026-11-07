@@ -21,7 +21,7 @@ you share anything.
 | Session date | the UTC date (default `--tz UTC`) | the US/Eastern date (default `--tz America/New_York`) |
 | Tick without a definition | none: a 1-unit tick and a warning | $0.01 (the venue default) |
 
-Download two schemas for the same symbols and the same time range, on the same day:
+Download these schemas for the same symbols, on the same day:
 
 - **`mbo`** (required): the order-by-order records queuetruth replays.
 - **`definition`** (strongly recommended): one record per instrument and UTC date with the raw symbol, the tick
@@ -29,6 +29,10 @@ Download two schemas for the same symbols and the same time range, on the same d
   tick (see step 5). Request it for every whole UTC date the MBO covers, from 00:00 UTC, even when the MBO window is
   shorter: a partial-day request can miss an instrument's only definition record of that date.
 - **`trades`** (optional): source prints, kept as `source_trades` next to the MBO partitions.
+- **`status`** (recommended where the dataset has it, for example `XNAS.ITCH` and `GLBX.MDP3`): trading halts,
+  pauses and resumptions. queuetruth records them as trading-halt spans, and replay censors shadows there (step 4).
+  Without it a halt is replayed as continuous trading. Request it over whole UTC dates, as for definitions: a halt
+  that started before a shorter window would be missed.
 
 Ask for symbols with `stype_in="raw_symbol"` (for example `ESZ6`, `AAPL`) when you can: the MBO file's metadata
 then maps each instrument id to its symbol on each date, which is also what lets queuetruth check that the MBO and
@@ -72,7 +76,7 @@ query = dict(
     end="2026-10-21",
 )
 print(client.metadata.get_dataset_range(dataset=query["dataset"]))  # first and last available times
-for schema in ("mbo", "definition", "trades"):
+for schema in ("mbo", "definition", "trades", "status"):
     cost = client.metadata.get_cost(schema=schema, **query)  # US dollars
     size = client.metadata.get_billable_size(schema=schema, **query)  # uncompressed bytes
     count = client.metadata.get_record_count(schema=schema, **query)
@@ -103,19 +107,20 @@ import databento as db
 
 client = db.Historical()
 query = dict(dataset="GLBX.MDP3", symbols=["ESZ6"], stype_in="raw_symbol", start="2026-10-20", end="2026-10-21")
-for schema in ("mbo", "definition"):
+for schema in ("mbo", "definition", "status"):
     client.timeseries.get_range(schema=schema, path=f"glbx-esz6-20261020.{schema}.dbn.zst", **query)
 
-# Nasdaq session 2026-01-14 (EST): the MBO over the session window, the definitions over whole UTC dates.
+# Nasdaq session 2026-01-14 (EST): the MBO over the session window, definitions and status over whole UTC dates.
 nasdaq = dict(dataset="XNAS.ITCH", symbols=["AAPL", "MSFT"], stype_in="raw_symbol")
 client.timeseries.get_range(
     schema="mbo", start="2026-01-14T05:00", end="2026-01-15T01:00",
     path="xnas-aapl-msft-20260114.mbo.dbn.zst", **nasdaq,
 )
-client.timeseries.get_range(
-    schema="definition", start="2026-01-14", end="2026-01-16",
-    path="xnas-aapl-msft-20260114.definition.dbn.zst", **nasdaq,
-)
+for schema in ("definition", "status"):
+    client.timeseries.get_range(
+        schema=schema, start="2026-01-14", end="2026-01-16",
+        path=f"xnas-aapl-msft-20260114.{schema}.dbn.zst", **nasdaq,
+    )
 ```
 
 Write down, next to the files, the dataset, the download date and the gateway you used. Vendors re-issue history
@@ -131,10 +136,10 @@ gives the same dataset.
 ```bash
 queuetruth ingest --format dbn --venue cme \
   --in glbx-esz6-20261020.mbo.dbn.zst --in glbx-esz6-20261020.definition.dbn.zst \
-  --out ds/esz6-20261020
+  --in glbx-esz6-20261020.status.dbn.zst --out ds/esz6-20261020
 queuetruth ingest --format dbn --venue nasdaq \
   --in xnas-aapl-msft-20260114.mbo.dbn.zst --in xnas-aapl-msft-20260114.definition.dbn.zst \
-  --symbols AAPL,MSFT --out ds/xnas-20260114
+  --in xnas-aapl-msft-20260114.status.dbn.zst --symbols AAPL,MSFT --out ds/xnas-20260114
 ```
 
 Plain `.dbn` and zstd `.dbn.zst` files of DBN versions 1 to 3 are read as stored. What queuetruth takes from the
@@ -146,6 +151,7 @@ inputs, per instrument id and UTC date:
 | metadata mappings of a parent, continuous or other query | an **alias**: it selects the instrument in `--symbols`, and names it only when no definition does and the alias maps to that one id on that date (a continuous symbol, never a parent with several contracts) |
 | `definition` records (a `definition` file, or definition records inside a mixed-schema file such as a saved live session) | the raw symbol; the tick from `min_price_increment` (rescaled exactly to `--price-exp`); the contract multiplier, `min_price_increment_amount / min_price_increment` (ES: $12.50 / 0.25 = 50; ZN: $15.625 / (1/64) = 1000); the currency; the matching algorithm (non-FIFO books are rejected, step 5) |
 | symbol-mapping records (saved live sessions) | the raw symbol (the output symbol of a `raw_symbol` mapping) and the requested symbol as an alias |
+| `status` records (a `status` file, or status records inside an MBO or mixed-schema file) | trading-halt spans in `data_quality.json` (`trading_halts`), which replay applies (below) |
 
 A definition applies from the UTC date of its `ts_recv` until a later one replaces it; a delete (`D`) and a record
 without a defined, positive `min_price_increment` leave the earlier tick in force. `--tick-size` overrides every
@@ -153,6 +159,20 @@ definition. The contract multiplier is set only when a definition gives both the
 stays 1 and currency markouts (`mo_ccy`) are per price point, not in money. Without a definition the currency stays
 USD. queuetruth does not take the round lot or display factor from definitions: the dataset's lot size stays
 `--lot-size` (default 1, because odd lots trade).
+
+**Trading halts.** A status record with action `Halt` (8), `Pause` (9) or `Suspend` (10), or `Quoting` (3) while
+`is_trading` is not `Y`, opens a trading-halt span of its instrument. The next record with action `Trading` (7),
+unless `is_trading` is `N`, closes it. Other actions, such as pre-open, close or a short-sale restriction change, do
+not change the state. A span is labelled `dbn_status:<action>` and keeps the record's `reason` code (for example
+`50`, a LULD pause). A status record applies to the partition its instrument id and dates resolve to for the MBO
+and trade records; a record of an instrument with no such records that day is ignored. The state is kept per symbol,
+so a halt that runs past a session date's midnight continues in the symbol's partition of the next date, as one span
+per partition, as long as that date has status records of the symbol (download `status` for every date of the MBO).
+A partition without a symbol (no metadata mapping or definition names it) keeps its state for its own
+session date only, because instrument ids are only unique per UTC date. A span still open at the end ends at the next
+local midnight of the symbol's last session date with status records. Replay censors shadows in these spans as on Nasdaq ITCH
+([halt censoring](../design/extensions/halt-censoring.md)). The counter `dbn_status_records` counts the status
+records read, including those that matched no partition, and never changes the verdict.
 
 `--symbols` matches a raw symbol or an alias, case-insensitively, so `--symbols ES.FUT` keeps every contract of a
 parent request and `--symbols ESZ6` keeps one.
@@ -173,10 +193,11 @@ touched), so you can fix the inputs and rerun with the same `--out`. Those speci
 | warning `... XNAS.ITCH partition(s) before 2023-11-28 take their symbol from definitions that no MBO file's metadata confirms`; counter `dbn_xnas_vintage_unverified` (verdict `warnings`) | the MBO metadata maps no raw symbol (an `ALL_SYMBOLS`, parent or `instrument_id` request), so queuetruth cannot check that the definitions are of the MBO's vintage (step 6) | request the MBO with `stype_in="raw_symbol"`, or make sure both files were downloaded on the same side of 2026-10-31 |
 | `QT-INPUT-002 ... inputs come from 2 Databento datasets` | for example `GLBX.MDP3` definitions with `XNAS.ITCH` MBO | ingest each dataset separately |
 | `QT-INPUT-002 ... unsupported DBN version 4` | a file newer than the reader's `dbn` crate (versions 1 to 3) | re-encode the file as DBN v3, or use a queuetruth release that reads the newer version |
-| counters `dbn_definition_repeats`, `dbn_definition_deletes`, `dbn_definitions_without_tick`, `dbn_symbol_mapping_records`, `dbn_alias_mapping_intervals`, `dbn_mixed_schema_other_records` | definitions that repeated the one before them (midnight snapshots), deletes, definitions without a tick, live symbol mappings read, parent or continuous mapping intervals kept as aliases, records of other schemas in a mixed-schema file (definitions, mappings, status, statistics, heartbeats, acknowledgements) | none: these never change the data-quality verdict; `dbn_definitions_without_tick` is expected on `XNAS.ITCH` |
+| counters `dbn_definition_repeats`, `dbn_definition_deletes`, `dbn_definitions_without_tick`, `dbn_symbol_mapping_records`, `dbn_alias_mapping_intervals`, `dbn_mixed_schema_other_records` | definitions that repeated the one before them (midnight snapshots), deletes, definitions without a tick, live symbol mappings read, parent or continuous mapping intervals kept as aliases, records of other schemas in a mixed-schema file (definitions, mappings, statistics, heartbeats, acknowledgements; status records are read, step 4) | none: these never change the data-quality verdict; `dbn_definitions_without_tick` is expected on `XNAS.ITCH` |
 | counter `dbn_definitions_undated` (verdict `warnings`) | definitions with neither `ts_recv` nor `ts_event`; they are not applied | check the file; re-download it if it came from Databento |
 | counter `instruments_without_symbol` (verdict `warnings`) | partitions labelled by their numeric id | add the `definition` file of the same query |
-| counter `dbn_other_records_skipped` (verdict `warnings`) | records of another schema inside an `mbo` or `trades` file, which Databento does not send | check where the file came from |
+| counter `dbn_status_records` | status records read (step 4) | none: it never changes the verdict |
+| counter `dbn_other_records_skipped` (verdict `warnings`) | records of another schema inside an `mbo`, `trades` or `status` file (status records inside an `mbo` file are read, not skipped) | check where the file came from |
 | counter `dbn_gateway_error_records` (verdict `warnings`) | error records and slow-reader warnings in a saved live session: a symbol that did not resolve, or records the gateway may have dropped | check the capture; record it again if records may be missing |
 | warning `tick_size defaulted ...` although you added the `definition` file | the definition request missed the instrument (a partial-day window, or another query) | request the definitions for whole UTC dates with the same symbols (step 1) |
 

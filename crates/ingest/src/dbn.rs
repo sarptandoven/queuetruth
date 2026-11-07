@@ -2,7 +2,9 @@
 //! guard). MBO records map to `MboEvent` with DBN semantics (u32 size and sequence widened to u64, `channel_id`
 //! u8 -> u16, `publisher_id` from the header, timestamps checked to i64, prices rescaled exactly from 1e-9 to the
 //! dataset `price_exp`; an inexact price is `QT-INPUT-004`). `definition` files supply symbols and ticks, `trades`
-//! files supply source prints. Multi-file inputs are ordered by metadata `start` (stable).
+//! files supply source prints, and `status` records (`status` files, or status records inside MBO and mixed-schema
+//! files) supply the trading state ([`DbnStatus`], [`status_halted`]). Multi-file inputs are ordered by metadata
+//! `start` (stable).
 //!
 //! Hardening: records are decoded as stored (no version upgrade: MBO and trade layouts are identical in DBN v1-v3,
 //! definitions are read with the file's own version), and the decompressed byte stream is checked by a framing
@@ -32,8 +34,8 @@ use std::sync::atomic::AtomicU64;
 use ::dbn::decode::dbn::Decoder;
 use ::dbn::decode::{DbnMetadata, DecodeRecordRef, DynReader};
 use ::dbn::{
-    ErrorMsg, InstrumentDefMsg, MboMsg, Metadata, RecordRef, SType, Schema, SymbolMappingMsg, SystemCode, SystemMsg,
-    TradeMsg, VersionUpgradePolicy,
+    ErrorMsg, InstrumentDefMsg, MboMsg, Metadata, RecordRef, SType, Schema, StatusAction, StatusMsg, SymbolMappingMsg,
+    SystemCode, SystemMsg, TradeMsg, VersionUpgradePolicy,
 };
 use qt_schema::rows::{TradeKind, TradeRow};
 use qt_types::{MboEvent, QtError, QtResult, Side, UNDEF_PRICE, VenueRules};
@@ -270,6 +272,51 @@ pub struct DbnReader {
     pub gateway_errors: u64,
     /// Records read (all types).
     pub records: u64,
+    /// Status records met by [`Self::next_mbo`] in file order (taken by the caller with `std::mem::take`); they
+    /// are not counted in `skipped`.
+    pub status: Vec<DbnStatus>,
+}
+
+/// One DBN `status` record (`StatusMsg`, the same layout in DBN v1 to v3): a change of an instrument's trading
+/// state as Databento normalizes it from the venue's feed. Fields are kept as stored; [`status_halted`] reads them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DbnStatus {
+    /// Databento instrument id (unique per UTC date).
+    pub instrument_id: u32,
+    /// Venue time of the change, UTC ns (checked to `i64`).
+    pub ts_event: i64,
+    /// Capture time, UTC ns (checked to `i64`).
+    pub ts_recv: i64,
+    /// `StatusAction` code (`8` halt, `9` pause, `7` trading, ...).
+    pub action: u16,
+    /// `StatusReason` code (`50` LULD pause, `30` news pending, ...; 0 none).
+    pub reason: u16,
+    /// `is_trading`: `Y`, `N` or `~` (not available).
+    pub is_trading: u8,
+}
+
+/// The trading state a status record reports (SPEC 1.2 halt censoring, `docs/design/extensions/halt-censoring.md`
+/// H.6): `Some(true)` halted, `Some(false)` trading, `None` no change.
+///
+/// - `Halt` (8), `Pause` (9) and `Suspend` (10) are halted, like ITCH `H` states `H` and `P`.
+/// - `Quoting` (3) is halted unless `is_trading` is `Y`, like ITCH `H` state `Q` (quotation only, before an IPO or a
+///   halt cross).
+/// - `Trading` (7) is trading unless `is_trading` is `N`, like ITCH `H` state `T`.
+/// - Every other action (none, pre-open, pre-cross, cross, rotation, price indication, pre-close, close,
+///   post-close, short-sale restriction change, not available for trading, unknown codes) changes nothing: session
+///   phases are the session window's business, not halts.
+pub fn status_halted(s: &DbnStatus) -> Option<bool> {
+    const HALT: u16 = StatusAction::Halt as u16;
+    const PAUSE: u16 = StatusAction::Pause as u16;
+    const SUSPEND: u16 = StatusAction::Suspend as u16;
+    const QUOTING: u16 = StatusAction::Quoting as u16;
+    const TRADING: u16 = StatusAction::Trading as u16;
+    match s.action {
+        HALT | PAUSE | SUSPEND => Some(true),
+        QUOTING => (s.is_trading != b'Y').then_some(true),
+        TRADING => (s.is_trading != b'N').then_some(false),
+        _ => None,
+    }
 }
 
 /// The largest metadata block a DBN file of this size can hold: an uncompressed file (it starts with `DBN`) holds
@@ -313,6 +360,7 @@ impl DbnReader {
             skipped: 0,
             gateway_errors: 0,
             records: 0,
+            status: Vec::new(),
         })
     }
 
@@ -355,7 +403,8 @@ impl DbnReader {
         }
     }
 
-    /// Next MBO record converted at `price_exp` (other record types are skipped and counted).
+    /// Next MBO record converted at `price_exp`: status records are kept in [`Self::status`], other record types
+    /// are skipped and counted.
     pub fn next_mbo(&mut self, price_exp: i8) -> QtResult<Option<MboEvent>> {
         let version = self.dec.metadata().version;
         loop {
@@ -365,6 +414,12 @@ impl DbnReader {
                 let m = rec.try_get::<MboMsg>().map_err(|e| fmt_err(&path, describe(&e)))?;
                 let out = convert_mbo(m, price_exp);
                 return out.map(Some).map_err(|e| self.conv_err(e));
+            }
+            if rec.has::<StatusMsg>() {
+                let m = rec.try_get::<StatusMsg>().map_err(|e| fmt_err(&path, describe(&e)))?;
+                let st = convert_status(m).map_err(|e| self.conv_err(e))?;
+                self.status.push(st);
+                continue;
             }
             let gateway = is_gateway_error(&rec, version);
             self.skip(gateway);
@@ -380,6 +435,22 @@ impl DbnReader {
             if rec.has::<TradeMsg>() {
                 let t = rec.try_get::<TradeMsg>().map_err(|e| fmt_err(&path, describe(&e)))?;
                 let out = convert_trade(t, price_exp, rules);
+                return out.map(Some).map_err(|e| self.conv_err(e));
+            }
+            let gateway = is_gateway_error(&rec, version);
+            self.skip(gateway);
+        }
+    }
+
+    /// Next status record (other record types are skipped and counted).
+    pub fn next_status(&mut self) -> QtResult<Option<DbnStatus>> {
+        let version = self.dec.metadata().version;
+        loop {
+            let path = self.path.clone();
+            let Some(rec) = self.next_ref()? else { return Ok(None) };
+            if rec.has::<StatusMsg>() {
+                let m = rec.try_get::<StatusMsg>().map_err(|e| fmt_err(&path, describe(&e)))?;
+                let out = convert_status(m);
                 return out.map(Some).map_err(|e| self.conv_err(e));
             }
             let gateway = is_gateway_error(&rec, version);
@@ -567,6 +638,17 @@ fn convert_mbo(m: &MboMsg, price_exp: i8) -> Result<MboEvent, ConvError> {
         sequence: u64::from(m.sequence),
         channel_id: u16::from(m.channel_id),
         publisher_id: m.hd.publisher_id,
+    })
+}
+
+fn convert_status(m: &StatusMsg) -> Result<DbnStatus, ConvError> {
+    Ok(DbnStatus {
+        instrument_id: m.hd.instrument_id,
+        ts_event: ts(m.hd.ts_event, "ts_event")?,
+        ts_recv: ts(m.ts_recv, "ts_recv")?,
+        action: m.action,
+        reason: m.reason,
+        is_trading: m.is_trading as u8,
     })
 }
 

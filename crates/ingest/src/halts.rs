@@ -67,6 +67,13 @@ impl HaltTracker {
         }
     }
 
+    /// Whether `instrument_id` is halted now (either state).
+    pub fn is_halted(&self, instrument_id: u32) -> bool {
+        self.states
+            .get(&instrument_id)
+            .is_some_and(|s| s.status || s.operational)
+    }
+
     /// The spans, sorted by instrument, start, end and state; a span still open ends at `end_of_input` (at least
     /// one nanosecond after its start). Leaves the tracker empty.
     pub fn finish(&mut self, end_of_input: Ts) -> Vec<TradingHaltSpan> {

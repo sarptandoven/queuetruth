@@ -208,3 +208,17 @@ pub fn write_dataset(out: &SynthOutput, root: &Path) -> QtResult<PathBuf> {
 pub fn encode_dbn(events: &[MboEvent], path: &Path) -> QtResult<()> {
     dbnio::encode_dbn(events, path)
 }
+
+pub use dbnio::StatusRecord;
+
+/// Writes a synthetic DBN (v3) file of schema `mbo` holding `events` in their order and the status records
+/// `status`, each just before the first event with a later `ts_recv`; a path ending in `.zst` is
+/// Zstandard-compressed.
+pub fn encode_dbn_with_status(events: &[MboEvent], status: &[StatusRecord], path: &Path) -> QtResult<()> {
+    dbnio::encode_dbn_with_status(events, status, path)
+}
+
+/// Writes a synthetic DBN (v3) file of schema `status`.
+pub fn encode_dbn_status(status: &[StatusRecord], path: &Path) -> QtResult<()> {
+    dbnio::encode_dbn_status(status, path)
+}

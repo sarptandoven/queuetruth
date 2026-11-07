@@ -133,8 +133,8 @@ ITCH and DBN-remap INFO counters; see the integrator notes.)
 ## Not covered
 
 - DBN v4 is still refused (`QT-INPUT-002`, unchanged): the pinned `dbn` 0.71 crate reads versions 1 to 3.
-- `status` schema files are still refused as inputs (`unsupported DBN schema status`); status records inside
-  mixed-schema files are skipped and counted (`dbn_mixed_schema_other_records`).
+- `status` records are read from `status` files and from MBO and mixed-schema files since halt censoring H.5
+  ([halt censoring](halt-censoring.md) H.6, INFO counter `dbn_status_records`).
 - No opt-in drops non-FIFO partitions instead of failing: it needs an `IngestSpec` field and a CLI flag, which this
   workstream does not own. The remedy is an explicit `symbols` list.
 - No `IngestSpec` override of the contract multiplier or currency exists; without definitions they stay 1 and `USD`.
