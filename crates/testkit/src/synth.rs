@@ -108,12 +108,11 @@ impl GBook {
     }
 
     pub(crate) fn set_size(&mut self, id: u64, size: Qty) {
-        if let Some(&(side, px)) = self.loc.get(&id) {
-            if let Some(level) = self.side_mut(side).get_mut(&px) {
-                if let Some(o) = level.iter_mut().find(|(o, _)| *o == id) {
-                    o.1 = size;
-                }
-            }
+        if let Some(&(side, px)) = self.loc.get(&id)
+            && let Some(level) = self.side_mut(side).get_mut(&px)
+            && let Some(o) = level.iter_mut().find(|(o, _)| *o == id)
+        {
+            o.1 = size;
         }
     }
 
@@ -637,20 +636,20 @@ impl<'a> InstGen<'a> {
         let mut cand = if self.rng.chance(0.5) { px + d } else { px - d };
         match side {
             BookSide::Bid => {
-                if let Some(a) = self.book.best_px(BookSide::Ask) {
-                    if cand >= a {
-                        cand = a - t;
-                    }
+                if let Some(a) = self.book.best_px(BookSide::Ask)
+                    && cand >= a
+                {
+                    cand = a - t;
                 }
                 if cand == px {
                     cand = px - t;
                 }
             }
             BookSide::Ask => {
-                if let Some(b) = self.book.best_px(BookSide::Bid) {
-                    if cand <= b {
-                        cand = b + t;
-                    }
+                if let Some(b) = self.book.best_px(BookSide::Bid)
+                    && cand <= b
+                {
+                    cand = b + t;
                 }
                 if cand == px {
                     cand = px + t;
@@ -661,10 +660,11 @@ impl<'a> InstGen<'a> {
     }
 
     fn gen_modify(&mut self) -> bool {
-        if let Some(m) = self.mix {
-            if self.rng.chance(m.jump) && self.gen_jump() {
-                return true;
-            }
+        if let Some(m) = self.mix
+            && self.rng.chance(m.jump)
+            && self.gen_jump()
+        {
+            return true;
         }
         let Some(id) = self.book.random_id(&mut self.rng) else {
             return false;

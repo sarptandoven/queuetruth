@@ -190,7 +190,7 @@ queuetruth doctor
 whether PostgreSQL and Docker are present (only the self-hosted service needs them). It exits 1 if it finds a
 problem.
 
-To build from source (Rust 1.85 or later, Python 3.11 or later):
+To build from source (Rust 1.88 or later, Python 3.11 or later):
 
 ```sh
 git clone <repository URL> queuetruth && cd queuetruth

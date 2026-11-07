@@ -194,10 +194,11 @@ fn publish(init: &[(bool, u8, u8)], ops: &[Vec<(u8, u8, u8, u8)>]) -> (Vec<Strin
                 }
             }
             for &(&i, &(s, p, q)) in &bk {
-                if let (Some(&(_, ap)), Some(o)) = (after_ids.get(&i), b.orders.get(&i)) {
-                    if ap == p && o.2 != q {
-                        ev[si(s)].push(kord(i, p, o.2, Some("modify")));
-                    }
+                if let (Some(&(_, ap)), Some(o)) = (after_ids.get(&i), b.orders.get(&i))
+                    && ap == p
+                    && o.2 != q
+                {
+                    ev[si(s)].push(kord(i, p, o.2, Some("modify")));
                 }
             }
             for (s, p, ids) in &after {

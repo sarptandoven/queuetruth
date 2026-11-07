@@ -95,10 +95,11 @@ impl Tracer {
 
     /// End of an event in which the shadow was processed (or had relevant records).
     pub(crate) fn end_event(&mut self, qa: Qty, rank: u32, level: Qty, filled_now: Qty, fills: &[ShadowFillRow]) {
-        if filled_now > 0 && self.pending.is_empty() {
-            if let Some(l) = self.last.take() {
-                self.pending.push(l);
-            }
+        if filled_now > 0
+            && self.pending.is_empty()
+            && let Some(l) = self.last.take()
+        {
+            self.pending.push(l);
         }
         let n = self.pending.len();
         let note = (!fills.is_empty()).then(|| {

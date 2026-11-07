@@ -199,14 +199,14 @@ fn mbo(i: u64) -> MboEvent {
         instrument_id: 7 + (i % 3) as u32,
         action: b"ACMRTFN"[(i % 7) as usize],
         side: b"BAN"[(i % 3) as usize],
-        price: if i % 5 == 0 {
+        price: if i.is_multiple_of(5) {
             qt_types::UNDEF_PRICE
         } else {
             100_000_000_000 + i as i64
         },
         size: i * 10,
         order_id: i + 1000,
-        flags: if i % 4 == 0 { qt_types::flags::LAST } else { 0 },
+        flags: if i.is_multiple_of(4) { qt_types::flags::LAST } else { 0 },
         sequence: i,
         channel_id: (i % 2) as u16,
         publisher_id: 2,

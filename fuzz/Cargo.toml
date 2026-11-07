@@ -13,7 +13,7 @@ cargo-fuzz = true
 name = "qt_fuzz"
 path = "src/lib.rs"
 
-# Exact pins as in the main workspace (every release dated on or before 2026-10-04).
+# Exact pins as in the main workspace (every release dated on or before 2026-10-16).
 [dependencies]
 libfuzzer-sys = "=0.4.13"
 queuetruth-types = { path = "../crates/types" }
@@ -25,7 +25,7 @@ flate2 = "=1.1.10"
 indexmap = { version = "=2.14.2", features = ["serde"] }
 serde_json = { version = "=1.0.151", features = ["preserve_order", "float_roundtrip"] }
 # As resolved for `dbn` 0.71.0 (already in the lock tree): `dbn_known_metadata_panic` peeks at zstd preludes.
-zstd = "=0.13.3"
+zstd = "=0.14.3"
 
 # Standalone workspace: the fuzz crate is not a member of the queuetruth workspace (it needs nightly and links
 # libFuzzer), so `cargo test --workspace` at the repository root never builds it.

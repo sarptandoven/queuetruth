@@ -542,10 +542,10 @@ impl DqTracker {
                 dq.hidden_prints += 1;
             }
             Some(Action::Fill) => {
-                if let Some(o) = self.book.order(e.order_id) {
-                    if o.price != e.price {
-                        dq.off_price_executions += 1;
-                    }
+                if let Some(o) = self.book.order(e.order_id)
+                    && o.price != e.price
+                {
+                    dq.off_price_executions += 1;
                 }
             }
             _ => {}

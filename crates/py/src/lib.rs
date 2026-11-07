@@ -1,5 +1,6 @@
 //! PyO3 extension module `queuetruth._core` (abi3-py311, SPEC 4.3): one function per native operation (spec JSON in,
-//! summary JSON out), the shared CLI grammar, Arrow interchange through `pyo3-arrow`, and the interactive `Session`.
+//! summary JSON out), the shared CLI grammar, Arrow interchange through the Arrow PyCapsule interface (`arrow_ffi`),
+//! and the interactive `Session`.
 //! Every call that does work releases the GIL; Rust errors raise `QtCoreError(code, message)` with `.code` and
 //! `.message`, re-raised by `queuetruth.api` as `queuetruth.QtError`.
 
@@ -10,13 +11,14 @@ use pyo3::create_exception;
 use pyo3::exceptions::{PyException, PyKeyError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
-use pyo3_arrow::PyTable;
 use qt_cli::ops;
 use qt_schema::specs::{
     CalibrationSpec, ExportSpec, FeatureSpec, IngestSpec, MirrorSpec, ReplaySpec, ShadowSampleSpec, WhySpec, ZooSpec,
 };
 use qt_types::{BookSide, QtError, QtResult, Venue};
 use serde_json::Value;
+
+mod arrow_ffi;
 
 create_exception!(
     _core,
@@ -67,7 +69,7 @@ fn schema_names() -> Vec<&'static str> {
 #[pyfunction(name = "arrow_schema")]
 fn table_schema(py: Python<'_>, name: &str) -> PyResult<Py<PyAny>> {
     let schema = qt_schema::schema(name).ok_or_else(|| PyKeyError::new_err(format!("unknown table {name:?}")))?;
-    Ok(pyo3_arrow::PySchema::new(schema).into_pyarrow(py)?.unbind())
+    Ok(arrow_ffi::schema_to_pyarrow(py, schema)?.unbind())
 }
 
 /// Parses argv with the shared clap grammar; returns the `CliCommand` JSON or raises `CliExit`.
@@ -264,14 +266,14 @@ fn read_table(py: Python<'_>, path: &str, expect: Option<&str>) -> PyResult<Py<P
         let batches = reader.collect::<QtResult<Vec<_>>>()?;
         Ok((batches, schema))
     }))?;
-    Ok(PyTable::try_new(batches, schema)?.into_pyarrow(py)?.unbind())
+    Ok(arrow_ffi::table_to_pyarrow(py, batches, schema)?.unbind())
 }
 
 /// Writes any Arrow stream object (`__arrow_c_stream__`) whose schema metadata names a queuetruth table, with the
 /// Parquet settings of SPEC 0.1; returns the file entry JSON `{name, rows, bytes, sha256}`.
 #[pyfunction]
-fn write_table(py: Python<'_>, table: PyTable, path: &str) -> PyResult<String> {
-    let (batches, schema) = table.into_inner();
+fn write_table(py: Python<'_>, table: Bound<'_, PyAny>, path: &str) -> PyResult<String> {
+    let (batches, schema) = arrow_ffi::stream_from_python(&table)?;
     let name = schema
         .metadata()
         .get("qt.schema")

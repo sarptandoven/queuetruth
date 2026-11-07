@@ -261,10 +261,10 @@ impl Engine {
 
     #[inline]
     fn slot(&mut self, id: u32, ts: Ts) -> usize {
-        if let Some((i, s)) = self.last {
-            if i == id {
-                return s;
-            }
+        if let Some((i, s)) = self.last
+            && i == id
+        {
+            return s;
         }
         let slot = match self.slots.get(&id) {
             Some(&s) => s,

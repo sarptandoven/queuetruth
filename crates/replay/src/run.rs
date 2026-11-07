@@ -526,12 +526,11 @@ pub(crate) fn resolve_ref(v: &Value) -> QtResult<String> {
             path: m.display().to_string(),
             msg: e.to_string(),
         })?;
-        if let Ok(Value::Object(doc)) = serde_json::from_str::<Value>(&text) {
-            if doc.get("schema").and_then(Value::as_str) == Some("qt.dataset_manifest") {
-                if let Some(Value::String(id)) = doc.get("dataset_id") {
-                    return Ok(id.clone());
-                }
-            }
+        if let Ok(Value::Object(doc)) = serde_json::from_str::<Value>(&text)
+            && doc.get("schema").and_then(Value::as_str) == Some("qt.dataset_manifest")
+            && let Some(Value::String(id)) = doc.get("dataset_id")
+        {
+            return Ok(id.clone());
         }
         return sha256_file(&m);
     }
@@ -792,10 +791,10 @@ pub fn run_dataset_with(spec: &ReplaySpec, over: &ReplayOptions) -> QtResult<jso
             }
             outs.push(o);
         }
-        if let Some(t) = &tmp {
-            if t.exists() {
-                std::fs::remove_dir_all(t)?;
-            }
+        if let Some(t) = &tmp
+            && t.exists()
+        {
+            std::fs::remove_dir_all(t)?;
         }
     }
 

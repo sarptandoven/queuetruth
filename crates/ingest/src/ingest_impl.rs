@@ -1004,10 +1004,10 @@ impl<'a> Resolver<'a> {
     #[inline]
     fn resolve(&mut self, c: &Common, id: u32, day: i32, date: i32) -> QtResult<Option<u32>> {
         let key = (id, day, date);
-        if let Some((k, v)) = self.last {
-            if k == key {
-                return Ok(v);
-            }
+        if let Some((k, v)) = self.last
+            && k == key
+        {
+            return Ok(v);
         }
         let v = match self.cache.get(&key) {
             Some(v) => *v,
@@ -1176,13 +1176,12 @@ fn ingest_dbn_into(spec: &IngestSpec, inputs: &[PathBuf], out: &Path, created: &
     t.part_symbol = res.part.into_iter().collect();
     for &(date, iid) in &t.seen {
         let name = t.part_symbol.get(&(date, iid)).map(String::as_str);
-        if c.tick.is_none() {
-            if let Some(tick) = sym
+        if c.tick.is_none()
+            && let Some(tick) = sym
                 .min_price_increment(iid, name, date)
                 .and_then(|m| rescale(m, -9, c.price_exp))
-            {
-                t.part_tick.insert((date, iid), tick);
-            }
+        {
+            t.part_tick.insert((date, iid), tick);
         }
         if let Some(m) = sym.contract_multiplier(iid, name, date) {
             t.part_multiplier.insert((date, iid), m);
@@ -1231,10 +1230,10 @@ fn ingest_etcsv(spec: &IngestSpec, inputs: &[PathBuf], out: &Path) -> QtResult<I
     }
     for p in &inst_files {
         for i in read_instruments_csv(p)? {
-            if let Some(mpi) = i.min_price_increment.filter(|m| *m > 0 && *m != i64::MAX) {
-                if let Some(tick) = rescale(mpi, -9, c.price_exp) {
-                    t.tick.insert(i.instrument_id, tick);
-                }
+            if let Some(mpi) = i.min_price_increment.filter(|m| *m > 0 && *m != i64::MAX)
+                && let Some(tick) = rescale(mpi, -9, c.price_exp)
+            {
+                t.tick.insert(i.instrument_id, tick);
             }
             t.symbol.insert(i.instrument_id, i.raw_symbol);
         }
@@ -1376,15 +1375,15 @@ fn apply_spec_to_rows(spec: &IngestSpec, c: &Common, rows: &mut [Instrument]) ->
     }
     for r in rows.iter_mut() {
         let at = || format!("instrument row {} {}", r.instrument_id, format_date(r.session_date));
-        if let Some(tz) = spec.tz {
-            if r.session_tz != tz_name(tz) {
-                return Err(cfg(format!(
-                    "tz: {} disagrees with session_tz {} of {}",
-                    tz_name(tz),
-                    r.session_tz,
-                    at()
-                )));
-            }
+        if let Some(tz) = spec.tz
+            && r.session_tz != tz_name(tz)
+        {
+            return Err(cfg(format!(
+                "tz: {} disagrees with session_tz {} of {}",
+                tz_name(tz),
+                r.session_tz,
+                at()
+            )));
         }
         if spec.price_exp != -9 && spec.price_exp != r.price_exp {
             return Err(cfg(format!(

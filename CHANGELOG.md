@@ -6,6 +6,30 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ## [Unreleased]
 
+### Security
+
+- **zstd advisories cleared** (RUSTSEC-2026-0391, -0398, -0403, -0410 and the `unsound` warnings against
+  `zstd-safe`): `zstd` 0.14.3, `zstd-safe` 8.2.0 and `zstd-sys` 2.1.2, through `arrow-*` and `parquet` 60.0.0 (whose
+  `zstd` 0.14 replaces `parquet` 59's `zstd` 0.13) and a lockfile update of `dbn`'s `zstd`. `cargo audit --deny
+  warnings` passes on `Cargo.lock` and `fuzz/Cargo.lock`. Every new release is at least two weeks old.
+
+### Changed
+
+- **Rust 1.88 or later** to build from source (arrow 60's minimum; was 1.85). Wheels are unaffected.
+- **`queuetruth._core` exchanges Arrow data through the Arrow PyCapsule interface directly**
+  (`crates/py/src/arrow_ffi.rs`) instead of `pyo3-arrow`, which has no release for arrow 60; `Cargo.lock` lists 26
+  fewer crates. `read_table`, `arrow_schema` and `write_table` behave as before, and `write_table` still accepts any
+  object with `__arrow_c_stream__`.
+- **Parquet files are written by `parquet` 60.0.0.** Data pages are unchanged; for some tables the footer is a few
+  bytes smaller (in a sample run `zoo_fills`, `zoo_predictions` and `zoo_trajectory`; every `replay` output was
+  byte-identical), so their sha256 in summaries differs from 0.2.0's for the same rows.
+
+### Fixed
+
+- **Four of the five known Parquet decode panics** (the `arrow-ipc` schema sites found by the `parquet` fuzz target)
+  are fixed by arrow 60: their reproducers moved to `fuzz/regressions/parquet/`. The `parquet` footer panic on a
+  negative column chunk range remains in `fuzz/known-crashes/parquet/`.
+
 ## [0.2.0] - 2026-10-25
 
 Data schema 1.2: every new document and table is additive and registered with the others (`queuetruth schema list`,
