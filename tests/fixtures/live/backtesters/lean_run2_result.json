@@ -1,0 +1,253 @@
+{
+  "orders": {
+    "1": {
+      "type": 1,
+      "limitPrice": 60500.0,
+      "id": 1,
+      "contingentId": 0,
+      "brokerId": [],
+      "symbol": {
+        "value": "BTCUSDT",
+        "id": "BTCUSDT 18N",
+        "permtick": "BTCUSDT"
+      },
+      "price": 60500.0,
+      "priceCurrency": "USDT",
+      "time": "2024-03-01T02:00:00Z",
+      "createdTime": "2024-03-01T02:00:00Z",
+      "lastFillTime": "2024-03-01T04:00:00Z",
+      "quantity": 0.03,
+      "status": 3,
+      "properties": {
+        "timeInForce": {
+          "$type": "QuantConnect.Orders.TimeInForces.DayTimeInForce"
+        }
+      },
+      "securityType": 7,
+      "direction": 0,
+      "value": 1815.0,
+      "isMarketable": false,
+      "priceAdjustmentMode": 0
+    },
+    "2": {
+      "type": 1,
+      "limitPrice": 62400.0,
+      "id": 2,
+      "contingentId": 0,
+      "brokerId": [],
+      "symbol": {
+        "value": "BTCUSDT",
+        "id": "BTCUSDT 18N",
+        "permtick": "BTCUSDT"
+      },
+      "price": 0.0,
+      "priceCurrency": "USDT",
+      "time": "2024-03-01T02:00:00Z",
+      "createdTime": "2024-03-01T02:00:00Z",
+      "quantity": -0.01,
+      "status": 5,
+      "properties": {
+        "timeInForce": {}
+      },
+      "securityType": 7,
+      "direction": 1,
+      "value": 0.0,
+      "isMarketable": false,
+      "priceAdjustmentMode": 0
+    },
+    "3": {
+      "type": 2,
+      "stopPrice": 60000.0,
+      "stopTriggered": true,
+      "id": 3,
+      "contingentId": 0,
+      "brokerId": [],
+      "symbol": {
+        "value": "BTCUSDT",
+        "id": "BTCUSDT 18N",
+        "permtick": "BTCUSDT"
+      },
+      "price": 59990.0,
+      "priceCurrency": "USDT",
+      "time": "2024-03-01T03:00:00Z",
+      "createdTime": "2024-03-01T03:00:00Z",
+      "lastFillTime": "2024-03-01T04:00:00Z",
+      "quantity": -0.01,
+      "status": 3,
+      "properties": {
+        "timeInForce": {}
+      },
+      "securityType": 7,
+      "direction": 1,
+      "value": 599.9,
+      "isMarketable": false,
+      "priceAdjustmentMode": 0
+    },
+    "4": {
+      "type": 3,
+      "limitPrice": 61050.0,
+      "stopPrice": 61000.0,
+      "stopTriggered": false,
+      "id": 4,
+      "contingentId": 0,
+      "brokerId": [],
+      "symbol": {
+        "value": "BTCUSDT",
+        "id": "BTCUSDT 18N",
+        "permtick": "BTCUSDT"
+      },
+      "price": 0.0,
+      "priceCurrency": "USDT",
+      "time": "2024-03-01T03:00:00Z",
+      "createdTime": "2024-03-01T03:00:00Z",
+      "quantity": 0.01,
+      "status": 5,
+      "properties": {
+        "timeInForce": {
+          "$type": "QuantConnect.Orders.TimeInForces.GoodTilDateTimeInForce",
+          "expiry": "2024-03-01T05:00:00Z"
+        }
+      },
+      "securityType": 7,
+      "direction": 0,
+      "value": 0.0,
+      "isMarketable": false,
+      "priceAdjustmentMode": 0
+    },
+    "5": {
+      "type": 1,
+      "limitPrice": 60000.0,
+      "id": 5,
+      "contingentId": 0,
+      "brokerId": [],
+      "symbol": {
+        "value": "BTCUSDT",
+        "id": "BTCUSDT 18N",
+        "permtick": "BTCUSDT"
+      },
+      "price": 0.0,
+      "priceCurrency": "USDT",
+      "time": "2024-03-01T04:00:00Z",
+      "createdTime": "2024-03-01T04:00:00Z",
+      "quantity": 5.0,
+      "status": 7,
+      "properties": {
+        "timeInForce": {}
+      },
+      "securityType": 7,
+      "direction": 0,
+      "value": 0.0,
+      "isMarketable": false,
+      "priceAdjustmentMode": 0
+    },
+    "6": {
+      "type": 11,
+      "stopPrice": 59000.0,
+      "stopTriggered": true,
+      "trailingAmount": 500.0,
+      "trailingAsPercentage": false,
+      "id": 6,
+      "contingentId": 0,
+      "brokerId": [],
+      "symbol": {
+        "value": "BTCUSDT",
+        "id": "BTCUSDT 18N",
+        "permtick": "BTCUSDT"
+      },
+      "price": 59100.0,
+      "priceCurrency": "USDT",
+      "time": "2024-03-01T04:00:00Z",
+      "createdTime": "2024-03-01T04:00:00Z",
+      "lastFillTime": "2024-03-01T05:00:00Z",
+      "quantity": -0.01,
+      "status": 3,
+      "properties": {
+        "timeInForce": {}
+      },
+      "securityType": 7,
+      "direction": 1,
+      "value": 591.0,
+      "isMarketable": false,
+      "priceAdjustmentMode": 0
+    },
+    "7": {
+      "type": 4,
+      "id": 7,
+      "contingentId": 0,
+      "brokerId": [],
+      "symbol": {
+        "value": "BTCUSDT",
+        "id": "BTCUSDT 18N",
+        "permtick": "BTCUSDT"
+      },
+      "price": 60100.0,
+      "priceCurrency": "USDT",
+      "time": "2024-03-01T04:00:00Z",
+      "createdTime": "2024-03-01T04:00:00Z",
+      "lastFillTime": "2024-03-01T05:00:00Z",
+      "quantity": 0.01,
+      "status": 3,
+      "properties": {
+        "timeInForce": {}
+      },
+      "securityType": 7,
+      "direction": 0,
+      "value": 601.0,
+      "isMarketable": false,
+      "priceAdjustmentMode": 0
+    },
+    "8": {
+      "type": 1,
+      "limitPrice": 60000.0,
+      "id": 8,
+      "contingentId": 0,
+      "brokerId": [],
+      "symbol": {
+        "value": "BTCUSDT",
+        "id": "BTCUSDT 18N",
+        "permtick": "BTCUSDT"
+      },
+      "price": 0.0,
+      "priceCurrency": "USDT",
+      "time": "2024-03-01T05:00:00Z",
+      "createdTime": "2024-03-01T05:00:00Z",
+      "quantity": 0.0,
+      "status": 7,
+      "properties": {
+        "timeInForce": {}
+      },
+      "securityType": 7,
+      "direction": 2,
+      "value": 0.0,
+      "isMarketable": false,
+      "priceAdjustmentMode": 0
+    },
+    "9": {
+      "type": 1,
+      "limitPrice": 60200.0,
+      "id": 9,
+      "contingentId": 0,
+      "brokerId": [],
+      "symbol": {
+        "value": "BTCUSDT",
+        "id": "BTCUSDT 18N",
+        "permtick": "BTCUSDT"
+      },
+      "price": 60200.0,
+      "priceCurrency": "USDT",
+      "time": "2024-03-01T05:00:00Z",
+      "createdTime": "2024-03-01T05:00:00Z",
+      "lastFillTime": "2024-03-01T07:00:00Z",
+      "quantity": 0.01,
+      "status": 3,
+      "properties": {
+        "timeInForce": {}
+      },
+      "securityType": 7,
+      "direction": 0,
+      "value": 602.0,
+      "isMarketable": false,
+      "priceAdjustmentMode": 0
+    }
+  }
+}
