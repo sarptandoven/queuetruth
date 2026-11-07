@@ -12,9 +12,10 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   records (`StatusMsg`) from `status` files, which it refused before, and from MBO and mixed-schema files, where it
   skipped them. Actions `Halt`, `Pause`, `Suspend`, and `Quoting` while not trading, open a trading-halt span;
   `Trading` closes it; other actions change nothing; a halt past a session date's midnight carries on in the
-  symbol's partition of the next date. The NYSE TAQ Integrated Feed reader turns Security Status (type 34) into
-  spans: `4` (trading halt), `6` (suspend) or a Halt Condition other than `~` opens one, `5` (resume) or another
-  status with Halt Condition `~` closes it, so a symbol still halted at the open stays halted. The spans go to
+  symbol's partition of the next date when that date has status records of the symbol. The NYSE TAQ Integrated Feed
+  reader turns Security Status (type 34) into spans: `4` (trading halt) or `6` (suspend) opens one and `5` (resume)
+  closes it; before a symbol's first of them that day, its Halt Condition decides (a halt carried over from the
+  previous day), and later disagreements are counted in the new INFO counter `nyse_halt_condition_disagreements`. The spans go to
   `qt.data_quality.trading_halts` and every engine censors shadows there, as on Nasdaq ITCH and IEX DEEP+. New INFO
   counter `dbn_status_records`. Datasets without status records are written exactly as before. With status records,
   besides the spans: status records inside an `mbo`-schema file no longer count in `dbn_other_records_skipped` (so

@@ -571,6 +571,7 @@ fn finish_counters(
     scan.add_source("nyse_trade_cancels", st.trade_cancels);
     scan.add_source("nyse_cross_corrections", st.cross_corrections);
     scan.add_source("nyse_failover_books_kept", st.failover_books_kept);
+    scan.add_source("nyse_halt_condition_disagreements", st.halt_condition_disagreements);
     if unknown > 0 {
         warnings.push(format!(
             "{unknown} instrument-day(s) of symbols whose market is unknown (the file names do not follow \

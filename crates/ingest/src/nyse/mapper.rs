@@ -22,12 +22,13 @@
 //! | Symbol Index Mapping 3, Security Status 34, Imbalance 105, Trade Cancel 112, Cross Correction 113, Retail Price Improvement 114, Stock Summary 223 | none (statistics and counters) |
 //!
 //! Trading halts (SPEC 1.2 halt censoring): every Security Status of a selected symbol carries its status and the
-//! latest Halt Condition (`~` when not halted). Status `4` (trading halt) or `6` (suspend), or any other status with a
-//! Halt Condition other than `~` (a session change or price indication during a halt, or a halt carried over from the
-//! previous day), opens a trading-halt span of the instrument when none is open; status `5` (resume), or any other
-//! status with Halt Condition `~`, closes it (`Mapper::take_trading_halts`). A blank Halt Condition changes nothing.
-//! A span still open at the end of a file ends at the next local midnight of the file's session date (one more day
-//! per midnight rollover).
+//! latest Halt Condition (`~` when not halted). Status `4` (trading halt) or `6` (suspend) opens a trading-halt span
+//! of the instrument and `5` (resume) closes it (`Mapper::take_trading_halts`). Until the symbol's first `4`, `5` or
+//! `6` of the day, any other status (a session change, a price indication) opens a span while its Halt Condition is
+//! not `~` and closes it when it is `~`: a halt carried over from the previous day has no `4` today. After it, the
+//! explicit statuses govern, and another status whose Halt Condition disagrees with the state is only counted
+//! (`halt_condition_disagreements`). A blank Halt Condition changes nothing. A span still open at the end of a file
+//! ends at the next local midnight of the file's session date (one more day per midnight rollover).
 //!
 //! A live Order ID added again first cancels the old order (`C`). Anomalies (unknown references, over-executions,
 //! bad fields, ...) are counted and never fatal, except that a file whose first lines are not Integrated Feed
@@ -225,6 +226,9 @@ pub struct MapperStats {
     pub zero_volume_crosses: u64,
     /// Orders added by Add Order Refresh.
     pub refresh_orders: u64,
+    /// Security Status messages (other than `4`, `5` and `6`) whose Halt Condition disagreed with the trading state
+    /// that the symbol's explicit `4`, `5` and `6` set (the explicit statuses were kept).
+    pub halt_condition_disagreements: u64,
     /// Time of day (ns after midnight) of Security Status transitions to the core session (`O`), at most 100,000.
     pub core_open_times: Vec<u64>,
     /// MBO records emitted.
@@ -321,6 +325,8 @@ struct Sym {
     refreshed_in: u32,
     /// Its latest symbol-sequenced message was an Add Order Refresh (selected or not).
     in_refresh: bool,
+    /// A Security Status `4`, `5` or `6` was seen today: from then on these statuses govern its trading state.
+    halt_explicit: bool,
 }
 
 /// Add, Modify, Delete, Execution, Replace and Add Order Refresh: the messages that change a book.
@@ -434,6 +440,7 @@ impl Mapper {
                 s.refresh = None;
                 s.home = None;
                 s.booked = false;
+                s.halt_explicit = false;
             }
         }
         self.file = Some(ctx);
@@ -726,16 +733,28 @@ impl Mapper {
             Message::TradeCancel(_) => self.stats.trade_cancels += 1,
             Message::CrossCorrection(_) => self.stats.cross_corrections += 1,
             Message::SecurityStatus(st) => {
-                // 4 trading halt and 6 suspend leave continuous trading and 5 resume returns to it; any other status
-                // (a session change, a price indication) carries the latest Halt Condition: `~` not halted, another
-                // code halted (blank: unknown, no change).
-                let halted = match (st.status, st.halt_condition) {
-                    (b'4' | b'6', _) => Some(true),
-                    (b'5', _) => Some(false),
-                    (_, b'~') => Some(false),
-                    (_, 0) => None,
+                // 4 trading halt and 6 suspend leave continuous trading and 5 resume returns to it. Any other status
+                // carries the latest Halt Condition (`~` not halted, blank unknown); it decides only until the
+                // symbol's first explicit status of the day (a halt carried over from the previous day).
+                let by_condition = match st.halt_condition {
+                    b'~' => Some(false),
+                    0 => None,
                     _ => Some(true),
                 };
+                let halted = match st.status {
+                    b'4' | b'6' => Some(true),
+                    b'5' => Some(false),
+                    _ if self.syms[c.si].halt_explicit => {
+                        if by_condition.is_some_and(|h| h != self.halts.is_halted(c.iid)) {
+                            self.stats.halt_condition_disagreements += 1;
+                        }
+                        None
+                    }
+                    _ => by_condition,
+                };
+                if matches!(st.status, b'4' | b'5' | b'6') {
+                    self.syms[c.si].halt_explicit = true;
+                }
                 if let Some(h) = halted {
                     let reason = match st.halt_condition {
                         0 | b'~' => String::new(),

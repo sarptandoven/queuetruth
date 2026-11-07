@@ -930,8 +930,9 @@ Schema 1.2 is additive like 1.1 (JSON `schema_version` stays 1). It adds:
 - `qt.data_quality.source_specific` INFO counters (never affect the verdict; `qt_ingest::dq::INFO_SOURCE_COUNTERS`):
   `iex_modify_maintain_priority`, `iex_modify_reset_priority`, `iex_modify_noop`, `iex_duplicate_messages`,
   `iex_other_protocol_segments`.
-- `qt.data_quality.source_specific` INFO counter `dbn_status_records` (DBN `status` records read; halt-censoring
-  H.6).
+- `qt.data_quality.source_specific` INFO counters `dbn_status_records` (DBN `status` records read) and
+  `nyse_halt_condition_disagreements` (NYSE Security Status Halt Conditions that disagree with the explicit
+  statuses); halt-censoring H.6.
 - `qt.scorecard_summary.pnl_gap?` [{horizon_ns, currency?, n_valued, n_unvalued, mean_ccy?, ci_lo?, ci_hi?,
   direction (`sim_too_high`/`sim_too_low`/`no_significant_difference`/`not_computable`/`not_answerable`), reason?,
   parts_ccy, parts_ci_lo, parts_ci_hi {granted, denied, timing, fees}, main_part?, headline}]

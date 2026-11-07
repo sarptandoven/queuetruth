@@ -127,35 +127,19 @@ fn status_actions_map_to_trading_halt_spans() {
     let _ = std::fs::remove_dir_all(&d);
 }
 
-/// A halt that runs past a session date's midnight carries on in the symbol's partition of the next date, whose
-/// instrument id differs (CME, session date = UTC date): one span per partition, cut at midnight. The records are in
-/// a mixed-schema file (status records between the MBO records).
-#[test]
-fn a_halt_across_midnight_carries_into_the_next_date() {
-    const D0: i64 = 20_000;
-    let d = scratch("midnight");
+const D0: i64 = 20_000;
+
+/// One record of a synthetic CME (`GLBX.MDP3`) file: an MBO add, or a status record (`reason` 3).
+enum Rec {
+    Mbo(u32, i64),
+    Status(u32, i64, u16, u8),
+}
+
+/// Ingests `recs` as one mixed-schema CME file whose metadata maps ESZ4 to id 42 on D0, 43 on D0 + 1 and 44 on
+/// D0 + 2 (session date = UTC date unless `extra` says otherwise).
+fn cme(name: &str, recs: &[Rec], extra: serde_json::Value) -> IngestSummary {
+    let d = scratch(name);
     let t0 = D0 * DAY;
-    let mbo = |iid: u32, ts: i64, oid: u64, seq: u32| MboMsg {
-        hd: RecordHeader::new::<MboMsg>(rtype::MBO, 1, iid, ts as u64),
-        order_id: oid,
-        price: 4_500_000_000_000,
-        size: 1,
-        flags: FlagSet::new(flags::LAST),
-        channel_id: 0,
-        action: b'A' as std::ffi::c_char,
-        side: b'B' as std::ffi::c_char,
-        ts_recv: ts as u64,
-        ts_in_delta: 0,
-        sequence: seq,
-    };
-    let status = |iid: u32, ts: i64, action: u16, is_trading: u8| StatusMsg {
-        hd: RecordHeader::new::<StatusMsg>(rtype::STATUS, 1, iid, ts as u64),
-        ts_recv: ts as u64,
-        action,
-        reason: 3,
-        is_trading: is_trading as std::ffi::c_char,
-        ..StatusMsg::default()
-    };
     let date = |day: i64| {
         Metadata::builder()
             .dataset("GLBX.MDP3")
@@ -175,31 +159,74 @@ fn a_halt_across_midnight_carries_into_the_next_date() {
         .stype_out(SType::InstrumentId)
         .mappings(vec![SymbolMapping {
             raw_symbol: "ESZ4".into(),
-            intervals: vec![
-                MappingInterval {
-                    start_date: date(D0),
-                    end_date: date(D0 + 1),
-                    symbol: "42".into(),
-                },
-                MappingInterval {
-                    start_date: date(D0 + 1),
-                    end_date: date(D0 + 2),
-                    symbol: "43".into(),
-                },
-            ],
+            intervals: (0..3)
+                .map(|k| MappingInterval {
+                    start_date: date(D0 + k),
+                    end_date: date(D0 + k + 1),
+                    symbol: (42 + k).to_string(),
+                })
+                .collect(),
         }])
         .build();
     let p = d.join("live.dbn");
     let mut enc = Encoder::new(std::fs::File::create(&p).unwrap(), &md).unwrap();
-    let (halt, resume) = (t0 + 23 * HOUR + 50 * 60 * NS, t0 + DAY + 20 * 60 * NS);
-    enc.encode_record(&mbo(42, t0 + 23 * HOUR, 1, 1)).unwrap();
-    enc.encode_record(&status(42, halt, 8, b'N')).unwrap();
-    enc.encode_record(&status(43, resume, 7, b'Y')).unwrap();
-    enc.encode_record(&mbo(43, t0 + DAY + HOUR, 2, 2)).unwrap();
+    for (i, r) in recs.iter().enumerate() {
+        match *r {
+            Rec::Mbo(iid, ts) => enc
+                .encode_record(&MboMsg {
+                    hd: RecordHeader::new::<MboMsg>(rtype::MBO, 1, iid, ts as u64),
+                    order_id: i as u64 + 1,
+                    price: 4_500_000_000_000,
+                    size: 1,
+                    flags: FlagSet::new(flags::LAST),
+                    channel_id: 0,
+                    action: b'A' as std::ffi::c_char,
+                    side: b'B' as std::ffi::c_char,
+                    ts_recv: ts as u64,
+                    ts_in_delta: 0,
+                    sequence: i as u32 + 1,
+                })
+                .unwrap(),
+            Rec::Status(iid, ts, action, is_trading) => enc
+                .encode_record(&StatusMsg {
+                    hd: RecordHeader::new::<StatusMsg>(rtype::STATUS, 1, iid, ts as u64),
+                    ts_recv: ts as u64,
+                    action,
+                    reason: 3,
+                    is_trading: is_trading as std::ffi::c_char,
+                    ..StatusMsg::default()
+                })
+                .unwrap(),
+        }
+    }
     drop(enc);
-    let spec = json!({"format": "dbn", "venue": "cme", "out": d.join("ds").display().to_string(),
-                      "inputs": [{"path": p.display().to_string()}], "tick_size": "0.25"});
+    let mut spec = json!({"format": "dbn", "venue": "cme", "out": d.join("ds").display().to_string(),
+                          "inputs": [{"path": p.display().to_string()}], "tick_size": "0.25"});
+    for (k, v) in extra.as_object().unwrap() {
+        spec[k] = v.clone();
+    }
     let s = ingest(&serde_json::from_value(spec).unwrap()).unwrap();
+    let _ = std::fs::remove_dir_all(&d);
+    s
+}
+
+/// A halt that runs past a session date's midnight carries on in the symbol's partition of the next date, whose
+/// instrument id differs (CME, session date = UTC date): one span per partition, cut at midnight. The records are in
+/// a mixed-schema file (status records between the MBO records).
+#[test]
+fn a_halt_across_midnight_carries_into_the_next_date() {
+    let t0 = D0 * DAY;
+    let (halt, resume) = (t0 + 23 * HOUR + 50 * 60 * NS, t0 + DAY + 20 * 60 * NS);
+    let s = cme(
+        "midnight",
+        &[
+            Rec::Mbo(42, t0 + 23 * HOUR),
+            Rec::Status(42, halt, 8, b'N'),
+            Rec::Status(43, resume, 7, b'Y'),
+            Rec::Mbo(43, t0 + DAY + HOUR),
+        ],
+        json!({}),
+    );
     assert_eq!(
         s.data_quality.trading_halts,
         vec![
@@ -208,7 +235,55 @@ fn a_halt_across_midnight_carries_into_the_next_date() {
         ]
     );
     assert_eq!(s.data_quality.source_specific.get("dbn_status_records"), Some(&2));
-    let _ = std::fs::remove_dir_all(&d);
+}
+
+/// A halt never lifted carries only into later dates with status records of the symbol: the MBO goes on two days
+/// later, but no status record says the symbol is still halted then, so the span ends at the first midnight.
+#[test]
+fn a_halt_does_not_carry_into_dates_without_status_records() {
+    let t0 = D0 * DAY;
+    let halt = t0 + 15 * HOUR;
+    let s = cme(
+        "uncovered",
+        &[
+            Rec::Mbo(42, t0 + 14 * HOUR),
+            Rec::Status(42, halt, 8, b'N'),
+            Rec::Mbo(44, t0 + 2 * DAY + 14 * HOUR),
+        ],
+        json!({}),
+    );
+    assert_eq!(
+        s.data_quality.trading_halts,
+        vec![span(42, halt, t0 + DAY, "dbn_status:8", "3")]
+    );
+}
+
+/// With a fixed `session_date`, records before that date's midnight belong to it and a halt there is kept whole
+/// (only the midnights between two session dates cut a span).
+#[test]
+fn a_halt_before_a_fixed_session_dates_midnight_is_kept() {
+    let t0 = D0 * DAY;
+    let (halt, resume) = (t0 + 23 * HOUR + 30 * 60 * NS, t0 + 23 * HOUR + 40 * 60 * NS);
+    let open_halt = t0 + 23 * HOUR + 50 * 60 * NS;
+    let s = cme(
+        "fixed",
+        &[
+            Rec::Mbo(42, t0 + 23 * HOUR),
+            Rec::Status(42, halt, 9, b'N'),
+            Rec::Status(42, resume, 7, b'Y'),
+            Rec::Status(42, open_halt, 8, b'N'),
+            Rec::Mbo(43, t0 + DAY + HOUR),
+        ],
+        json!({"session_date": "2024-10-05"}),
+    );
+    // Id 42's records of D0 go to ESZ4's id on the session date, 43.
+    assert_eq!(
+        s.data_quality.trading_halts,
+        vec![
+            span(43, halt, resume, "dbn_status:9", "3"),
+            span(43, open_halt, t0 + 2 * DAY, "dbn_status:8", "3"),
+        ]
+    );
 }
 
 fn write_raw(path: &Path, schema: Schema, recs: &[StatusMsg]) {

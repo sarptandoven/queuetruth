@@ -1141,10 +1141,10 @@ mod props {
 }
 
 /// SPEC 1.2 halt censoring: Security Status `4` (trading halt) and `6` (suspend) open a trading-halt span of a
-/// selected symbol with records, `5` (resume) closes it; any other status opens or keeps a span while its Halt
-/// Condition is not `~` (a core-session `O` during a halt, a halt carried over from the previous day) and closes it
-/// when it is `~`; a span still open at the end of the file ends at the next midnight. The committed fixtures have no
-/// halts.
+/// selected symbol with records, `5` (resume) closes it; before the symbol's first `4`, `5` or `6` any other status
+/// opens or keeps a span while its Halt Condition is not `~` (a halt carried over from the previous day) and closes it
+/// when it is `~`; after it, a Halt Condition that disagrees is only counted; a span still open at the end of the file
+/// ends at the next midnight. The committed fixtures have no halts.
 #[test]
 fn security_status_halts_become_trading_halt_spans() {
     let d = scratch("halts");
@@ -1163,7 +1163,7 @@ fn security_status_halts_become_trading_halt_spans() {
         "34,10,06:30:00.000000000,QTO,1,P,~,,,,,,~,P",
         // QTK halted before the open and still halted at it (Halt Condition D on the `O`): only `5` resumes it.
         "34,11,08:00:00.000000000,QTK,2,4,D,,,,,,~,P",
-        // QTO halted before the open; its `O` comes with Halt Condition `~`, so the open lifts it.
+        // QTO halted before the open; its `O` says `~`, which contradicts the `4`: counted, the halt waits for its `5`.
         "34,12,08:00:00.000000000,QTO,2,4,D,,,,,,~,P",
         "34,13,09:30:00.000000000,QTH,2,O,~,,,,,,~,O",
         "34,14,09:30:00.000000000,QTK,3,O,D,,,,,,~,O",
@@ -1181,11 +1181,14 @@ fn security_status_halts_become_trading_halt_spans() {
         "34,24,10:04:00.000000000,QTH,5,I,M,,,,,,~,O",
         "34,25,10:05:00.000000000,QTH,6,5,~,,,,,,~,O",
         "34,26,10:15:00.000000000,QTK,5,5,~,,,,,,~,O",
-        "34,27,10:20:00.000000000,QTC,4,5,~,,,,,,~,O",
-        "34,28,15:00:00.000000000,QTH,7,6,C,,,,,,~,O",
-        "34,29,16:01:00.000000000,QTH,8,X,C,,,,,,~,X",
+        "34,27,10:30:00.000000000,QTO,5,5,~,,,,,,~,O",
+        // QTH: a short-sale restriction after the resume that still names the pause's condition: counted, no span.
+        "34,28,11:00:00.000000000,QTH,7,A,M,,,,,,A,O",
+        "34,29,10:20:00.000000000,QTC,4,5,~,,,,,,~,O",
+        "34,30,15:00:00.000000000,QTH,8,6,C,,,,,,A,O",
+        "34,31,16:01:00.000000000,QTH,9,X,C,,,,,,A,X",
         // QTX is not selected.
-        "34,30,10:00:00.000000000,QTX,4,4,M,,,,,,~,O",
+        "34,32,10:00:00.000000000,QTX,4,4,M,,,,,,~,O",
     ];
     std::fs::write(&src, lines.join("\n") + "\n").unwrap();
     let out = d.join("ds");
@@ -1209,9 +1212,10 @@ fn security_status_halts_become_trading_halt_spans() {
             span(1, MID + 15 * h, MID + 24 * h, "nyse_34:6", "C"),
             span(2, MID + 8 * h, MID + 10 * h + 900 * S, "nyse_34:4", "D"),
             span(4, MID + 6 * h + 1_800 * S, MID + 10 * h + 1_200 * S, "nyse_34:P", "P"),
-            span(5, MID + 8 * h, MID + 9 * h + 1_800 * S, "nyse_34:4", "D"),
+            span(5, MID + 8 * h, MID + 10 * h + 1_800 * S, "nyse_34:4", "D"),
         ]
     );
+    assert_eq!(source(&sum.data_quality, "nyse_halt_condition_disagreements"), 2);
     assert_eq!(
         sum.data_quality.verdict,
         Verdict::Clean,

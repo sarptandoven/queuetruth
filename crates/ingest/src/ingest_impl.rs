@@ -1253,9 +1253,11 @@ fn ingest_dbn_into(spec: &IngestSpec, inputs: &[PathBuf], out: &Path, created: &
 /// record whose key no such record had is ignored, so status records never resolve symbology of their own.
 ///
 /// The state is kept per symbol, so a halt that runs past a session date's midnight carries on in the symbol's
-/// partition of the next date (its instrument id may differ): the span is cut at each midnight into one span per
-/// partition with records. A partition without a symbol keeps its own state for its session date only (ids are per
-/// UTC date). A span still open at the end ends at the next local midnight of the symbol's last session date.
+/// partition of the next date (its instrument id may differ), as long as that date has status records of the symbol:
+/// the span is cut at each midnight into one span per partition with records, and ends at the midnight before the
+/// first later date without status records of the symbol. A partition without a symbol keeps its own state for its
+/// session date only (ids are per UTC date). A span still open at the end ends at the next local midnight of the
+/// symbol's last session date with status records.
 fn dbn_trading_halts(
     c: &Common,
     res: &Resolver<'_>,
@@ -1274,17 +1276,34 @@ fn dbn_trading_halts(
         state: String,
         reason: String,
     }
-    let mut sym_part: HashMap<(&str, i32), u32> = HashMap::new();
-    let mut last_date: HashMap<&str, i32> = HashMap::new();
-    for ((date, iid), name) in &res.part {
-        if seen.contains(&(*date, *iid)) {
-            sym_part.insert((name.as_str(), *date), *iid);
-            let d = last_date.entry(name.as_str()).or_insert(*date);
-            *d = (*d).max(*date);
-        }
+    // Partition of each (symbol, session date) with records; the smallest id if a symbol had two on one date, so the
+    // choice never depends on hash order.
+    let mut parts: Vec<(&(i32, u32), &String)> = res.part.iter().filter(|(k, _)| seen.contains(k)).collect();
+    parts.sort();
+    let mut sym_part: BTreeMap<(&str, i32), u32> = BTreeMap::new();
+    for ((date, iid), name) in parts {
+        sym_part.entry((name.as_str(), *date)).or_insert(*iid);
     }
-    // The spans of `key` over `[start, end)`, one per session date with a partition with records.
-    let pieces = |key: &Key, start: Ts, end: Ts, open: &Open, out: &mut Vec<TradingHaltSpan>| -> QtResult<()> {
+    status.sort_by_key(|s| s.ts_event);
+    // Each record's key and session date (`None`: ignored); the session dates with status records of each symbol.
+    let mut keyed: Vec<Option<(Key, i32)>> = Vec::with_capacity(status.len());
+    let mut covered: BTreeSet<(String, i32)> = BTreeSet::new();
+    for s in status.iter() {
+        let date = dates.of(c, s.ts_event)?;
+        let k = res
+            .resolved(s.instrument_id, utc_day(s.ts_recv), date)
+            .map(|iid| match res.part.get(&(date, iid)) {
+                Some(name) => {
+                    covered.insert((name.clone(), date));
+                    Key::Sym(name.clone())
+                }
+                None => Key::Part(date, iid),
+            });
+        keyed.push(k.map(|k| (k, date)));
+    }
+    // The spans of `key` from `start` (on session date `first`) to `end`, one per session date with a partition
+    // with records; a symbol's span stops at the first later date without status records of the symbol.
+    let pieces = |key: &Key, first: i32, start: Ts, end: Ts, open: &Open, out: &mut Vec<TradingHaltSpan>| {
         let mut push = |date: i32, iid: u32, lo: Ts, hi: Ts| {
             if lo < hi && seen.contains(&(date, iid)) {
                 out.push(TradingHaltSpan {
@@ -1299,30 +1318,31 @@ fn dbn_trading_halts(
         match key {
             Key::Part(date, iid) => push(*date, *iid, start, end),
             Key::Sym(name) => {
-                let (first, last) = (c.date_of(start)?, c.date_of(end.saturating_sub(1).max(start))?);
+                let last = c.date_of(end.saturating_sub(1).max(start))?.max(first);
                 for date in first..=last {
+                    if date > first && !covered.contains(&(name.clone(), date)) {
+                        break;
+                    }
+                    // Only the inner midnights cut (with a fixed session date every record has that date).
+                    let lo = if date == first { start } else { c.midnight(date)? };
+                    let hi = if date == last {
+                        end
+                    } else {
+                        c.midnight(date.saturating_add(1))?
+                    };
                     if let Some(&iid) = sym_part.get(&(name.as_str(), date)) {
-                        let lo = start.max(c.midnight(date)?);
-                        let hi = end.min(c.midnight(date.saturating_add(1))?);
                         push(date, iid, lo, hi);
                     }
                 }
             }
         }
-        Ok(())
+        QtResult::Ok(())
     };
-    status.sort_by_key(|s| s.ts_event);
-    let mut open: BTreeMap<Key, Open> = BTreeMap::new();
+    let mut open: BTreeMap<Key, (i32, Open)> = BTreeMap::new();
     let mut out = Vec::new();
-    for s in status.iter() {
-        let Some(halted) = status_halted(s) else { continue };
-        let date = dates.of(c, s.ts_event)?;
-        let Some(iid) = res.resolved(s.instrument_id, utc_day(s.ts_recv), date) else {
+    for (s, k) in status.iter().zip(keyed) {
+        let (Some(halted), Some((key, date))) = (status_halted(s), k) else {
             continue;
-        };
-        let key = match res.part.get(&(date, iid)) {
-            Some(name) => Key::Sym(name.clone()),
-            None => Key::Part(date, iid),
         };
         match (halted, open.contains_key(&key)) {
             (true, false) => {
@@ -1336,28 +1356,26 @@ fn dbn_trading_halts(
                     state: format!("dbn_status:{}", s.action),
                     reason,
                 };
-                open.insert(key, o);
+                open.insert(key, (date, o));
             }
             (false, true) => {
-                if let Some(o) = open.remove(&key) {
-                    pieces(&key, o.ts_start, s.ts_event, &o, &mut out)?;
+                if let Some((first, o)) = open.remove(&key) {
+                    pieces(&key, first, o.ts_start, s.ts_event, &o, &mut out)?;
                 }
             }
             _ => {}
         }
     }
-    for (key, o) in &open {
-        let start_date = dates.of(c, o.ts_start)?;
-        let last = match key {
-            Key::Sym(name) => last_date
-                .get(name.as_str())
-                .copied()
-                .unwrap_or(start_date)
-                .max(start_date),
-            Key::Part(date, _) => *date,
-        };
+    for (key, (first, o)) in &open {
+        // The last session date the span can reach: consecutive dates with status records of the symbol.
+        let mut last = *first;
+        if let Key::Sym(name) = key {
+            while covered.contains(&(name.clone(), last.saturating_add(1))) {
+                last += 1;
+            }
+        }
         let end = c.midnight(last.saturating_add(1))?.max(o.ts_start.saturating_add(1));
-        pieces(key, o.ts_start, end, o, &mut out)?;
+        pieces(key, *first, o.ts_start, end, o, &mut out)?;
     }
     crate::halts::sort(&mut out);
     Ok(out)

@@ -167,9 +167,10 @@ not change the state. A span is labelled `dbn_status:<action>` and keeps the rec
 `50`, a LULD pause). A status record applies to the partition its instrument id and dates resolve to for the MBO
 and trade records; a record of an instrument with no such records that day is ignored. The state is kept per symbol,
 so a halt that runs past a session date's midnight continues in the symbol's partition of the next date, as one span
-per partition. A partition without a symbol (no metadata mapping or definition names it) keeps its state for its own
+per partition, as long as that date has status records of the symbol (download `status` for every date of the MBO).
+A partition without a symbol (no metadata mapping or definition names it) keeps its state for its own
 session date only, because instrument ids are only unique per UTC date. A span still open at the end ends at the next
-local midnight of the symbol's last session date. Replay censors shadows in these spans as on Nasdaq ITCH
+local midnight of the symbol's last session date with status records. Replay censors shadows in these spans as on Nasdaq ITCH
 ([halt censoring](../design/extensions/halt-censoring.md)). The counter `dbn_status_records` counts the status
 records read, including those that matched no partition, and never changes the verdict.
 

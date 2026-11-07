@@ -21,7 +21,7 @@ use qt_types::{MboEvent, VenueRules, flags};
 /// (auction) executions and non-displayed trades, zero-share crosses, firm-attributed adds, Trade Cancel and Cross
 /// Correction messages (a bust does not restore the executed order, so book builders may ignore them, TAQ spec v2.4b
 /// sections 14 and 15) and books kept after a refresh that did not cover them.
-pub const INFO_SOURCE_COUNTERS: [&str; 28] = [
+pub const INFO_SOURCE_COUNTERS: [&str; 29] = [
     "itch_zero_share_cross",
     "cross_prints",
     "dbn_instrument_id_remapped",
@@ -50,6 +50,7 @@ pub const INFO_SOURCE_COUNTERS: [&str; 28] = [
     "nyse_trade_cancels",
     "nyse_cross_corrections",
     "nyse_failover_books_kept",
+    "nyse_halt_condition_disagreements",
 ];
 
 /// Whether a `source_specific` counter is an INFO counter (`INFO_SOURCE_COUNTERS`).
