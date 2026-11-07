@@ -124,6 +124,12 @@ def local_time(ts: int, midnight_utc_ns: int) -> str:
     return f"{sign}{hh:02d}:{mm:02d}:{ss:02d}.{ns // 1000:06d}"
 
 
+def rel_time(ns: int) -> str:
+    """`+HH:MM:SS.ffffff` of a time in ns since the session open (`-` before it): the clock of a blind episode."""
+    text = local_time(int(ns), 0)
+    return text if text.startswith("-") else "+" + text
+
+
 def date_of_days(days: int) -> str:
     """`YYYY-MM-DD` of a date32 day number."""
     return (_dt.date(1970, 1, 1) + _dt.timedelta(days=int(days))).isoformat()
@@ -248,6 +254,7 @@ __all__ = [
     "parse_duration",
     "parse_time",
     "real",
+    "rel_time",
     "sha256_text",
     "tick_decimals",
     "to_fixed",

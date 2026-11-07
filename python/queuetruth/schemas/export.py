@@ -40,6 +40,7 @@ _PATTERN_SAMPLES = {
     # queuetruth.sandbox.models: order ids and client order ids
     r"^o[1-9][0-9]*$": "o1",
     r"^[A-Za-z0-9_.:\-]+$": "c1",
+    r"^ep_[0-9a-f]{16}$": "ep_0123456789abcdef",
 }
 
 

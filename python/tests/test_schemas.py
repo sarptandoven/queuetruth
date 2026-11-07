@@ -153,7 +153,7 @@ def test_extension_documents_are_registered() -> None:
         **ledger.DOCUMENTS,
         **sandbox.SANDBOX_DOC_MODELS,
     }
-    assert len(expected) == 20
+    assert len(expected) == 25
     for name, model in expected.items():
         assert DOC_MODELS[name] is model, name
         assert model.SCHEMA == name

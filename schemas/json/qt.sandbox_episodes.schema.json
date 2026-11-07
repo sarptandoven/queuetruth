@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.sandbox_episodes",
+  "$defs": {
+    "EpisodePin": {
+      "additionalProperties": false,
+      "description": "One operator-pinned blind episode: its id, its spec (true dataset, instrument, day and window), the secret\nits transform derives from and how often it may be started. Private to the operator.",
+      "properties": {
+        "episode_id": {
+          "pattern": "^ep_[0-9a-f]{16}$",
+          "title": "Episode Id",
+          "type": "string"
+        },
+        "spec": {
+          "additionalProperties": true,
+          "title": "Spec",
+          "type": "object"
+        },
+        "secret": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Secret",
+          "type": "string"
+        },
+        "max_starts": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Max Starts",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "episode_id",
+        "spec",
+        "secret"
+      ],
+      "title": "EpisodePin",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The operator's pinned blind episodes (`queuetruth.sandbox.blind.EpisodeBook`). Holds the secrets: never give\nthis file to the agent.",
+  "properties": {
+    "schema": {
+      "const": "qt.sandbox_episodes",
+      "default": "qt.sandbox_episodes",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "episodes": {
+      "items": {
+        "$ref": "#/$defs/EpisodePin"
+      },
+      "title": "Episodes",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "episodes"
+  ],
+  "type": "object"
+}

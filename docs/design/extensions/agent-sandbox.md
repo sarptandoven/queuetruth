@@ -173,11 +173,13 @@ messages). With the session stepping a step no longer costs a replay of the pref
 
 ## S.6 Documents, identities and the log
 
-Documents (Pydantic models in `queuetruth.sandbox.models`, JSON Schemas from `json_schemas()`):
-`qt.sandbox_session`, `qt.sandbox_observation`, `qt.sandbox_ack`, `qt.sandbox_scorecard`, `qt.sandbox_order_log`,
-`qt.sandbox_verification`, and for the MCP tools `qt.sandbox_finish` and `qt.sandbox_session_list`; spec
-`qt.sandbox_spec`. Conventions of SPEC 0.1 and 3.10 (tag first, unknown fields rejected, integer ns, raw fixed-point
-prices and sizes); money and `avg_fill_price` / `mark_price` / `vwap_price` are floats.
+Documents (Pydantic models in `queuetruth.sandbox.models`, JSON Schemas from `json_schemas()`): `qt.sandbox_session`,
+`qt.sandbox_observation`, `qt.sandbox_ack`, `qt.sandbox_scorecard`, `qt.sandbox_order_log`, `qt.sandbox_verification`,
+and for the MCP tools `qt.sandbox_finish` and `qt.sandbox_session_list`; for blind episodes (S.11)
+`qt.sandbox_blind_session`, `qt.sandbox_blind_finish`, `qt.sandbox_blind_session_list`, `qt.sandbox_blind_order_log` and
+the operator's `qt.sandbox_episodes`; spec `qt.sandbox_spec`. Conventions of SPEC 0.1 and 3.10 (tag first, unknown
+fields rejected, integer ns, raw fixed-point prices and sizes); money and `avg_fill_price` / `mark_price` / `vwap_price`
+are floats.
 
 - `spec_sha256` = `sha256(canonical_json({engine_version, spec}))` with `spec.dataset` replaced by
   `{"sha256": dataset_id}` (SPEC 7.3); `spec_id` = its first 16 hex. `run_id` = the first 16 hex of the same digest
@@ -252,7 +254,73 @@ venue and date, and prices are absolute, so a language model whose training data
 price path; earlier episodes on the same day, or tuning across episodes, leak the same way. The certificate and
 `verify` prove that the scorecard follows from the logged instructions on the logged data, not that the instructions
 were made without such knowledge. Claims about language-model agents need data after the model's training cutoff or
-a held-out day. A blind mode would have to hide the instrument-day from the agent entirely: an operator-pinned
-episode the agent starts without naming the dataset, symbol or date, times relative to the session, and prices
-rebased; hiding the symbol and date alone would leave the absolute prices, and in MCP the agent itself names the
-dataset path, symbol and date when it calls `qt_sandbox_start`.
+a held-out day, or a blind episode (S.11), which hides the instrument-day from the agent.
+
+## S.11 Blind episodes
+
+`queuetruth.sandbox.blind`; tests in `python/tests/sandbox/test_blind.py`.
+
+- **Pinning.** `EpisodeBook.pin(spec)` validates an ordinary `qt.sandbox_spec` against the dataset, stores it with
+  absolute times, a fresh 32-byte secret and `max_starts` (default 1), and returns an opaque id `ep_<16 hex>`. A
+  spec whose fees have a basis-point part is refused (`QT-CONFIG-001`): a fee proportional to the notional shows the
+  price level; so is an instrument whose tick size is not positive. The book is a `qt.sandbox_episodes` document,
+  created 0600 and renamed into place. `start(episode_id)` opens the episode; an unknown id, or one started
+  `max_starts` times (a failed open counts), is `QT-USAGE-001` and names no pinned episode. A second session of one
+  episode would let a scout read the future before the real session plays it. `use_journal(path)` appends every
+  start and end to a JSON-lines file; each start re-reads it under an exclusive `flock` (POSIX), counts the starts
+  of its episode, and appends `start` or `refused` before releasing the lock, so processes sharing the file never
+  exceed `max_starts`. `check_reveal(reveal, transform_sha256, collar_shift_raw=)` also checks the logged collar
+  shift against the revealed offset.
+- **Transform.** `time_origin_ns` = the instrument row's open. `price_offset_ticks = base - floor(reference / tick)`,
+  where `reference` is the best bid in view at the start (else the best ask, else the last print; none of them is
+  `QT-CONFIG-001` at start) and `base = 1000 + (HMAC-SHA256(secret, "price_base") mod 9001)`; an offset of
+  `2**60` raw units or more is `QT-CONFIG-001`. Both depend only on the
+  secret and the data up to the first cut, so no look-ahead enters the transform. `salt = HMAC-SHA256(secret,
+  "salt")`. `transform_sha256 = sha256(canonical_json({kind, time_origin_ns, price_offset_ticks, tick_size,
+  price_exp, salt}))` commits to the transform and reveals nothing without the salt.
+- **Agent-visible values.** A `BlindSandbox` wraps a `Sandbox` and maps its documents: times `t - time_origin_ns`,
+  `time_local` as `+HH:MM:SS.ffffff`; raw prices `p + price_offset_ticks * tick`; `avg_fill_price` and `vwap_price`
+  recomputed from the rebased integers (`(notional + offset * qty) / qty`, the sandbox's own formula), since the
+  digits of a shifted float would carry the true value's magnitude; `mark_price` (a mid, an exact short decimal)
+  moved by the offset in decimals; `cash` and `notional_traded`
+  recomputed at the rebased prices; `mo_bps` and `mean_bps` null; a market order's collar price null. Sizes, money
+  that does not depend on the price level and every count are unchanged. `qt.sandbox_blind_session` replaces the
+  instrument by `BlindInstrument` (tick, lot, exponents, multiplier, currency) and the spec by its simulation
+  settings. Acks keep their `log_seq` and name the entry of the agent's own log (`qt.sandbox_blind_order_log`: one
+  entry per entry of the operator's log, same `seq`, blind times, prices and requests, `rows_seen` counted from the
+  start, its own genesis `sha256("queuetruth.sandbox.blind_order_log.v1")`).
+- **Instructions back.** A price the agent sends (decimal string or raw integer) is parsed at `price_exp`. A rebased
+  price of magnitude `2**62 - 2**60` or more is sent as the sandbox's out-of-range sentinel `2**63 - 1`, which it
+  refuses and logs whatever the offset; any other is moved back by the offset, which lands inside `|price| < 2**62`.
+  Acceptance therefore never depends on the offset (the tick grid is offset invariant; sizes and risk limits do not
+  involve prices; self-trade checks compare prices with each other). Text that does not parse is passed on as it is, so
+  the sandbox meets and logs the same rejection. A market order's collar is sized on the rebased best:
+  `Sandbox._collar_shift` (the offset, recorded in the `open` entry as `blind_collar_shift_raw`, which `verify` passes
+  back) is added to the opposite best before the width and the one-tick floor are computed, and subtracted from the
+  result. The blind mapping of a market order is a market order with that collar. `advance(to=)` takes ns or
+  `HH:MM[:SS]` since the open. The operator's sandbox therefore receives exactly what a non-blind agent sending the true
+  values (and the same collar) would send: its log entries equal theirs except the `open` entry, and its scorecard
+  equals theirs except `run_id`, `certificate`, `timings` and `files` (tested).
+- **Concurrency.** A `BlindSandbox` holds its own lock around each call (read the log length, call the sandbox,
+  record the agent's request, mirror the entry), so concurrent calls never misattribute an entry.
+- **Errors.** A `QtError` of the operator's sandbox has the true prices the call passed replaced by the agent's; then,
+  if its message or hint still contains a hidden string as a whole word (symbol, venue, date, dataset path or id, spec
+  id), a time of day or an integer of 15 or more digits, it is replaced by a generic message. Only `details.reason` and
+  `details.order_id` are kept. A blind MCP server reports an internal error by its code alone.
+- **Scoring and certificate.** `finish` returns `qt.sandbox_blind_finish` to the agent and keeps the operator's
+  `qt.sandbox_scorecard` (true values) in `scorecard`; with `out` it writes the usual files and `blind.json` (the
+  episode id and the revealed transform). `Sandbox.open(..., blind=hook)` puts `{episode_id, transform_sha256}` in
+  the `open` entry, so the log root commits to it, and `certify` copies it to `certificate.blind`. `verify` passes
+  the logged commitment to the re-execution and checks the certificate's `blind` against it.
+- **MCP.** `register_sandbox_tools(app, episodes=book, out_dir=...)` (`--episodes FILE --out DIR`; `out_dir` is
+  required) removes the server's own tools, replaces its instructions, and serves the eight sandbox tools with blind
+  arguments (`qt_sandbox_start {episode_id}`, `qt_sandbox_advance` with `to` since the open,
+  `qt_sandbox_list {episode_id}` listing only that episode's sessions, `qt_sandbox_finish {session_id,
+  include_log}`) and blind outputs. `<out_dir>/episodes.jsonl` journals every start and end (start, refused, finish,
+  close, evict, failed, exit). A start reserves its slot before the episode opens, so a start without a slot never
+  counts against its pin. The operator's files under `out_dir` are not linked; `include_log` embeds the blind log.
+- **Not hidden.** Tick size, lot size, multiplier, currency, sizes, volumes, the session length and the shape of
+  the price path in ticks. They narrow the instrument class and may let a very distinctive day be recognised. A fall
+  of more than `base` ticks below the reference, or a deep stub quote, shows as a zero or negative rebased price,
+  which bounds `base`. The operator's log holds the offset (`blind_collar_shift_raw`) along with every true value,
+  so it is not for the agent. The certificate does not commit to the agent's blind log root.

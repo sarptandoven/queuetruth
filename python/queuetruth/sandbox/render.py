@@ -5,14 +5,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from queuetruth.sandbox._util import fmt_duration, fmt_fixed, local_time, tick_decimals
+from queuetruth.sandbox._util import fmt_duration, fmt_fixed, local_time, rel_time, tick_decimals
 
 MAX_LEVELS_SHOWN = 10
 MAX_ITEMS_SHOWN = 12
 
 
 class Fmt:
-    """Formatting of one instrument's prices, sizes and times."""
+    """Formatting of one instrument's prices, sizes and times. An instrument dict with `relative` set (a blind
+    episode, `blind_instrument`) has times in ns since the session open and prints them as `+HH:MM:SS`."""
 
     def __init__(self, instrument: dict[str, Any]) -> None:
         self.i = instrument
@@ -28,7 +29,11 @@ class Fmt:
 
     def t(self, ns: int | None) -> str:
         """Local time of day."""
-        return "-" if ns is None else local_time(int(ns), int(self.i["midnight_utc_ns"]))
+        if ns is None:
+            return "-"
+        if self.i.get("relative"):
+            return rel_time(int(ns))
+        return local_time(int(ns), int(self.i["midnight_utc_ns"]))
 
     def money(self, v: float | None) -> str:
         """Currency amount."""
@@ -198,4 +203,61 @@ def scorecard_text(doc: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-__all__ = ["Fmt", "ack_text", "observation_text", "scorecard_text", "session_text"]
+def blind_instrument(instrument: dict[str, Any]) -> dict[str, Any]:
+    """The instrument dict the renderings use for a blind episode (`BlindSandbox.instrument`): no name, times since
+    the open."""
+    return {**instrument, "symbol": "blind episode", "instrument_id": "", "relative": True}
+
+
+def blind_session_text(doc: dict[str, Any]) -> str:
+    """Text of a `qt.sandbox_blind_session`."""
+    i = blind_instrument(doc["instrument"])
+    f = Fmt(i)
+    s = doc["settings"]
+    name = "blind sandbox session" + (f" {doc['session_id']}" if doc["session_id"] else "")
+    jitter = f" (+ up to {fmt_duration(s['jitter_ns'])})" if s["jitter_ns"] else ""
+    lines = [
+        f"{name}, episode {doc['episode_id']}: {f.t(doc['start_ns'])} to {f.t(doc['end_ns'])} after the session "
+        "open; prices shifted by a hidden whole number of ticks",
+        f"tick {f.px(i['tick_size'])}, lot {f.sz(i['lot_size'])}, multiplier {i['contract_multiplier']:g}, "
+        f"currency {i['currency']}; latency {fmt_duration(s['latency_ns'])}{jitter}, "
+        f"feed latency {fmt_duration(s['feed_latency_ns'])}",
+        f'send prices as decimal strings on the tick grid (e.g. "{f.px(_example_price(doc))}"), sizes as integers '
+        f"in units of {i['lot_size']} lot(s); advance to= takes a time since the open ('+01:30:00')",
+        "rules: " + " ".join(f"({k + 1}) {r}" for k, r in enumerate(doc["rules"])),
+        observation_text(doc["observation"], i, doc["end_ns"]),
+    ]
+    return "\n".join(lines)
+
+
+def blind_finish_text(doc: dict[str, Any]) -> str:
+    """Text of a `qt.sandbox_blind_finish`."""
+    f = Fmt(blind_instrument({"tick_size": 1, "price_exp": 0, "size_exp": 0, "currency": doc["pnl"]["currency"]}))
+    p = doc["pnl"]
+    c = doc["consistency"]
+    allr = next(r for r in doc["fill_rates"] if r["order_class"] == "all")
+    n_fills, n_maker = doc["n_fills"], doc["n_fills_maker"]
+    lines = [
+        f"blind episode {doc['episode_id']}: PnL net {f.money(p['pnl_net'])} (gross {f.money(p['pnl_gross'])}, "
+        f"fees {f.money(p['fees'])}; at the touch {f.money(p['pnl_net_at_touch'])}), end position "
+        f"{p['position_end']}",
+        f"{allr['n_orders']} orders ({allr['n_live']} reached the venue), {n_fills} fills ({n_maker} maker, "
+        f"{n_fills - n_maker} taker)",
+        f"consistency with one full exact replay: {'EQUAL' if c['equal'] else 'DIFFERENT'} "
+        f"({c['fills_matched']}/{c['fills_reported']} reported fills matched)",
+        f"your blind log root {doc['log_root'][:16]}; the operator holds the scorecard and its certificate",
+    ]
+    lines.extend(f"note: {w}" for w in doc["warnings"])
+    return "\n".join(lines)
+
+
+__all__ = [
+    "Fmt",
+    "ack_text",
+    "blind_finish_text",
+    "blind_instrument",
+    "blind_session_text",
+    "observation_text",
+    "scorecard_text",
+    "session_text",
+]

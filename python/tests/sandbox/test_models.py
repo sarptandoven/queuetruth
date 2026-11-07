@@ -79,6 +79,23 @@ def test_real_documents_validate_against_their_schemas(tmp_path) -> None:
 
     tools = SandboxTools(root=FIXTURES)
     docs.append(tools.list_doc())
+    # the blind documents (queuetruth.sandbox.blind): the operator's book and what a blind agent receives
+    from queuetruth.sandbox.blind import EpisodeBook
+
+    book = EpisodeBook()
+    eid = book.pin(
+        {"dataset": {"path": str(SYNTH)}, "instrument_id": 1, "session_date": "2026-06-16", "start": "14:00"}
+    )
+    docs.append(book.document().model_dump(mode="json"))
+    with book.start(eid) as bsb:
+        docs.append(bsb.session.model_dump(mode="json"))
+        bid = bsb.observe().book.bid[0]
+        docs.append(bsb.submit("buy", 1, price=bid).model_dump(mode="json"))
+        docs.append(bsb.advance(by="10s").model_dump(mode="json"))
+        docs.append(bsb.finish().model_dump(mode="json"))
+        docs.append(bsb.order_log())
+    blind_tools = SandboxTools(root=FIXTURES, episodes=book, out_dir=tmp_path / "blind-out")
+    docs.append(blind_tools.list_doc(episode_id=eid))
     seen = set()
     for d in docs:
         jsonschema.Draft202012Validator(schemas[d["schema"]]).validate(d)

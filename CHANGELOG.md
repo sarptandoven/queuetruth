@@ -8,6 +8,26 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ### Added
 
+- **Blind episodes for the agent sandbox** (ROADMAP, Agent arena; `queuetruth.sandbox.blind`): an agent plays an
+  operator-pinned episode without being able to tell which instrument or day it is on. `EpisodeBook.pin(spec)` returns
+  an opaque episode id (the book, a `qt.sandbox_episodes` file, holds the secrets); `start(episode_id)` gives a
+  `BlindSandbox` whose observations, acks, fills, errors, log and text renderings show times since the session open and
+  prices moved by a secret whole number of ticks, with sizes as recorded and the symbol, venue, date and ids hidden.
+  Orders are mapped back exactly, so the operator's scorecard (true values) equals that of a non-blind episode sent the
+  same instructions. The log's `open` entry and the new optional `certificate.blind` field of `qt.sandbox_scorecard` and
+  `qt.sandbox_finish` record `{episode_id, transform_sha256}`, a commitment to the transform that does not reveal it;
+  `verify` checks it. Over MCP, `python -m queuetruth.mcp.sandbox_tools --episodes FILE` (`register_sandbox_tools(app,
+  episodes=book)`) serves only the sandbox tools, started by `episode_id`, requires `--out` and journals every start and
+  end there (`episodes.jsonl`, counted under a file lock at every start, refused starts included; a start reserves its
+  slot first). A pin can be started once by default (`max_starts`), so no scout session can read the future;
+  `qt_sandbox_list` on a blind server lists only the caller's episode. Acceptance of an order never depends on the
+  hidden offset: out-of-range prices are refused in blind units and market collars are sized on the rebased best. New
+  documents `qt.sandbox_blind_session`, `qt.sandbox_blind_finish`, `qt.sandbox_blind_session_list`,
+  `qt.sandbox_blind_order_log` and `qt.sandbox_episodes`. Ordinary certificates now carry `"blind": null` (schema
+  version unchanged: an additive optional field). Fees in basis points and instruments without a positive tick are
+  refused in a blind pin; a peg beyond 1,000,000 ticks is a `QT-CONFIG-001` in every sandbox. A leak test scans
+  everything a blind agent receives, through the Python API and the MCP tools, for the fixture day's names, ids,
+  absolute times and true prices. Guide: [Blind episodes](docs/how-to/agent-sandbox.md#blind-episodes).
 - **Nasdaq TotalView-ITCH sample days in the Fill-Realism Atlas** (ROADMAP W1): a manual run of
   `.github/workflows/atlas.yml` with `venue: nasdaq` runs one sample day from emi.nasdaq.com on a GitHub-hosted runner
   (`local_day.py --source itch`). It keeps the reduced day on its own release, `atlas-days-nasdaq`, created as a

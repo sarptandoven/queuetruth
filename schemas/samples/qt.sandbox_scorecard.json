@@ -159,7 +159,11 @@
       "spec_id": "0123456789abcdef",
       "log_root": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       "run_id": "0123456789abcdef",
-      "scorecard_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      "scorecard_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "blind": {
+        "episode_id": "ep_0123456789abcdef",
+        "transform_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      }
     },
     "timings": {
       "k": 0.5
