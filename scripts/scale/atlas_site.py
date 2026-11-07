@@ -229,6 +229,19 @@ LIBRARY_PAGES = {
     ),
 }
 REPO = DOCS.rsplit("/docs", 1)[0]
+REPO_HOME = DOCS.split("/blob/", 1)[0]
+
+
+def commits(heads: list[str | None] | None) -> str:
+    """Links to the commits a day (or the site) was built at, short shas; "not recorded" for none."""
+    shas = [h for h in heads or [] if h]
+    if not shas:
+        return '<span class="muted">not recorded</span>'
+    return ", ".join(
+        f'<a href="{REPO_HOME}/commit/{html.escape(h)}"><code>{html.escape(h[:12])}</code></a>' for h in shas
+    )
+
+
 #: Model families that are not a setting a reader of an L2 backtest can pick: hftbacktest's L3 FIFO model needs
 #: order-level input, the very data the exact replay uses.
 NOT_A_SETTING = ("hbt_l3_fifo",)
@@ -922,23 +935,28 @@ def build(
     root = manifest.get("atlas_root", "")
     day_rows = "".join(
         f"<tr><td>{html.escape(iso_date(d['date']))}</td><td><code>{html.escape(str(d['merkle_root']))}</code></td>"
-        f"<td>{d.get('units_valid', '')} / {d.get('units_planned', '')}</td></tr>"
+        f"<td>{d.get('units_valid', '')} / {d.get('units_planned', '')}</td><td>{commits(d.get('git_heads'))}</td></tr>"
         for d in days
     )
+    build = manifest.get("build") or {}
     built = (
-        '<p class="muted">Built by <a href="https://github.com/sarptandoven/queuetruth">queuetruth</a> '
-        f"{html.escape(str((manifest.get('build') or {}).get('queuetruth', '')))} from "
+        f'<p class="muted">Built by <a href="{REPO_HOME}">queuetruth</a> '
+        f"{html.escape(str(build.get('queuetruth_version') or ''))} ({commits([build.get('git_head')])}) from "
         '<code>scripts/scale/atlas.py</code> outputs. Data: <a href="data/leaderboard.json">leaderboard.json</a>, '
         '<a href="data/atlas_manifest.json">atlas_manifest.json</a>.'
     )
     parts.append(
         "<h2>Verify any number</h2>"
         f"<p>Atlas root <code>{html.escape(root)}</code> (Merkle root over the day roots in date order; flag policy "
-        f"<code>{html.escape(str(manifest.get('flag_policy')))}</code>). Each day root covers that day's shard leaves; "
-        "re-run any unit from the public day file and check its leaf against the published root:</p>"
-        "<pre>uv run --frozen --no-sync python scripts/scale/verify_unit.py --help</pre>"
-        f'<div class="wrap"><table><thead><tr><th>date</th><th>day root</th><th>units</th></tr></thead>'
-        f"<tbody>{day_rows}</tbody></table></div>"
+        f"<code>{html.escape(str(manifest.get('flag_policy')))}</code>). Each day root covers that day's shard leaves. "
+        "To check one, download the day (<code>day-&lt;date&gt;.tar.gz</code> on the repository's "
+        f'<a href="{REPO_HOME}/releases/tag/atlas-days">atlas-days</a> release: its tables, plan and manifest), check '
+        "out the commit the day was built at, re-create the unit's bucket from the public day file and re-run the "
+        f'unit (<a href="{DOCS}/concepts/fill-realism-atlas.md#verify-a-number">the steps</a>):</p>'
+        "<pre>uv run --frozen --no-sync python scripts/scale/verify_unit.py --day DAY_DIR "
+        "--atlas-manifest atlas_manifest.json --unit-id UNIT_ID --split SPLIT_DIR</pre>"
+        '<div class="wrap"><table><thead><tr><th>date</th><th>day root</th><th>units</th><th>built at</th></tr>'
+        f"</thead><tbody>{day_rows}</tbody></table></div>"
         + built
         + (' Per symbol: <a href="symbols.html">symbols</a>.' if per_symbol else "")
         + (
