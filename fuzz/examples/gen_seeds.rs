@@ -11,8 +11,8 @@ use std::path::{Path, PathBuf};
 use ::dbn::encode::EncodeRecord;
 use ::dbn::encode::dbn::Encoder;
 use ::dbn::{
-    FlagSet, InstrumentDefMsg, MappingInterval, MboMsg, Metadata, RecordHeader, SType, Schema, SymbolMapping, TradeMsg,
-    rtype,
+    FlagSet, InstrumentDefMsg, MappingInterval, MboMsg, Metadata, RecordHeader, SType, Schema, StatusMsg,
+    SymbolMapping, TradeMsg, rtype,
 };
 use qt_ingest::iex::synth::{Segment, frames, message_bytes, pcap, pcapng};
 use qt_ingest::iex::{Message as Deep, symbol};
@@ -598,6 +598,27 @@ fn main() {
         "trades",
         0,
         &dbn_bytes(&metadata(Schema::Trades, 0, vec![]), &[trade], false),
+    );
+    let status: Vec<StatusMsg> = [(1_001, 8, 50, b'N'), (1_002, 6, 0, b'N'), (1_006, 7, 0, b'Y')]
+        .into_iter()
+        .map(|(t, action, reason, is_trading)| StatusMsg {
+            hd: RecordHeader::new::<StatusMsg>(rtype::STATUS, 1, 42, (19_000 * D + t) as u64),
+            ts_recv: (19_000 * D + t + 1) as u64,
+            action,
+            reason,
+            is_trading: is_trading as c_char,
+            ..Default::default()
+        })
+        .collect();
+    write(
+        "dbn",
+        "status",
+        0,
+        &dbn_bytes(
+            &metadata(Schema::Status, (19_000 * D) as u64, mapping()),
+            &status,
+            false,
+        ),
     );
     write("ingest", "dbn_plain", 2, &plain);
 

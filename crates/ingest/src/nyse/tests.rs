@@ -1139,3 +1139,67 @@ mod props {
         }
     }
 }
+
+/// SPEC 1.2 halt censoring: Security Status `4` (trading halt) and `6` (suspend) open a trading-halt span of a
+/// selected symbol with records, `5` (resume) and `O` (core session) close it, the session phases and price
+/// indications change nothing, and a span still open at the end of the file ends at the next midnight. The committed
+/// fixtures have no halts.
+#[test]
+fn security_status_halts_become_trading_halt_spans() {
+    let d = scratch("halts");
+    let src = d.join("EQY_US_ARCA_IBF_9_20260105.csv");
+    let lines = [
+        "3,1,QTH,3,1,P,C,100,10.00,1000000,0,Y,1,100",
+        "3,2,QTK,3,1,P,C,100,10.00,1000000,0,Y,1,100",
+        "3,3,QTX,3,1,P,C,100,10.00,1000000,0,Y,1,100",
+        "34,4,06:30:00.000000000,QTH,1,P,~,,,,,,~,P",
+        "34,5,06:30:00.000000000,QTK,1,P,~,,,,,,~,P",
+        "34,6,06:30:00.000000000,QTX,1,P,~,,,,,,~,P",
+        // QTK halted before the open: the core session opening closes the span.
+        "34,7,08:00:00.000000000,QTK,2,4,D,,,,,,~,P",
+        "34,8,09:30:00.000000000,QTH,2,O,~,,,,,,~,O",
+        "34,9,09:30:00.000000000,QTK,3,O,~,,,,,,~,O",
+        "34,10,09:30:00.000000000,QTX,2,O,~,,,,,,~,O",
+        "100,11,09:31:00.000000000,QTH,3,1,9.98,100,B,,",
+        "100,12,09:31:00.000000000,QTK,4,2,9.98,100,B,,",
+        "100,13,09:31:00.000000000,QTX,3,3,9.98,100,B,,",
+        // QTH: LULD pause, a price indication and a resume; then suspended to the end of the file.
+        "34,14,10:00:00.000000000,QTH,4,4,M,,,,,,~,O",
+        "34,15,10:04:00.000000000,QTH,5,I,M,,,,,,~,O",
+        "34,16,10:05:00.000000000,QTH,6,5,~,,,,,,~,O",
+        "34,17,15:00:00.000000000,QTH,7,6,~,,,,,,~,O",
+        "34,18,16:01:00.000000000,QTH,8,X,~,,,,,,~,X",
+        // QTX is not selected.
+        "34,19,10:00:00.000000000,QTX,4,4,M,,,,,,~,O",
+    ];
+    std::fs::write(&src, lines.join("\n") + "\n").unwrap();
+    let out = d.join("ds");
+    let sum = run(std::slice::from_ref(&src), &out, json!({"symbols": ["QTH", "QTK"]}));
+    let span = |iid: u32, a: i64, b: i64, state: &str, reason: &str| qt_schema::json::TradingHaltSpan {
+        instrument_id: iid,
+        ts_start: a,
+        ts_end: b,
+        state: state.into(),
+        reason: reason.into(),
+    };
+    let h = 3_600 * S;
+    assert_eq!(
+        sum.data_quality.trading_halts,
+        vec![
+            span(1, MID + 10 * h, MID + 10 * h + 300 * S, "nyse_34:4", "M"),
+            span(1, MID + 15 * h, MID + 24 * h, "nyse_34:6", ""),
+            span(2, MID + 8 * h, MID + 9 * h + 1_800 * S, "nyse_34:4", "D"),
+        ]
+    );
+    assert_eq!(
+        sum.data_quality.verdict,
+        Verdict::Clean,
+        "{:?}",
+        sum.data_quality.reasons
+    );
+    for f in [NYSE3, NYSE4, ARCA1] {
+        let sum = run(&[fixture(f)], &scratch(&format!("nohalt-{f}")).join("ds"), json!({}));
+        assert!(sum.data_quality.trading_halts.is_empty(), "{f}");
+    }
+    let _ = std::fs::remove_dir_all(&d);
+}

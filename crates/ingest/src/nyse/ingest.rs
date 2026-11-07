@@ -680,6 +680,13 @@ pub(crate) fn ingest(spec: &IngestSpec, inputs: &[PathBuf], out: &Path) -> QtRes
             label: label.clone(),
         });
         mapper = ingest_file(mapper, input, &mut w, &mut scan, &mut seen)?;
+        // Trading-halt spans of the file (SPEC 1.2): only those of an instrument with records on the file's date.
+        let halts = mapper.take_trading_halts();
+        scan.counters_mut().trading_halts.extend(
+            halts
+                .into_iter()
+                .filter(|h| seen.contains(&(input.date, h.instrument_id))),
+        );
         if let Some(msg) = clock_warning(&label, mapper.file_core_opens(), plan.tz, input.date) {
             warnings.push(msg);
         }
@@ -705,7 +712,9 @@ pub(crate) fn ingest(spec: &IngestSpec, inputs: &[PathBuf], out: &Path) -> QtRes
     for msg in &warnings {
         w.add_warning(msg.clone());
     }
-    let mut summary = w.finish(scan.finish())?;
+    let mut dq = scan.finish();
+    crate::halts::sort(&mut dq.trading_halts);
+    let mut summary = w.finish(dq)?;
     summary.warnings = warnings;
     Ok(summary)
 }

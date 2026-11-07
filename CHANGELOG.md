@@ -8,6 +8,16 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ### Added
 
+- **Halts censor shadows on DBN and NYSE data** (ROADMAP "Now", halt censoring H.5): the DBN reader reads `status`
+  records (`StatusMsg`) from `status` files, which it refused before, and from MBO and mixed-schema files, where it
+  skipped them. Actions `Halt`, `Pause`, `Suspend`, and `Quoting` while not trading, open a trading-halt span;
+  `Trading` closes it; other actions change nothing. The NYSE TAQ Integrated Feed reader turns Security Status
+  (type 34) `4` (trading halt) and `6` (suspend) into spans that `5` (resume) or `O` (core session) close. The spans
+  go to `qt.data_quality.trading_halts` and every engine censors shadows there, as on Nasdaq ITCH and IEX DEEP+.
+  New INFO counter `dbn_status_records`. Datasets without status records, or without halts, are written exactly as
+  before. Testkit: `encode_dbn_with_status`, `encode_dbn_status` and `StatusRecord` write synthetic DBN status
+  records. See [halt censoring](docs/design/extensions/halt-censoring.md) H.6 for the mappings.
+
 - **The P&L gap next to the fill-rate gap in `score`** (ROADMAP, the one-line reality gap): under its `RESULT:` line
   `queuetruth score` prints a `P&L:` line, for example `the simulator's P&L is 5.78 USD per order too high (95% CI
   +3.40 to +8.75) at the 1 s markout, mostly from fills it grants that live did not get (+3.09 USD per order)`, and

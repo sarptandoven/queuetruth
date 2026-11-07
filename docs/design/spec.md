@@ -152,9 +152,9 @@ Logs and progress go to stderr only.
 - No hidden-liquidity modelling (Nasdaq price-slid orders, icebergs, CME implied): flagged and counted only.
 - FIFO venues only. Pro-rata books are rejected at ingest (`QT-CONFIG-001`).
 - No auction modelling: shadows resting through an auction or halt are censored (`end_state = censored_gap`). As
-  built, ingest records the trading state of Nasdaq ITCH and IEX DEEP+ (`qt.data_quality.trading_halts`) and every
-  engine censors shadows there (5.2.7; finding F2, design extension halt-censoring H.6); DBN, NYSE and crypto
-  datasets carry no spans yet.
+  built, ingest records the trading state of Nasdaq ITCH, IEX DEEP+, DBN `status` records and NYSE Security
+  Status (`qt.data_quality.trading_halts`) and every engine censors shadows there (5.2.7; finding F2, design
+  extension halt-censoring H.6); crypto datasets carry no spans.
 - No exact truth from L2-only data. L2-only datasets support simulation and markouts only.
 - DBN/CME: the reader ships, but its validation label stays `synthetic_only` until a real Databento parity run is
   done by the author (no Databento key is used by the project).
@@ -930,6 +930,8 @@ Schema 1.2 is additive like 1.1 (JSON `schema_version` stays 1). It adds:
 - `qt.data_quality.source_specific` INFO counters (never affect the verdict; `qt_ingest::dq::INFO_SOURCE_COUNTERS`):
   `iex_modify_maintain_priority`, `iex_modify_reset_priority`, `iex_modify_noop`, `iex_duplicate_messages`,
   `iex_other_protocol_segments`.
+- `qt.data_quality.source_specific` INFO counter `dbn_status_records` (DBN `status` records read; halt-censoring
+  H.6).
 - `qt.scorecard_summary.pnl_gap?` [{horizon_ns, currency?, n_valued, n_unvalued, mean_ccy?, ci_lo?, ci_hi?,
   direction (`sim_too_high`/`sim_too_low`/`no_significant_difference`/`not_computable`/`not_answerable`), reason?,
   parts_ccy, parts_ci_lo, parts_ci_hi {granted, denied, timing, fees}, main_part?, headline}]
@@ -1967,7 +1969,7 @@ ts_end)` per instrument, `Engine::set_trading_halts`, `ReplayOptions::trading_ha
 `QT-CONFIG-001`): a shadow live when a halt starts ends `censored_gap` at the halt start (an event at exactly that
 instant still trades); a shadow whose `ts_live` falls inside a halt never goes live and ends `censored_gap` at its
 `ts_live` unless its cancel is effective at or before `ts_live`; a shadow arriving exactly at the resumption trades
-normally. Without spans nothing changes. Ingest records them for Nasdaq ITCH and IEX DEEP+
+normally. Without spans nothing changes. Ingest records them for Nasdaq ITCH, IEX DEEP+, DBN and NYSE
 (`qt.data_quality.trading_halts`), and `run_dataset`, `why`, the zoo, calibration and features apply a dataset's
 spans to each partition (design extension halt-censoring H.6). At end of partition input, live shadows end
 `censored_session_end` if the partition's last `ts_event >= midnight_utc_ns + close_s * 1e9`, else `open_at_end`.

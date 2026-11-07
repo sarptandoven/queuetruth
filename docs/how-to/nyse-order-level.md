@@ -49,10 +49,17 @@ added, modified, deleted, replaced or executed under its Order ID, so the displa
 | Add Order Refresh (106) | the book is cleared (`R`) and rebuilt from the refresh, inside a feed gap |
 | Non-Displayed Trade (110) | `T` with side `N`: a hidden print that consumes no displayed queue |
 | Cross Trade (111) | `T` with side `N`, kind `cross` |
-| Symbol Index Mapping (3), Security Status (34), Imbalance (105), Trade Cancel (112), Cross Correction (113), Retail Price Improvement (114), Stock Summary (223) | no records (counters) |
+| Security Status (34) | no records; status `4` (trading halt) or `6` (suspend) opens a trading-halt span, `5` (resume) or `O` (core session) closes it |
+| Symbol Index Mapping (3), Imbalance (105), Trade Cancel (112), Cross Correction (113), Retail Price Improvement (114), Stock Summary (223) | no records (counters) |
 
 A few things the reader does that matter for exactness:
 
+- **Trading halts.** A Security Status message of a selected symbol with status `4` (trading halt) or `6`
+  (suspend) opens a trading-halt span, and the next one with status `5` (resume) or `O` (core session) closes it.
+  Session phases (`P`, `B`, `E`, `L`, `X`), short-sale codes and price indications (`I`, `G`) change nothing. The
+  span is labelled `nyse_34:<status>` and keeps the Halt Condition (for example `M`, a LULD pause). A span still
+  open at the end of a file ends at the next midnight. The spans go to `data_quality.json` (`trading_halts`), and
+  replay censors shadows in them ([halt censoring](../design/extensions/halt-censoring.md)).
 - **Which changes keep the queue place.** On Pillar a cancel/replace keeps its time priority and its Order ID only
   when it reduces the quantity (or changes a sell to a short sale); every other cancel/replace gets a new time
   priority and a new Order ID, and so does the replenished part of a reserve order

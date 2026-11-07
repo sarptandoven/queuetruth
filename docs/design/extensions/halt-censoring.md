@@ -1,8 +1,9 @@
 # Trading halts censor shadows (fix of finding F2; SPEC 1.2)
 
-Status: built end to end for Nasdaq ITCH and IEX DEEP+ (H.6). The engine side came first (`crates/replay/src/engine.rs`,
-`crates/replay/src/shadow/mod.rs`, `crates/replay/tests/halts.rs`); ingest now records the trading state and every
-engine entry point applies it. DBN, NYSE and the crypto sources record no spans yet (H.5). This note is the contract
+Status: built end to end for Nasdaq ITCH, IEX DEEP+, Databento DBN and NYSE TAQ Integrated Feed (H.6). The engine
+side came first (`crates/replay/src/engine.rs`, `crates/replay/src/shadow/mod.rs`, `crates/replay/tests/halts.rs`);
+ingest now records the trading state and every engine entry point applies it. The crypto sources record no spans
+(H.5). This note is the contract
 the fix was built against, written to be merged into [the design specification](../spec.md) (sections 1.2 and
 5.2.7).
 
@@ -101,10 +102,15 @@ is identical, and all 50 Parquet outputs the two runs wrote are byte-identical. 
 
 ## H.5 Open
 
-- **Other sources.** The DBN, NYSE and crypto readers record no spans: DBN skips `status` records (and refuses
-  `status` files), NYSE uses its security status only for the open time, and the crypto venues publish no
-  per-instrument halt state in the captures read. Datasets from them replay as before. Feed positions of the state
-  messages are not recorded either; the engine's tie rule (H.2 rule 1) decides the halt instant.
+- **Other sources.** DBN `status` records and NYSE Security Status now record spans (H.6). The crypto readers
+  record none: the crypto venues publish no per-instrument halt state in the captures read, so their datasets replay
+  as before. Feed positions of the state messages are not recorded; the engine's tie rule (H.2 rule 1) decides the
+  halt instant.
+- **DBN and NYSE mappings wait for real files.** Both mappings are taken from the documentation and checked on
+  synthetic files only. On DBN the state does not carry from one session date to the next (instrument ids are per
+  UTC date), so a halt that lasts overnight needs a status record on the next date to continue. On NYSE a halted
+  symbol is assumed not to get a core session `O` while it stays halted; a status `3` (opening delay, in some
+  versions of the XDP specification) is not read as a halt.
 - **Halt crosses disseminated after the resumption.** Nasdaq sends the halt or IPO cross's executions after the
   `H` T message (54 to 148 crossed events per cross on 2020-01-30). A shadow that goes live in that window sees the
   still-crossed displayed book and can be filled `crossed_at_live`. The span ends at the resumption message, so this
@@ -128,6 +134,38 @@ is identical, and all 50 Parquet outputs the two runs wrote are byte-identical. 
   still open at the end of an ITCH file ends at the next midnight of its day (ITCH
   locates are per day); IEX ids are shared across inputs, so an IEX span may run from one day file into the next and
   one still open ends at the end of the last message's session day.
+- **Databento DBN** (`crates/ingest/src/dbn.rs` `status_halted`, `crates/ingest/src/ingest_impl.rs`
+  `dbn_trading_halts`): `status` records (`StatusMsg`, the same layout in DBN v1 to v3) are read from `status`
+  files and from MBO and mixed-schema files (they were skipped, and `status` files refused). Databento normalizes
+  each venue's state messages to the fields `action`, `reason` and `is_trading`; the span rules follow ITCH `H`:
+
+  | `action` | `is_trading` | state |
+  |---|---|---|
+  | `Halt` (8), `Pause` (9), `Suspend` (10) | any | halted (ITCH `H`, `P`) |
+  | `Quoting` (3) | not `Y` | halted (ITCH `Q`, quotation only) |
+  | `Trading` (7) | not `N` | trading (ITCH `T`): closes the span |
+  | any other (`None`, `PreOpen`, `PreCross`, `Cross`, `Rotation`, `NewPriceIndication`, `PreClose`, `Close`, `PostClose`, `SsrChange`, `NotAvailableForTrading`, unknown codes) | any | no change |
+
+  Session phases are not halts: the session window and `censored_session_end` already handle them, and censoring
+  at a close would turn `censored_session_end` and `open_at_end` ends into `censored_gap`. `state` is
+  `dbn_status:<action>` and `reason` the `StatusReason` code (empty for 0), for example `dbn_status:9` with `50`
+  (LULD pause). Records apply in `ts_event` order to the partition their `(instrument id, UTC date of ts_recv,
+  session date)` resolved to for the MBO records; a record whose key no MBO record had is ignored, so status records
+  never resolve symbology of their own. A span still open ends at the next local midnight of its session date.
+  INFO counter `dbn_status_records`. A status record with an undefined or out-of-range time, or shorter than
+  `StatusMsg`, is `QT-INPUT-002` (`fuzz/regressions/dbn/status_record_too_short`).
+- **NYSE TAQ Integrated Feed** (`crates/ingest/src/nyse/mapper.rs`): Security Status (type 34) of a selected
+  symbol, from the XDP Integrated Feed and Pillar Common Client specifications' `SecurityStatus` field:
+
+  | `SecurityStatus` | state |
+  |---|---|
+  | `4` trading halt, `6` suspend | halted |
+  | `5` resume, `O` core session | trading: closes the span |
+  | `P`, `B`, `E`, `L`, `X` (session phases), `A`, `C`, `D` (short-sale codes), `I`, `G` (price indications) | no change |
+
+  `state` is `nyse_34:<status>` and `reason` the Halt Condition (empty for `~`), for example `nyse_34:4` with `M`
+  (LULD pause). A span still open at the end of a file ends at the next midnight of the file's session date (one more
+  day per midnight rollover), and only spans of an instrument with records on the file's date are kept.
 - **Contract** (schema 1.2, additive): `qt.data_quality.trading_halts`, a list of
   `{instrument_id, ts_start, ts_end, state, reason}` (`state` e.g. `itch_H:P`, `iex_O:O`; `reason` the feed's code,
   e.g. `LUDP`, `IPO1`). Halts are venue state, not a data defect: they never change the verdict. The key is omitted
@@ -150,7 +188,12 @@ is identical, and all 50 Parquet outputs the two runs wrote are byte-identical. 
   F2 day and checks that the recorded span equals the test's own reading of the `H` messages, that the default
   replay censors `S1` and `S2`, that a dataset without spans (as written by 0.2.0) still reproduces the defect, and
   that spans passed by the caller give the same outputs; `crates/ingest/src/itch/mapper.rs` and
-  `crates/ingest/tests/iex_messages.rs` test the span rules of each source; `crates/zoo/tests/trading_halts.rs`
+  `crates/ingest/tests/iex_messages.rs` test the span rules of each source (DBN:
+  `crates/ingest/tests/dbn_status.rs`; NYSE: `security_status_halts_become_trading_halt_spans` in
+  `crates/ingest/src/nyse/tests.rs`); `crates/replay/tests/halts.rs` replays the F2 day from DBN status records (in
+  a `status` file and inside the MBO file) and from NYSE Security Status, checks that the default replay censors
+  `S1` and `S2` and that the same dataset without its span fills both, and that a DBN dataset without status records
+  writes no span; `crates/zoo/tests/trading_halts.rs`
   checks that the zoo's exact arm equals replay, that no model books a fill during a halt or for a shadow submitted
   in one, and that without the span the upper bound does fill there. `repro_halt_shadow_fill.py` exits 0 and
   `scripts/scale/tests/test_trace_flags.py` asserts it (the strict xfail is gone).
