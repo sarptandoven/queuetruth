@@ -11,9 +11,9 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 The public Fill-Realism Atlas: each new IEX DEEP+ day runs through the scale pipeline on a GitHub runner and the site
 shows, per liquidity tier, how far each popular backtester fill model is from the exact queue in fill rate and P&L,
 which setting comes closest, and roots to verify any number; Nasdaq sample days can be added as a second venue. Also:
-trading halts censor shadows (finding F2), sessions that take orders while they replay and the agent sandbox on them
-(with blind episodes), the `queuetruth-hftbacktest` plugin, LEAN, Backtrader and VectorBT importers, the P&L gap in
-`score`, and arrow and parquet 60.1.0. Every schema change is additive.
+trading halts censor shadows (finding F2) on ITCH, IEX DEEP+, DBN and NYSE data, sessions that take orders while they
+replay and the agent sandbox on them (with blind episodes), the `queuetruth-hftbacktest` plugin, LEAN, Backtrader and
+VectorBT importers, the P&L gap in `score`, and arrow and parquet 60.1.0. Every schema change is additive.
 
 ### Added
 
