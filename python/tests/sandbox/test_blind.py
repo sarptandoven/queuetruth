@@ -24,6 +24,7 @@ from queuetruth.sandbox import Sandbox, render, verify
 from queuetruth.sandbox.blind import (
     BASE_MAX_TICKS,
     BASE_MIN_TICKS,
+    BLIND_PRICE_LIMIT,
     BlindSandbox,
     BlindTransform,
     EpisodeBook,
@@ -230,7 +231,9 @@ def instructions_mapped_back(rec: Recorder, tr: BlindTransform, exp: int) -> lis
             except ArithmeticError:
                 exact = False
             if exact:
-                kw["price"] = tr.p_back(raw)
+                # a price at or beyond the blind limit is refused in blind units: the documented mapping sends the
+                # sandbox's own out-of-range sentinel
+                kw["price"] = 2**63 - 1 if abs(raw) >= BLIND_PRICE_LIMIT else tr.p_back(raw)
         if name == "advance" and kw.get("to") is not None:
             t = kw["to"]
             rel = t if isinstance(t, int) else None
@@ -242,14 +245,14 @@ def instructions_mapped_back(rec: Recorder, tr: BlindTransform, exp: int) -> lis
     return out
 
 
-def test_a_non_blind_episode_with_the_same_instructions_gives_the_same_scorecard(tmp_path: Path) -> None:
-    book = EpisodeBook()
-    eid = book.pin(SPEC, secret=SECRET)
-    rec = Recorder()
-    sb = book.start(eid)
-    play(sb, rec)
+def assert_equivalent(sb: BlindSandbox, rec: Recorder, spec: dict[str, Any]) -> None:
+    """A non-blind sandbox sent the agent's instructions mapped back gives the operator's scorecard and log. Its
+    market collars are sized like the blind ones, on the rebased best (the documented mapping of a blind market
+    order: a market order whose collar is a fraction of the prices the agent saw)."""
     blind_card = sb.scorecard.model_dump(mode="json")
-    plain = Sandbox.open(SPEC)
+    plain = Sandbox.open(spec)
+    plain._collar_shift = sb.transform.offset_raw
+    card = None
     for name, args, kw in instructions_mapped_back(rec, sb.transform, sb.instrument["price_exp"]):
         try:
             out = getattr(plain, name)(*args, **kw)
@@ -257,11 +260,12 @@ def test_a_non_blind_episode_with_the_same_instructions_gives_the_same_scorecard
             continue
         if name == "finish":
             card = out.model_dump(mode="json")
+    assert card is not None
     skip = ("run_id", "certificate", "timings", "files")
     assert {k: v for k, v in card.items() if k not in skip} == {k: v for k, v in blind_card.items() if k not in skip}
     assert card["certificate"]["blind"] is None
     assert blind_card["certificate"]["blind"] == {
-        "episode_id": eid,
+        "episode_id": sb.episode_id,
         "transform_sha256": sb.transform.commitment(),
     }
     # the same orders, cancels, rejections and observations: every log entry but the open entry (which carries the
@@ -272,7 +276,179 @@ def test_a_non_blind_episode_with_the_same_instructions_gives_the_same_scorecard
         assert {k: x[k] for k in ("kind", "clock_ns", "visible_ns", "rows_seen", "data")} == {
             k: y[k] for k in ("kind", "clock_ns", "visible_ns", "rows_seen", "data")
         }
-    assert {k: v for k, v in a[0]["data"].items() if k != "blind"} == b[0]["data"]
+    blind_only = ("blind", "blind_collar_shift_raw")
+    assert {k: v for k, v in a[0]["data"].items() if k not in blind_only} == b[0]["data"]
+
+
+def test_a_non_blind_episode_with_the_same_instructions_gives_the_same_scorecard(tmp_path: Path) -> None:
+    book = EpisodeBook()
+    eid = book.pin(SPEC, secret=SECRET)
+    rec = Recorder()
+    sb = book.start(eid)
+    play(sb, rec)
+    assert_equivalent(sb, rec, SPEC)
+
+
+def play_takers(sb: BlindSandbox, rec: Recorder) -> None:
+    """With self-trade prevention off: accepted market and IOC orders (taker fills), a partial and a full cancel,
+    and day orders still open at the finish (finish cancels)."""
+    rec.seen.append(sb.session.model_dump(mode="json"))
+    obs = rec.call(sb, "observe")
+    tick = sb.instrument["tick_size"]
+    bid, ask = obs["book"]["bid"][0], obs["book"]["ask"][0]
+    rec.call(sb, "submit", "buy", 3, price=str(sb.to_price(bid)))
+    rec.call(sb, "submit", "sell", 4, price=str(sb.to_price(ask + tick)))
+    rec.call(sb, "submit", "buy", 2, type="market")
+    rec.call(sb, "submit", "sell", 2, type="market")
+    rec.call(sb, "submit", "buy", 1, price=str(sb.to_price(ask + 2 * tick)), tif="ioc")
+    rec.call(sb, "submit", "sell", 1, price=str(sb.to_price(bid - 2 * tick)), tif="ioc")
+    deep = rec.call(sb, "submit", "buy", 1, price=str(sb.to_price(bid - 40 * tick)))
+    doc = rec.call(sb, "advance", by="5s")
+    rec.call(sb, "cancel", deep["order"]["order_id"])  # a full cancel of a working order
+    rec.call(sb, "cancel", "o2", 2)  # partial: priority kept
+    rec.call(sb, "submit", "buy", 2, peg_offset_ticks=0)
+    rec.call(sb, "submit", "sell", 2, peg_offset_ticks=-2)
+    for _ in range(8):
+        doc = rec.call(sb, "advance", by="15s")
+    working = [o for o in doc["orders"] if o["status"] in ("pending", "working") and o["tif"] == "day"]
+    if working:
+        rec.call(sb, "cancel", working[-1]["order_id"])
+    b = doc["book"]
+    rec.call(sb, "submit", "buy", 1, price=str(sb.to_price(b["bid"][0] - 3 * tick)))
+    rec.call(sb, "submit", "sell", 1, price=str(sb.to_price(b["ask"][0] + 3 * tick)))
+    rec.call(sb, "advance", by="1s")
+    rec.seen.append(sb.order_log())
+    rec.call(sb, "finish")
+
+
+def test_takers_cancels_and_finish_cancels_leak_nothing_and_match_a_non_blind_episode(tmp_path: Path) -> None:
+    spec = {**SPEC, "self_trade_prevention": "off"}
+    book = EpisodeBook()
+    eid = book.pin(spec, secret=SECRET)
+    rec = Recorder()
+    sb = book.start(eid)
+    play_takers(sb, rec)
+    card = sb.scorecard
+    # the scenario reaches what it is meant to: accepted market and IOC orders with taker fills, a partial cancel,
+    # an agent cancel and orders cancelled by the finish
+    kinds = {(o.type, o.tif) for o in card.orders if o.n_fills}
+    assert ("market", "ioc") in kinds and ("limit", "ioc") in kinds
+    assert any(f.liquidity == "taker" for f in card.fills) and any(f.liquidity == "maker" for f in card.fills)
+    entries = sb.inner.log.entries
+    assert any(e["kind"] == "cancel" and e["data"]["new_qty"] is not None for e in entries)
+    assert any(e["kind"] == "cancel" and e["data"]["by"] == "agent" and e["data"]["new_qty"] is None for e in entries)
+    assert any(e["kind"] == "cancel" and e["data"]["by"] == "finish" for e in entries)
+    hidden = Hidden(sb.inner)
+    problems = [p for k, v in enumerate(rec.seen) for p in hidden.problems(v, f"[{k}]")]
+    assert not problems, "\n".join(problems[:30])
+    assert_equivalent(sb, rec, spec)
+    # the agent's PnL is the operator's: only cash and notional move with the price level
+    fin = rec.seen[-1]
+    true = card.pnl.model_dump(mode="json")
+    for k in ("pnl_gross", "pnl_net", "pnl_net_at_touch", "fees", "fees_maker", "fees_taker", "position_end"):
+        assert fin["pnl"][k] == true[k], k
+    assert fin["execution_cost"] == card.execution_cost.model_dump(mode="json")
+    # average prices are recomputed from the rebased integers, never from the true float's digits
+    tr, exp = sb.transform, sb.instrument["price_exp"]
+    last = next(d for d in reversed(rec.seen) if isinstance(d, dict) and d.get("schema") == "qt.sandbox_observation")
+    seen_fills: dict[str, list[tuple[int, int]]] = {}
+    for d in rec.seen:
+        if isinstance(d, dict) and d.get("schema") == "qt.sandbox_observation":
+            for f in d["fills"]:
+                seen_fills.setdefault(f["order_id"], []).append((f["price"], f["qty"]))
+    for o in last["orders"]:
+        if o["avg_fill_price"] is not None:
+            fs = seen_fills[o["order_id"]]
+            want = float((Decimal(sum(p * q for p, q in fs)) / Decimal(sum(q for _, q in fs))).scaleb(exp))
+            assert o["avg_fill_price"] == want
+    st = last["session_trades"]
+    true_stats = sb.inner._session_stats
+    want = float((Decimal(true_stats.notional + tr.offset_raw * st["volume"]) / Decimal(st["volume"])).scaleb(exp))
+    assert st["vwap_price"] == want
+
+
+def test_the_market_collar_is_sized_on_the_prices_the_agent_sees() -> None:
+    """A market order's collar is a fraction of the rebased best, so its width says nothing of the true level."""
+    spec = {**SPEC, "market_collar_bps": 1.0}
+    for secret in (SECRET, "77" * 32):
+        book = EpisodeBook()
+        with book.start(book.pin(spec, secret=secret)) as sb:
+            ask = sb.observe().book.ask[0]
+            sb.submit("buy", 1, type="market")
+            o = sb.inner.orders[-1]
+            tick = sb.instrument["tick_size"]
+            k = max(1, -(-(abs(ask) // 10_000) // tick))  # ceil(|blind ask| * 1 bps / tick)
+            assert o.price == sb.transform.p_back(ask) + k * tick
+
+
+def test_acceptance_never_depends_on_the_offset() -> None:
+    """The range attack: binary-search the first refused on-grid sell price near 2**62. The boundary is the blind
+    limit for every secret, so it says nothing of the offset."""
+
+    def first_refused(secret: str) -> tuple[int, int]:
+        book = EpisodeBook()
+        with book.start(book.pin({**SPEC, "max_open_orders": 1000}, secret=secret)) as sb:
+            tick = sb.instrument["tick_size"]
+            lo, hi = 2**61 // tick, 2**63 // tick  # in ticks: lo accepted, hi refused
+            probes = 0
+            while hi - lo > 1:
+                mid = (lo + hi) // 2
+                probes += 1
+                try:
+                    ack = sb.submit("sell", 1, price=mid * tick)
+                except QtError as e:
+                    assert e.code == "QT-CONFIG-001"
+                    hi = mid
+                else:
+                    sb.cancel(ack.order.order_id)
+                    lo = mid
+            assert probes < 80
+            return hi * tick, sb.transform.offset_raw
+
+    a, off_a = first_refused(SECRET)
+    b, off_b = first_refused("77" * 32)
+    assert off_a != off_b and a == b
+    assert a == -(-BLIND_PRICE_LIMIT // 250_000_000) * 250_000_000
+
+
+def test_concurrent_calls_keep_the_blind_log_whole() -> None:
+    """Agent calls from several threads (MCP tool calls run in worker threads) are serialized: every order gets its
+    ack, the blind log mirrors every entry, and the session keeps working."""
+    import threading
+
+    book = EpisodeBook()
+    spec = {**SPEC, "self_trade_prevention": "off", "max_open_orders": 1000}
+    with book.start(book.pin(spec, secret=SECRET)) as sb:
+        bid = sb.observe().book.bid[0]
+        tick = sb.instrument["tick_size"]
+        acks: list[Any] = []
+        errors: list[BaseException] = []
+        barrier = threading.Barrier(8)
+
+        def worker(k: int) -> None:
+            barrier.wait()
+            try:
+                for j in range(10):
+                    acks.append(sb.submit("buy", 1, price=bid - (k + j) * tick))
+                    if j == 5:
+                        sb.observe()
+            except BaseException as e:  # collected for the assertion below
+                errors.append(e)
+
+        threads = [threading.Thread(target=worker, args=(k,)) for k in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        assert not errors and len(acks) == 80 and len(sb.inner.orders) == 80
+        log = sb.order_log()
+        assert len(log["entries"]) == len(sb.inner.log.entries) == 81
+        assert sorted(a.log_seq for a in acks) == list(range(1, 81))
+        for a in acks:
+            assert log["entries"][a.log_seq]["hash"] == a.log_hash
+            assert log["entries"][a.log_seq]["data"]["order_id"] == a.order.order_id
+        sb.advance(by="5s")
+        assert sb.finish().n_orders == 80
 
 
 def test_the_blind_certificate_verifies_and_commits_to_the_transform(tmp_path: Path) -> None:
@@ -341,11 +517,33 @@ def test_pins_and_the_book_file(tmp_path: Path) -> None:
         book.pin(SPEC, episode_id=eid)
     p = book.save(tmp_path / "episodes.json")
     assert p.stat().st_mode & 0o777 == 0o600
+    assert [x.name for x in tmp_path.iterdir()] == ["episodes.json"]  # no temporary file left behind
+    with pytest.raises(QtError, match="max_starts"):
+        EpisodeBook().pin(SPEC, max_starts=0)
     loaded = EpisodeBook.load(p)
     assert loaded.pins == book.pins
     with pytest.raises(QtError) as e:
         loaded.start("ep_0000000000000000")
     assert e.value.code == "QT-USAGE-001" and eid not in e.value.message
+    # single use by default: a second session of the same episode would show the agent its future
+    loaded.start(eid).close()
+    with pytest.raises(QtError, match="already started"):
+        loaded.start(eid)
+    twice = loaded.pin(SPEC, max_starts=2)
+    loaded.start(twice).close()
+    loaded.start(twice).close()
+    with pytest.raises(QtError, match="already started"):
+        loaded.start(twice)
+    # the journal counts the starts across restarts
+    journal = tmp_path / "episodes.jsonl"
+    first = EpisodeBook.load(p)
+    first.use_journal(journal)
+    first.start(eid).close()
+    restarted = EpisodeBook.load(p)
+    restarted.use_journal(journal)
+    with pytest.raises(QtError, match="already started"):
+        restarted.start(eid)
+    assert [json.loads(x)["event"] for x in journal.read_text().splitlines()] == ["start"]
 
 
 # ---- through the MCP tools ----------------------------------------------------------------------------------------
@@ -357,6 +555,7 @@ async def test_a_blind_episode_through_the_mcp_tools(tmp_path: Path) -> None:
     eid = book.pin(SPEC, secret=SECRET)
     out = tmp_path / "out"
     app = build_server(local=True, root=SYNTH.parent)
+    eid2 = book.pin(SPEC, secret="77" * 32)
     tools = register_sandbox_tools(app, episodes=book, out_dir=out)
     schemas = json_schemas()
     seen: list[Any] = []
@@ -407,7 +606,11 @@ async def test_a_blind_episode_through_the_mcp_tools(tmp_path: Path) -> None:
         await call("qt_sandbox_cancel", {"session_id": sid, "order_id": "o99"}, error=True)
         await call("qt_sandbox_observe", {"session_id": sid})
         await call("qt_sandbox_advance", {"session_id": sid, "to": "+00:04:00"}, error=True)
-        await call("qt_sandbox_list", {})
+        listed_doc = (await call("qt_sandbox_list", {"episode_id": eid})).structured_content
+        assert [x["session_id"] for x in listed_doc["sessions"]] == [sid]
+        other = (await call("qt_sandbox_list", {"episode_id": "ep_0000000000000000"})).structured_content
+        assert other["sessions"] == []  # another agent sees no session id of this one
+        await call("qt_sandbox_start", {"episode_id": eid}, error=True)  # single use: no scout session
         low = str(to_px(bid - 4 * tick))
         b2 = await call("qt_sandbox_submit", {"session_id": sid, "side": "buy", "qty": 1, "price": low})
         assert b2.structured_content["order"]["price"] == bid - 4 * tick
@@ -416,7 +619,7 @@ async def test_a_blind_episode_through_the_mcp_tools(tmp_path: Path) -> None:
         assert fin.structured_content["schema"] == "qt.sandbox_blind_finish"
         assert not any(isinstance(b, types.ResourceLink) for b in fin.content)
         await call("qt_sandbox_observe", {"session_id": sid}, error=True)
-        s2 = (await call("qt_sandbox_start", {"episode_id": eid})).structured_content["session_id"]
+        s2 = (await call("qt_sandbox_start", {"episode_id": eid2})).structured_content["session_id"]
         await call("qt_sandbox_close", {"session_id": s2})
 
     plain = Sandbox.open(SPEC)
@@ -429,3 +632,13 @@ async def test_a_blind_episode_through_the_mcp_tools(tmp_path: Path) -> None:
     assert card["instrument"]["symbol"] == plain.instrument["symbol"]
     assert card["certificate"]["blind"]["episode_id"] == eid
     assert verify(out / sid / "order_log.json", scorecard=card).ok
+    # the operator's journal: every start and end, the refused second start included
+    events = [json.loads(x) for x in (out / "episodes.jsonl").read_text().splitlines()]
+    assert [(e["event"], e["episode_id"]) for e in events] == [
+        ("start", eid),
+        ("finish", eid),
+        ("start", eid2),
+        ("close", eid2),
+    ]
+    with pytest.raises(QtError, match="output directory"):
+        register_sandbox_tools(build_server(local=True, root=SYNTH.parent), episodes=book)

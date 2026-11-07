@@ -94,8 +94,8 @@ def test_real_documents_validate_against_their_schemas(tmp_path) -> None:
         docs.append(bsb.advance(by="10s").model_dump(mode="json"))
         docs.append(bsb.finish().model_dump(mode="json"))
         docs.append(bsb.order_log())
-    blind_tools = SandboxTools(root=FIXTURES, episodes=book)
-    docs.append(blind_tools.list_doc())
+    blind_tools = SandboxTools(root=FIXTURES, episodes=book, out_dir=tmp_path / "blind-out")
+    docs.append(blind_tools.list_doc(episode_id=eid))
     seen = set()
     for d in docs:
         jsonschema.Draft202012Validator(schemas[d["schema"]]).validate(d)

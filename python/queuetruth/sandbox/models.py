@@ -712,12 +712,14 @@ class SandboxBlindOrderLog(QtDoc):
 
 
 class EpisodePin(QtModel):
-    """One operator-pinned blind episode: its id, its spec (true dataset, instrument, day and window) and the secret
-    its transform derives from. Private to the operator."""
+    """One operator-pinned blind episode: its id, its spec (true dataset, instrument, day and window), the secret
+    its transform derives from and how often it may be started. Private to the operator."""
 
     episode_id: EpisodeId
     spec: dict[str, Any]
     secret: Sha256
+    #: How often the episode may be started (a second session would show the agent its future).
+    max_starts: PosInt = 1
 
 
 class SandboxEpisodes(QtDoc):

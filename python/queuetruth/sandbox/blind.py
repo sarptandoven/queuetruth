@@ -49,11 +49,14 @@ Design: docs/design/extensions/agent-sandbox.md (S.11).
 
 from __future__ import annotations
 
+import datetime as _dt
 import hashlib
 import hmac
 import json
+import os
 import re
 import secrets
+import threading
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -115,6 +118,13 @@ BLIND_RULES = (
     "tick size is real, so send prices on the grid you see), sizes and money are real; the instrument and the day "
     "are hidden.",
 )
+#: A rebased price at or beyond this magnitude is refused in blind units, before it is mapped back; the offset's
+#: magnitude stays below `MAX_OFFSET_RAW`, so a price accepted here maps back inside the sandbox's own range
+#: (`|price| < 2**62`) and acceptance never depends on the hidden offset.
+BLIND_PRICE_LIMIT = 2**62 - 2**60
+MAX_OFFSET_RAW = 2**60
+#: The sandbox's own out-of-range sentinel: a price it always refuses, whatever the offset.
+_REFUSED_PRICE = 2**63 - 1
 _TIME_TEXT = re.compile(r"[0-9]+:[0-9]{2}(:[0-9]{2})?")
 _LONG_INT = re.compile(r"[0-9]{15,}")
 _EPISODE = re.compile(EPISODE_ID_PATTERN)
@@ -129,7 +139,9 @@ def _real(raw: int, exp: int) -> Decimal:
 
 
 def _shift_float(v: float | None, delta: Decimal) -> float | None:
-    """A float price moved by an exact decimal amount (`None` stays `None`)."""
+    """A float price moved by an exact decimal amount (`None` stays `None`). Only for prices that are exact short
+    decimals (a mid of two raw prices); a ratio such as an average is recomputed from integers (`ratio`), since the
+    digits of its float would carry the true value's magnitude."""
     return None if v is None else float(Decimal(repr(float(v))) + delta)
 
 
@@ -149,10 +161,14 @@ class BlindTransform:
     def derive(cls, secret_hex: str, *, origin_ns: int, reference_raw: int, tick_size: int, price_exp: int):
         """The transform of an episode from its secret and the reference price in view at its start."""
         secret = bytes.fromhex(secret_hex)
-        tick = max(int(tick_size), 1)
+        tick = int(tick_size)
+        if tick <= 0:
+            raise config_error("a blind episode needs an instrument with a positive tick size")
         span = BASE_MAX_TICKS - BASE_MIN_TICKS + 1
         base = BASE_MIN_TICKS + int.from_bytes(_derive(secret, "price_base"), "big") % span
         ref_ticks = int(reference_raw) // tick
+        if abs((base - ref_ticks) * tick) >= MAX_OFFSET_RAW:
+            raise config_error("the instrument's prices are too large for a blind episode")
         return cls(
             time_origin_ns=origin_ns,
             price_offset_ticks=base - ref_ticks,
@@ -186,8 +202,16 @@ class BlindTransform:
         return None if raw is None else int(raw) + self.offset_raw
 
     def p_float(self, v: float | None) -> float | None:
-        """A float price (`avg_fill_price`, `mark_price`, `vwap_price`) rebased."""
+        """A mid price (`mark_price`) rebased."""
         return _shift_float(v, _real(self.offset_raw, self.price_exp))
+
+    def ratio(self, notional_raw: int, qty: int) -> float | None:
+        """An average price (`avg_fill_price`, `vwap_price`) of `qty` units of true notional `notional_raw`, at the
+        rebased prices, by the sandbox's own formula on exact integers."""
+        if not qty:
+            return None
+        rebased = Decimal(int(notional_raw) + self.offset_raw * int(qty))
+        return float((rebased / Decimal(int(qty))).scaleb(self.price_exp))
 
     # blind -> true
     def t_back(self, rel: int) -> int:
@@ -211,10 +235,10 @@ def _level(tr: BlindTransform, lv: Any) -> Any:
     return None if lv is None else [tr.p(lv[0]), lv[1], lv[2]]
 
 
-def _stats(tr: BlindTransform, s: dict[str, Any]) -> dict[str, Any]:
+def _stats(tr: BlindTransform, s: dict[str, Any], notional: int | None) -> dict[str, Any]:
     return {
         **s,
-        "vwap_price": tr.p_float(s["vwap_price"]),
+        "vwap_price": None if notional is None else tr.ratio(notional, s["volume"]),
         "high": tr.p(s["high"]),
         "low": tr.p(s["low"]),
         "last": tr.p(s["last"]),
@@ -223,8 +247,9 @@ def _stats(tr: BlindTransform, s: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def blind_order(tr: BlindTransform, o: dict[str, Any]) -> dict[str, Any]:
-    """An `OrderView` in blind units; a market order's collar price is not shown."""
+def blind_order(tr: BlindTransform, o: dict[str, Any], notional: int | None) -> dict[str, Any]:
+    """An `OrderView` in blind units (`notional`: the true sum of price x size of its fills); a market order's collar
+    price is not shown."""
     return {
         **o,
         "price": None if o["type"] == "market" else tr.p(o["price"]),
@@ -232,7 +257,7 @@ def blind_order(tr: BlindTransform, o: dict[str, Any]) -> dict[str, Any]:
         "ts_activated": tr.t(o["ts_activated"]),
         "ts_done": tr.t(o["ts_done"]),
         "cancel_sent_ns": tr.t(o["cancel_sent_ns"]),
-        "avg_fill_price": tr.p_float(o["avg_fill_price"]),
+        "avg_fill_price": None if notional is None else tr.ratio(notional, o["filled_qty"]),
     }
 
 
@@ -245,8 +270,18 @@ def _cash(tr: BlindTransform, cash: float, qty: int, size_exp: int, mult: float)
     return float(Decimal(repr(float(cash))) - money(tr.offset_raw * int(qty), tr.price_exp + size_exp, mult))
 
 
-def blind_observation(tr: BlindTransform, obs: dict[str, Any], *, size_exp: int, mult: float) -> dict[str, Any]:
-    """A `qt.sandbox_observation` in blind units."""
+def blind_observation(
+    tr: BlindTransform,
+    obs: dict[str, Any],
+    *,
+    size_exp: int,
+    mult: float,
+    notionals: dict[str, int],
+    step_notional: int,
+    session_notional: int,
+) -> dict[str, Any]:
+    """A `qt.sandbox_observation` in blind units. `notionals` (order id -> true sum of price x size of its fills) and
+    the true print notionals since the last step and since the open give the averages exactly."""
     b = obs["book"]
     pos = obs["position"]
     return {
@@ -263,9 +298,9 @@ def blind_observation(tr: BlindTransform, obs: dict[str, Any], *, size_exp: int,
             "asks": [_level(tr, x) for x in b["asks"]],
         },
         "trades": [{**x, "ts_event": tr.t(x["ts_event"]), "price": tr.p(x["price"])} for x in obs["trades"]],
-        "trades_since_last": _stats(tr, obs["trades_since_last"]),
-        "session_trades": _stats(tr, obs["session_trades"]),
-        "orders": [blind_order(tr, o) for o in obs["orders"]],
+        "trades_since_last": _stats(tr, obs["trades_since_last"], step_notional),
+        "session_trades": _stats(tr, obs["session_trades"], session_notional),
+        "orders": [blind_order(tr, o, notionals.get(o["order_id"])) for o in obs["orders"]],
         "fills": [_fill(tr, f) for f in obs["fills"]],
         "markouts": [{**m, "mo_bps": None} for m in obs["markouts"]],
         "position": {
@@ -284,8 +319,39 @@ class EpisodeBook:
     `qt.sandbox_episodes` file, `start` opens one for an agent by its id."""
 
     def __init__(self, pins: dict[str, dict[str, Any]] | None = None) -> None:
-        #: episode id -> {"spec": spec dict, "secret": 64 hex}.
-        self.pins: dict[str, dict[str, Any]] = dict(pins or {})
+        #: episode id -> {"spec": spec dict, "secret": 64 hex, "max_starts": int}.
+        self.pins: dict[str, dict[str, Any]] = {k: {"max_starts": 1, **v} for k, v in (pins or {}).items()}
+        #: episode id -> times started (in this process, plus those the journal lists).
+        self.starts: dict[str, int] = {}
+        self._journal: Path | None = None
+        self._lock = threading.Lock()
+
+    def use_journal(self, path: str | Path) -> None:
+        """Records every start and end of an episode in `path` (JSON lines, appended) and counts the starts it
+        already lists, so a restarted server does not start a single-use episode again."""
+        p = Path(path)
+        with self._lock:
+            if p.exists():
+                for line in p.read_text(encoding="utf-8").splitlines():
+                    rec = json.loads(line) if line.strip() else {}
+                    if rec.get("event") == "start":
+                        eid = str(rec.get("episode_id"))
+                        self.starts[eid] = self.starts.get(eid, 0) + 1
+            self._journal = p
+
+    def note(self, event: str, episode_id: str, session_id: str | None, **extra: Any) -> None:
+        """Appends one event (`start`, `finish`, `close`, `evict`, `failed`) to the journal, if there is one."""
+        if self._journal is None:
+            return
+        rec = {
+            "event": event,
+            "episode_id": episode_id,
+            "session_id": session_id,
+            "utc": _dt.datetime.now(_dt.UTC).isoformat(timespec="milliseconds"),
+            **extra,
+        }
+        with self._lock, self._journal.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, sort_keys=True) + "\n")
 
     def __contains__(self, episode_id: object) -> bool:
         return episode_id in self.pins
@@ -302,10 +368,12 @@ class EpisodeBook:
         secret: str | None = None,
         episode_id: str | None = None,
         contain: Contain | None = None,
+        max_starts: int = 1,
     ) -> str:
         """Pins an episode and returns its opaque id. `spec` is an ordinary sandbox spec (friendly values allowed);
         it is validated against the dataset now and stored with absolute times. `secret` (64 hex) and `episode_id`
-        default to fresh random values; give them only to reproduce a pin."""
+        default to fresh random values; give them only to reproduce a pin. `max_starts` (default 1) bounds how
+        often the episode can be started: a second session of the same episode would show the agent its future."""
         raw = spec.model_dump(mode="json") if isinstance(spec, BaseModel) else dict(spec)
         first = normalize_spec(raw, None)
         SandboxSpec.model_validate(first)
@@ -317,6 +385,10 @@ class EpisodeBook:
             contain=contain,
         )
         full = SandboxSpec.model_validate(normalize_spec(raw, int(src.instrument["midnight_utc_ns"])))
+        if int(src.instrument["tick_size"]) <= 0:
+            raise config_error("a blind episode needs an instrument with a positive tick size")
+        if isinstance(max_starts, bool) or not isinstance(max_starts, int) or max_starts < 1:
+            raise config_error("max_starts: a positive integer")
         fees = full.fees
         if fees.maker_bps or fees.taker_bps:
             raise config_error(
@@ -332,7 +404,7 @@ class EpisodeBook:
         key = secret if secret is not None else secrets.token_hex(32)
         if not re.fullmatch(r"[0-9a-f]{64}", key):
             raise config_error("secret: 64 lower-case hex digits")
-        self.pins[eid] = {"spec": full.model_dump(mode="json"), "secret": key}
+        self.pins[eid] = {"spec": full.model_dump(mode="json"), "secret": key, "max_starts": max_starts}
         return eid
 
     def document(self) -> SandboxEpisodes:
@@ -349,8 +421,16 @@ class EpisodeBook:
         """Writes the book (owner read and write only: it holds the secrets)."""
         p = Path(path)
         text = json.dumps(self.document().model_dump(mode="json"), indent=2) + "\n"
-        p.write_text(text, encoding="utf-8")
-        p.chmod(0o600)
+        # Created 0600 and renamed into place: the secrets are never in a file anyone else can read.
+        tmp = p.with_name(f".{p.name}.{secrets.token_hex(4)}.tmp")
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(text)
+            os.replace(tmp, p)
+        except BaseException:
+            tmp.unlink(missing_ok=True)
+            raise
         return p
 
     @classmethod
@@ -363,7 +443,9 @@ class EpisodeBook:
             raise QtError("QT-INPUT-001", f"{p}: not found") from None
         except (OSError, ValueError) as e:
             raise QtError("QT-INPUT-002", f"{p}: not a qt.sandbox_episodes document: {e}") from None
-        return cls({e.episode_id: {"spec": e.spec, "secret": e.secret} for e in doc.episodes})
+        return cls(
+            {e.episode_id: {"spec": e.spec, "secret": e.secret, "max_starts": e.max_starts} for e in doc.episodes}
+        )
 
     def start(
         self,
@@ -374,19 +456,30 @@ class EpisodeBook:
         contain: Contain | None = None,
         stepping: str = "session",
     ) -> BlindSandbox:
-        """Opens a pinned episode for an agent. An unknown id is `QT-USAGE-001`, with no hint of what is pinned."""
+        """Opens a pinned episode for an agent. An unknown id is `QT-USAGE-001`, with no hint of what is pinned; so is
+        an episode already started `max_starts` times (a failed open counts too: it may have shown nothing, but the
+        count is the operator's safeguard)."""
         pin = self.pins.get(episode_id) if isinstance(episode_id, str) else None
         if pin is None:
             raise usage_error("unknown episode id", "ask the operator for the id of a pinned episode")
-        return BlindSandbox.open(
-            episode_id,
-            pin["spec"],
-            pin["secret"],
-            session_id=session_id,
-            workdir=workdir,
-            contain=contain,
-            stepping=stepping,
-        )
+        with self._lock:
+            if self.starts.get(episode_id, 0) >= int(pin.get("max_starts", 1)):
+                raise usage_error("this episode was already started", "ask the operator for a new episode id")
+            self.starts[episode_id] = self.starts.get(episode_id, 0) + 1
+        self.note("start", episode_id, session_id)
+        try:
+            return BlindSandbox.open(
+                episode_id,
+                pin["spec"],
+                pin["secret"],
+                session_id=session_id,
+                workdir=workdir,
+                contain=contain,
+                stepping=stepping,
+            )
+        except BaseException:
+            self.note("failed", episode_id, session_id)
+            raise
 
 
 # ---- the agent's sandbox -----------------------------------------------------------------------------------------
@@ -415,6 +508,9 @@ class BlindSandbox:
         #: The operator's episode, in true values. An in-process agent could read it: drive a blind agent through
         #: the MCP tools from another process.
         self.inner = inner
+        #: Serializes the agent's calls: each one reads the operator log, calls the sandbox and mirrors the entry it
+        #: appended, which must not interleave with another call.
+        self._lock = threading.RLock()
         self.episode_id = episode_id
         self.transform = transform
         #: The operator's scorecard, set by `finish`.
@@ -482,7 +578,7 @@ class BlindSandbox:
                 price_exp=inst["price_exp"],
             )
             made["t"] = tr
-            return {"episode_id": episode_id, "transform_sha256": tr.commitment()}
+            return {"episode_id": episode_id, "transform_sha256": tr.commitment(), "collar_shift_raw": tr.offset_raw}
 
         try:
             inner = Sandbox.open(
@@ -491,7 +587,11 @@ class BlindSandbox:
         except QtError as e:
             # The pin is the operator's: a failure to open names nothing of it to the agent.
             raise QtError(e.code, "the episode could not be opened", "ask the operator", None) from None
-        return cls(inner, episode_id, made["t"])
+        try:
+            return cls(inner, episode_id, made["t"])
+        except BaseException:
+            inner.close()
+            raise
 
     def __enter__(self) -> BlindSandbox:
         return self
@@ -501,7 +601,8 @@ class BlindSandbox:
 
     def close(self) -> None:
         """Ends the episode without a scorecard."""
-        self.inner.close()
+        with self._lock:
+            self.inner.close()
 
     # ---- state the MCP tools read ----------------------------------------------------------------------------------
 
@@ -559,9 +660,11 @@ class BlindSandbox:
         return [s for s in out if s]
 
     def _leaks(self, text: str) -> bool:
-        low = text.lower()
-        if any(s.lower() in low for s in self._secrets):
-            return True
+        """Whether `text` names a hidden value: a hidden string as a whole word (a two-letter symbol must not match
+        inside "clock"), a time of day or an integer of 15 or more digits."""
+        for hidden in self._secrets:
+            if re.search(rf"(?<![A-Za-z0-9]){re.escape(hidden)}(?![A-Za-z0-9])", text, re.IGNORECASE):
+                return True
         return bool(_TIME_TEXT.search(text) or _LONG_INT.search(text))
 
     def _error(self, e: QtError, prices: dict[int, int]) -> QtError:
@@ -637,6 +740,10 @@ class BlindSandbox:
 
     def order_log(self) -> dict[str, Any]:
         """The agent's blind log (`qt.sandbox_blind_order_log` as a dict)."""
+        with self._lock:
+            return self._order_log()
+
+    def _order_log(self) -> dict[str, Any]:
         return SandboxBlindOrderLog.model_validate(
             {
                 "schema": "qt.sandbox_blind_order_log",
@@ -649,8 +756,24 @@ class BlindSandbox:
 
     # ---- documents -----------------------------------------------------------------------------------------------
 
+    def _notional(self, order_id: str) -> int | None:
+        """The true sum of price x size of an order's fills (None without fills)."""
+        o = self.inner._by_id.get(order_id)
+        if o is None or not o.fills:
+            return None
+        return sum(int(f["fill_px"]) * int(f["fill_qty"]) for f in o.fills)
+
     def _obs(self, obs: SandboxObservation) -> SandboxObservation:
-        doc = blind_observation(self.transform, obs.model_dump(mode="json"), size_exp=self._size_exp, mult=self._mult)
+        doc = obs.model_dump(mode="json")
+        doc = blind_observation(
+            self.transform,
+            doc,
+            size_exp=self._size_exp,
+            mult=self._mult,
+            notionals={o["order_id"]: n for o in doc["orders"] if (n := self._notional(o["order_id"])) is not None},
+            step_notional=self.inner._step_stats.notional,
+            session_notional=self.inner._session_stats.notional,
+        )
         return SandboxObservation.model_validate(doc)
 
     def _ack(self, ack: SandboxAck) -> SandboxAck:
@@ -658,7 +781,7 @@ class BlindSandbox:
         entry = self._entries[doc["log_seq"]]
         doc.update(
             clock_ns=self.transform.t(doc["clock_ns"]),
-            order=blind_order(self.transform, doc["order"]),
+            order=blind_order(self.transform, doc["order"], self._notional(doc["order"]["order_id"])),
             log_hash=entry["hash"],
         )
         return SandboxAck.model_validate(doc)
@@ -667,38 +790,44 @@ class BlindSandbox:
 
     def observe(self) -> SandboxObservation:
         """The current observation, in blind units."""
-        try:
-            obs = self.inner.observe()
-        except QtError as e:
-            raise self._error(e, {}) from None
-        return self._obs(obs)
+        with self._lock:
+            try:
+                obs = self.inner.observe()
+            except QtError as e:
+                raise self._error(e, {}) from None
+            return self._obs(obs)
 
     def advance(self, *, by: int | str | None = None, to: int | str | None = None) -> SandboxObservation:
         """Moves the clock by a duration (`by`, unchanged) or to a time since the open (`to`: ns, or `HH:MM[:SS]`
         elapsed since the open, optionally written `+HH:MM`)."""
-        target: int | None = None
-        if to is not None:
-            if isinstance(to, str):
-                rel = parse_time(to.strip().removeprefix("+"), 0, "to")
-            elif isinstance(to, int) and not isinstance(to, bool):
-                rel = int(to)
-            else:
-                raise config_error(f"to: expected a time since the open (ns or 'HH:MM'), got {type(to).__name__}")
-            if by is None and not self.inner.closed and rel <= self.clock_ns:
-                raise usage_error(
-                    f"to ({rel_time(rel)}) is not after the clock ({rel_time(self.clock_ns)})",
-                    "the clock only moves forward",
-                )
-            target = self.transform.t_back(rel)
-        if by is not None:
-            parse_duration(by, "by")
-        try:
-            obs = self.inner.advance(by=by, to=target)
-        except QtError as e:
-            raise self._error(e, {}) from None
-        blind = self._obs(obs)
-        self._mirror(observation=blind)
-        return blind
+        with self._lock:
+            target: int | None = None
+            if to is not None:
+                if isinstance(to, str):
+                    try:
+                        rel = parse_time(to.strip().removeprefix("+"), 0, "to")
+                    except QtError:
+                        hint = "write +HH:MM[:SS[.fraction]] or ns since the open"
+                        raise config_error(f"to: {to!r} is not a time since the open", hint) from None
+                elif isinstance(to, int) and not isinstance(to, bool):
+                    rel = int(to)
+                else:
+                    raise config_error(f"to: expected a time since the open (ns or 'HH:MM'), got {type(to).__name__}")
+                if by is None and not self.inner.closed and rel <= self.clock_ns:
+                    raise usage_error(
+                        f"to ({rel_time(rel)}) is not after the clock ({rel_time(self.clock_ns)})",
+                        "the clock only moves forward",
+                    )
+                target = self.transform.t_back(rel)
+            if by is not None:
+                parse_duration(by, "by")
+            try:
+                obs = self.inner.advance(by=by, to=target)
+            except QtError as e:
+                raise self._error(e, {}) from None
+            blind = self._obs(obs)
+            self._mirror(observation=blind)
+            return blind
 
     def submit(
         self,
@@ -729,9 +858,17 @@ class BlindSandbox:
                 rebased = to_fixed(true_price, self.transform.price_exp, "price")
             except QtError:
                 rebased = None  # the sandbox meets the same error on the same text, and logs it
-            if rebased is not None:
+            if rebased is not None and abs(rebased) >= BLIND_PRICE_LIMIT:
+                # Decided in blind units: the sandbox refuses its sentinel whatever the offset, and logs it.
+                true_price = _REFUSED_PRICE
+                prices[true_price] = rebased
+            elif rebased is not None:
                 true_price = self.transform.p_back(rebased)
                 prices[true_price] = rebased
+        with self._lock:
+            return self._submit(request, true_price, prices)
+
+    def _submit(self, request: dict[str, Any], true_price: Any, prices: dict[int, int]) -> SandboxAck:
         n = len(self.inner.log.entries)
         try:
             ack = self.inner.submit(
@@ -753,15 +890,16 @@ class BlindSandbox:
     def cancel(self, order_id: str, qty: int | str | None = None) -> SandboxAck:
         """Cancels an order, or `qty` of it (as `Sandbox.cancel`)."""
         request = {"order_id": wire(order_id), "qty": wire(qty)}
-        n = len(self.inner.log.entries)
-        try:
-            ack = self.inner.cancel(order_id, qty)
-        except QtError as e:
-            err = self._error(e, {})
-            self._record(n, request, err)
-            raise err from None
-        self._record(n, request, None)
-        return self._ack(ack)
+        with self._lock:
+            n = len(self.inner.log.entries)
+            try:
+                ack = self.inner.cancel(order_id, qty)
+            except QtError as e:
+                err = self._error(e, {})
+                self._record(n, request, err)
+                raise err from None
+            self._record(n, request, None)
+            return self._ack(ack)
 
     def _record(self, n: int, request: dict[str, Any], err: QtError | None) -> None:
         """Mirrors the entry an instruction appended (if any) with the agent's request and blind message."""
@@ -774,16 +912,17 @@ class BlindSandbox:
     def finish(self, *, out: str | Path | None = None) -> SandboxBlindFinish:
         """Ends the episode. The operator's scorecard (true values, blind certificate) is kept in `scorecard` and
         written to `out` when given; the agent gets its aggregates in blind units."""
-        try:
-            card = self.inner.finish(out=out)
-        except QtError as e:
-            raise self._error(e, {}) from None
-        self.scorecard = card
-        self._mirror()
-        if out is not None:
-            reveal = {"episode_id": self.episode_id, "transform": self.transform.reveal()}
-            (Path(out) / "blind.json").write_text(json.dumps(reveal, indent=2) + "\n", encoding="utf-8")
-        return self.finish_summary(card)
+        with self._lock:
+            try:
+                card = self.inner.finish(out=out)
+            except QtError as e:
+                raise self._error(e, {}) from None
+            self.scorecard = card
+            self._mirror()
+            if out is not None:
+                reveal = {"episode_id": self.episode_id, "transform": self.transform.reveal()}
+                (Path(out) / "blind.json").write_text(json.dumps(reveal, indent=2) + "\n", encoding="utf-8")
+            return self.finish_summary(card)
 
     def finish_summary(self, card: SandboxScorecard) -> SandboxBlindFinish:
         """The agent's `qt.sandbox_blind_finish` of the operator's scorecard."""
@@ -834,7 +973,9 @@ __all__ = [
     "BASE_MAX_TICKS",
     "BASE_MIN_TICKS",
     "BLIND_GENESIS",
+    "BLIND_PRICE_LIMIT",
     "BLIND_RULES",
+    "MAX_OFFSET_RAW",
     "VISIBLE_SETTINGS",
     "BlindSandbox",
     "BlindTransform",

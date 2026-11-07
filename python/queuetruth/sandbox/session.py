@@ -84,7 +84,7 @@ from queuetruth.stats import stable_seed
 
 M = TypeVar("M", bound=BaseModel)
 #: Called with the sandbox and its first observation when a blind episode opens; returns the commitment its `open`
-#: entry records (`queuetruth.sandbox.blind`).
+#: entry records (`queuetruth.sandbox.blind`), plus `collar_shift_raw`, the offset market collars are sized with.
 BlindHook = Callable[[Any, SandboxObservation], dict[str, Any]]
 #: How a step brings the orders to the visible cut (module docstring); the outputs are identical.
 STEPPINGS = ("session", "replay")
@@ -276,12 +276,19 @@ class Sandbox:
         self._timings: dict[str, float] = {"tape_s": 0.0, "book_s": 0.0, "replay_s": 0.0}
         if stepping == "session":
             self._open_session()
+        #: Added to the opposite best when a market order's collar is sized (blind episodes: the rebasing offset).
+        self._collar_shift = 0
         self._sync()
         obs = self._observation()
         #: The commitment of a blind episode (`queuetruth.sandbox.blind`): in the `open` entry, so the log root and
         #: the certificate commit to it; None for an ordinary episode.
-        self.blind: dict[str, Any] | None = None if blind is None else dict(blind(self, obs))
-        opened: dict[str, Any] = {} if self.blind is None else {"blind": self.blind}
+        self.blind: dict[str, Any] | None = None
+        opened: dict[str, Any] = {}
+        if blind is not None:
+            commit = dict(blind(self, obs))
+            self._collar_shift = int(commit.pop("collar_shift_raw", 0))
+            self.blind = commit
+            opened = {"blind": commit, "blind_collar_shift_raw": self._collar_shift}
         self.log.append(
             "open",
             clock_ns=self.clock_ns,
@@ -873,7 +880,10 @@ class Sandbox:
                 raise config_error(
                     "order rejected: no opposite quote in view to price the market order", reason="no_quote"
                 )
-            best = int(opp[0])
+            # The collar is sized on the prices the agent sees: `best + collar_shift_raw` (0 unless blind, where
+            # it is the rebasing offset), so its width and floor never depend on a hidden price level.
+            shift = self._collar_shift
+            best = int(opp[0]) + shift
             delta = Decimal(abs(best)) * Decimal(repr(self.spec.market_collar_bps)) / Decimal(10_000)
             step = max(tick, 1)
             k = int((delta / step).to_integral_value(rounding=ROUND_CEILING))
@@ -881,6 +891,7 @@ class Sandbox:
             price = best + delta_raw if req["side"] == "buy" else best - delta_raw
             if req["side"] == "sell" and best > 0 and price <= 0:
                 price = step
+            price -= shift
             est = price
         elif req["peg_offset_ticks"] is not None:
             if req["price"] is not None:

@@ -351,12 +351,12 @@ QT_REALDATA_DS=.realdata/ds/nasdaq-2019-12-30 python -m pytest -m realdata pytho
 
 ## What the guarantee does not cover
 
-The sandbox controls what the agent is shown; it cannot control what the agent already knows. An ordinary session
-names the symbol, venue and date, and prices are absolute, so a language model whose training data covers that day may recall
+The sandbox controls what the agent is shown; it cannot control what the agent already knows. An ordinary session names
+the symbol, venue and date, and prices are absolute, so a language model whose training data covers that day may recall
 how the price moved, and so may an agent tuned on earlier episodes of the same day. A verified certificate proves the
-scorecard follows from the logged instructions on that data, not that they were made without such knowledge. For
-claims about language-model agents, use data after the model's training cutoff or a day held out from every earlier
-run. To keep the agent from knowing which day it plays, play the episode blind (next section).
+scorecard follows from the logged instructions on that data, not that they were made without such knowledge. For claims
+about language-model agents, use data after the model's training cutoff or a day held out from every earlier run. To
+keep the agent from knowing which day it plays, play the episode blind (next section).
 
 ## Blind episodes
 
@@ -368,13 +368,26 @@ The operator pins the episode; the agent starts it by an opaque id and sees only
 | Times | ns since the session open; `time_local` reads `+00:05:00.000000`; durations are real |
 | Prices | moved by a hidden whole number of ticks; the tick size and `price_exp` are real, so prices stay on the grid |
 | Sizes, PnL, fees, markouts in ticks and currency, execution edge | as they are |
-| Cash, notional, `avg_fill_price`, `mark_price`, `vwap_price` | computed at the rebased prices |
+| Cash, notional, `avg_fill_price`, `mark_price`, `vwap_price` | computed from the rebased integer prices |
 | Basis points (`mo_bps`, `mean_bps`) | null: they would give the price level away |
 | Symbol, venue, date, rule set, time zone, dataset path and ids | nothing |
 
 The offset is drawn per episode from a secret: the best bid in view at the start (else the best ask, else the
 last print) becomes a price between 1,000 and 9,000 ticks. The agent's orders are mapped back exactly, so the
 operator's episode has the same orders, fills and scorecard numbers as a non-blind episode sent the true values.
+
+Nothing the agent can try depends on the hidden offset:
+
+- **Price range.** A rebased price of magnitude `2**62 - 2**60` or more is refused before it is mapped back, and the
+  offset stays below `2**60`, so every accepted price maps inside the engine's own range.
+- **Market orders.** The collar is `market_collar_bps` of the rebased best, so its width and its floor at one tick
+  are set by the prices the agent sees. The order sent is a market order with that collar; a non-blind episode with
+  the same collar gives the same scorecard.
+- **Averages.** `avg_fill_price` and `vwap_price` are recomputed from the rebased integer prices, so the digits of
+  the float carry nothing of the true value.
+- **One session per pin.** An episode can be started once (`pin(spec, max_starts=1)`, the default). A second
+  session of the same episode would let a scout session read the future before the real one plays it.
+- **Concurrent calls.** A `BlindSandbox` serializes its calls, so calls from several threads keep its log whole.
 
 The operator pins episodes and keeps the book file; the agent gets only the episode id:
 
@@ -411,7 +424,7 @@ print("agent sees PnL net", fin.pnl.pnl_net, "| operator's scorecard on", sb.sco
 own blind log (`order_log()`, a hash chain whose entries the ack receipts name). The operator's scorecard, in true
 values, is `sb.scorecard`, and `out` holds it with the order log, the replay tables and `blind.json`, the transform
 that opens the commitment. Errors are rewritten in blind units; one that would still name a hidden value keeps only
-its code and `details.reason`.
+its code, `details.reason` and `details.order_id`.
 
 **The certificate.** The log's `open` entry and the certificate's `blind` field hold the episode id and
 `transform_sha256`, the sha256 of the transform with a salt from the secret. The log root therefore commits to the
@@ -424,19 +437,32 @@ transform_sha256)` opens the commitment once the operator publishes the transfor
 python -m queuetruth.mcp.sandbox_tools --episodes /operator/episodes.json --out /operator/sandbox-runs
 ```
 
-With `--episodes` (or `register_sandbox_tools(app, episodes=book)`) the server lists only the eight sandbox tools,
-since the dataset, run and output tools could show the data. `qt_sandbox_start` takes only `episode_id`,
-`qt_sandbox_advance` takes `to` as a time since the open (`"+00:12:00"`), and every result is blind
-(`qt.sandbox_blind_session`, `qt.sandbox_blind_finish`, `qt.sandbox_blind_session_list`). An internal error says only
-its code. `qt_sandbox_finish` does not link the operator's files under `--out`; `include_log` returns the agent's
-blind log. Run the server in another process, under an account that cannot read the episode file or the datasets
-from the agent's side.
+With `--episodes` (or `register_sandbox_tools(app, episodes=book, out_dir=...)`) the server lists only the eight
+sandbox tools, since the dataset, run and output tools could show the data. A blind server needs `--out`: the
+operator's scorecards go there, and so does `episodes.jsonl`, a journal of every start and end of an episode (start,
+finish, close, evict, failed, exit). The server reads the journal when it starts, so a restart does not start a
+single-use episode again.
+
+- `qt_sandbox_start` takes only `episode_id`.
+- `qt_sandbox_advance` takes `to` as a time since the open (`"+00:12:00"`).
+- `qt_sandbox_list` takes `episode_id` and lists only that episode's sessions, so a client never sees another
+  agent's session ids.
+- Every result is blind (`qt.sandbox_blind_session`, `qt.sandbox_blind_finish`, `qt.sandbox_blind_session_list`),
+  and an internal error says only its code.
+- `qt_sandbox_finish` does not link the operator's files under `--out`; `include_log` returns the agent's blind log.
+
+Run the server in another process, under an account that cannot read the episode file or the datasets from the
+agent's side.
 
 **What stays visible.** The tick size, lot size, multiplier and currency are real, and so are sizes, volumes and the
 session length: together they narrow the instrument class (a 0.25 tick and a multiplier of 50 suggest an equity index
-future). Price moves in ticks are real, so a very distinctive day might still be recognised from its shape. A market
-order's collar price is not shown, since it is a fraction of the true price level. A market sweep that stops at the
-collar could still hint at the level. Fees in basis points are refused at pin time, since they would show the
-notional. `python/tests/sandbox/test_blind.py` runs a full blind episode through the Python API and through the MCP
-tools, scans every string and number the agent received for the symbol, venue, date, ids, absolute times and the
-day's true prices, and checks that a non-blind episode with the same instructions gives the same scorecard.
+future). Price moves in ticks are real, so a very distinctive day might still be recognised from its shape. Fees in
+basis points are refused at pin time, since they would show the notional, and so is an instrument without a positive
+tick size. A fall of more than the base level (1,000 to 9,000 ticks) below the start, or a deep stub quote, shows as a
+zero or negative rebased price, which bounds the base. The agent's blind log is not committed by the certificate: its
+receipts are checked against the blind log it was given, not against the operator's log.
+`python/tests/sandbox/test_blind.py` runs a full blind episode through the Python API and through the MCP tools, scans
+every string and number the agent received for the symbol, venue, date, ids, absolute times and the day's true prices,
+and checks that a non-blind episode with the same instructions gives the same scorecard. It also runs the range attack
+(a binary search for the first refused price, which lands on the same price whatever the secret), a scenario with taker
+fills, cancels and finish cancels, single-use pins and the journal, and threaded calls.

@@ -4646,13 +4646,14 @@ The operator's pinned blind episodes (`queuetruth.sandbox.blind.EpisodeBook`). H
 
 **`EpisodePin`** (in `qt.sandbox_episodes`)
 
-One operator-pinned blind episode: its id, its spec (true dataset, instrument, day and window) and the secret its transform derives from. Private to the operator.
+One operator-pinned blind episode: its id, its spec (true dataset, instrument, day and window), the secret its transform derives from and how often it may be started. Private to the operator.
 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `episode_id` | string | yes |  |  |
 | `spec` | object | yes |  |  |
 | `secret` | string | yes |  |  |
+| `max_starts` | integer | no | `1` |  |
 
 ### qt.sandbox_finish
 

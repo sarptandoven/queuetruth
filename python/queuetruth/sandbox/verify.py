@@ -116,7 +116,8 @@ def verify(
     sb = None
     try:
         logged_blind = opened.get("blind")
-        hook = None if logged_blind is None else (lambda _sb, _obs: logged_blind)
+        shift = int(opened.get("blind_collar_shift_raw") or 0)
+        hook = None if logged_blind is None else (lambda _sb, _obs: {**logged_blind, "collar_shift_raw": shift})
         sb = Sandbox.open(spec, workdir=workdir, blind=hook)
         dataset_ok = sb.dataset_id == doc["dataset_id"]
         if not dataset_ok:

@@ -4,7 +4,7 @@
   "$defs": {
     "EpisodePin": {
       "additionalProperties": false,
-      "description": "One operator-pinned blind episode: its id, its spec (true dataset, instrument, day and window) and the secret\nits transform derives from. Private to the operator.",
+      "description": "One operator-pinned blind episode: its id, its spec (true dataset, instrument, day and window), the secret\nits transform derives from and how often it may be started. Private to the operator.",
       "properties": {
         "episode_id": {
           "pattern": "^ep_[0-9a-f]{16}$",
@@ -20,6 +20,12 @@
           "pattern": "^[0-9a-f]{64}$",
           "title": "Secret",
           "type": "string"
+        },
+        "max_starts": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Max Starts",
+          "type": "integer"
         }
       },
       "required": [

@@ -18,9 +18,13 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   field of `qt.sandbox_scorecard` and `qt.sandbox_finish` record `{episode_id, transform_sha256}`, a commitment to
   the transform that does not reveal it; `verify` checks it. Over MCP, `python -m queuetruth.mcp.sandbox_tools
   --episodes FILE` (`register_sandbox_tools(app, episodes=book)`) serves only the sandbox tools, started by
-  `episode_id`. New documents `qt.sandbox_blind_session`, `qt.sandbox_blind_finish`,
-  `qt.sandbox_blind_session_list`, `qt.sandbox_blind_order_log` and `qt.sandbox_episodes`. Fees in basis points are
-  refused in a blind pin. A leak test scans everything a blind agent receives, through the Python API and the MCP
+  `episode_id`, requires `--out` and journals every start and end there (`episodes.jsonl`). A pin can be started
+  once by default (`max_starts`), so no scout session can read the future; `qt_sandbox_list` on a blind server lists
+  only the caller's episode. Acceptance of an order never depends on the hidden offset: out-of-range prices are
+  refused in blind units and market collars are sized on the rebased best. New documents `qt.sandbox_blind_session`,
+  `qt.sandbox_blind_finish`, `qt.sandbox_blind_session_list`, `qt.sandbox_blind_order_log` and
+  `qt.sandbox_episodes`. Ordinary certificates now carry `"blind": null` (schema version unchanged: an additive
+  optional field). Fees in basis points and instruments without a positive tick are refused in a blind pin. A leak test scans everything a blind agent receives, through the Python API and the MCP
   tools, for the fixture day's names, ids, absolute times and true prices. Guide:
   [Blind episodes](docs/how-to/agent-sandbox.md#blind-episodes).
 - **The P&L gap next to the fill-rate gap in `score`** (ROADMAP, the one-line reality gap): under its `RESULT:` line

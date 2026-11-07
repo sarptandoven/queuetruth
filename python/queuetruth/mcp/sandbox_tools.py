@@ -160,6 +160,12 @@ class BlindAdvanceArgs(Args):
     ) = None
 
 
+class BlindListArgs(Args):
+    """`qt_sandbox_list` of a blind server: only the sessions of the caller's own episode are listed."""
+
+    episode_id: Annotated[str, Field(pattern=EPISODE_ID_PATTERN, description="your episode id")]
+
+
 class BlindFinishArgs(Args):
     """`qt_sandbox_finish` of a blind server."""
 
@@ -374,7 +380,17 @@ def _blind_tools() -> tuple[tuple[ToolDef, type[BaseModel]], ...]:
                 "qt.sandbox_blind_finish",
             )
             model = SandboxBlindFinish
-        elif t.name in ("qt_sandbox_list", "qt_sandbox_close"):
+        elif t.name == "qt_sandbox_list":
+            t = ToolDef(
+                t.name,
+                t.title,
+                "The open sessions of your episode (id, clock since the open, step, orders, idle time) and the "
+                "server's limits. Read-only.",
+                BlindListArgs,
+                "qt.sandbox_blind_session_list",
+            )
+            model = SandboxBlindSessionList
+        elif t.name == "qt_sandbox_close":
             t = ToolDef(t.name, t.title, t.description, t.args, "qt.sandbox_blind_session_list")
             model = SandboxBlindSessionList
         elif t.name == "qt_sandbox_advance":
@@ -421,6 +437,12 @@ class SandboxTools:
         self.workdir = workdir
         self.idle_timeout_s = idle_timeout_s
         self.out_dir: Path | None = None
+        if episodes is not None and out_dir is None:
+            raise QtError(
+                "QT-CONFIG-001",
+                "a blind sandbox server needs an output directory",
+                "pass out_dir (--out): the operator's scorecards and the journal of starts are written there",
+            )
         if out_dir is not None:
             out = Path(out_dir).expanduser().resolve()
             if self.outputs.inside(out) is not None:
@@ -434,6 +456,8 @@ class SandboxTools:
         #: The operator's pinned episodes of a blind server (None: an ordinary server).
         self.episodes = episodes
         self.blind = episodes is not None
+        if episodes is not None and self.out_dir is not None:
+            episodes.use_journal(self.out_dir / "episodes.jsonl")
         self._tools = BLIND_SANDBOX_TOOLS if self.blind else SANDBOX_TOOLS
         self.sessions: dict[str, Sandbox | BlindSandbox] = {}
         self._last_used: dict[str, float] = {}
@@ -512,10 +536,17 @@ class SandboxTools:
             )
         return sb
 
-    def _pop(self, session_id: str) -> Any:
+    def _pop(self, session_id: str, event: str | None = None) -> Any:
         with self._lock:
             self._last_used.pop(session_id, None)
-            return self.sessions.pop(session_id, None)
+            sb = self.sessions.pop(session_id, None)
+        self._note(event, session_id, sb)
+        return sb
+
+    def _note(self, event: str | None, session_id: str, sb: Any) -> None:
+        """Journals the end of a blind session (`finish`, `close`, `evict`, `failed`)."""
+        if event is not None and self.episodes is not None and isinstance(sb, BlindSandbox):
+            self.episodes.note(event, sb.episode_id, session_id, step=sb.step, n_orders=sb.n_orders)
 
     def _item(self, session_id: str, sb: Any, now: float) -> dict[str, Any]:
         idle = round(max(0.0, now - self._last_used.get(session_id, now)), 3)
@@ -544,11 +575,16 @@ class SandboxTools:
             "idle_s": idle,
         }
 
-    def list_doc(self, closed: dict[str, Any] | None = None) -> dict[str, Any]:
-        """The `qt.sandbox_session_list` document of the open sessions (and of one just closed)."""
+    def list_doc(self, closed: dict[str, Any] | None = None, episode_id: str | None = None) -> dict[str, Any]:
+        """The `qt.sandbox_session_list` document of the open sessions (and of one just closed); on a blind server
+        only the sessions of `episode_id`, so a client never sees another agent's session ids."""
         now = time.monotonic()
         with self._lock:
-            items = [self._item(sid, sb, now) for sid, sb in self.sessions.items()]
+            items = [
+                self._item(sid, sb, now)
+                for sid, sb in self.sessions.items()
+                if not self.blind or getattr(sb, "episode_id", None) == episode_id
+            ]
         model = SandboxBlindSessionList if self.blind else SandboxSessionList
         return model.model_validate(
             {
@@ -573,15 +609,17 @@ class SandboxTools:
                 self._last_used.pop(sid, None)
         for sid, sb in gone:
             log.warning("evicting sandbox session %s: idle for more than %s s", sid, self.idle_timeout_s)
+            self._note("evict", sid, sb)
             sb.close()
 
     def close_all(self) -> None:
         """Closes every open session (scratch files removed)."""
         with self._lock:
-            sessions, self.sessions = list(self.sessions.values()), {}
+            sessions, self.sessions = list(self.sessions.items()), {}
             self._last_used = {}
-        for sb in sessions:
+        for sid, sb in sessions:
             try:
+                self._note("exit", sid, sb)
                 sb.close()
             except Exception:  # cleanup at exit must not raise
                 log.exception("closing a sandbox session failed")
@@ -618,13 +656,14 @@ class SandboxTools:
                 partial(Sandbox.open, spec, session_id=session_id, workdir=self.workdir, contain=self.outputs.contain)
             )
         with self._lock:
-            if len(self.sessions) >= self.max_sessions:
-                sb.close()
-                raise QtError(
-                    "QT-USAGE-001", f"{len(self.sessions)} sandbox sessions are open (max {self.max_sessions})"
-                )
-            self.sessions[session_id] = sb
-            self._last_used[session_id] = time.monotonic()
+            full = len(self.sessions) >= self.max_sessions
+            if not full:
+                self.sessions[session_id] = sb
+                self._last_used[session_id] = time.monotonic()
+        if full:
+            self._note("failed", session_id, sb)
+            sb.close()
+            raise QtError("QT-USAGE-001", f"{self.max_sessions} sandbox sessions are open (max {self.max_sessions})")
         doc = sb.session.model_dump(mode="json")
         text = render.blind_session_text(doc) if self.blind else render.session_text(doc)
         return doc, [types.TextContent(text=text)]
@@ -672,10 +711,10 @@ class SandboxTools:
         try:
             card = await self._run(partial(sb.finish, out=out))
         except BaseException:
+            self._pop(args.session_id, "failed")
             sb.close()  # a failed finish leaves no usable session: free its slot and scratch files
             raise
-        finally:
-            self._pop(args.session_id)
+        self._pop(args.session_id, "finish")
         if isinstance(sb, BlindSandbox):
             # The operator's files stay unlinked: their paths and contents name the instrument-day.
             doc = card.model_dump(mode="json")
@@ -705,8 +744,8 @@ class SandboxTools:
             )
         )
 
-    async def _list(self, tool: ToolDef, args: ListArgs) -> Result:
-        doc = self.list_doc()
+    async def _list(self, tool: ToolDef, args: Any) -> Result:
+        doc = self.list_doc(episode_id=getattr(args, "episode_id", None))
         n = len(doc["sessions"])
         lines = [f"{n} open sandbox session(s) of at most {doc['max_sessions']}"]
         lines += [
@@ -721,9 +760,9 @@ class SandboxTools:
     async def _close(self, tool: ToolDef, args: SessionArgs) -> Result:
         sb = self._get(args.session_id)
         item = self._item(args.session_id, sb, time.monotonic())
-        self._pop(args.session_id)
+        self._pop(args.session_id, "close")
         await self._run(sb.close)
-        doc = self.list_doc(closed=item)
+        doc = self.list_doc(closed=item, episode_id=getattr(sb, "episode_id", None))
         return doc, [types.TextContent(text=f"closed {args.session_id}; {len(doc['sessions'])} session(s) open")]
 
 
