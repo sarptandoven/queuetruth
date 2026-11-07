@@ -21,7 +21,7 @@ pub(crate) const PYTHON_LONG_ABOUT: &[(&[&str], &str)] = &[
     (&["demo"], "Fetch a small public order-level subset (the first minutes of a Nasdaq TotalView-ITCH or IEX DEEP+ day), place simulated resting orders in the real queue, and show how often NautilusTrader's default fill model fills them compared with the exact replay, by horizon, with base rates. Writes <out>/demo.html and <out>/demo.json."),
     (&["forecast"], "Forecast referee: commit forecasts to a hash-chained ledger before their questions resolve, record resolutions, and score proper scores, calibration, skill and executable PnL."),
     (&["pm"], "Prediction-market kit (Kalshi, Polymarket): your own captures -> books, queue calibration and reward-aware market-making PnL. Self-hosted use on your own data only; see `queuetruth.pm.terms`."),
-    (&["reconcile"], "A trading bot's simulator arm (Freqtrade backtest or dry run, Hummingbot paper bot) against its live run, or a Backtrader or VectorBT backtest against a canonical live log: paired orders, why each differs, and the sim-vs-live scorecard."),
+    (&["reconcile"], "A trading bot's simulator arm (Freqtrade backtest or dry run, Hummingbot paper bot) against its live run, or a Backtrader, VectorBT or LEAN backtest against a canonical live log: paired orders, why each differs, and the sim-vs-live scorecard."),
 ];
 
 /// Help of positional arguments: (command path, argument name, help).
@@ -480,9 +480,9 @@ pub(crate) const PYTHON_COMMANDS: &[Cmd] = &[
         imp: Implementation::Python,
         about: "a bot's or backtester's simulated orders against the live run, order by order",
         flags: &[
-            Flag { long: "kind", kind: Kind::Enum(&["freqtrade", "hummingbot", "backtrader", "vectorbt"]), to: "_cli.kind", required: true, help: "the bot or backtester", short: None, value_name: None },
-            Flag { long: "sim", kind: Kind::StrAppend, to: "_cli.sim", required: true, help: "simulator arm: backtest result, dry-run database and logs, paper-bot database, Backtrader notification lines or VectorBT records (repeatable)", short: None, value_name: Some("PATH") },
-            Flag { long: "live", kind: Kind::StrAppend, to: "_cli.live", required: true, help: "live arm: the bot's database, logs or trades CSV (repeatable); for backtrader and vectorbt one canonical live-log directory (queuetruth live import)", short: None, value_name: Some("PATH") },
+            Flag { long: "kind", kind: Kind::Enum(&["freqtrade", "hummingbot", "backtrader", "vectorbt", "lean"]), to: "_cli.kind", required: true, help: "the bot or backtester", short: None, value_name: None },
+            Flag { long: "sim", kind: Kind::StrAppend, to: "_cli.sim", required: true, help: "simulator arm: backtest result, dry-run database and logs, paper-bot database, Backtrader notification lines, VectorBT records or LEAN result and order-events JSON (repeatable)", short: None, value_name: Some("PATH") },
+            Flag { long: "live", kind: Kind::StrAppend, to: "_cli.live", required: true, help: "live arm: the bot's database, logs or trades CSV (repeatable); for backtrader, vectorbt and lean one canonical live-log directory (queuetruth live import)", short: None, value_name: Some("PATH") },
             Flag { long: "out", kind: Kind::Str, to: "_cli.out", required: true, help: "output directory", short: None, value_name: Some("DIR") },
             Flag { long: "account", kind: Kind::Str, to: "_cli.account", required: false, help: "account label of both logs (default main)", short: None, value_name: Some("ACCOUNT") },
             Flag { long: "instrument-map", kind: Kind::Str, to: "_cli.instrument_map", required: false, help: "instrument_map.csv (default: generated, with a warning)", short: None, value_name: Some("FILE") },

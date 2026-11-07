@@ -91,8 +91,8 @@ class ReconcileReport(QtDoc):
     SCHEMA: ClassVar[str] = "qt.bot_reconcile"
     schema_: Literal["qt.bot_reconcile"] = _tag("qt.bot_reconcile")
     schema_version: Literal[1] = 1
-    #: `backtrader` and `vectorbt` (a backtest against a canonical live log) are additive.
-    kind: Literal["freqtrade", "hummingbot", "backtrader", "vectorbt"]
+    #: `backtrader`, `vectorbt` and `lean` (a backtest against a canonical live log) are additive.
+    kind: Literal["freqtrade", "hummingbot", "backtrader", "vectorbt", "lean"]
     run_id: str
     live_log: str
     sim_log: str

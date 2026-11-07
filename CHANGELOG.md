@@ -8,6 +8,15 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ### Added
 
+- **QuantConnect LEAN backtests.** `live import --venue sim-lean` reads a LEAN backtest's result JSON (its
+  `orders`) and its `<algorithm id>-order-events.json` (or an order-events CSV with the same names), formats read
+  from LEAN's source at release tag 18241; LEAN is not imported. Market, limit, stop-market and stop-limit orders
+  (also market-on-open and -close, trailing stops and limit-if-touched), partial fills, cancels and invalid orders
+  map to the canonical log; option exercises and combo orders, and inputs from two backtests, are refused. Option
+  `timeframe` moves a fill stamped at the end of its bar (LEAN's time) to the bar's start. `queuetruth reconcile
+  --kind lean --sim RESULT --sim EVENTS --live LIVE_LOG_DIR --out DIR` writes the same `qt.bot_reconcile` report as
+  for Backtrader and VectorBT (`kind` gains `lean` and `LiveImportSpec.venue` gains `sim_lean`, both additive).
+  Guide: `docs/how-to/reconcile-lean.md`.
 - **The P&L gap next to the fill-rate gap in `score`** (ROADMAP, the one-line reality gap): under its `RESULT:` line
   `queuetruth score` prints a `P&L:` line, for example `the simulator's P&L is 5.78 USD per order too high (95% CI
   +3.40 to +8.75) at the 1 s markout, mostly from fills it grants that live did not get (+3.09 USD per order)`, and

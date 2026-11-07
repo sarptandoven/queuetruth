@@ -88,6 +88,7 @@ SIM_VENUES: dict[str, str] = {
     "sim_hummingbot": "hummingbot",
     "sim_backtrader": "backtrader",
     "sim_vectorbt": "vectorbt",
+    "sim_lean": "lean",
 }
 #: Trading-bot venues of the live arm (`queuetruth.live.importers.BOT_IMPORTERS`): the log venue is the exchange.
 BOT_VENUES = frozenset({"freqtrade", "hummingbot"})
@@ -448,10 +449,10 @@ def import_sim(
     append: bool = False,
     **options: Any,
 ) -> LiveImportSummary:
-    """Simulator output (`kind` = `hftbacktest`, `nautilus`, `freqtrade`, `hummingbot`, `backtrader` or `vectorbt`)
-    -> canonical live-log directory for the scorer's external arm. `venue` names the live venue whose instrument-map
-    rows apply; other options go to the importer (`order_key_map`, `key_from_client_id`, `size_exp`; for
-    `backtrader` and `vectorbt` `pair_with` = a canonical live-log directory, `timeframe`, `instrument`, ...). The
+    """Simulator output (`kind` = `hftbacktest`, `nautilus`, `freqtrade`, `hummingbot`, `backtrader`, `vectorbt` or
+    `lean`) -> canonical live-log directory for the scorer's external arm. `venue` names the live venue whose
+    instrument-map rows apply; other options go to the importer (`order_key_map`, `key_from_client_id`, `size_exp`;
+    for `backtrader`, `vectorbt` and `lean` `pair_with` = a canonical live-log directory, `timeframe`, ...). The
     log is marked `venue = sim:<kind>`, `source = sim`, `validation_status = simulated` (schema 1.1; v0.1 used
     synthetic / fixture_only)."""
     if kind not in SIM_IMPORTERS:

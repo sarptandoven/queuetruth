@@ -45,6 +45,7 @@ Every term is defined in the [Glossary](concepts/glossary.md).
 | run a QuickFIX order-entry session and want to score your simulator against it | [Score my QuickFIX-driven strategy](how-to/score-quickfix-strategy.md) |
 | run Freqtrade or Hummingbot and want to know how far your dry run or backtest is from your live fills | [Reconcile Freqtrade or Hummingbot](how-to/reconcile-freqtrade-hummingbot.md) |
 | backtest in Backtrader or VectorBT and want each simulated order checked against your live fills or exact queues | [Reconcile a Backtrader or VectorBT backtest](how-to/reconcile-backtrader-vectorbt.md) |
+| backtest in QuantConnect LEAN and want each simulated order checked against your live fills | [Reconcile a LEAN backtest](how-to/reconcile-lean.md) |
 | want to see where the sim-vs-live gap comes from in money | [Decompose the sim-live gap](how-to/decompose-the-sim-live-gap.md) |
 | maintain a simulator and want regression tests for queue logic | [Referee my simulator](how-to/referee-your-simulator.md) |
 | want to prove a result to someone else, re-executable bit for bit | [Certify a result](how-to/certify-a-result.md) |

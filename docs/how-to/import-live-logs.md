@@ -49,7 +49,7 @@ queuetruth live import --venue binance --account main --instrument-map instrumen
 
 `--venue` is one of `binance`, `bybit`, `okx`, `coinbase`, `kraken`, `deribit`, `hyperliquid`, `ibkr-flex`,
 `fix44`, or one of the simulator outputs `sim-hftbacktest`, `sim-nautilus`, `sim-freqtrade`, `sim-hummingbot`,
-`sim-backtrader` and `sim-vectorbt` (their options go in
+`sim-backtrader`, `sim-vectorbt` and `sim-lean` (their options go in
 `--option KEY=VALUE`). FIX logs take the `--fix-*` flags ([Score my QuickFIX-driven strategy](score-quickfix-strategy.md)). `--in` repeats; every input of one run goes into the same log and fills seen in more than one input are
 deduplicated. `--append` adds to an existing log: orders with an existing `order_key` keep their row, events already
 present (same fill id, or an identical lifecycle event) are dropped and counted, and events are renumbered

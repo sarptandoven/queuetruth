@@ -1,10 +1,11 @@
-# Extension: Backtrader and VectorBT importers
+# Extension: Backtrader, VectorBT and LEAN importers
 
 Proposed SPEC text (5.7.1 importers, 5.7.5 external simulator arm) for the importers of backtesters that have no
 live arm of their own. Implemented in `python/queuetruth/live/importers/backtrader.py`,
-`python/queuetruth/live/importers/vectorbt.py` and the shared `python/queuetruth/live/importers/backtest.py`;
-registered as `SIM_IMPORTERS["backtrader"]` and `SIM_IMPORTERS["vectorbt"]`. User guide:
-`docs/how-to/reconcile-backtrader-vectorbt.md`. The reconciliation document and its explanations are those of
+`python/queuetruth/live/importers/vectorbt.py`, `python/queuetruth/live/importers/lean.py` and the shared
+`python/queuetruth/live/importers/backtest.py`; registered as `SIM_IMPORTERS["backtrader"]`, `SIM_IMPORTERS["vectorbt"]`
+and `SIM_IMPORTERS["lean"]`. User guides: `docs/how-to/reconcile-backtrader-vectorbt.md` and
+`docs/how-to/reconcile-lean.md`. The reconciliation document and its explanations are those of
 [Freqtrade and Hummingbot reconciliation](freqtrade-hummingbot.md).
 
 ## Wiring
@@ -14,6 +15,8 @@ registered as `SIM_IMPORTERS["backtrader"]` and `SIM_IMPORTERS["vectorbt"]`. Use
   KEY=VALUE`, and `queuetruth reconcile --kind backtrader | vectorbt --sim PATH... --live DIR --out DIR` (the
   Python-only group of `queuetruth.live.reconcile_cli`).
 - `qt.bot_reconcile.kind` gains `backtrader` and `vectorbt` (additive; `schema_version` stays 1).
+- LEAN: `LiveImportSpec.venue` accepts `sim_lean`, the CLI `live import --venue sim-lean` and `reconcile --kind
+  lean`, and `qt.bot_reconcile.kind` gains `lean` (all additive).
 - Neither library is imported or added as a dependency: the importers read exported JSON and CSV only.
 - Still open: the generic code (`OrderView`, `explain_pairs`, ...) still lives in the Freqtrade module; the shared
   backtest code imports it from there.
@@ -52,7 +55,26 @@ column-oriented JSON. More than one column fails `QT-CONFIG-001` unless option `
 (`instrument` alone does not choose a column). Epoch values are read in `data_tz` (pandas writes a naive index's
 wall-clock time as UTC).
 
-**Shared** (both): times are ISO 8601 text, or a date alone (midnight; precision `s`), naive in option `data_tz`
+**LEAN** (formats of release tag 18241): the result JSON's `orders` (`Order`: `id`, `symbol` `{value, id,
+permtick}`, `time`, `type` and `status` and `direction` as numbers, signed `quantity`, `limitPrice`, `stopPrice`,
+`properties.timeInForce`) and the order events (`SerializedOrderEvent`: `orderId`, `orderEventId`, `symbolValue`,
+`time` in Unix seconds, `status` as a camelCase name, `fillPrice`, signed `fillQuantity`, `direction`, `orderType`,
+`quantity`, `limitPrice`, `orderFeeAmount`, `orderFeeCurrency`, `message`) from `<algorithm id>-order-events.json`,
+a result's `orderEvents`, or a CSV with those names. Names are matched without case, `-` or `_` (camelCase,
+hyphenated and C# property names); enums as numbers or names. One order per id: `submit_sent` at `time`, `ack` at
+the first `submitted` event, one fill per `partiallyFilled` / `filled` event (`fill_id = <order id>:<order event
+id>`, fee when its currency is the fill price's, else dropped and counted), `cancel_ack` at `canceled`, `reject` at
+`invalid` (an invalid order without a `submitted` event gets no `ack`); `new`, `none`, `cancelPending`,
+`updateSubmitted` are counted. Types: Market, MarketOnOpen, MarketOnClose -> market; Limit -> limit; StopMarket,
+TrailingStop -> stop; StopLimit, LimitIfTouched -> stop_limit at `limitPrice`; OptionExercise and the combo types
+fail `QT-INPUT-002`. Without an orders section the order is built from its first event (`orderType` required).
+Events given twice are counted once. `QT-CONFIG-001`: two orders sections, two `algorithmId`s, the same input twice,
+option `data_tz` (LEAN times are UTC). `QT-INPUT-002`: an orders section without any event, an event of an order the
+section does not hold, of another symbol, or the same event id with other content, fills beyond the order quantity,
+a final status (filled, canceled, invalid) without its event. With `timeframe`, a fill stamped after its order's
+submission (LEAN stamps the bar's end) moves one bar earlier, never before the submission (counted).
+
+**Shared** (all three; LEAN has no `data_tz`): times are ISO 8601 text, or a date alone (midnight; precision `s`), naive in option `data_tz`
 (default UTC; precision from the text), or epoch ms; doubles are read as decimals rounded to 15 significant digits, then rounded half-even to the instrument
 exponents (counted), in place, so a reconciliation quotes the logged values. Options: `timeframe` (bar length; the
 fill time is known to `[t, t + timeframe)`), `fill_delay_bars` (fills `k` bars later; needs `timeframe`),
@@ -72,10 +94,10 @@ takes the live `order_key`, and each of its fills stamped before the live order'
 placement (counted; the bar time kept in the fill's `reason`). With option `pair_with` the importer pairs against
 that log and warns with its orders' sha256 and venue.
 
-`reconcile_backtrader(sim, live, out, ...)` / `reconcile_vectorbt(...)`: a live arm whose every order is a
+`reconcile_backtrader(sim, live, out, ...)` / `reconcile_vectorbt(...)` / `reconcile_lean(...)`: a live arm whose every order is a
 simulator's or simulated fails `QT-CONFIG-001` unless `arms_as_given`; several venues need option `venue`. Without
 an instrument map the live log's ids and scales are used, instruments without an id numbered after its largest id.
 Writes `<out>/live` (the live rows with those ids), `<out>/sim`, `<out>/score` (`window_ns` default 1 day) and
-`reconcile.json` / `reconcile_orders.csv` with `kind = backtrader | vectorbt`; `time_tol_ns` defaults to 0 with
+`reconcile.json` / `reconcile_orders.csv` with `kind = backtrader | vectorbt | lean`; `time_tol_ns` defaults to 0 with
 `timeframe` (bar resolution) and 60 s without. The spec's `live` inputs are the live log's table files, hashed into
 `run_id`. Below 50% pairing coverage, and for simulator instruments absent from the live log, the report warns.

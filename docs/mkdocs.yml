@@ -53,6 +53,7 @@ nav:
       - Decompose the sim-live gap: how-to/decompose-the-sim-live-gap.md
       - Reconcile Freqtrade and Hummingbot runs: how-to/reconcile-freqtrade-hummingbot.md
       - Reconcile a Backtrader or VectorBT backtest: how-to/reconcile-backtrader-vectorbt.md
+      - Reconcile a LEAN backtest: how-to/reconcile-lean.md
       - Score my own live fills (Bitstamp, IBKR on IEX): how-to/own-account-live-fills.md
       - Score market making on Kalshi or Polymarket: how-to/prediction-market-making.md
       - Referee my simulator: how-to/referee-your-simulator.md
@@ -95,7 +96,7 @@ nav:
           - Fill toxicity: design/extensions/fill-toxicity.md
           - Forecast referee: design/extensions/forecast-referee.md
           - Freqtrade and Hummingbot reconciliation: design/extensions/freqtrade-hummingbot.md
-          - Backtrader and VectorBT importers: design/extensions/backtrader-vectorbt.md
+          - Backtrader, VectorBT and LEAN importers: design/extensions/backtrader-vectorbt.md
           - Trading halts censor shadows: design/extensions/halt-censoring.md
           - hftbacktest integration: design/extensions/hftbacktest-integration.md
           - Impact and queue-share warnings: design/extensions/impact-flag.md

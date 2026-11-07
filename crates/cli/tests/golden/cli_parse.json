@@ -4790,6 +4790,62 @@
       "live",
       "import",
       "--venue",
+      "sim-lean",
+      "--in",
+      "lean_result.json",
+      "--in",
+      "lean-order-events.json",
+      "--out",
+      "lean-sim",
+      "--instrument-map",
+      "map.csv",
+      "--option",
+      "pair_with=live",
+      "--option",
+      "timeframe=1h"
+    ],
+    "command": {
+      "path": [
+        "live",
+        "import"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "venue": "sim_lean",
+        "inputs": [
+          {
+            "path": "lean_result.json"
+          },
+          {
+            "path": "lean-order-events.json"
+          }
+        ],
+        "out": "lean-sim",
+        "instrument_map": {
+          "path": "map.csv"
+        },
+        "_cli": {
+          "options": {
+            "pair_with": "live",
+            "timeframe": "1h"
+          }
+        }
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "live",
+      "import",
+      "--venue",
       "sim-vectorbt",
       "--in",
       "orders.csv",
