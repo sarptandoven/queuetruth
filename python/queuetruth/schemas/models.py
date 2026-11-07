@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any, ClassVar, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, SerializerFunctionWrapHandler, model_serializer
 
 HEX16 = r"^[0-9a-f]{16}$"
 HEX64 = r"^[0-9a-f]{64}$"
@@ -188,6 +188,20 @@ class FeedGap(QtModel):
     reason: str
 
 
+class TradingHaltSpan(QtModel):
+    """A span `[ts_start, ts_end)` in which one instrument was not in continuous trading as its feed reported it
+    (SPEC 1.2, halt censoring): replay, `why`, the zoo, calibration and features censor shadows there."""
+
+    instrument_id: int
+    ts_start: int
+    #: The message that resumed trading; the end of the input's session day when trading did not resume.
+    ts_end: int
+    #: Feed state that opened the span, `<source>_<message type>:<state>` (e.g. `itch_H:P`, `iex_O:O`).
+    state: str
+    #: Feed reason code (ITCH `Reason`, e.g. `LUDP`); empty when the feed gives none.
+    reason: str
+
+
 class DataQuality(QtDoc):
     """Data-quality counters and verdict (SPEC 5.1.5)."""
 
@@ -209,9 +223,22 @@ class DataQuality(QtDoc):
     hidden_prints: int
     off_price_executions: int
     feed_gaps: list[FeedGap]
+    #: 1.2: spans in which an instrument was not in continuous trading (venue state, never part of the verdict);
+    #: omitted when empty.
+    trading_halts: list[TradingHaltSpan] = Field(default_factory=list)
     source_specific: dict[str, int]
     verdict: Literal["clean", "warnings", "unusable"]
     reasons: list[str]
+
+    @model_serializer(mode="wrap")
+    def _omit_empty_halts(self, handler: SerializerFunctionWrapHandler):
+        """As the engine writes it: `trading_halts` is left out when empty, so a document without halts dumps the
+        same keys as before schema 1.2 and as `data_quality.json` on disk. No return annotation: pydantic then keeps
+        the model's own schema in serialization mode (the HTTP API's OpenAPI document), not a generic object."""
+        out = handler(self)
+        if not out.get("trading_halts"):
+            out.pop("trading_halts", None)
+        return out
 
 
 class IngestSummary(QtDoc):
@@ -1241,6 +1268,39 @@ class ArmCounts(QtModel):
     sim: int
 
 
+class PnlGapParts(QtModel):
+    """1.2: one value per part of the P&L gap (`queuetruth.score.pnl_gap`): fills the simulator grants that live did
+    not get, fills live got that it misses, the timing of fills both arms got, and fees."""
+
+    granted: float | None
+    denied: float | None
+    timing: float | None
+    fees: float | None
+
+
+class PnlGap(QtModel):
+    """1.2: the scorecard's P&L gap in one currency at one markout horizon (`queuetruth.score.pnl_gap`): the per-order
+    mean of `qt.score_shortfall.total_ccy` (simulator minus live, net of fees; positive = the simulator's P&L is too
+    high) with its 95% block-bootstrap CI, the direction (a finding only when the CI excludes 0), why it is not
+    computable or not answerable, the parts (per-order means that add up to the gap) with their CIs on the same
+    draws, the part a finding mostly comes from, and the plain sentence."""
+
+    horizon_ns: int
+    currency: str | None
+    n_valued: int
+    n_unvalued: int
+    mean_ccy: float | None
+    ci_lo: float | None
+    ci_hi: float | None
+    direction: Literal["sim_too_high", "sim_too_low", "no_significant_difference", "not_computable", "not_answerable"]
+    reason: str | None
+    parts_ccy: PnlGapParts
+    parts_ci_lo: PnlGapParts
+    parts_ci_hi: PnlGapParts
+    main_part: Literal["granted", "denied", "timing", "fees"] | None
+    headline: str
+
+
 class ScorecardSummary(QtDoc):
     """Summary of `score` (SPEC 5.7)."""
 
@@ -1281,6 +1341,9 @@ class ScorecardSummary(QtDoc):
     n_taker_fills: ArmCounts | None = None
     #: 1.1 (3.11 #9): the live log is fills-only; null = not reported (v0.1: `fills_only:` warning).
     fills_only: bool | None = None
+    #: 1.2: the P&L gap per currency at the markout equivalence horizon (from `qt.score_shortfall`); null = not
+    #: reported (no `--out`, or a summary written before 1.2).
+    pnl_gap: list[PnlGap] | None = None
 
 
 # ---- referee, why, report, export, misc -------------------------------------------------------------------------

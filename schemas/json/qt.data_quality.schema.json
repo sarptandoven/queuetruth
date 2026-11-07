@@ -31,6 +31,41 @@
       ],
       "title": "FeedGap",
       "type": "object"
+    },
+    "TradingHaltSpan": {
+      "additionalProperties": false,
+      "description": "A span `[ts_start, ts_end)` in which one instrument was not in continuous trading as its feed reported it\n(SPEC 1.2, halt censoring): replay, `why`, the zoo, calibration and features censor shadows there.",
+      "properties": {
+        "instrument_id": {
+          "title": "Instrument Id",
+          "type": "integer"
+        },
+        "ts_start": {
+          "title": "Ts Start",
+          "type": "integer"
+        },
+        "ts_end": {
+          "title": "Ts End",
+          "type": "integer"
+        },
+        "state": {
+          "title": "State",
+          "type": "string"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "instrument_id",
+        "ts_start",
+        "ts_end",
+        "state",
+        "reason"
+      ],
+      "title": "TradingHaltSpan",
+      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -109,6 +144,13 @@
         "$ref": "#/$defs/FeedGap"
       },
       "title": "Feed Gaps",
+      "type": "array"
+    },
+    "trading_halts": {
+      "items": {
+        "$ref": "#/$defs/TradingHaltSpan"
+      },
+      "title": "Trading Halts",
       "type": "array"
     },
     "source_specific": {

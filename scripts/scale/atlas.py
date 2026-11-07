@@ -18,6 +18,9 @@ content digests), then writes
   model them, finding F2) and `exact_ok` (both);
 - `strata_by_tier.parquet`: the queue-decile and liquidity-bucket strata summed over the symbols of each tier, apart
   for `exact_ok` and other symbol-days;
+- `pnl_cells.parquet` (when the plan's units computed the P&L error, `plan.py` without `--no-pnl`): the units'
+  `pnl_stats` summed over blocks, one row per (mode, shadow population, model, markout horizon, symbol-day) with
+  the `blocks.PNL_SUMS` and the same `tier`, `replay_ok`, `trading_ok` and `exact_ok`;
 - `day_manifest.json`: run id, date, the day's Merkle root over its leaves (with proofs), invalid / missing shards,
   units whose replay checks flagged anything, `flagged_symbols` (per symbol-day that is not `exact_ok`: unit, replay
   flags, how they were attributed: `leaf`, `symbol_flags` or the whole `unit`, the causes a `trace_flags.py` sidecar
@@ -32,6 +35,11 @@ combine (any number of days; `--flag-policy label`, the default, keeps the flagg
   over dates x symbols (`blocks.cluster_bootstrap`), `overfill_bias` at the last horizon, BH-adjusted p-values
   of the bias across models and horizons within (mode, population, tier), and `n_flagged_symbol_days`,
   `flagged_n`, `flagged_share` (the symbol-days that are not `exact_ok` and their share of `n`; 0 under `exclude`);
+- `pnl_by_tier.parquet` (when some day has `pnl_cells`; `pnl_days` in the manifest lists them): per (mode, shadow
+  population, tier incl. `ALL`, model, markout horizon) the P&L error of `zoo-toxicity` (`pnl_bias_ticks`: simulated
+  minus exact P&L per order placed, in ticks at the mid `horizon_ns` after the first fill; positive = the model's
+  P&L is too high), the model's and the exact P&L, its grant / deny / timing parts and `pnl_bias_bps`, with 95%
+  CIs from the same two-way bootstrap and BH-adjusted p-values of `pnl_bias_ticks`;
 - `per_symbol.parquet`: per symbol, model, horizon, mode and population: the cross-day bias with a day-cluster
   bootstrap CI (symbols seen on >= 2 days), the empirical-Bayes estimate shrunk toward its tier (DerSimonian-Laird),
   and BH-adjusted p-values across symbols per (mode, population, model, horizon); `n_flagged_days` and `flags`
@@ -59,6 +67,29 @@ import symbol_exactness as SE  # noqa: E402
 
 SUMS = ("n", "sum_p", "n_y", "sum_d", "sum_sq", "sum_ll", "qty_n", "qty_num", "qty_den", "b", "c")
 CELL_KEYS = ["mode", "shadow_pop", "model_id", "population", "horizon_ns", "symbol", "session_date"]
+#: queuetruth.eval.blocks.PNL_SUMS (atlas does not import the engine at module level)
+PNL_SUMS = (
+    "pnl_n",
+    "pnl_grant",
+    "pnl_deny",
+    "pnl_timing",
+    "pnl_model",
+    "pnl_exact",
+    "pnl_bias",
+    "pnl_n_bps",
+    "pnl_bias_bps",
+)
+PNL_CELL_KEYS = ["mode", "shadow_pop", "model_id", "horizon_ns", "symbol", "session_date"]
+#: the P&L metrics of `pnl_by_tier` (queuetruth.eval.blocks.METRICS); the first is the headline
+PNL_METRICS = (
+    "pnl_bias_ticks",
+    "model_pnl_ticks",
+    "exact_pnl_ticks",
+    "pnl_grant_ticks",
+    "pnl_deny_ticks",
+    "pnl_timing_ticks",
+    "pnl_bias_bps",
+)
 STRATA_KEYS = [
     "mode",
     "shadow_pop",
@@ -82,9 +113,9 @@ TRADING_RULE = (
 )
 
 
-def _sum_by(t: Any, keys: list[str]) -> Any:
-    g = t.group_by(keys).aggregate([(f, "sum") for f in SUMS])
-    return g.select([*keys, *[f"{f}_sum" for f in SUMS]]).rename_columns([*keys, *SUMS])
+def _sum_by(t: Any, keys: list[str], sums: tuple[str, ...] = SUMS) -> Any:
+    g = t.group_by(keys).aggregate([(f, "sum") for f in sums])
+    return g.select([*keys, *[f"{f}_sum" for f in sums]]).rename_columns([*keys, *sums])
 
 
 def symbol_exactness(
@@ -232,24 +263,45 @@ def reduce_day(
         }
     ts_info["symbols_not_trading_with_shadows"] = sum(1 for s in not_trading if shadows_of.get(s, 0))
     ts_info["symbols_not_trading_replay_ok"] = sum(1 for s in not_trading if s not in replay_flagged)
-    cells, strata = [], []
-    for m in ok:
-        t = pq.read_table(Path(m["_dir"]) / m["files"]["block_stats"]["file"])
-        if not t.num_rows:
-            continue
+
+    def labelled(t: Any) -> Any:
         syms = t.column("symbol").to_pylist()
         t = t.append_column("tier", pa.array([tier.get(s, "?") for s in syms], pa.utf8()))
         t = t.append_column("replay_ok", pa.array([s not in replay_flagged for s in syms], pa.bool_()))
         t = t.append_column("trading_ok", pa.array([s not in not_trading for s in syms], pa.bool_()))
-        t = t.append_column("exact_ok", pa.array([s not in flagged_syms for s in syms], pa.bool_()))
+        return t.append_column("exact_ok", pa.array([s not in flagged_syms for s in syms], pa.bool_()))
+
+    flag_cols = ["tier", "replay_ok", "trading_ok", "exact_ok"]
+    cells, strata, pnl = [], [], []
+    pnl_units, pnl_errors = 0, []
+    for m in ok:
+        if "pnl_stats" in m["files"]:
+            pnl_units += 1
+            pnl_errors += [
+                {"unit_id": m["unit_id"], "run": k, "error": v["error"]}
+                for k, v in sorted((m["leaf"].get("pnl") or {}).items())
+                if "error" in v
+            ]
+            pt = pq.read_table(Path(m["_dir"]) / m["files"]["pnl_stats"]["file"])
+            if pt.num_rows:
+                pnl.append(_sum_by(labelled(pt), [*PNL_CELL_KEYS, *flag_cols], PNL_SUMS))
+        t = pq.read_table(Path(m["_dir"]) / m["files"]["block_stats"]["file"])
+        if not t.num_rows:
+            continue
+        t = labelled(t)
         is_all = pc.equal(t["stratum_kind"], "all")
-        cells.append(_sum_by(t.filter(is_all), [*CELL_KEYS, "tier", "replay_ok", "trading_ok", "exact_ok"]))
+        cells.append(_sum_by(t.filter(is_all), [*CELL_KEYS, *flag_cols]))
         strata.append(_sum_by(t.filter(pc.invert(is_all)), STRATA_KEYS))
     out.mkdir(parents=True, exist_ok=True)
     cells_t = pa.concat_tables(cells) if cells else pa.table({})
     strata_t = _sum_by(pa.concat_tables(strata), STRATA_KEYS) if strata else pa.table({})
     pq.write_table(cells_t, out / "cells_all.parquet", compression="zstd")
     pq.write_table(strata_t, out / "strata_by_tier.parquet", compression="zstd")
+    if pnl_units:
+        pnl_t = pa.concat_tables(pnl) if pnl else pa.table({})
+        if pnl_t.num_rows:
+            pnl_t = pnl_t.sort_by([(k, "ascending") for k in PNL_CELL_KEYS])
+        pq.write_table(pnl_t, out / "pnl_cells.parquet", compression="zstd")
     leaves = [m["leaf_hash"] for m in ok]
     by_tier: dict[str, list] = defaultdict(list)
     aborts: dict[str, int] = defaultdict(int)
@@ -305,6 +357,12 @@ def reduce_day(
         "exactness_note": "per-tier sums count a unit holding several tiers in each of them; overall is exact",
         "exactness_by_unit_tiers": {t: sum_exactness(v) for t, v in sorted(by_tier.items())},
         "zoo_hbt_312_abort": dict(sorted(aborts.items())),
+        "pnl": {
+            "units_with_pnl": pnl_units,
+            "errors": pnl_errors,
+            "rule": "pnl_cells.parquet: the P&L terms of zoo-toxicity (queuetruth.eval.toxicity) summed per symbol-day "
+            "(blocks.pnl_block_stats, scripts/scale/unit.py); absent when no unit computed them",
+        },
         "telemetry": {
             "records": sum(t["records"] for t in tel),
             "shadows": sum(t["shadows"] for t in tel),
@@ -516,6 +574,61 @@ def combine(
                 board += lb
     pq.write_table(pa.Table.from_pylist(board), out / "leaderboard_by_tier.parquet", compression="zstd")
 
+    # 1b. P&L error by tier (the days whose units computed it), the same two-way bootstrap
+    pnl_days = [dm["date"] for dm, d in days if (d / "pnl_cells.parquet").exists()]
+    pnl_tables = [pq.read_table(d / "pnl_cells.parquet") for dm, d in days if dm["date"] in pnl_days]
+    pnl_cells = (
+        pa.concat_tables([t for t in pnl_tables if t.num_rows], promote_options="default")
+        if any(t.num_rows for t in pnl_tables)
+        else None
+    )
+    if pnl_cells is not None and flag_policy == "exclude":
+        pnl_cells = pnl_cells.filter(pnl_cells["exact_ok"])
+    pnl_board = []
+    if pnl_cells is not None and pnl_cells.num_rows:
+        for mode in sorted(set(pnl_cells.column("mode").to_pylist())):
+            for pop in sorted(set(pnl_cells.column("shadow_pop").to_pylist())):
+                base = pnl_cells.filter(
+                    pc.and_(pc.equal(pnl_cells["mode"], mode), pc.equal(pnl_cells["shadow_pop"], pop))
+                )
+                for tr in [*sorted(set(base.column("tier").to_pylist())), "ALL"]:
+                    st = base if tr == "ALL" else base.filter(pc.equal(base["tier"], tr))
+                    rows = {}
+                    for metric in PNL_METRICS:
+                        for r in B.cluster_bootstrap(
+                            st,
+                            metric=metric,
+                            clusters=("session_date", "symbol"),
+                            group=("model_id", "horizon_ns"),
+                            bootstrap_b=bootstrap_b,
+                            seed=seed,
+                        ):
+                            row = rows.setdefault(
+                                (r["model_id"], r["horizon_ns"]),
+                                {
+                                    "mode": mode,
+                                    "shadow_pop": pop,
+                                    "tier": tr,
+                                    "model_id": r["model_id"],
+                                    "horizon_ns": r["horizon_ns"],
+                                    "n": r["n"],
+                                    "n_dates": r["n_session_date"],
+                                    "n_symbols": r["n_symbol"],
+                                },
+                            )
+                            for f in ("value", "ci_lo", "ci_hi", "se"):
+                                row[f"{metric}_{f}"] = r[f]
+                            if metric == "pnl_bias_ticks":
+                                row["pnl_bias_ticks_p_boot"] = r["p_boot"]
+                    lb = list(rows.values())
+                    adj = B.bh([r["pnl_bias_ticks_p_boot"] if r["pnl_bias_ticks_p_boot"] is not None else np.nan
+                                for r in lb])  # fmt: skip
+                    for r, q in zip(lb, adj, strict=True):
+                        r["pnl_bias_ticks_p_bh"] = None if np.isnan(q) else float(q)
+                    pnl_board += lb
+    if pnl_days:
+        pq.write_table(pa.Table.from_pylist(pnl_board), out / "pnl_by_tier.parquet", compression="zstd")
+
     # 2. per symbol across days (vectorised day bootstrap per (mode, pop, model, horizon))
     date_list = sorted(set(cells.column("session_date").to_pylist()))
     di = {d: i for i, d in enumerate(date_list)}
@@ -645,6 +758,7 @@ def combine(
         "symbol_days": sum(d["symbol_days"] for d, _ in days),
         "distinct_symbols": len(set(sym_all)),
         "flag_policy": flag_policy,
+        "pnl_days": pnl_days,
         "flagged_symbol_days": flagged_days,
         "flagged_cell_rows": n_rows_flagged,
         "days_without_symbol_exactness": no_symbols,
@@ -662,6 +776,7 @@ def combine(
         "distinct_symbols": manifest["distinct_symbols"],
         "flag_policy": flag_policy,
         "flagged_symbol_days": len(flagged_days),
+        "pnl_days": len(pnl_days),
     }
 
 

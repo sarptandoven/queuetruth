@@ -333,6 +333,13 @@ impl Session {
         to_py(r)
     }
 
+    /// Replays whole events up to `ts` (complete events whose records are all at or before `ts`; the end of the data
+    /// also applies and ends an unterminated tail).
+    fn advance_events_to(&self, py: Python<'_>, ts: i64) -> PyResult<()> {
+        let r = py.detach(|| self.with(|s| s.advance_events_to(ts)))?;
+        to_py(r)
+    }
+
     /// `{"bid": (price, qty, count) | None, "ask": ...}` or None before the instrument's first record.
     fn bbo<'py>(&self, py: Python<'py>, instrument_id: u32) -> PyResult<Option<Bound<'py, PyDict>>> {
         let Some(b) = self.with(|s| s.bbo(instrument_id))? else {
@@ -355,6 +362,121 @@ impl Session {
     fn queue_ahead(&self, instrument_id: u32, side: &str, price: i64) -> PyResult<Option<(u64, u32)>> {
         let side = book_side(side)?;
         self.with(|s| s.queue_ahead(instrument_id, side, price))
+    }
+
+    /// A session that also takes shadow orders, from a replay spec (JSON; its `shadows` and `amends` must be unset):
+    /// every partition engine is configured as `replay` configures it.
+    #[staticmethod]
+    fn from_spec(py: Python<'_>, spec_json: &str) -> PyResult<Self> {
+        let s = to_py(py.detach(|| {
+            let spec: ReplaySpec =
+                serde_json::from_str(spec_json).map_err(|e| QtError::Config(format!("session spec: {e}")))?;
+            qt_replay::Session::open_replay(&spec)
+        }))?;
+        Ok(Self { inner: Mutex::new(s) })
+    }
+
+    /// Every record with `ts_event` at or before this was applied.
+    #[getter]
+    fn position(&self) -> PyResult<i64> {
+        self.with(|s| s.position())
+    }
+
+    /// Sends the shadows of a `qt.shadow_spec` table (any `__arrow_c_stream__` object), each with `ts_submit` at or
+    /// after the position, in row order.
+    fn submit(&self, py: Python<'_>, shadows: Bound<'_, PyAny>) -> PyResult<()> {
+        let (batches, _) = arrow_ffi::stream_from_python(&shadows)?;
+        let r = py.detach(|| {
+            // decode everything first, then submit all or none
+            let mut specs = Vec::new();
+            for b in &batches {
+                match qt_schema::codec::batch_to_shadow_specs(b) {
+                    Ok(v) => specs.extend(v),
+                    Err(e) => return Ok(Err(e)),
+                }
+            }
+            self.with(|s| s.submit_all(specs))
+        })?;
+        to_py(r)
+    }
+
+    /// Sends a cancel at `ts` (at or after the position) for a shadow without one.
+    fn cancel(&self, py: Python<'_>, shadow_id: &str, ts: i64) -> PyResult<()> {
+        let r = py.detach(|| self.with(|s| s.cancel(shadow_id, ts)))?;
+        to_py(r)
+    }
+
+    /// Sends a priority-keeping reduction to `new_qty` at `ts` (at or after the position).
+    fn amend(&self, py: Python<'_>, shadow_id: &str, ts: i64, new_qty: u64) -> PyResult<()> {
+        let r = py.detach(|| self.with(|s| s.amend(shadow_id, ts, new_qty)))?;
+        to_py(r)
+    }
+
+    /// Each shadow as a replay ending now would report it: a dict per id with `status` (`pending`, `live`,
+    /// `done`), the `qt.shadow_results` columns the state determines (`end_state` None until done), `ts_end`,
+    /// `queue_ahead` and `rank`.
+    fn shadow_states<'py>(&self, py: Python<'py>, shadow_ids: Vec<String>) -> PyResult<Vec<Bound<'py, PyDict>>> {
+        let peeks = to_py(self.with(|s| {
+            shadow_ids
+                .iter()
+                .map(|id| s.shadow_peek(id))
+                .collect::<QtResult<Vec<_>>>()
+        })?)?;
+        let mut out = Vec::with_capacity(peeks.len());
+        for p in peeks {
+            let r = &p.result;
+            let d = PyDict::new(py);
+            let status = match p.status {
+                qt_replay::ShadowStatus::Pending => "pending",
+                qt_replay::ShadowStatus::Live => "live",
+                qt_replay::ShadowStatus::Done => "done",
+            };
+            d.set_item("shadow_id", &r.shadow_id)?;
+            d.set_item("status", status)?;
+            let done = p.status == qt_replay::ShadowStatus::Done;
+            d.set_item("end_state", done.then(|| r.end_state.to_string()))?;
+            d.set_item("price", r.price)?;
+            d.set_item("qty", r.qty)?;
+            d.set_item("ts_submit", r.ts_submit)?;
+            d.set_item("ts_live", r.ts_live)?;
+            d.set_item("ts_activated_event", r.ts_activated_event)?;
+            d.set_item("ts_cancel_effective", r.ts_cancel_effective)?;
+            d.set_item("ts_first_fill", r.ts_first_fill)?;
+            d.set_item("ts_last_fill", r.ts_last_fill)?;
+            d.set_item("ts_full_fill", r.ts_full_fill)?;
+            d.set_item("filled_qty", r.filled_qty)?;
+            d.set_item("n_fills", r.n_fills)?;
+            d.set_item("out_of_session", r.out_of_session)?;
+            d.set_item("ts_end", p.ts_end)?;
+            d.set_item("queue_ahead", p.queue_ahead)?;
+            d.set_item("rank", p.rank)?;
+            out.push(d);
+        }
+        Ok(out)
+    }
+
+    /// The shadow fills since the last call, as a `qt.shadow_fills` pyarrow.Table.
+    fn take_fills(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let (b, n) = to_py(self.with(|s| s.pending_fills())?)?;
+        let schema = b.schema();
+        let t = arrow_ffi::table_to_pyarrow(py, vec![b], schema)?.unbind();
+        self.with(|s| s.consume_fills(n))?; // only once the table exists: a failed hand-off loses no fill
+        Ok(t)
+    }
+
+    /// The results of the shadows that ended since the last call, as a `qt.shadow_results` pyarrow.Table.
+    fn take_results(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let (b, n) = to_py(self.with(|s| s.pending_results())?)?;
+        let schema = b.schema();
+        let t = arrow_ffi::table_to_pyarrow(py, vec![b], schema)?.unbind();
+        self.with(|s| s.consume_results(n))?;
+        Ok(t)
+    }
+
+    /// Replays to the end of the data and ends the shadows still open (their results join `take_results`).
+    fn finish(&self, py: Python<'_>) -> PyResult<()> {
+        let r = py.detach(|| self.with(qt_replay::Session::finish))?;
+        to_py(r)
     }
 }
 

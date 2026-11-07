@@ -3,8 +3,9 @@
 
     uv run --frozen --no-sync python scripts/scale/findings/repro_halt_shadow_fill.py [--keep DIR]
 
-Exit 0 when the engine follows the contract, 1 while it fills shadows during the halt (the current behaviour), 2 on
-a setup error. See `README.md` in this directory (finding F2) for the 2020-01-30 evidence.
+Exit 0 when the engine follows the contract (fixed after 0.2.0: ingest records the `H` spans in `data_quality.json`
+and replay censors shadows there), 1 if it fills shadows during the halt (0.1.0 to 0.2.0), 2 on a setup error. See
+`README.md` in this directory (finding F2) for the 2020-01-30 evidence.
 
 The contract: `docs/design/spec.md` 1.2 (non-goals for v0.1) says "No auction modelling: shadows resting through an
 auction or halt are censored (`end_state = censored_gap`)", and `docs/concepts/exact-truth.md` ("Where exactness
@@ -37,8 +38,8 @@ Actual (queuetruth 0.1.1, `_core` sha256 004ecd3b...): `S1` filled 100 @ 10.00 a
 maker) and `S2` filled 100 @ 9.99 at 10:02:30 (reason `crossed_at_live`, taker against the halted 9.99 ask), both
 `end_state = filled`. The exact fill rule assumes continuous matching. The book replay itself is exact (no invariant
 flag: the displayed book never crosses here), so the replay checks cannot see this; what is wrong is the shadows'
-fill truth while the symbol is not trading. The ITCH mapper drops `H` messages (`crates/ingest/src/itch/mapper.rs`,
-`Body::TradingAction => {}`), so the engine cannot know.
+fill truth while the symbol is not trading. Up to 0.2.0 the ITCH mapper dropped `H` messages, so the engine could not
+know; it now records them (`qt_ingest::halts`, `qt.data_quality.trading_halts`).
 
 The report prints prices in dollars and times as seconds since midnight (New York) in every section.
 """

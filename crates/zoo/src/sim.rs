@@ -266,6 +266,11 @@ pub struct PartitionSim {
     unsided_trades: u64,
     start_best: (Option<Px>, Option<Px>),
     admin_events: Vec<Ts>,
+    /// Trading halts `[start, end)` of the partition (SPEC 1.2), sorted and merged (`set_trading_halts`).
+    halts: Vec<(Ts, Ts)>,
+    /// Halts whose start the L2 arm / the `hbt_l3_fifo` arm has applied.
+    next_halt_l2: usize,
+    next_halt_l3: usize,
     record: bool,
     tapes: Vec<Vec<Op>>,
     warnings: Vec<String>,
@@ -405,6 +410,9 @@ impl PartitionSim {
             unsided_trades: 0,
             start_best: (None, None),
             admin_events: Vec::new(),
+            halts: Vec::new(),
+            next_halt_l2: 0,
+            next_halt_l3: 0,
             record: false,
             tapes: vec![Vec::new(); n],
             warnings: Vec::new(),
@@ -444,6 +452,30 @@ impl PartitionSim {
                 index.remove(&key);
             }
         }
+    }
+
+    /// Trading halts `[start, end)` of the partition (SPEC 1.2; the spans `Engine::set_trading_halts` takes): each
+    /// start is an administrative end (audit A2) that ends every live pair of both arms `censored_gap`, and a shadow
+    /// whose `ts_live` falls in a halt never goes live in either arm (the exact engine censors it at its `ts_live`
+    /// without activating it, so no truth row reports it). Call before the first record.
+    pub fn set_trading_halts(&mut self, spans: &[(Ts, Ts)]) {
+        let mut v: Vec<(Ts, Ts)> = spans.iter().copied().filter(|(a, b)| b > a).collect();
+        v.sort_unstable();
+        let mut merged: Vec<(Ts, Ts)> = Vec::with_capacity(v.len());
+        for (a, b) in v {
+            match merged.last_mut() {
+                Some(last) if a <= last.1 => last.1 = last.1.max(b),
+                _ => merged.push((a, b)),
+            }
+        }
+        self.admin_events.extend(merged.iter().map(|(a, _)| *a));
+        self.halts = merged;
+    }
+
+    /// Whether `ts` falls in a trading halt.
+    fn halted_at(&self, ts: Ts) -> bool {
+        let k = self.halts.partition_point(|&(start, _)| start <= ts);
+        k > 0 && ts < self.halts[k - 1].1
     }
 
     fn stop_l2(&mut self, i: u32, why: PairEnd) {
@@ -494,6 +526,16 @@ impl PartitionSim {
             let s = &mut self.shadows[i as usize];
             if s.status == Status::Pending {
                 s.status = Status::Done;
+            }
+        }
+        // trading halts that started before this batch: nothing is live through them (SPEC 1.2)
+        while self.next_halt_l2 < self.halts.len() && self.halts[self.next_halt_l2].0 < ts {
+            self.next_halt_l2 += 1;
+            let live: Vec<u32> = (0..self.shadows.len() as u32)
+                .filter(|&i| self.shadows[i as usize].status == Status::Live)
+                .collect();
+            for i in live {
+                self.stop_l2(i, PairEnd::CensoredGap);
             }
         }
         // activations
@@ -576,6 +618,7 @@ impl PartitionSim {
         }
         let (k, q) = Self::amends_before_live(&s.input, s.next_amend);
         {
+            let halted = self.halted_at(ts_live);
             let s = &mut self.shadows[i as usize];
             s.next_amend = k;
             match q {
@@ -585,6 +628,11 @@ impl PartitionSim {
                 }
                 Some(q) => s.qty_f = q as f64,
                 None => {}
+            }
+            if halted {
+                // SPEC 1.2: never live in a trading halt
+                s.status = Status::Done;
+                return;
             }
         }
         let s = &self.shadows[i as usize];
@@ -851,6 +899,14 @@ impl PartitionSim {
             book.best(BookSide::Bid).map(|l| l.price),
             book.best(BookSide::Ask).map(|l| l.price),
         );
+        // trading halts that started before this event: nothing is live through them (SPEC 1.2)
+        while self.next_halt_l3 < self.halts.len() && self.halts[self.next_halt_l3].0 < ts {
+            self.next_halt_l3 += 1;
+            let live: Vec<u32> = self.l3_index.values().flat_map(|v| v.iter().copied()).collect();
+            for i in live {
+                self.stop_l3(i);
+            }
+        }
         while self.next_mbo < self.pending.len() {
             let i = self.pending[self.next_mbo];
             if self.shadows[i as usize].input.ts_live >= ts {
@@ -858,6 +914,7 @@ impl PartitionSim {
             }
             self.next_mbo += 1;
             let tick = self.cfg.tick;
+            let halted = self.halted_at(self.shadows[i as usize].input.ts_live);
             let s = &mut self.shadows[i as usize];
             let side = s.input.side;
             match resolve_price(
@@ -885,6 +942,11 @@ impl PartitionSim {
             let (k, q) = Self::amends_before_live(&s.input, s.l3_next_amend);
             s.l3_next_amend = k;
             if q == Some(0) {
+                s.l3_status = Status::Done;
+                continue;
+            }
+            if halted {
+                // SPEC 1.2: never live in a trading halt
                 s.l3_status = Status::Done;
                 continue;
             }

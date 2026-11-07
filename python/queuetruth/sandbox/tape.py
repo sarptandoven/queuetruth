@@ -17,6 +17,8 @@ nothing else of it), so a prefix replay meets every gap at the same event as the
 instrument inside them included, and no time past the cut enters a replay input. Every replay the sandbox runs during
 an episode reads this scratch dataset, so its input physically ends at the agent's visible cut. Prefixes nest (a later
 cut only appends), which is what makes a replay of a prefix equal to the same prefix of one full replay.
+With `materialize=False` (the sandbox's `session` stepping, which replays nothing during the episode) the tape is
+only the cursor: it releases the same records and prints and keeps the same counters, but writes no scratch dataset.
 `certification_view` builds the single-partition view of the original files (symlinks to the real paths resolved at
 open) that the final replay and `verify` run on.
 """
@@ -473,7 +475,9 @@ def _gap_doc(src: SourceDataset, cut: int | None) -> dict[str, Any] | None:
     """`data_quality.json` of a cut: the source document with every counter zeroed and the instrument's feed gaps
     with `ts_start < cut`, each ending at most at `cut` (a gap still in progress there gets `GAP_IN_PROGRESS` as its
     reason); with `cut = None` the source document with all of the instrument's gaps as they are (module docstring:
-    the engine acts on a gap at the first event after its start and reads nothing else of it)."""
+    the engine acts on a gap at the first event after its start and reads nothing else of it). The instrument's
+    trading halts (`trading_halts`, SPEC 1.2) are cut the same way: a halt the feed announced before the cut is
+    known at the cut, its end and any later halt are not."""
     if src.data_quality is None:
         return None
     doc = json.loads(json.dumps(src.data_quality))
@@ -487,6 +491,20 @@ def _gap_doc(src: SourceDataset, cut: int | None) -> dict[str, Any] | None:
             if int(g["ts_end"]) > cut:
                 g = {**g, "ts_end": cut, "reason": GAP_IN_PROGRESS}
         gaps.append(g)
+    halts = []
+    for h in doc.get("trading_halts") or []:
+        if int(h.get("instrument_id", -1)) != src.partition.instrument_id:
+            continue
+        if cut is not None:
+            if int(h["ts_start"]) >= cut:
+                continue
+            if int(h["ts_end"]) > cut:
+                h = {**h, "ts_end": cut}
+        halts.append(h)
+    if halts:
+        doc["trading_halts"] = halts
+    else:
+        doc.pop("trading_halts", None)
     if cut is not None:
         for k, v in list(doc.items()):
             if isinstance(v, int) and not isinstance(v, bool) and k != "schema_version":
@@ -507,15 +525,24 @@ def _write_json(path: Path, doc: dict[str, Any]) -> None:
 class Tape:
     """The scratch dataset holding the source partition up to the visible cut (module docstring)."""
 
-    def __init__(self, src: SourceDataset, root: Path, *, compact_every: int = 32, batch_rows: int = 65_536) -> None:
+    def __init__(
+        self,
+        src: SourceDataset,
+        root: Path,
+        *,
+        compact_every: int = 32,
+        batch_rows: int = 65_536,
+        materialize: bool = True,
+    ) -> None:
         self.src = src
         self.root = Path(root)
+        #: Writes the scratch dataset (module docstring); without it the tape only releases records.
+        self.materialize = materialize
         if self.root.exists():
             shutil.rmtree(self.root)
         p = src.partition
         self._mbo_dir = f"mbo/date={p.date}/instrument_id={p.instrument_id}"
         self._trades_dir = f"trades_source/date={p.date}/instrument_id={p.instrument_id}"
-        (self.root / self._mbo_dir).mkdir(parents=True)
         self._cursor = SourceCursor(src.mbo_paths(), batch_rows=batch_rows)
         self._prints = _PrintCursor(src.trades_paths())
         self._compact_every = compact_every
@@ -532,9 +559,11 @@ class Tape:
         self._template["price_exp_by_instrument"] = {
             k: v for k, v in (self._template.get("price_exp_by_instrument") or {}).items() if k == str(p.instrument_id)
         }
-        write_table(_instrument_row(src), self.root / "instruments.parquet")
-        self._write_manifest()
-        self._write_dq(None)
+        if materialize:
+            (self.root / self._mbo_dir).mkdir(parents=True)
+            write_table(_instrument_row(src), self.root / "instruments.parquet")
+            self._write_manifest()
+            self._write_dq(None)
 
     # -- public ---------------------------------------------------------------------------------------------------
 
@@ -551,6 +580,13 @@ class Tape:
         self.cut_ns = t
         mbo = self._cursor.take_until(t)
         prints = self._prints.take_until(t)
+        if not self.materialize:
+            if mbo is not None:
+                ts = _ts_int(mbo.column("ts_event"))
+                self.rows += mbo.num_rows
+                self.ts_min = int(ts.min()) if self.ts_min is None else min(self.ts_min, int(ts.min()))
+                self.ts_max = int(ts.max()) if self.ts_max is None else max(self.ts_max, int(ts.max()))
+            return mbo, prints
         if mbo is not None:
             rel = f"{self._mbo_dir}/part-{self._next:0{PART_DIGITS}d}.parquet"
             entry = write_table(mbo, self.root / rel, SCHEMAS["qt.mbo"])

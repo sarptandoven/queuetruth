@@ -69,8 +69,8 @@ section below is the command's own `--help` text.
   to stdout: the summary on exit 0 or 1, a `qt.error` document on exit 2 (see [Error codes](errors.md)). Logs,
   warnings and progress go to stderr.
 - Human output is answer-first: `zoo` prints the leaderboard of fill-rate bias by horizon (sorted at
-  `--sort-horizon`, default 60 s) and one plain sentence per model; `score` a `RESULT:` line, the equivalence result,
-  order counts, gate status and the 2x2 table (`--verbose` for every statistic); `calibrate` and `calibrate-live` the
+  `--sort-horizon`, default 60 s) and one plain sentence per model; `score` a `RESULT:` line, a `P&L:` line, the
+  equivalence result, order counts, gate status and the 2x2 table (`--verbose` for every statistic); `calibrate` and `calibrate-live` the
   fitted value, the held-out comparison with the default and a trust verdict; `why` the order, its event table and a
   one-sentence conclusion. The full document is always in the output directory and in `--format json`.
 - `queuetruth-core` runs the native commands; Python-only commands exit 2 with `QT-USAGE-001` there.
@@ -259,13 +259,13 @@ which the service exports (`make openapi`) and a test keeps current. The service
   give 404, never 403. Every response carries `X-Request-Id`.
 - **Lists** take `?limit=` (1 to 200, default 50) and `&starting_after=<id>` and return `qt.page`
   (`data`, `has_more`, `next_cursor`).
-- **Ids** are `<prefix>_<26-character ULID>`: `ten_`, `key_`, `up_`, `ds_`, `job_`, `rp_`, `cal_`, `sc_`, `rpt_`,
-  `del_`.
+- **Ids** are `<prefix>_<26-character ULID>`: `ten_`, `key_`, `up_`, `ds_`, `job_`, `rp_`, `zoo_`, `cal_`, `sc_`,
+  `rpt_`, `del_`.
 - **Times** in service documents are RFC 3339 UTC strings; inside analysis documents they are integer
   nanoseconds.
 - **Specs** are the same objects as in the CLI and Python API, except that datasets and files are referenced by
   `dataset_id`, `upload_id` or `job_file`, and `out` must be null (the worker picks a private directory).
-- **Rate limits** are per key; responses carry `RateLimit-Policy` and `RateLimit` headers (draft-based), and 429
+- **Rate limits** are per tenant (every key of a tenant draws on the same buckets); responses carry `RateLimit-Policy` and `RateLimit` headers (draft-based), and 429
   responses carry `Retry-After`.
 - **Job flow.** Estimate (`POST /v1/<kind>/estimate`), submit (`POST /v1/<kind>`, 202 with `Location` of the job),
   poll `GET /v1/jobs/{id}`, list files (`GET /v1/jobs/{id}/files`, presigned URLs valid at most 15 minutes),

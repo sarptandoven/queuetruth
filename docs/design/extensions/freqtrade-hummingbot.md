@@ -6,17 +6,17 @@ the reconciliation document and the candle-fill audit. Implemented in
 `python/queuetruth/live/importers/__init__.py` (`SIM_IMPORTERS["freqtrade"]`, `SIM_IMPORTERS["hummingbot"]`, and
 `BOT_IMPORTERS` for the live arm). User guide: `docs/how-to/reconcile-freqtrade-hummingbot.md`.
 
-## What is not wired yet (integrator)
+## Wiring
 
-- `LiveImportSpec.venue` is a closed `Literal`; it gains `freqtrade`, `hummingbot`, `sim_freqtrade` and
-  `sim_hummingbot` (additive, 1.x minor). `queuetruth.live.import_venue` routes `freqtrade` / `hummingbot` to
-  `BOT_IMPORTERS` and finishes with `_finish_import` (status `simulated` when the importer marked the orders so, as
-  `import_freqtrade_live` does); `sim_*` already route through `import_sim` once the literal accepts them.
-- CLI (`crates/cli/src/grammar.rs`): `live import --venue freqtrade|hummingbot|sim-freqtrade|sim-hummingbot`, with
-  `--option pair_with=PATH` repeatable (a list) and the options below; and a command
-  `queuetruth reconcile --kind freqtrade|hummingbot --sim PATH... --live PATH... --out DIR [--instrument-map F]
-  [--window D] [--option K=V]` calling `reconcile_freqtrade` / `reconcile_hummingbot`. Until then the Python API is
-  the entry point and `queuetruth score --live DIR --sim-log DIR` scores the written logs.
+- Done after 0.2.0: `LiveImportSpec.venue` accepts `freqtrade`, `hummingbot`, `sim_freqtrade` and `sim_hummingbot`
+  (schema 1.2, additive). `queuetruth.live.import_bot` (from `import_venue` and `queuetruth.api.import_live`) runs
+  `import_freqtrade_live` / `import_hummingbot_live` with the importer options (status `simulated` when the importer
+  marked the orders so); `sim_*` route through `import_sim`. The CLI takes `live import --venue
+  freqtrade|hummingbot|sim-freqtrade|sim-hummingbot` with `--option KEY=VALUE`, and `queuetruth reconcile --kind
+  freqtrade|hummingbot --sim PATH... --live PATH... --out DIR [--account A] [--instrument-map F] [--window D]
+  [--price-tol-bps X] [--time-tol D] [--no-score] [--arms-as-given] [--option K=V] [--max-rows N]`, a Python-only
+  group (`queuetruth.live.reconcile_cli`) listed in the clap grammar by `crates/cli/gen_python_commands.py`.
+- Still open: `--option pair_with=PATH` takes one path from the command line (the Python API takes a list).
 - Done at integration: `ReconcileReport` is the registered document `qt.bot_reconcile` (model in
   `queuetruth.schemas.reconcile`, still importable from the importer module), so `reconcile.json` carries
   `"schema": "qt.bot_reconcile"` and `"schema_version": 1`. Still open: `reconcile_orders.csv` as a Parquet table

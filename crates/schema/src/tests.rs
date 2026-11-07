@@ -1610,6 +1610,7 @@ fn v1_1_documents_accept_v0_1() {
         "discordance_clustered",
         "n_taker_fills",
         "fills_only",
+        "pnl_gap",
     ] {
         assert!(sc.as_object_mut().and_then(|o| o.remove(k)).is_some(), "{k}");
     }

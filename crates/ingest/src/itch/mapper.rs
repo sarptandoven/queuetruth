@@ -11,16 +11,22 @@
 //!   back of queue, side kept from the old order).
 //! - `P` -> `T` side `N` (hidden print, kind `hidden`); `Q` -> `T` side `N` (kind `cross`), omitted when shares are
 //!   0. `B` and the administrative types produce no records.
+//! - `H` (Stock Trading Action) states `H`, `P` and `Q`, and `h` (Operational Halt) of market `Q` (Nasdaq), open a
+//!   trading-halt span of the instrument; the message that returns it to continuous trading (`H` state `T`, `h`
+//!   action `T`) closes it (`Mapper::take_trading_halts`, SPEC 1.2 halt censoring). `K` and `W` only announce
+//!   times and levels: the `H` messages carry the state.
 //!
 //! Anomalies (unknown references, over-executions, ...) are counted and clamped, never fatal.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::hash::{BuildHasherDefault, Hasher};
 
+use qt_schema::json::TradingHaltSpan;
 use qt_schema::rows::{TradeKind, TradeRow};
 use qt_types::{MboEvent, QtError, QtResult, Side, Ts, flags};
 
 use super::message::{Body, Message, StockDirectory, stock_str};
+use crate::halts::{HaltKind, HaltTracker};
 
 /// Fixed multiplicative hasher for order ids (deterministic; never iterated for output).
 #[derive(Default, Clone, Copy)]
@@ -169,6 +175,8 @@ pub struct Mapper {
     pub stats: MapperStats,
     /// Selected stock directory entries in arrival order: (locate, directory).
     pub directory: Vec<(u16, StockDirectory)>,
+    /// Trading state of the selected instruments (`H` and `h` messages).
+    halts: HaltTracker,
 }
 
 impl Mapper {
@@ -196,6 +204,7 @@ impl Mapper {
             by_type: [0; 256],
             stats: MapperStats::default(),
             directory: Vec::new(),
+            halts: HaltTracker::new(),
         })
     }
 
@@ -271,6 +280,12 @@ impl Mapper {
             kind,
             maker_order_id: maker,
         }
+    }
+
+    /// The trading-halt spans of the file (`crate::halts`); a span still open ends at the next midnight of the
+    /// file's day, the end of its session (ITCH locates are per day). Call once, after the last message.
+    pub fn take_trading_halts(&mut self) -> Vec<TradingHaltSpan> {
+        self.halts.finish(self.midnight.saturating_add(86_400 * 1_000_000_000))
     }
 
     fn take_order(&mut self, order_ref: u64, locate: u16) -> Option<Order> {
@@ -524,14 +539,39 @@ impl Mapper {
                     .push(self.trade(ts, h.locate, px, shares, Side::None, TradeKind::Cross, None));
             }
             Body::Unknown => self.stats.anomalies.unknown_message_type += 1,
-            Body::TradingAction { .. }
-            | Body::RegSho { .. }
+            Body::TradingAction { state, reason, .. } => {
+                // States H (halted), P (paused), Q (quotation only) are not continuous trading; T is. Other bytes
+                // are not in the ITCH 5.0 table and change nothing.
+                if self.selected(h.locate) && matches!(state, b'H' | b'P' | b'Q' | b'T') {
+                    self.halts.apply(
+                        ts,
+                        u32::from(h.locate),
+                        HaltKind::Status,
+                        state != b'T',
+                        format!("itch_H:{}", state as char),
+                        String::from_utf8_lossy(&reason).trim().to_owned(),
+                    );
+                }
+            }
+            Body::OperationalHalt { market, action, .. } => {
+                // Market Q is Nasdaq, the book this feed carries (B and X are BX and PSX).
+                if self.selected(h.locate) && market == b'Q' && matches!(action, b'H' | b'T') {
+                    self.halts.apply(
+                        ts,
+                        u32::from(h.locate),
+                        HaltKind::Operational,
+                        action == b'H',
+                        format!("itch_h:{}", action as char),
+                        String::new(),
+                    );
+                }
+            }
+            Body::RegSho { .. }
             | Body::MarketParticipant { .. }
             | Body::MwcbLevels { .. }
             | Body::MwcbStatus { .. }
             | Body::IpoQuoting { .. }
             | Body::LuldCollar { .. }
-            | Body::OperationalHalt { .. }
             | Body::BrokenTrade { .. }
             | Body::Noii(_)
             | Body::Rpii { .. }
@@ -589,6 +629,117 @@ impl Mapper {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::itch::message::{Header, stock};
+
+    fn msg(kind: u8, locate: u16, ts_ns: u64, body: Body) -> Message {
+        Message {
+            header: Header {
+                kind,
+                locate,
+                tracking: 0,
+                ts_ns,
+            },
+            body,
+        }
+    }
+
+    fn directory(locate: u16, symbol: &str) -> Message {
+        msg(
+            b'R',
+            locate,
+            1,
+            Body::StockDirectory(StockDirectory {
+                stock: stock(symbol),
+                market_category: b'Q',
+                financial_status: b'N',
+                round_lot_size: 100,
+                round_lots_only: b'N',
+                issue_classification: b'C',
+                issue_sub_type: *b"Z ",
+                authenticity: b'P',
+                short_sale_threshold: b'N',
+                ipo_flag: b'N',
+                luld_tier: b'1',
+                etp_flag: b'N',
+                etp_leverage_factor: 0,
+                inverse_indicator: b'N',
+            }),
+        )
+    }
+
+    fn action(locate: u16, symbol: &str, ts_ns: u64, state: u8, reason: &[u8; 4]) -> Message {
+        msg(
+            b'H',
+            locate,
+            ts_ns,
+            Body::TradingAction {
+                stock: stock(symbol),
+                state,
+                reason: *reason,
+            },
+        )
+    }
+
+    fn op_halt(locate: u16, symbol: &str, ts_ns: u64, market: u8, action: u8) -> Message {
+        msg(
+            b'h',
+            locate,
+            ts_ns,
+            Body::OperationalHalt {
+                stock: stock(symbol),
+                market,
+                action,
+            },
+        )
+    }
+
+    /// SPEC 1.2: `H` states H, P and Q and `h` halts of market Q open spans; `T` closes them; an IPO's H to Q to T
+    /// is one span with its first state; other markets' operational halts and unselected symbols are ignored; a
+    /// span still open ends at the next midnight.
+    #[test]
+    fn trading_halt_spans_from_h_and_operational_halts() {
+        const MID: Ts = 1_000_000_000_000;
+        let mut m = Mapper::new(MID, Some(&["IPOX".into(), "LULD".into(), "OPS".into()]), -9).unwrap();
+        let mut out = MapOutput::default();
+        let msgs = [
+            directory(1, "IPOX"),
+            directory(2, "LULD"),
+            directory(3, "OPS"),
+            directory(4, "SKIP"),
+            action(1, "IPOX", 10, b'H', b"IPO1"),
+            action(2, "LULD", 11, b'T', b"    "),
+            action(4, "SKIP", 12, b'H', b"T1  "),
+            action(1, "IPOX", 20, b'Q', b"IPOQ"),
+            action(2, "LULD", 30, b'P', b"LUDP"),
+            op_halt(3, "OPS", 35, b'B', b'H'),
+            action(1, "IPOX", 40, b'T', b"    "),
+            action(2, "LULD", 50, b'T', b"    "),
+            op_halt(3, "OPS", 60, b'Q', b'H'),
+            action(2, "LULD", 70, b'X', b"    "),
+        ];
+        for x in &msgs {
+            m.apply(x, &mut out).unwrap();
+            assert!(
+                out.mbo.is_empty() && out.trades.is_empty(),
+                "state messages emit no records"
+            );
+        }
+        let span = |iid: u32, a: Ts, b: Ts, state: &str, reason: &str| TradingHaltSpan {
+            instrument_id: iid,
+            ts_start: MID + a,
+            ts_end: b,
+            state: state.into(),
+            reason: reason.into(),
+        };
+        assert_eq!(
+            m.take_trading_halts(),
+            vec![
+                span(1, 10, MID + 40, "itch_H:H", "IPO1"),
+                span(2, 30, MID + 50, "itch_H:P", "LUDP"),
+                span(3, 60, MID + 86_400 * 1_000_000_000, "itch_h:H", ""),
+            ]
+        );
+    }
 
     #[test]
     fn sequence_is_u64_and_checked() {

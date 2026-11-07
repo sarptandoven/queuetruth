@@ -1,10 +1,8 @@
-//! The `dbn` 0.71.0 up-front metadata allocation (reported, not fixed here; `known-crashes/dbn-alloc/`): a DBN file
-//! of a few bytes whose prelude announces up to `MAX_METADATA_BYTES` (256 MiB) of metadata makes the decoder
-//! allocate the announced length before reading any of it. This binary has its own global allocator that records the
-//! largest single allocation, so it holds one test only.
-//!
-//! When this test fails because the allocation is gone, `DbnReader::open` (or the decoder) was fixed: move the inputs
-//! to `regressions/dbn/` and drop `dbn_known_metadata_alloc` from the `dbn` and `ingest` harness filters.
+//! The `dbn` 0.71.0 up-front metadata allocation stays fixed (`regressions/dbn/alloc_*`): a DBN file of a few bytes
+//! whose prelude announces up to `MAX_METADATA_BYTES` (256 MiB) of metadata made the decoder allocate the announced
+//! length before reading any of it. `qt_ingest::dbn::FrameCheck` now rejects a length the file cannot hold before the
+//! decoder sees it. This binary has its own global allocator that records the largest single allocation, so it holds
+//! one test only.
 
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::path::Path;
@@ -45,29 +43,27 @@ unsafe impl GlobalAlloc for Peak {
 static GLOBAL: Peak = Peak;
 
 #[test]
-fn known_dbn_metadata_allocation_still_reproduces() {
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("known-crashes/dbn-alloc");
-    let mut files: Vec<_> = std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().path()).collect();
+fn dbn_metadata_announcing_more_than_the_file_holds_allocates_nothing_large() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("regressions/dbn");
+    let mut files: Vec<_> = std::fs::read_dir(&dir)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| p.file_name().is_some_and(|n| n.to_string_lossy().starts_with("alloc_")))
+        .collect();
     files.sort();
     assert!(files.len() >= 2, "{} reproducers", files.len());
     for f in files {
         let data = std::fs::read(&f).unwrap();
         assert!(data.len() < 64, "{}: a few bytes", f.display());
-        assert!(qt_fuzz::dbn_known_metadata_alloc(&data[1..]), "{}", f.display());
-        // The filtered harnesses skip it without allocating.
         LARGEST.store(0, Ordering::Relaxed);
         qt_fuzz::dbn(&data);
         let mut ingest_input = data.clone();
         ingest_input[0] = 2;
         qt_fuzz::ingest(&ingest_input);
-        assert!(LARGEST.load(Ordering::Relaxed) < 16 << 20, "{}: filtered", f.display());
-        // Unfiltered: an input error after one allocation of the announced 256 MiB.
-        LARGEST.store(0, Ordering::Relaxed);
-        qt_fuzz::dbn_unfiltered(&data);
         let largest = LARGEST.load(Ordering::Relaxed);
         assert!(
-            largest >= 256 << 20,
-            "{}: largest allocation {largest} bytes; the up-front allocation is gone",
+            largest < 16 << 20,
+            "{}: largest allocation {largest} bytes",
             f.display()
         );
     }

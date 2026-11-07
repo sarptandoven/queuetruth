@@ -47,6 +47,7 @@ def parsers() -> list[tuple[list[str], argparse.ArgumentParser]]:
     from queuetruth.demo.cli import parser as demo_parser
     from queuetruth.forecast.cli import build_parser as forecast_parser
     from queuetruth.ledger.cli import parser as ledger_parser
+    from queuetruth.live.reconcile_cli import parser as reconcile_parser
     from queuetruth.pm.cli import parser as pm_parser
 
     # the certificate parser is a root parser whose subcommands are top-level words
@@ -56,6 +57,7 @@ def parsers() -> list[tuple[list[str], argparse.ArgumentParser]]:
         (["ledger"], ledger_parser()),
         (["pm"], pm_parser()),
         ([], cert_parser()),
+        ([], reconcile_parser()),
     ]
 
 

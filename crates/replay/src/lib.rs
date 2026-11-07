@@ -32,8 +32,8 @@ use qt_types::{Dur, LatencyModel, MboEvent, Px, QtResult, Qty, Ts, VenueRules};
 
 pub use engine::Engine;
 pub use run::{
-    ReplayOptions, for_each_partition, ingest_dq, partition_gaps, run_dataset, run_dataset_with, run_partition,
-    split_shadows, strict_violations,
+    ReplayOptions, for_each_partition, halts_of, ingest_dq, partition_gaps, partition_halts, run_dataset,
+    run_dataset_with, run_partition, split_shadows, strict_violations,
 };
 pub use sample::{mirror_real_orders, sample_shadows};
 pub use session::Session;
@@ -292,6 +292,22 @@ pub struct ShadowState {
     pub qty: Qty,
     /// End state once done.
     pub end_state: Option<EndState>,
+}
+
+/// One shadow of an interactive session as a replay ending now would report it (`Session::shadow_peek`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ShadowPeek {
+    /// Status.
+    pub status: ShadowStatus,
+    /// Its `qt.shadow_results` row as of now: `end_state` is `open_at_end` while it has not ended (`status` tells),
+    /// `dq_flags` is 0 (the verdict is known only at the end of the data).
+    pub result: ShadowResultRow,
+    /// When it ended: the `ts_event` of its trajectory `end` row.
+    pub ts_end: Option<Ts>,
+    /// Queue ahead after the last processed event (from activation on; what a trajectory row would show).
+    pub queue_ahead: Option<Qty>,
+    /// Rank after the last processed event (from activation on).
+    pub rank: Option<u32>,
 }
 
 /// Replay counters (et `Stats`).

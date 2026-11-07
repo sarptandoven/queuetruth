@@ -190,7 +190,7 @@ File: `schemas/json/qt.bot_reconcile.schema.json`.
 |---|---|---|---|---|
 | `schema` | const "qt.bot_reconcile" | yes | `"qt.bot_reconcile"` |  |
 | `schema_version` | const 1 | yes | `1` |  |
-| `kind` | one of "freqtrade", "hummingbot" | yes |  |  |
+| `kind` | one of "freqtrade", "hummingbot", "backtrader", "vectorbt" | yes |  |  |
 | `run_id` | string | yes |  |  |
 | `live_log` | string | yes |  |  |
 | `sim_log` | string | yes |  |  |
@@ -1042,6 +1042,7 @@ Data-quality counters and verdict (SPEC 5.1.5).
 | `hidden_prints` | integer | yes |  |  |
 | `off_price_executions` | integer | yes |  |  |
 | `feed_gaps` | array of FeedGap | yes |  |  |
+| `trading_halts` | array of TradingHaltSpan | no |  |  |
 | `source_specific` | map of integer | yes |  |  |
 | `verdict` | one of "clean", "warnings", "unusable" | yes |  |  |
 | `reasons` | array of string | yes |  |  |
@@ -1055,6 +1056,18 @@ A gap in the feed of one instrument.
 | `instrument_id` | integer | yes |  |  |
 | `ts_start` | integer | yes |  |  |
 | `ts_end` | integer | yes |  |  |
+| `reason` | string | yes |  |  |
+
+**`TradingHaltSpan`** (in `qt.data_quality`)
+
+A span `[ts_start, ts_end)` in which one instrument was not in continuous trading as its feed reported it (SPEC 1.2, halt censoring): replay, `why`, the zoo, calibration and features censor shadows there.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `instrument_id` | integer | yes |  |  |
+| `ts_start` | integer | yes |  |  |
+| `ts_end` | integer | yes |  |  |
+| `state` | string | yes |  |  |
 | `reason` | string | yes |  |  |
 
 ### qt.dataset
@@ -1102,6 +1115,7 @@ Data-quality counters and verdict (SPEC 5.1.5).
 | `hidden_prints` | integer | yes |  |  |
 | `off_price_executions` | integer | yes |  |  |
 | `feed_gaps` | array of FeedGap | yes |  |  |
+| `trading_halts` | array of TradingHaltSpan | no |  |  |
 | `source_specific` | map of integer | yes |  |  |
 | `verdict` | one of "clean", "warnings", "unusable" | yes |  |  |
 | `reasons` | array of string | yes |  |  |
@@ -1184,6 +1198,18 @@ One Parquet file of a partition, path relative to the dataset root.
 | `start_ns` | integer or null | no | `null` |  |
 | `end_ns` | integer or null | no | `null` |  |
 | `publisher_id` | integer or null | no | `null` |  |
+
+**`TradingHaltSpan`** (in `qt.dataset`)
+
+A span `[ts_start, ts_end)` in which one instrument was not in continuous trading as its feed reported it (SPEC 1.2, halt censoring): replay, `why`, the zoo, calibration and features censor shadows there.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `instrument_id` | integer | yes |  |  |
+| `ts_start` | integer | yes |  |  |
+| `ts_end` | integer | yes |  |  |
+| `state` | string | yes |  |  |
+| `reason` | string | yes |  |  |
 
 ### qt.dataset_manifest
 
@@ -2637,6 +2663,7 @@ Data-quality counters and verdict (SPEC 5.1.5).
 | `hidden_prints` | integer | yes |  |  |
 | `off_price_executions` | integer | yes |  |  |
 | `feed_gaps` | array of FeedGap | yes |  |  |
+| `trading_halts` | array of TradingHaltSpan | no |  |  |
 | `source_specific` | map of integer | yes |  |  |
 | `verdict` | one of "clean", "warnings", "unusable" | yes |  |  |
 | `reasons` | array of string | yes |  |  |
@@ -2730,6 +2757,18 @@ One Parquet file of a partition, path relative to the dataset root.
 | `start_ns` | integer or null | no | `null` |  |
 | `end_ns` | integer or null | no | `null` |  |
 | `publisher_id` | integer or null | no | `null` |  |
+
+**`TradingHaltSpan`** (in `qt.ingest_summary`)
+
+A span `[ts_start, ts_end)` in which one instrument was not in continuous trading as its feed reported it (SPEC 1.2, halt censoring): replay, `why`, the zoo, calibration and features censor shadows there.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `instrument_id` | integer | yes |  |  |
+| `ts_start` | integer | yes |  |  |
+| `ts_end` | integer | yes |  |  |
+| `state` | string | yes |  |  |
+| `reason` | string | yes |  |  |
 
 ### qt.job
 
@@ -3399,7 +3438,7 @@ File: `schemas/json/qt.live_import_spec.schema.json`.
 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `venue` | one of "binance", "bybit", "okx", "coinbase", "kraken", "deribit", "hyperliquid", "ibkr_flex", "fix44", "sim_hftbacktest", "sim_nautilus" | yes |  |  |
+| `venue` | one of "binance", "bybit", "okx", "coinbase", "kraken", "deribit", "hyperliquid", "ibkr_flex", "fix44", "sim_hftbacktest", "sim_nautilus", "freqtrade", "hummingbot", "sim_freqtrade", "sim_hummingbot", "sim_backtrader", "sim_vectorbt" | yes |  |  |
 | `inputs` | array of PathRef or UploadRef or JobFileRef | yes |  |  |
 | `out` | string or null | no | `null` |  |
 | `account` | string or null | no | `null` |  |
@@ -3966,6 +4005,7 @@ Data-quality counters and verdict (SPEC 5.1.5).
 | `hidden_prints` | integer | yes |  |  |
 | `off_price_executions` | integer | yes |  |  |
 | `feed_gaps` | array of FeedGap | yes |  |  |
+| `trading_halts` | array of TradingHaltSpan | no |  |  |
 | `source_specific` | map of integer | yes |  |  |
 | `verdict` | one of "clean", "warnings", "unusable" | yes |  |  |
 | `reasons` | array of string | yes |  |  |
@@ -4120,6 +4160,18 @@ Shadow outcome counters.
 | `twins_linked` | integer | no | `0` |  |
 | `twin_fills_with_queue_ahead` | integer | no | `0` |  |
 | `twin_fills_off_display` | integer | no | `0` |  |
+
+**`TradingHaltSpan`** (in `qt.replay_summary`)
+
+A span `[ts_start, ts_end)` in which one instrument was not in continuous trading as its feed reported it (SPEC 1.2, halt censoring): replay, `why`, the zoo, calibration and features censor shadows there.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `instrument_id` | integer | yes |  |  |
+| `ts_start` | integer | yes |  |  |
+| `ts_end` | integer | yes |  |  |
+| `state` | string | yes |  |  |
+| `reason` | string | yes |  |  |
 
 ### qt.report_spec
 
@@ -5364,6 +5416,7 @@ Summary of `score` (SPEC 5.7).
 | `discordance_clustered` | DiscordanceClustered or null | no | `null` |  |
 | `n_taker_fills` | ArmCounts or null | no | `null` |  |
 | `fills_only` | boolean or null | no | `null` |  |
+| `pnl_gap` | array of PnlGap or null | no | `null` |  |
 
 **`ArmCounts`** (in `qt.scorecard_summary`)
 
@@ -5412,6 +5465,7 @@ Data-quality counters and verdict (SPEC 5.1.5).
 | `hidden_prints` | integer | yes |  |  |
 | `off_price_executions` | integer | yes |  |  |
 | `feed_gaps` | array of FeedGap | yes |  |  |
+| `trading_halts` | array of TradingHaltSpan | no |  |  |
 | `source_specific` | map of integer | yes |  |  |
 | `verdict` | one of "clean", "warnings", "unusable" | yes |  |  |
 | `reasons` | array of string | yes |  |  |
@@ -5563,6 +5617,38 @@ McNemar test on the discordant pairs (SPEC 5.7.5).
 | `or_ci_lo` | number or null | no | `null` |  |
 | `or_ci_hi` | number or null | no | `null` |  |
 
+**`PnlGap`** (in `qt.scorecard_summary`)
+
+1.2: the scorecard's P&L gap in one currency at one markout horizon (`queuetruth.score.pnl_gap`): the per-order mean of `qt.score_shortfall.total_ccy` (simulator minus live, net of fees; positive = the simulator's P&L is too high) with its 95% block-bootstrap CI, the direction (a finding only when the CI excludes 0), why it is not computable or not answerable, the parts (per-order means that add up to the gap) with their CIs on the same draws, the part a finding mostly comes from, and the plain sentence.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `horizon_ns` | integer | yes |  |  |
+| `currency` | string or null | yes |  |  |
+| `n_valued` | integer | yes |  |  |
+| `n_unvalued` | integer | yes |  |  |
+| `mean_ccy` | number or null | yes |  |  |
+| `ci_lo` | number or null | yes |  |  |
+| `ci_hi` | number or null | yes |  |  |
+| `direction` | one of "sim_too_high", "sim_too_low", "no_significant_difference", "not_computable", "not_answerable" | yes |  |  |
+| `reason` | string or null | yes |  |  |
+| `parts_ccy` | PnlGapParts | yes |  |  |
+| `parts_ci_lo` | PnlGapParts | yes |  |  |
+| `parts_ci_hi` | PnlGapParts | yes |  |  |
+| `main_part` | one of "granted", "denied", "timing", "fees" or null | yes |  |  |
+| `headline` | string | yes |  |  |
+
+**`PnlGapParts`** (in `qt.scorecard_summary`)
+
+1.2: one value per part of the P&L gap (`queuetruth.score.pnl_gap`): fills the simulator grants that live did not get, fills live got that it misses, the timing of fills both arms got, and fees.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `granted` | number or null | yes |  |  |
+| `denied` | number or null | yes |  |  |
+| `timing` | number or null | yes |  |  |
+| `fees` | number or null | yes |  |  |
+
 **`SimSource`** (in `qt.scorecard_summary`)
 
 Which simulator arm was scored.
@@ -5572,6 +5658,18 @@ Which simulator arm was scored.
 | `kind` | one of "external", "exact", "zoo" | yes |  |  |
 | `model_id` | string or null | no | `null` |  |
 | `path` | string or null | no | `null` |  |
+
+**`TradingHaltSpan`** (in `qt.scorecard_summary`)
+
+A span `[ts_start, ts_end)` in which one instrument was not in continuous trading as its feed reported it (SPEC 1.2, halt censoring): replay, `why`, the zoo, calibration and features censor shadows there.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `instrument_id` | integer | yes |  |  |
+| `ts_start` | integer | yes |  |  |
+| `ts_end` | integer | yes |  |  |
+| `state` | string | yes |  |  |
+| `reason` | string | yes |  |  |
 
 **`Ttf`** (in `qt.scorecard_summary`)
 

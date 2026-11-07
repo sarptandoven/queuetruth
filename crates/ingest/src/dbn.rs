@@ -54,6 +54,11 @@ type Inner = FrameCheck<GuardedReader<DynReader<'static, BufReader<CountingReade
 /// Largest accepted DBN metadata block.
 pub const MAX_METADATA_BYTES: u64 = 256 << 20;
 
+/// Smallest possible DBN metadata block: the 100 fixed bytes and the 4-byte schema-definition length that follows
+/// them. The pinned `dbn` decoder rejects blocks shorter than 100 bytes but panics on 100 to 103
+/// (`fuzz/regressions/dbn/`), so `FrameCheck` rejects them first.
+pub const MIN_METADATA_BYTES: u64 = 104;
+
 /// Newest DBN version the pinned `dbn` crate decodes (versions 1 to this one are accepted).
 pub const SUPPORTED_DBN_VERSION: u8 = ::dbn::DBN_VERSION;
 
@@ -69,6 +74,7 @@ pub struct FrameCheck<R> {
     inner: R,
     state: Frame,
     offset: u64,
+    metadata_cap: u64,
 }
 
 impl<R> FrameCheck<R> {
@@ -78,7 +84,16 @@ impl<R> FrameCheck<R> {
             inner,
             state: Frame::Prelude { buf: [0; 8], got: 0 },
             offset: 0,
+            metadata_cap: MAX_METADATA_BYTES,
         }
+    }
+
+    /// Rejects a metadata block longer than `cap` bytes (at most `MAX_METADATA_BYTES`) before the decoder allocates
+    /// it: the pinned `dbn` decoder grows its buffer to the announced length before reading any of it
+    /// (`fuzz/regressions/dbn/alloc_*`).
+    pub fn with_metadata_cap(mut self, cap: u64) -> Self {
+        self.metadata_cap = cap.min(MAX_METADATA_BYTES);
+        self
     }
 
     fn observe(&mut self, mut b: &[u8]) -> std::io::Result<()> {
@@ -109,6 +124,18 @@ impl<R> FrameCheck<R> {
                         let len = u64::from(u32::from_le_bytes([buf[4], buf[5], buf[6], buf[7]]));
                         if len > MAX_METADATA_BYTES {
                             return Err(bad(format!("DBN metadata length {len} exceeds {MAX_METADATA_BYTES}")));
+                        }
+                        if len > self.metadata_cap {
+                            return Err(bad(format!(
+                                "DBN metadata length {len} cannot fit in this file (at most {} bytes)",
+                                self.metadata_cap
+                            )));
+                        }
+                        if len < MIN_METADATA_BYTES {
+                            return Err(bad(format!(
+                                "DBN metadata length {len} is shorter than its fixed fields ({MIN_METADATA_BYTES} \
+                                 bytes)"
+                            )));
                         }
                         self.state = if len == 0 {
                             Frame::Header
@@ -245,6 +272,25 @@ pub struct DbnReader {
     pub records: u64,
 }
 
+/// The largest metadata block a DBN file of this size can hold: an uncompressed file (it starts with `DBN`) holds
+/// at most its size minus the 8-byte prelude; a compressed one at most what the decompression guard lets it inflate
+/// to before the ratio check (`GuardLimits`).
+fn metadata_cap(path: &Path, limits: &GuardLimits) -> QtResult<u64> {
+    use std::io::Read;
+    let mut f = open_file(path)?;
+    let size = f
+        .metadata()
+        .map(|m| m.len())
+        .map_err(|e| fmt_err(path, e.to_string()))?;
+    let mut magic = [0u8; 3];
+    let plain = f.read_exact(&mut magic).is_ok() && &magic == b"DBN";
+    Ok(if plain {
+        size.saturating_sub(8)
+    } else {
+        limits.min_checked.max(size.saturating_mul(limits.max_ratio))
+    })
+}
+
 impl DbnReader {
     /// Opens a DBN file with the default decompression guard.
     pub fn open(path: &Path) -> QtResult<Self> {
@@ -253,11 +299,12 @@ impl DbnReader {
 
     /// Opens a DBN file with explicit decompression limits.
     pub fn open_with(path: &Path, limits: GuardLimits) -> QtResult<Self> {
+        let cap = metadata_cap(path, &limits)?;
         let file = open_file(path)?;
         let count = Arc::new(AtomicU64::new(0));
         let src = BufReader::with_capacity(READ_BUF, CountingReader::new(file, count.clone()));
         let dynr = DynReader::inferred_with_buffer(src).map_err(|e| fmt_err(path, describe(&e)))?;
-        let guarded = FrameCheck::new(GuardedReader::new(dynr, count, limits));
+        let guarded = FrameCheck::new(GuardedReader::new(dynr, count, limits)).with_metadata_cap(cap);
         let dec = Decoder::with_upgrade_policy(guarded, VersionUpgradePolicy::AsIs)
             .map_err(|e| fmt_err(path, format!("not a readable DBN file: {}", describe(&e))))?;
         Ok(Self {

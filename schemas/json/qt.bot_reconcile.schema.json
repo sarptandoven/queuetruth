@@ -395,7 +395,9 @@
     "kind": {
       "enum": [
         "freqtrade",
-        "hummingbot"
+        "hummingbot",
+        "backtrader",
+        "vectorbt"
       ],
       "title": "Kind",
       "type": "string"

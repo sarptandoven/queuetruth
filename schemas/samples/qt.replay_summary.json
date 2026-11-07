@@ -117,6 +117,15 @@
           "reason": "x"
         }
       ],
+      "trading_halts": [
+        {
+          "instrument_id": 1,
+          "ts_start": 1,
+          "ts_end": 1,
+          "state": "x",
+          "reason": "x"
+        }
+      ],
       "source_specific": {
         "k": 1
       },

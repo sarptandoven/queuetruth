@@ -78,6 +78,11 @@ def test_zoo_view_prints_the_leaderboard_sorted_by_bias_at_60s() -> None:
     )
     assert "At 60 s, hbt_power3[n=2] fills 0.7 pp less often than the exact replay" in out
     assert "At 60 s, hbt_log fills 0.1 pp more often than the exact replay, within noise (95% CI -0.2" in out
+    # The answer first: the closest and the furthest model at the sort horizon.
+    assert lines[1] == (
+        "reality gap at 60 s: from +0.1 pp (hbt_log, the closest) to +13.3 pp (front_of_queue[mode=faithful], "
+        "the furthest), model minus exact fill rate"
+    )
     # Another sort horizon on request (`sort_horizon`: the horizon itself when evaluated, else the nearest below).
     out10 = cli.render(["zoo"], doc, extra={"sort_horizon_ns": 10_000_000_000})
     assert "sorted by |fill-rate bias| at 10s" in out10
@@ -169,6 +174,27 @@ def test_score_view_leads_with_the_headline_in_plain_words() -> None:
     # No gates requested: never "passed".
     assert "gates: none set" in out and "passed" not in out
     assert "live filled" in out and "live not filled" in out
+
+
+def test_score_view_puts_the_pnl_gap_under_the_result_line() -> None:
+    gap = {
+        "horizon_ns": 1_000_000_000,
+        "currency": "USD",
+        "direction": "sim_too_high",
+        "headline": "the simulator's P&L is 0.42 USD per order too high (95% CI +0.10 to +0.75) at the 1 s markout",
+    }
+    eur = {**gap, "currency": "EUR", "direction": "no_significant_difference", "headline": "no P&L difference found"}
+    lines = cli.render(["score"], _score_doc(pnl_gap=[gap, eur])).splitlines()
+    assert lines[1].startswith("RESULT: the simulator fills 11.5 pp less often")
+    assert lines[2] == f"P&L: {gap['headline']}" and lines[3] == "P&L: no P&L difference found"
+    assert lines[4].startswith("equivalence: ")
+    # summaries before schema 1.2 have no P&L gap: no line
+    assert "P&L" not in cli.render(["score"], _score_doc())
+    assert "P&L" not in cli.render(["score"], _score_doc(pnl_gap=None))
+    # a scorecard blocked by own orders in the L2 depth gets no P&L line (as in the report)
+    blocked = {"headline": "BLOCKED: own resting orders are in the L2 depth; x", "signed_bias": -0.115,
+               "gates_passed": False, "failed_gates": ["own_orders_in_l2_depth"]}  # fmt: skip
+    assert "P&L" not in cli.render(["score"], _score_doc(pnl_gap=[gap], verdict=blocked))
 
 
 def test_score_view_gate_status_only_with_gates() -> None:
@@ -624,6 +650,7 @@ def test_human_output_end_to_end(repo_root: Path, tmp_path: Path, capsys: pytest
     lines = out.splitlines()
     assert lines[0].startswith("score: zoo model hbt_power3") and lines[1].startswith("RESULT: the simulator fills ")
     assert "within 60s of entry" in lines[1] and "cluster-robust p = " in lines[1]
+    assert lines[2].startswith("P&L: ") and " at the 1 s markout" in lines[2]
     assert "gates: none set" in out and "Gates passed" not in out and "gates: passed" not in out
     sc2 = str(tmp_path / "sc2")
     code, out, _ = run("score", "--live", live, "--sim-model", "front_of_queue", "--data", ds, "--out", sc2,

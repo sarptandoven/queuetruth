@@ -2,7 +2,8 @@
 """Local nightly cross-checks for queuetruth: engine cross-checks, a public-data reproduction and a benchmark, each in
 its own virtual environment, with a static HTML results page and a JSON history diffed against the previous run.
 
-Never uses GitHub Actions or any cloud runner: everything runs on this machine, from this checkout.
+Runs on this machine, from this checkout. `.github/workflows/compat.yml` also runs the engine checks daily on a GitHub
+runner against the newest hftbacktest and NautilusTrader releases (`scripts/nightly/compat.py`).
 
   bash scripts/nightly/nightly.sh run [--mode full|reduced] [--state DIR] [--only a,b | --skip a,b] ...
   bash scripts/nightly/nightly.sh render [--state DIR]             re-render the page from the history
@@ -14,7 +15,8 @@ Never uses GitHub Actions or any cloud runner: everything runs on this machine, 
 (nightly.sh runs this file with CPython >= 3.11: Homebrew python3.13 or $QT_NIGHTLY_PYTHON.)
 
 Checks (each in its own venv under <state>/venvs; the queuetruth side runs in a venv built from this checkout):
-  hbt        hftbacktest (the version `make hbt-crosscheck` pins) vs the faithful hbt zoo models, order by order
+  hbt        hftbacktest (the version `make hbt-crosscheck` pins, or --hbt) vs the faithful hbt zoo models, order by
+             order
   nt-pinned  NautilusTrader as pinned in scripts/nt_crosscheck/requirements.txt vs the faithful nt_* zoo models
   nt-rc      the newest NautilusTrader 2.x release on PyPI (release candidates included); advisory
   repro      scripts/repro/reproduce.py on the public Nasdaq ITCH subsets (pinned sha256)
@@ -573,7 +575,9 @@ def check_nt(ctx: Ctx, cdir: Path, which: str) -> dict[str, Any]:
 def check_hbt(ctx: Ctx, cdir: Path) -> dict[str, Any]:
     log = cdir / "log.txt"
     to = ctx.mode["timeouts"]["hbt"]
-    version = pinned_hbt_version(ctx.repo)
+    version = pinned_hbt_version(ctx.repo) if ctx.a.hbt == "pinned" else ctx.a.hbt
+    if E.version_key(version) is None:
+        raise CheckError(f"--hbt {version!r} is not a release version X.Y.Z[aN|bN|rcN][.postN]")
     venv = ctx.state / "venvs" / f"hbt-{version}"
     if ctx.a.offline:
         if not (venv / E.MARKER).exists():
@@ -585,7 +589,13 @@ def check_hbt(ctx: Ctx, cdir: Path) -> dict[str, Any]:
             ctx.a.python,
             [["numba", "numpy"], ["--no-deps", f"hftbacktest=={version}"]],
             {"hftbacktest": version},
-            ["--exclude-newer", E.exclude_newer(ctx.today)],
+            # the cutoff is lifted for hftbacktest itself, so a release is checked on the day it is published
+            [
+                "--exclude-newer",
+                E.exclude_newer(ctx.today),
+                "--exclude-newer-package",
+                f"hftbacktest={iso(utcnow())}",
+            ],
         )
         hbt_py, _ = E.ensure_env(
             venv, spec, ctx.a.uv, _env_runner(ctx, log, ctx.mode["timeouts"]["setup"]), ctx.a.refresh_envs, ctx.log
@@ -1258,6 +1268,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="use this interpreter (queuetruth importable) instead of building the queuetruth venv",
     )
     p.add_argument("--nt-rc", default="auto", help="NautilusTrader 2.x version (default: newest on PyPI)")
+    p.add_argument(
+        "--hbt",
+        default="pinned",
+        help="hftbacktest version of the hbt check (default: the version `make hbt-crosscheck` pins)",
+    )
     p.add_argument(
         "--wheel-dirs",
         default="",

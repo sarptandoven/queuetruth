@@ -213,6 +213,23 @@ pub fn collect_events_with_gaps(
     cfg: &CollectConfig,
     feed_gaps: &[FeedGap],
 ) -> QtResult<Collected> {
+    collect_events_with_spans(events, inst, rules, shadows, nt, cfg, feed_gaps, &[])
+}
+
+/// `collect_events_with_gaps` with the ingest-recorded trading halts of the partition too
+/// (`qt_replay::partition_halts`, SPEC 1.2), set on the exact engine exactly as `replay` does: a shadow live at a
+/// halt ends `censored_gap` there, one going live in a halt never goes live.
+#[allow(clippy::too_many_arguments)]
+pub fn collect_events_with_spans(
+    events: impl Iterator<Item = QtResult<MboEvent>>,
+    inst: &Instrument,
+    rules: VenueRules,
+    shadows: Vec<ShadowSpec>,
+    nt: &dyn QueueModel,
+    cfg: &CollectConfig,
+    feed_gaps: &[FeedGap],
+    trading_halts: &[qt_replay::TradingHalt],
+) -> QtResult<Collected> {
     let mut ecfg = EngineConfig::new(rules);
     ecfg.seed = cfg.seed;
     ecfg.bbo = qt_replay::BboMode::None;
@@ -225,6 +242,7 @@ pub fn collect_events_with_gaps(
     // the partition's ingest-recorded gaps censor the shadows live across them
     engine.set_sequence_gap_detection(false);
     engine.set_feed_gaps(feed_gaps);
+    engine.set_trading_halts(trading_halts)?;
     let buf = TruthBuf::default();
     engine.add_observer(Box::new(TruthObserver(buf.clone())));
     let model_id = nt.id().to_string();
@@ -611,7 +629,8 @@ fn level_view(rows: &[L2Row], vb: &VisibleBook, side: BookSide, price: Px) -> (O
     }
 }
 
-/// Partition-level collection on a dataset (with the dataset's ingest-recorded feed gaps, as `replay`).
+/// Partition-level collection on a dataset (with the dataset's ingest-recorded feed gaps and trading halts, as
+/// `replay`).
 pub fn collect_partition(
     part: &Partition,
     ds: &Dataset,
@@ -619,8 +638,10 @@ pub fn collect_partition(
     nt: &dyn QueueModel,
     cfg: &CollectConfig,
 ) -> QtResult<Collected> {
-    let gaps = qt_replay::ingest_dq(ds).map(|d| d.feed_gaps).unwrap_or_default();
-    collect_partition_gaps(part, ds, shadows, nt, cfg, &gaps)
+    let dq = qt_replay::ingest_dq(ds);
+    let gaps = dq.as_ref().map(|d| d.feed_gaps.clone()).unwrap_or_default();
+    let halts = dq.as_ref().map(qt_replay::halts_of).unwrap_or_default();
+    collect_partition_gaps(part, ds, shadows, nt, cfg, &gaps, &halts)
 }
 
 fn collect_partition_gaps(
@@ -630,6 +651,7 @@ fn collect_partition_gaps(
     nt: &dyn QueueModel,
     cfg: &CollectConfig,
     gaps: &[FeedGap],
+    halts: &[qt_replay::TradingHalt],
 ) -> QtResult<Collected> {
     let inst = ds
         .instrument(part.instrument_id, part.session_date)
@@ -638,7 +660,8 @@ fn collect_partition_gaps(
             msg: "partition without an instrument row".into(),
         })?;
     let part_gaps = qt_replay::partition_gaps(gaps, part);
-    collect_events_with_gaps(part.mbo()?, inst, ds.rules(), shadows, nt, cfg, &part_gaps)
+    let part_halts = qt_replay::partition_halts(halts, part, Some(inst.midnight_utc_ns));
+    collect_events_with_spans(part.mbo()?, inst, ds.rules(), shadows, nt, cfg, &part_gaps, &part_halts)
 }
 
 /// Collects every partition that has shadows, in partition order.
@@ -660,13 +683,15 @@ pub fn collect_dataset(
         .into_iter()
         .map(|(k, v)| (k, Mutex::new(v)))
         .collect();
-    let gaps = qt_replay::ingest_dq(ds).map(|d| d.feed_gaps).unwrap_or_default();
+    let dq = qt_replay::ingest_dq(ds);
+    let gaps = dq.as_ref().map(|d| d.feed_gaps.clone()).unwrap_or_default();
+    let halts = dq.as_ref().map(qt_replay::halts_of).unwrap_or_default();
     let results = qt_replay::for_each_partition(&parts, threads.max(1), |part| {
         let shadows = jobs
             .get(&(part.session_date, part.instrument_id))
             .and_then(|m| m.lock().ok().map(|mut v| std::mem::take(&mut *v)))
             .unwrap_or_default();
-        collect_partition_gaps(part, ds, shadows, nt, cfg, &gaps)
+        collect_partition_gaps(part, ds, shadows, nt, cfg, &gaps, &halts)
     })?;
     let mut out = Collected::default();
     for r in results {

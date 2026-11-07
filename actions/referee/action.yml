@@ -1,0 +1,97 @@
+name: queuetruth referee
+description: >-
+  Run your backtester or exchange simulator on queuetruth's 16 queue and fill bug-class fixtures and check every
+  fill against the exact FIFO engine.
+author: Sarp Tandoven
+branding:
+  icon: check-square
+  color: green
+
+inputs:
+  sim-command:
+    description: >-
+      Shell command that runs your simulator on one fixture class. It reads the dataset at $QT_DATASET and the
+      orders at $QT_SCHEDULE, and writes its fills to $QT_FILLS (Parquet with shadow_id, fill_qty and ts_event).
+      $QT_CLASS names the class and $QT_WORK is a scratch directory.
+    required: true
+  classes:
+    description: "'all', or class names or numbers to run, comma separated (e.g. '02,05,06')."
+    default: all
+  skip:
+    description: Class names or numbers to leave out, comma separated (e.g. '09,12,13,14' for a non-Nasdaq simulator).
+    default: ""
+  simulator:
+    description: NAME[@VERSION] recorded in the reports.
+    default: ""
+  max-discordant:
+    description: Orders per class your simulator may fill when the exact engine does not, or the reverse.
+    default: "0"
+  max-qty-mismatch:
+    description: Orders per class with a different total filled quantity that are tolerated.
+    default: "0"
+  max-ttf-err-ns:
+    description: Tolerated first-fill time error, e.g. 0, 250us, 5ms.
+    default: "0"
+  queuetruth-version:
+    description: pip requirement for queuetruth (e.g. 'queuetruth==0.2.0'); default the latest release.
+    default: queuetruth
+  python-version:
+    description: Python used to install queuetruth (3.11 or later).
+    default: "3.13"
+  out:
+    description: Output directory (summary.json, summary.md, badge.json, reports/).
+    default: queuetruth-referee
+  fail:
+    description: Fail the step when a class fails ('true' or 'false').
+    default: "true"
+
+outputs:
+  passed:
+    description: Number of classes that pass.
+    value: ${{ steps.run.outputs.passed }}
+  total:
+    description: Number of classes run.
+    value: ${{ steps.run.outputs.total }}
+  summary:
+    description: Path of summary.json.
+    value: ${{ steps.run.outputs.summary }}
+  badge:
+    description: Path of badge.json, a shields.io endpoint document to publish for a README badge.
+    value: ${{ steps.run.outputs.badge }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      with:
+        python-version: ${{ inputs.python-version }}
+    - name: install queuetruth in its own venv
+      shell: bash
+      env:
+        QT_REQ: ${{ inputs.queuetruth-version }}
+      run: |
+        python -m venv "$RUNNER_TEMP/qt-venv"
+        "$RUNNER_TEMP/qt-venv/bin/pip" install --disable-pip-version-check "$QT_REQ"
+        "$RUNNER_TEMP/qt-venv/bin/queuetruth" --version
+    - name: referee
+      id: run
+      shell: bash
+      env:
+        SIM_COMMAND: ${{ inputs.sim-command }}
+        CLASSES: ${{ inputs.classes }}
+        SKIP: ${{ inputs.skip }}
+        SIMULATOR: ${{ inputs.simulator }}
+        MAX_DISCORDANT: ${{ inputs.max-discordant }}
+        MAX_QTY_MISMATCH: ${{ inputs.max-qty-mismatch }}
+        MAX_TTF_ERR_NS: ${{ inputs.max-ttf-err-ns }}
+        OUT: ${{ inputs.out }}
+        FAIL: ${{ inputs.fail }}
+      run: |
+        set +e
+        "$RUNNER_TEMP/qt-venv/bin/python" -I "$GITHUB_ACTION_PATH/run.py" \
+          --sim-command "$SIM_COMMAND" --classes "$CLASSES" --skip "$SKIP" --simulator "$SIMULATOR" \
+          --max-discordant "$MAX_DISCORDANT" --max-qty-mismatch "$MAX_QTY_MISMATCH" --max-ttf-err-ns "$MAX_TTF_ERR_NS" \
+          --out "$OUT" --queuetruth "$RUNNER_TEMP/qt-venv/bin/queuetruth"
+        rc=$?
+        if [ "$rc" -eq 1 ] && [ "$FAIL" != "true" ]; then rc=0; fi
+        exit "$rc"

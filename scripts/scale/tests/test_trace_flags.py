@@ -531,12 +531,9 @@ def test_pipeline_attributes_labels_excludes_and_traces(tmp_path, day, monkeypat
 
 
 @pytest.mark.requires_core
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="finding F2: the exact fill rule fills shadows while the symbol is halted (spec 1.2: they end censored_gap)",
-)
 def test_halt_shadow_fill_reproduction() -> None:
+    """Finding F2 is fixed: ingest records the ITCH trading-state spans and replay censors shadows there (spec 1.2,
+    `docs/design/extensions/halt-censoring.md`), so the reproduction exits 0."""
     import importlib.util
 
     path = Path(__file__).resolve().parents[1] / "findings" / "repro_halt_shadow_fill.py"
@@ -546,7 +543,7 @@ def test_halt_shadow_fill_reproduction() -> None:
     rc = mod.main([])
     if rc not in (0, 1):  # a broken reproduction (setup error) must not pass as the expected F2 failure
         pytest.fail(f"repro_halt_shadow_fill.py exited {rc} (setup error)")
-    assert rc == 0  # 1 while shadows S1 and S2 are filled during the halt instead of ending censored_gap
+    assert rc == 0  # 1 if shadows S1 and S2 were filled during the halt instead of ending censored_gap
 
 
 def test_atlas_symbol_exactness_sources() -> None:

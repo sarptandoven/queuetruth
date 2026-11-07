@@ -166,7 +166,13 @@
         "ibkr_flex",
         "fix44",
         "sim_hftbacktest",
-        "sim_nautilus"
+        "sim_nautilus",
+        "freqtrade",
+        "hummingbot",
+        "sim_freqtrade",
+        "sim_hummingbot",
+        "sim_backtrader",
+        "sim_vectorbt"
       ],
       "title": "Venue",
       "type": "string"

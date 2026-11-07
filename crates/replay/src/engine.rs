@@ -19,7 +19,7 @@ use crate::util::{DAY_NS, InstrumentTable, SEC_NS, utc_days};
 use crate::why::Tracer;
 use crate::{
     BboMode, EngineConfig, EngineReport, EventEnd, EventObserver, FillRule, HiddenPrintPolicy, PlannedEnd,
-    ShadowDiagnostics, ShadowState, Sink, Stats, TradingHalt,
+    ShadowDiagnostics, ShadowPeek, ShadowState, Sink, Stats, TradingHalt,
 };
 
 type BboKey = (Option<Px>, Qty, u32, Option<Px>, Qty, u32);
@@ -235,6 +235,51 @@ impl Engine {
     /// before the first record.
     pub fn set_cross_prints(&mut self, keys: impl IntoIterator<Item = (u32, u64)>) {
         self.cross_prints.extend(keys);
+    }
+
+    /// An engine for an interactive session: no shadows yet, each instrument ready for `add_shadow` (so feed gaps and
+    /// trading halts set after this reach the shadows added later).
+    pub fn new_interactive(cfg: EngineConfig, instruments: &[Instrument]) -> QtResult<Self> {
+        let mut eng = Self::new(cfg, instruments, Vec::new(), Vec::new())?;
+        for i in instruments {
+            eng.shadows.ensure_instrument(i.instrument_id);
+        }
+        Ok(eng)
+    }
+
+    fn check_not_past(&self, ts: Ts, what: &str, shadow_id: &str) -> QtResult<()> {
+        match self.last_ts {
+            Some(p) if ts < p => Err(QtError::Config(format!(
+                "shadow {shadow_id}: {what} {ts} is before the replay position {p} (records up to it were applied)"
+            ))),
+            _ => Ok(()),
+        }
+    }
+
+    /// Adds a shadow while replaying (interactive sessions). Its replay is the one a run with it in the input would
+    /// make, because its work happens at the start of the first event after `ts_live >= ts_submit`, so `ts_submit`
+    /// must not be before the last record applied. Returns its index.
+    pub fn add_shadow(&mut self, spec: ShadowSpec) -> QtResult<u32> {
+        self.check_not_past(spec.ts_submit, "ts_submit", &spec.shadow_id)?;
+        self.shadows.add(spec)
+    }
+
+    /// The checks of `add_shadow` without adding the shadow (so a batch can be refused whole).
+    pub fn check_shadow(&self, spec: &ShadowSpec) -> QtResult<()> {
+        self.check_not_past(spec.ts_submit, "ts_submit", &spec.shadow_id)?;
+        self.shadows.check(spec)
+    }
+
+    /// Sends a cancel at `ts_cancel` for a shadow without one (not before the last record applied).
+    pub fn cancel_shadow(&mut self, shadow_id: &str, ts_cancel: Ts) -> QtResult<u32> {
+        self.check_not_past(ts_cancel, "ts_cancel", shadow_id)?;
+        self.shadows.cancel(shadow_id, ts_cancel)
+    }
+
+    /// Sends a priority-keeping reduction to `new_qty` at `ts_send` (not before the last record applied).
+    pub fn amend_shadow(&mut self, shadow_id: &str, ts_send: Ts, new_qty: Qty) -> QtResult<u32> {
+        self.check_not_past(ts_send, "ts_send", shadow_id)?;
+        self.shadows.amend(shadow_id, ts_send, new_qty)
     }
 
     /// Planned (exogenous) end of every shadow, input order (A2).
@@ -652,13 +697,21 @@ impl Engine {
         Ok((r, self.shadows.why.take()))
     }
 
-    fn finish_inner(&mut self, sink: &mut dyn Sink) -> QtResult<EngineReport> {
+    /// Ends every event still open (no `LAST` record yet) as `finish` does at the end of input, without ending the
+    /// shadows: an interactive session at the end of its data (`Session::advance_events_to`), where shadows can still
+    /// be added and cancelled until `finish`.
+    pub fn end_open_events(&mut self, sink: &mut dyn Sink) -> QtResult<()> {
         for slot in 0..self.insts.len() {
             if self.insts[slot].open {
                 self.stats.unterminated_events += 1;
                 self.end_event(slot, sink)?;
             }
         }
+        Ok(())
+    }
+
+    fn finish_inner(&mut self, sink: &mut dyn Sink) -> QtResult<EngineReport> {
+        self.end_open_events(sink)?;
         if let Some(o) = self.oracle.as_mut() {
             for inst in &mut self.insts {
                 o.flush(&mut inst.sweeps, inst.id, sink)?;
@@ -776,6 +829,11 @@ impl Engine {
             }
         }
         st
+    }
+
+    /// A shadow as a replay ending now would report it (panics on an index not returned by `shadow_index`).
+    pub fn shadow_peek(&self, idx: u32) -> ShadowPeek {
+        self.shadows.peek(idx)
     }
 
     /// Ends every shadow as `censored_gap` without replaying (their partition does not exist).

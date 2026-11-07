@@ -13,7 +13,7 @@ PYTHON_BIN ?= /opt/homebrew/bin/python3.13
 VENV_PY := $(ROOT)/.venv/bin/python
 RUN := uv run --frozen --no-sync
 CARGO := cargo
-PY_DIRS := $(wildcard python service scripts tests benches tools integrations)
+PY_DIRS := $(wildcard python service scripts tests benches tools integrations) actions
 # Test directories outside python/ and service/ (also in pyproject testpaths). Their optional dependencies
 # (the hftbacktest venvs, queuetruth._core, real data) skip with a reason when absent.
 EXTRA_TEST_DIRS := $(wildcard tools/livefill/tests scripts/nightly/tests scripts/scale/tests \
@@ -25,7 +25,7 @@ ET_ROOT ?= $(QT_ET_ROOT)
 
 .PHONY: help env-check venv lock sync develop fmt lint test-rust test-py test-service test-e2e test schemas \
 	schemas-check fixtures openapi gate-0 gate-1 gate-2 gate-3 realdata bench bench-check compose-config \
-	lint-py test-extra test-nautilus fuzz-py fuzz-rust nightly nightly-reduced \
+	lint-py test-extra test-nautilus test-hftbacktest-plugin hftbacktest-plugin-wheel fuzz-py fuzz-rust nightly nightly-reduced \
 	hbt-crosscheck clean-realdata check-placeholders check-docs docs-build examples wheel-smoke release-check compose-smoke dbn-samples bench-real bench-baseline bench-et test-bench reproduce reproduce-breadth
 
 help: ## list targets
@@ -85,11 +85,31 @@ test-extra: ## tests of tools/, integrations/ and scripts/ (livefill kit, nightl
 test-nautilus: ## queuetruth-nautilus plugin tests (integrations/nautilus, its own pytest session)
 	$(RUN) pytest integrations/nautilus/tests
 
+# The same for the queuetruth-hftbacktest plugin (integrations/hftbacktest/plugin, its own pyproject and pytest
+# config). Tests that run hftbacktest use QT_HBT_PY (default .scratch/hbt-venv, from setup_venvs.sh) and skip without it.
+test-hftbacktest-plugin: ## queuetruth-hftbacktest plugin tests (integrations/hftbacktest/plugin, its own pytest session)
+	$(RUN) pytest integrations/hftbacktest/plugin/tests
+
+HBT_PLUGIN_DIR := .scratch/hbt-plugin
+
+# pip, not uv: the plugin is tested against queuetruth from PyPI (HBT_PLUGIN_QT), as release-hftbacktest.yml does.
+HBT_PLUGIN_QT ?= queuetruth==0.2.0
+
+hftbacktest-plugin-wheel: ## build the plugin's sdist and wheel, run its tests on the wheel in a clean venv (as the release)
+	rm -rf $(HBT_PLUGIN_DIR)
+	uv build --sdist --wheel --out-dir $(HBT_PLUGIN_DIR)/dist integrations/hftbacktest/plugin
+	$(PYTHON_BIN) -m venv $(HBT_PLUGIN_DIR)/venv
+	$(HBT_PLUGIN_DIR)/venv/bin/pip install -q --disable-pip-version-check "$(HBT_PLUGIN_QT)" pytest \
+		$(HBT_PLUGIN_DIR)/dist/queuetruth_hftbacktest-*.whl
+	cd integrations/hftbacktest/plugin && env -u PYTHONPATH $(ROOT)/$(HBT_PLUGIN_DIR)/venv/bin/python -m pytest -q tests \
+		-p no:cacheprovider
+	rm -rf $(HBT_PLUGIN_DIR)
+
 test-e2e: ## end-to-end tests (integration included); builds queuetruth-core for the O-PARITY-1 binary arm
 	$(CARGO) build --locked -p queuetruth-cli --bin queuetruth-core
 	$(RUN) pytest tests/e2e -m "integration or not integration"
 
-test: lint test-rust develop test-py test-service test-extra test-nautilus ## everything except e2e
+test: lint test-rust develop test-py test-service test-extra test-nautilus test-hftbacktest-plugin ## everything except e2e
 
 FUZZ_EXAMPLES ?= 400
 FUZZ_STATS ?= .scratch/fuzz-py-stats.json

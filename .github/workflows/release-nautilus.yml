@@ -1,0 +1,133 @@
+# Release of the queuetruth-nautilus plugin (integrations/nautilus), versioned on its own. On a published GitHub
+# release whose tag is `queuetruth-nautilus-vX.Y.Z`: check that the tag matches integrations/nautilus/pyproject.toml
+# and the package's __version__, build the sdist and the pure-Python wheel, run the plugin's tests against the
+# built wheel with the lowest and the newest supported nautilus_trader, then upload to PyPI with Trusted Publishing
+# (PEP 740 attestations). `workflow_dispatch` runs every step except the upload (a dry run). The queuetruth release
+# (release.yml) ignores these tags.
+#
+# Actions are pinned by commit SHA (tag in the trailing comment), as in ci.yml and release.yml.
+#
+# One-time setup, done by the maintainer before the first release:
+# - PyPI: add a pending trusted publisher for project `queuetruth-nautilus`: owner `sarptandoven`, repository
+#   `queuetruth`, workflow `release-nautilus.yml`, environment `pypi-nautilus`.
+# - GitHub: Settings -> Environments -> `pypi-nautilus`, with the maintainer as required reviewer.
+name: release-nautilus
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-nautilus-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: "3.13"
+
+jobs:
+  build:
+    name: version, build and check
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.release.tag_name, 'queuetruth-nautilus-v')
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: the tag, pyproject.toml and __version__ agree
+        id: version
+        env:
+          EVENT: ${{ github.event_name }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          python -I - <<'EOF'
+          import os
+          import re
+          import tomllib
+          from pathlib import Path
+
+          root = Path("integrations/nautilus")
+          v = tomllib.loads((root / "pyproject.toml").read_text())["project"]["version"]
+          init = (root / "src/queuetruth_nautilus/__init__.py").read_text()
+          m = re.search(r'__version__\s*=\s*"([^"]+)"', init)
+          assert m and m[1] == v, f"pyproject {v}, __version__ {m and m[1]}"
+          if os.environ["EVENT"] == "release":
+              tag = os.environ["TAG"]
+              assert tag == f"queuetruth-nautilus-v{v}", f"release tag {tag!r} is not queuetruth-nautilus-v{v}"
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"version={v}\n")
+          print("version", v)
+          EOF
+      - name: build sdist and wheel
+        run: |
+          python -m pip install --disable-pip-version-check 'build==1.2.2.post1' 'twine==6.1.0'
+          python -m build integrations/nautilus --outdir dist
+          python -m twine check --strict dist/*
+          ls -l dist
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dist-nautilus
+          path: dist/
+          if-no-files-found: error
+
+  test:
+    name: tests on the built wheel (nautilus_trader ${{ matrix.nautilus }})
+    needs: build
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        nautilus: ["1.231.0", "2.*"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dist-nautilus
+          path: dist
+      - name: install the wheel, not the source tree
+        env:
+          NT: ${{ matrix.nautilus }}
+        run: |
+          python -m venv /tmp/venv
+          /tmp/venv/bin/pip install --disable-pip-version-check --pre "nautilus_trader==$NT" pytest dist/*.whl
+          /tmp/venv/bin/queuetruth-nautilus --version
+      - name: plugin tests
+        working-directory: integrations/nautilus
+        run: /tmp/venv/bin/python -m pytest -q tests -p no:cacheprovider
+
+  publish:
+    name: publish to PyPI
+    needs: [build, test]
+    if: github.event_name == 'release'
+    runs-on: ubuntu-24.04
+    environment:
+      name: pypi-nautilus
+      url: https://pypi.org/project/queuetruth-nautilus/${{ needs.build.outputs.version }}/
+    permissions:
+      id-token: write # PyPI Trusted Publishing and Sigstore signing of the attestations
+      attestations: write # GitHub build-provenance attestations of the uploaded files
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dist-nautilus
+          path: dist
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/*
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          packages-dir: dist/
+          attestations: true

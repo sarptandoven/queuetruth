@@ -309,6 +309,24 @@ pub struct FeedGap {
     pub reason: String,
 }
 
+/// A span in which one instrument was not in continuous trading as its feed reported it, `[ts_start, ts_end)` in
+/// UTC ns (SPEC 1.2, halt-censoring extension): halted, paused, or quoting before an IPO or halt cross. Recorded by
+/// ingest; replay, `why`, the zoo, calibration and features censor shadows there (`qt_replay::TradingHalt`).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TradingHaltSpan {
+    /// Instrument.
+    pub instrument_id: u32,
+    /// Time of the message that left continuous trading.
+    pub ts_start: i64,
+    /// Time of the message that resumed it; the end of the input's session day when trading did not resume.
+    pub ts_end: i64,
+    /// Feed state that opened the span: `<source>_<message type>:<state>` (e.g. `itch_H:P`, `itch_h:H`, `iex_H:H`).
+    pub state: String,
+    /// Feed reason code (ITCH `Reason`, e.g. `LUDP`, `IPO1`; empty when the feed gives none).
+    pub reason: String,
+}
+
 /// Data-quality verdict.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -360,6 +378,11 @@ pub struct DataQuality {
     pub off_price_executions: u64,
     /// Feed gaps.
     pub feed_gaps: Vec<FeedGap>,
+    /// 1.2 (halt censoring): spans in which an instrument was not in continuous trading. Venue state, not a data
+    /// defect: never part of the verdict. Omitted when empty, so a dataset without halts writes the same bytes as
+    /// before.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub trading_halts: Vec<TradingHaltSpan>,
     /// Source-specific counters.
     pub source_specific: IndexMap<String, u64>,
     /// Verdict.
@@ -1721,6 +1744,86 @@ pub struct ArmCounts {
     pub sim: u64,
 }
 
+/// 1.2: direction of the scorecard's P&L gap (a finding only when the 95% CI excludes 0).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PnlGapDirection {
+    /// CI lower > 0: the simulator's P&L is too high.
+    SimTooHigh,
+    /// CI upper < 0: the simulator's P&L is too low.
+    SimTooLow,
+    /// The CI contains 0, or there is no CI.
+    #[default]
+    NoSignificantDifference,
+    /// No valued order at the horizon.
+    NotComputable,
+    /// Fills-only live log: the orders live never filled are missing.
+    NotAnswerable,
+}
+
+/// 1.2: part of the P&L gap.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PnlGapPart {
+    /// Fills the simulator grants that live did not get.
+    #[default]
+    Granted,
+    /// Fills live got that the simulator misses.
+    Denied,
+    /// Delay, spread and adverse selection of matched units.
+    Timing,
+    /// Fees and rebates.
+    Fees,
+}
+
+/// 1.2: one value per part of the P&L gap.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PnlGapParts {
+    /// Fills the simulator grants that live did not get.
+    pub granted: Option<f64>,
+    /// Fills live got that the simulator misses.
+    pub denied: Option<f64>,
+    /// Timing and price of fills both arms got.
+    pub timing: Option<f64>,
+    /// Fees and rebates.
+    pub fees: Option<f64>,
+}
+
+/// 1.2: the scorecard's P&L gap in one currency at one markout horizon.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PnlGap {
+    /// Markout horizon.
+    pub horizon_ns: i64,
+    /// Currency.
+    pub currency: Option<String>,
+    /// Valued orders.
+    pub n_valued: u64,
+    /// Unvalued orders.
+    pub n_unvalued: u64,
+    /// Per-order mean of simulator minus live P&L.
+    pub mean_ccy: Option<f64>,
+    /// CI low.
+    pub ci_lo: Option<f64>,
+    /// CI high.
+    pub ci_hi: Option<f64>,
+    /// Direction.
+    pub direction: PnlGapDirection,
+    /// Why the gap is not computable or not answerable.
+    pub reason: Option<String>,
+    /// Parts (per-order means).
+    pub parts_ccy: PnlGapParts,
+    /// CI low of each part.
+    pub parts_ci_lo: PnlGapParts,
+    /// CI high of each part.
+    pub parts_ci_hi: PnlGapParts,
+    /// The part a finding mostly comes from.
+    pub main_part: Option<PnlGapPart>,
+    /// Plain sentence.
+    pub headline: String,
+}
+
 /// Summary of `score`.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -1792,6 +1895,9 @@ pub struct ScorecardSummary {
     /// 1.1 (3.11 #9): fills-only live log.
     #[serde(default)]
     pub fills_only: Option<bool>,
+    /// 1.2: P&L gap per currency at the markout equivalence horizon.
+    #[serde(default)]
+    pub pnl_gap: Option<Vec<PnlGap>>,
 }
 doc!(ScorecardSummary, "qt.scorecard_summary");
 

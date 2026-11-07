@@ -1134,6 +1134,13 @@
             "title": "Source Specific",
             "type": "object"
           },
+          "trading_halts": {
+            "items": {
+              "$ref": "#/components/schemas/TradingHaltSpan"
+            },
+            "title": "Trading Halts",
+            "type": "array"
+          },
           "unexpected_modifies": {
             "title": "Unexpected Modifies",
             "type": "integer"
@@ -3894,6 +3901,196 @@
         "title": "PathRef",
         "type": "object"
       },
+      "PnlGap": {
+        "additionalProperties": false,
+        "description": "1.2: the scorecard's P&L gap in one currency at one markout horizon (`queuetruth.score.pnl_gap`): the per-order\nmean of `qt.score_shortfall.total_ccy` (simulator minus live, net of fees; positive = the simulator's P&L is too\nhigh) with its 95% block-bootstrap CI, the direction (a finding only when the CI excludes 0), why it is not\ncomputable or not answerable, the parts (per-order means that add up to the gap) with their CIs on the same\ndraws, the part a finding mostly comes from, and the plain sentence.",
+        "properties": {
+          "ci_hi": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ci Hi"
+          },
+          "ci_lo": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ci Lo"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "direction": {
+            "enum": [
+              "sim_too_high",
+              "sim_too_low",
+              "no_significant_difference",
+              "not_computable",
+              "not_answerable"
+            ],
+            "title": "Direction",
+            "type": "string"
+          },
+          "headline": {
+            "title": "Headline",
+            "type": "string"
+          },
+          "horizon_ns": {
+            "title": "Horizon Ns",
+            "type": "integer"
+          },
+          "main_part": {
+            "anyOf": [
+              {
+                "enum": [
+                  "granted",
+                  "denied",
+                  "timing",
+                  "fees"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Main Part"
+          },
+          "mean_ccy": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Ccy"
+          },
+          "n_unvalued": {
+            "title": "N Unvalued",
+            "type": "integer"
+          },
+          "n_valued": {
+            "title": "N Valued",
+            "type": "integer"
+          },
+          "parts_ccy": {
+            "$ref": "#/components/schemas/PnlGapParts"
+          },
+          "parts_ci_hi": {
+            "$ref": "#/components/schemas/PnlGapParts"
+          },
+          "parts_ci_lo": {
+            "$ref": "#/components/schemas/PnlGapParts"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "horizon_ns",
+          "currency",
+          "n_valued",
+          "n_unvalued",
+          "mean_ccy",
+          "ci_lo",
+          "ci_hi",
+          "direction",
+          "reason",
+          "parts_ccy",
+          "parts_ci_lo",
+          "parts_ci_hi",
+          "main_part",
+          "headline"
+        ],
+        "title": "PnlGap",
+        "type": "object"
+      },
+      "PnlGapParts": {
+        "additionalProperties": false,
+        "description": "1.2: one value per part of the P&L gap (`queuetruth.score.pnl_gap`): fills the simulator grants that live did\nnot get, fills live got that it misses, the timing of fills both arms got, and fees.",
+        "properties": {
+          "denied": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Denied"
+          },
+          "fees": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fees"
+          },
+          "granted": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Granted"
+          },
+          "timing": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timing"
+          }
+        },
+        "required": [
+          "granted",
+          "denied",
+          "timing",
+          "fees"
+        ],
+        "title": "PnlGapParts",
+        "type": "object"
+      },
       "Problem": {
         "additionalProperties": false,
         "description": "RFC 9457 problem details.",
@@ -5297,6 +5494,20 @@
             "title": "N Unmatched Sim",
             "type": "integer"
           },
+          "pnl_gap": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PnlGap"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pnl Gap"
+          },
           "run_id": {
             "pattern": "^[0-9a-f]{16}$",
             "title": "Run Id",
@@ -5916,6 +6127,41 @@
           "next_cursor"
         ],
         "title": "TombstonePage",
+        "type": "object"
+      },
+      "TradingHaltSpan": {
+        "additionalProperties": false,
+        "description": "A span `[ts_start, ts_end)` in which one instrument was not in continuous trading as its feed reported it\n(SPEC 1.2, halt censoring): replay, `why`, the zoo, calibration and features censor shadows there.",
+        "properties": {
+          "instrument_id": {
+            "title": "Instrument Id",
+            "type": "integer"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "ts_end": {
+            "title": "Ts End",
+            "type": "integer"
+          },
+          "ts_start": {
+            "title": "Ts Start",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "instrument_id",
+          "ts_start",
+          "ts_end",
+          "state",
+          "reason"
+        ],
+        "title": "TradingHaltSpan",
         "type": "object"
       },
       "Ttf": {

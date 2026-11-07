@@ -15,6 +15,12 @@ mode). `block_stats` reduces the predictions of one shard to sums per cell and t
   model, horizon and instrument-day: predictions not `censored` with a truth label, and how many filled; the
   "exact fill rate" of `scripts/repro/breadth.py`). Every table carries the `extra` constant columns and, with
   `symbols`, a `symbol` column (locates are per day; the symbol is the cross-day identity).
+- `pnl_block_stats(terms)`: the per-shadow PnL terms of `queuetruth.eval.toxicity.evaluate_toxicity`
+  (`PnlTerms`: the zoo-toxicity population, markout horizons) summed per (`model_id`, `horizon_ns` = markout
+  horizon, `instrument_id`, `session_date`, `block`): `pnl_n` (shadows whose first-fill markouts are defined in every
+  arm that filled them), `pnl_grant`, `pnl_deny`, `pnl_timing`, `pnl_model`, `pnl_exact`, `pnl_bias` (ticks) and
+  `pnl_n_bps`, `pnl_bias_bps`. `sum(pnl_bias) / sum(pnl_n)` over every block is the `bias_ticks` value of
+  `zoo-toxicity` on the same shadows; the `pnl_*` metrics of `METRICS` are these ratios.
 - `evaluate_blocks(stats, shadows, h_max_ns=...)`: the `qt.zoo_errors` rows of `evaluate_zoo` for metrics `brier`,
   `logloss`, `fill_rate_bias`, `qty_bias` (every horizon), `overfill_bias`, `mcnemar_b`, `mcnemar_c` and
   `mcnemar_p_exact` (at `h_max_ns`), strata all / queue_decile / liquidity_bucket / instrument, as if the shards'
@@ -70,7 +76,60 @@ METRICS: dict[str, tuple[Any, Any]] = {
     "exact_fill_rate": (lambda s: s["n_y"], lambda s: s["n"]),
     "model_fill_rate": (lambda s: s["sum_p"], lambda s: s["n"]),
 }
+#: summed fields of `pnl_block_stats` and the PnL metrics (ticks, or bps for `pnl_bias_bps`; positive = the model's
+#: simulated PnL is too high)
+PNL_KEYS = ("model_id", "horizon_ns", "instrument_id", "session_date", "block")
+PNL_SUMS = (
+    "pnl_n",
+    "pnl_grant",
+    "pnl_deny",
+    "pnl_timing",
+    "pnl_model",
+    "pnl_exact",
+    "pnl_bias",
+    "pnl_n_bps",
+    "pnl_bias_bps",
+)
+_PNL_FIELDS = {
+    "pnl_grant": "grant_ticks",
+    "pnl_deny": "deny_ticks",
+    "pnl_timing": "timing_ticks",
+    "pnl_model": "model_pnl_ticks",
+    "pnl_exact": "exact_pnl_ticks",
+    "pnl_bias": "bias_ticks",
+    "pnl_bias_bps": "bias_bps",
+}
+METRICS.update(
+    {
+        "pnl_bias_ticks": (lambda s: s["pnl_bias"], lambda s: s["pnl_n"]),
+        "pnl_grant_ticks": (lambda s: s["pnl_grant"], lambda s: s["pnl_n"]),
+        "pnl_deny_ticks": (lambda s: s["pnl_deny"], lambda s: s["pnl_n"]),
+        "pnl_timing_ticks": (lambda s: s["pnl_timing"], lambda s: s["pnl_n"]),
+        "model_pnl_ticks": (lambda s: s["pnl_model"], lambda s: s["pnl_n"]),
+        "exact_pnl_ticks": (lambda s: s["pnl_exact"], lambda s: s["pnl_n"]),
+        "pnl_bias_bps": (lambda s: s["pnl_bias_bps"], lambda s: s["pnl_n_bps"]),
+    }
+)
+#: the count a metric's `n` reports (default `n`, the scored prediction rows)
+_COUNT = {m: "pnl_n_bps" if m.endswith("_bps") else "pnl_n" for m in METRICS if "pnl" in m}
 BOOTSTRAP_TEST_ID = "zoo_eval"
+#: prediction columns `block_stats` reads (with `status` for the population filter)
+_BLOCK_COLS = (
+    "model_id",
+    "shadow_id",
+    "horizon_ns",
+    "p_fill",
+    "e_fill_qty",
+    "qty",
+    "truth_filled",
+    "truth_filled_qty",
+    "ts_live",
+    "session_date",
+    "instrument_id",
+    "queue_ahead_at_live",
+    "trade_vol_60s",
+    "status",
+)
 
 
 def _with_extra(cols: dict[str, Any], n: int, extra: dict[str, Any] | None) -> pa.Table:
@@ -103,9 +162,9 @@ def block_stats(
         return np.floor_divide(ts, block_ns) if block_ns else np.zeros(ts.size, dtype=np.int64)
 
     raw = predictions
-    t = assign_strata(common_population(predictions))
-    model = C.strings(t, "model_id")
-    sid = C.strings(t, "shadow_id")
+    # only the columns read below: the population filter then copies a third of the table
+    t = assign_strata(common_population(predictions.select([c for c in _BLOCK_COLS if c in predictions.column_names])))
+    models, _, mcode = C.unique_strings(t, "model_id")
     h, _ = C.ints(t, "horizon_ns")
     p = C.floats(t, "p_fill")
     e_qty = C.floats(t, "e_fill_qty")
@@ -120,9 +179,8 @@ def block_stats(
     out: dict[str, pa.Table] = {}
 
     # shadows: the block universe (distinct shadows of the evaluated rows)
-    if sid.size:
-        ids, first, sid_inv = np.unique(sid, return_index=True, return_inverse=True)
-        sid_inv = np.asarray(sid_inv).reshape(-1)
+    if t.num_rows:
+        ids, first, sid_inv = C.unique_strings(t, "shadow_id")
         blk_shadow = blk(live[first])
         sk = np.stack([inst[first], date[first], blk_shadow], axis=1)
         su, scount = np.unique(sk, axis=0, return_counts=True)
@@ -140,22 +198,18 @@ def block_stats(
     out["shadows"] = _symbol_col(_with_extra(shadows, len(su), extra), symbols)
 
     # exact fill counts of breadth.py: raw predictions, not censored, truth defined
-    rm = C.strings(raw, "model_id")
+    mods, _, rcode = C.unique_strings(raw, "model_id")
     rh, _ = C.ints(raw, "horizon_ns")
     ri, _ = C.ints(raw, "instrument_id")
     rd, _ = C.ints(raw, "session_date")
     ry, ryv = C.bools(raw, "truth_filled")
     rc, rcv = C.bools(raw, "censored")
     defined = ryv & ~(rc & rcv)
-    mods, mcode = np.unique(rm, return_inverse=True) if rm.size else (np.zeros(0, dtype=object), np.zeros(0, int))
-    ek = np.stack([np.asarray(mcode).reshape(-1), rh, ri, rd], axis=1)[defined]
-    if ek.size:
-        eu, einv = np.unique(ek, axis=0, return_inverse=True)
-        einv = np.asarray(einv).reshape(-1)
-        nd = np.bincount(einv, minlength=len(eu))
-        nf = np.bincount(einv, weights=ry[defined].astype(float), minlength=len(eu)).astype(np.int64)
-    else:
-        eu, nd, nf = np.zeros((0, 4), dtype=np.int64), np.zeros(0, np.int64), np.zeros(0, np.int64)
+    eu, einv = _unique_rows(
+        int(defined.sum()), [lambda: rcode[defined], lambda: rh[defined], lambda: ri[defined], lambda: rd[defined]]
+    )
+    nd = np.bincount(einv, minlength=len(eu)).astype(np.int64)
+    nf = np.bincount(einv, weights=ry[defined].astype(float), minlength=len(eu)).astype(np.int64)
     exact = {
         "model_id": pa.array([str(mods[i]) for i in eu[:, 0]], pa.utf8()),
         "horizon_ns": pa.array(eu[:, 1], pa.int64()),
@@ -170,7 +224,7 @@ def block_stats(
     eligible = admin_rel[sid_inv] >= h.astype(float)
     never_cancel = cancel_rel >= float(h_max_ns)
     usable = yv & eligible & (h <= h_max_ns)
-    pop_code = np.where(never_cancel[sid_inv], 0, 1) if sid.size else np.zeros(0, int)
+    pop_code = np.where(never_cancel[sid_inv], 0, 1) if t.num_rows else np.zeros(0, int)
     yf = y.astype(float)
     pcl = np.clip(p, LOGLOSS_EPS, 1.0 - LOGLOSS_EPS)
     ll = -(yf * np.log(pcl) + (1.0 - yf) * np.log(1.0 - pcl))
@@ -182,32 +236,19 @@ def block_stats(
     idx = np.concatenate([rows_all, rows_dec, rows_liq])
     kind = np.concatenate([np.zeros(rows_all.size), np.ones(rows_dec.size), np.full(rows_liq.size, 2)]).astype(int)
     stratum = np.concatenate([np.zeros(rows_all.size, int), dec[rows_dec], liq[rows_liq]])
-    models, mcode = np.unique(model, return_inverse=True) if model.size else (model, np.zeros(0, int))
-    mcode = np.asarray(mcode).reshape(-1)
-    key = np.stack(
+    ku, kinv = _unique_rows(
+        idx.size,
         [
-            mcode[idx],
-            pop_code[idx],
-            kind,
-            stratum,
-            h[idx],
-            inst[idx],
-            date[idx],
-            blk(live[idx]),
+            lambda: mcode[idx],
+            lambda: pop_code[idx],
+            lambda: kind,
+            lambda: stratum,
+            lambda: h[idx],
+            lambda: inst[idx],
+            lambda: date[idx],
+            lambda: blk(live[idx]),
         ],
-        axis=1,
-    ).astype(np.int64)
-    if key.size:
-        # one int64 per row from per-column codes (fast 1-D unique instead of a row-wise one)
-        cols = [np.unique(key[:, j], return_inverse=True) for j in range(key.shape[1])]
-        flat = np.ravel_multi_index(tuple(np.asarray(c[1]).reshape(-1) for c in cols), [len(c[0]) for c in cols])
-        fu, kinv = np.unique(flat, return_inverse=True)
-        kinv = np.asarray(kinv).reshape(-1)
-        ku = np.stack(
-            [c[0][i] for c, i in zip(cols, np.unravel_index(fu, [len(c[0]) for c in cols]), strict=True)], axis=1
-        )
-    else:
-        ku, kinv = np.zeros((0, 8), dtype=np.int64), np.zeros(0, dtype=np.int64)
+    )
     m = len(ku)
 
     def s(w: np.ndarray) -> np.ndarray:
@@ -245,6 +286,75 @@ def block_stats(
 
 
 # ---- evaluation --------------------------------------------------------------------------------------------------
+
+
+def _unique_rows(n: int, columns: Sequence[Any]) -> tuple[np.ndarray, np.ndarray]:
+    """`np.unique(np.stack(cols, axis=1), axis=0, return_inverse=True)` of `n` rows of integer columns, each given as a
+    function returning it (rows sorted lexicographically, int64). Each column is made, coded and dropped in turn, and
+    the codes are combined into one int64 per row (row-major, as `np.ravel_multi_index`), so no row-wise sort is
+    needed and one column is in memory at a time."""
+    if n == 0:
+        return np.zeros((0, len(columns)), dtype=np.int64), np.zeros(0, dtype=np.intp)
+    uniques: list[np.ndarray] = []
+    flat = np.zeros(n, dtype=np.int64)
+    for make in columns:
+        u, inv = C.unique_ints(np.asarray(make(), dtype=np.int64))
+        uniques.append(u)
+        flat *= len(u)
+        flat += inv
+    fu, inv = C.unique_ints(flat)
+    del flat
+    dims = [len(u) for u in uniques]
+    rows = np.stack([u[i] for u, i in zip(uniques, np.unravel_index(fu, dims), strict=True)], axis=1)
+    return rows.astype(np.int64), inv
+
+
+def pnl_block_stats(
+    terms: Any,
+    *,
+    symbols: dict[int, str] | None = None,
+    extra: dict[str, Any] | None = None,
+    block_ns: int | None = HALF_HOUR_NS,
+) -> pa.Table:
+    """Sums of `toxicity.PnlTerms` per (model, markout horizon, instrument-day, block) over the population's shadows
+    (module docstring); rows where no shadow counts are left out. `block_ns=None`: whole instrument-days."""
+    sel = np.flatnonzero(terms.pop)
+    inst, date, live = terms.instrument_id[sel], terms.session_date[sel], terms.ts_live[sel]
+    blk = np.floor_divide(live, block_ns) if block_ns else np.zeros(sel.size, dtype=np.int64)
+    if sel.size:
+        su, sinv = np.unique(np.stack([inst, date, blk], axis=1).astype(np.int64), axis=0, return_inverse=True)
+        sinv = np.asarray(sinv).reshape(-1)
+    else:
+        su, sinv = np.zeros((0, 3), dtype=np.int64), np.zeros(0, dtype=np.int64)
+    g = len(su)
+    cols: dict[str, list[np.ndarray]] = {k: [] for k in ("model_id", "horizon_ns", "cell", *PNL_SUMS)}
+    for i, model in enumerate(terms.models):
+        for k, hz in enumerate(terms.horizons_ns):
+            ok, okb = terms.ok[i, k, sel], terms.ok_bps[i, k, sel]
+            sums = {"pnl_n": np.bincount(sinv, weights=ok.astype(float), minlength=g)}
+            sums["pnl_n_bps"] = np.bincount(sinv, weights=okb.astype(float), minlength=g)
+            for f, term in _PNL_FIELDS.items():
+                sums[f] = np.bincount(sinv, weights=terms.values[term][i, k, sel], minlength=g)
+            keep = np.flatnonzero((sums["pnl_n"] > 0) | (sums["pnl_n_bps"] > 0))
+            cols["model_id"].append(np.full(keep.size, model, dtype=object))
+            cols["horizon_ns"].append(np.full(keep.size, int(hz), dtype=np.int64))
+            cols["cell"].append(keep)
+            for f in PNL_SUMS:
+                cols[f].append(sums[f][keep])
+    cat = {k: np.concatenate(v) if v else np.zeros(0) for k, v in cols.items()}
+    cell = cat["cell"].astype(np.int64)
+    out = {
+        "model_id": pa.array(cat["model_id"].tolist(), pa.utf8()),
+        "horizon_ns": pa.array(cat["horizon_ns"].astype(np.int64), pa.int64()),
+        "instrument_id": pa.array(su[cell, 0], pa.uint32()),
+        "session_date": pa.array(su[cell, 1].astype(np.int32), pa.int32()),
+        "block": pa.array(su[cell, 2], pa.int64()),
+    }
+    for f in PNL_SUMS:
+        typ = pa.int64() if f in ("pnl_n", "pnl_n_bps") else pa.float64()
+        v = cat[f]
+        out[f] = pa.array(np.rint(v).astype(np.int64) if typ == pa.int64() else v.astype(float), typ)
+    return _symbol_col(_with_extra(out, len(cell), extra), symbols)
 
 
 def _np(t: pa.Table, name: str) -> np.ndarray:
@@ -398,7 +508,7 @@ def cluster_bootstrap(
     if stats.num_rows == 0:
         return []
     num_f, den_f = METRICS[metric]
-    vals = {f: _np(stats, f).astype(float) for f in SUMS}
+    vals = {f: _np(stats, f).astype(float) for f in (*SUMS, *PNL_SUMS) if f in stats.column_names}
     num_all, den_all = num_f(vals), den_f(vals)
     codes, sizes = [], []
     for c in clusters:
@@ -456,7 +566,7 @@ def cluster_bootstrap(
                 "ci_hi": hi if np.isfinite(hi) else None,
                 "se": float(np.std(finite, ddof=1)) if finite.size > 1 else None,
                 "p_boot": bootstrap_p_two_sided(reps) if metric not in ("exact_fill_rate", "model_fill_rate") else None,
-                "n": round(float(_np(stats, "n")[rows].sum())),
+                "n": round(float(_np(stats, _COUNT.get(metric, "n"))[rows].sum())),
                 **{f"n_{c}": int(np.unique(cu[:, j]).size) for j, c in enumerate(clusters)},
             }
         )
@@ -500,11 +610,14 @@ def concat(tables: Sequence[pa.Table]) -> pa.Table:
 __all__ = [
     "KEYS",
     "METRICS",
+    "PNL_KEYS",
+    "PNL_SUMS",
     "SUMS",
     "bh",
     "block_stats",
     "cluster_bootstrap",
     "concat",
     "evaluate_blocks",
+    "pnl_block_stats",
     "shrink",
 ]

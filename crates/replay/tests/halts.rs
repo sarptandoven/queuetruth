@@ -6,7 +6,8 @@
 //! resumption is unchanged.
 //!
 //! `f2_reproduction_*` is the Rust port of `scripts/scale/findings/repro_halt_shadow_fill.py`: the same 15-message
-//! ITCH day, ingested by `qt_ingest`, replayed by `run_dataset_with`.
+//! ITCH day, ingested by `qt_ingest` (which records the halt in `data_quality.json`), replayed by
+//! `run_dataset_with`.
 
 mod common;
 
@@ -251,6 +252,7 @@ fn f2_reproduction_itch_day_halt_censors_shadows() {
     )
     .unwrap();
 
+    // Ingest records the span (SPEC 1.2), equal to this test's own reading of the `H` messages.
     let halts = halts_from_itch(&msgs, MIDNIGHT, &BTreeMap::from([(SYMBOL.to_owned(), iid)]));
     assert_eq!(
         halts,
@@ -260,9 +262,27 @@ fn f2_reproduction_itch_day_halt_censors_shadows() {
             ts_end: MIDNIGHT + RESUME,
         }]
     );
+    let dq = qt_replay::ingest_dq(&dataset).unwrap();
+    assert_eq!(qt_replay::halts_of(&dq), halts);
+    assert_eq!(
+        (dq.trading_halts[0].state.as_str(), dq.trading_halts[0].reason.as_str()),
+        ("itch_H:H", "T1")
+    );
+    assert_eq!(
+        dq.verdict,
+        qt_schema::json::Verdict::Clean,
+        "a halt is venue state, not a data defect"
+    );
 
-    // Without the trading state the engine matches continuously through the halt.
-    let before = replay(&ds, &csv, &d.join("no-state"), &ReplayOptions::default());
+    // A dataset ingested before the fix (no `trading_halts` in its data_quality.json) still replays as it did: the
+    // engine matches continuously through the halt (the defect as found).
+    let old = d.join("ds-0.2.0");
+    copy_dir(&ds, &old);
+    let dq_path = old.join("data_quality.json");
+    let mut doc: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&dq_path).unwrap()).unwrap();
+    doc.as_object_mut().unwrap().remove("trading_halts").unwrap();
+    std::fs::write(&dq_path, serde_json::to_string_pretty(&doc).unwrap()).unwrap();
+    let before = replay(&old, &csv, &d.join("no-state"), &ReplayOptions::default());
     let got: Vec<_> = before
         .fills
         .iter()
@@ -282,30 +302,49 @@ fn f2_reproduction_itch_day_halt_censors_shadows() {
         ]
     );
 
-    // With it (SPEC 1.2).
+    // With the trading state (SPEC 1.2): from the new dataset's own data_quality.json with default options, and
+    // from spans the caller passes on the old dataset; both give the same outputs.
+    let after = replay(&ds, &csv, &d.join("state"), &ReplayOptions::default());
     let opts = ReplayOptions {
         trading_halts: halts,
         ..ReplayOptions::default()
     };
-    let after = replay(&ds, &csv, &d.join("state"), &opts);
-    assert!(after.fills.is_empty(), "{:?}", after.fills);
-    let s1 = after.result("S1");
-    assert_eq!((s1.end_state, s1.filled_qty), (EndState::CensoredGap, 0));
-    assert_eq!(
-        s1.queue_ahead_at_live,
-        Some(0),
-        "S1 was live (the best bid) before the halt"
-    );
-    assert_eq!(after.end_ts("S1"), MIDNIGHT + HALT);
-    let s2 = after.result("S2");
-    assert_eq!((s2.end_state, s2.filled_qty), (EndState::CensoredGap, 0));
-    assert_eq!(
-        (s2.ts_activated_event, s2.queue_ahead_at_live),
-        (None, None),
-        "S2 never live"
-    );
-    assert_eq!(after.end_ts("S2"), s2_live);
+    let passed = replay(&old, &csv, &d.join("state-passed"), &opts);
+    for out in [&after, &passed] {
+        assert!(out.fills.is_empty(), "{:?}", out.fills);
+        let s1 = out.result("S1");
+        assert_eq!((s1.end_state, s1.filled_qty), (EndState::CensoredGap, 0));
+        assert_eq!(
+            s1.queue_ahead_at_live,
+            Some(0),
+            "S1 was live (the best bid) before the halt"
+        );
+        assert_eq!(out.end_ts("S1"), MIDNIGHT + HALT);
+        let s2 = out.result("S2");
+        assert_eq!((s2.end_state, s2.filled_qty), (EndState::CensoredGap, 0));
+        assert_eq!(
+            (s2.ts_activated_event, s2.queue_ahead_at_live),
+            (None, None),
+            "S2 never live"
+        );
+        assert_eq!(out.end_ts("S2"), s2_live);
+    }
+    assert_eq!(after.results, passed.results);
     let _ = std::fs::remove_dir_all(&d);
+}
+
+/// A copy of a dataset directory (files and subdirectories).
+fn copy_dir(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for e in std::fs::read_dir(from).unwrap() {
+        let e = e.unwrap();
+        let dst = to.join(e.file_name());
+        if e.file_type().unwrap().is_dir() {
+            copy_dir(&e.path(), &dst);
+        } else {
+            std::fs::copy(e.path(), dst).unwrap();
+        }
+    }
 }
 
 // ---- engine-level rules -------------------------------------------------------------------------------------------

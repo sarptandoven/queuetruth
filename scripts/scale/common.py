@@ -35,6 +35,8 @@ from reproduce import free_gib, sha256_file  # noqa: E402
 
 S1 = 1_000_000_000
 H_MAX_NS = 300 * S1
+#: markout horizons of the atlas's P&L error: the `zoo-toxicity` defaults (`queuetruth.eval.toxicity`)
+PNL_HORIZONS_NS = (100_000_000, S1, 10 * S1, 60 * S1)
 #: The W1 design (07_scale_validation.md 1.5): the breadth populations scaled down, both modes.
 SCALE_POPULATIONS: dict[str, dict[str, Any]] = {
     "standard": {"n": 1000, "placements": STD_PLACEMENTS, "qty": STD_QTY},
@@ -49,6 +51,7 @@ __all__ = [
     "HORIZONS",
     "H_MAX_NS",
     "INGEST_DEFAULTS",
+    "PNL_HORIZONS_NS",
     "POPULATIONS",
     "SCALE_POPULATIONS",
     "TEST_SYMBOL_PREFIXES",

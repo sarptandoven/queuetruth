@@ -10,9 +10,10 @@ only one of the two runs. Then measure how far Freqtrade's candle-fill rule is f
 (`data/<config>.sqlite`) of a live bot and of a paper-trade bot that ran the same strategy at the same time. Nothing
 else: no market data and no exchange account.
 
-**This is a Python API for now.** The code is `queuetruth.live.importers.freqtrade` and
-`queuetruth.live.importers.hummingbot`; `queuetruth live import --venue freqtrade` and a `queuetruth reconcile`
-command do not exist yet (`queuetruth score` does run on the logs the API writes, step 2 below). Every file format
+**From the command line or Python.** `queuetruth reconcile --kind freqtrade|hummingbot` runs the whole comparison
+below, and `queuetruth live import --venue freqtrade | hummingbot | sim-freqtrade | sim-hummingbot` writes one arm as
+a canonical live log (importer options with `--option KEY=VALUE`, e.g. `--option dry_run=true`); the Python API is
+`queuetruth.live.importers.freqtrade` and `queuetruth.live.importers.hummingbot`. Every file format
 below was read from the projects' public source (Freqtrade `develop` at commit `1c0d709401b5`, Hummingbot 2.17.0 at
 commit `9af100d6822d`); the fixtures in `tests/fixtures/live/` are written from that source, not exported from a
 real bot, so check the counts against your own records the first time.
@@ -90,7 +91,18 @@ the 5m candle opening 2024-03-01T10:15:00.000Z (candle rule); the dry-run order 
 2024-03-01T13:06:12.880Z, outside the backtest fill candle [2024-03-01T13:10:00.000Z, +5m)
 ```
 
-Every number above is asserted in `test_reconcile_freqtrade_end_to_end` (`python/tests/live/test_freqtrade.py`).
+The same from the command line (`--format json` prints the `qt.bot_reconcile` document instead):
+
+<!-- check-docs: run -->
+```sh
+FX="$QT_FIXTURES/live/freqtrade"
+queuetruth reconcile --kind freqtrade --sim "$FX/backtest-result-2024-03-01_14-00-00.zip" \
+    --live tradesv3.dryrun.sqlite --live "$FX/freqtrade.log" --out rec-cli \
+    --instrument-map "$FX/instrument_map.csv" --max-rows 3
+```
+
+Every number above is asserted in `test_reconcile_freqtrade_end_to_end` (`python/tests/live/test_freqtrade.py`); the
+command line gives the same report (`python/tests/cli/test_cli_bots.py`).
 Six of the dry-run's limit orders have a backtest twin and the backtest filled all six; the dry-run filled four.
 The two it did not fill are the 10:15 ETH entry (the bot's log shows it timed out after 10 minutes; the database
 does not have it) and the 13:40 BTC exit (timed out, then replaced at a lower price). Both are candle-rule fills:

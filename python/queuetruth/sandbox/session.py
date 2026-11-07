@@ -3,20 +3,32 @@ as the real queue would have filled them.
 
 Clock and information. The agent's clock starts at the episode start and moves only forward, by `advance`. What the
 agent can see is the visible cut `clock - feed_latency_ns`: the tape (`queuetruth.sandbox.tape`) releases the source
-records of complete events up to that cut into a scratch dataset, and every observation, fill, queue position and
-markout is computed from that scratch dataset alone. Instructions are stamped with the clock (there is no way to
-backdate one), so an order sent at `T` arrives at `T + latency` and can only touch events after the cut it was
-decided on.
+records of complete events up to that cut (into a scratch dataset with `replay` stepping), and every observation,
+fill, queue position and markout is computed from those records alone. Instructions are stamped with the clock (there
+is no way to backdate one), so an order sent at `T` arrives at `T + latency` and can only touch events after the cut
+it was decided on.
 
-Decide-then-replay. `queuetruth._core.Session` advances a book step by step but carries no shadow orders, and a replay
-runs a whole dataset, so each `advance` re-runs the exact replay (SPEC 5.1, 5.2, fill rule `exact`) of the scratch
-dataset, i.e. of the episode's prefix, with every order that is still open (orders that have ended keep their final
-state: shadows never see each other, so dropping them changes nothing). Because instructions only take effect after
-the cut they were made at and prefixes nest, the fills and order states of each step are exactly those of one full
-replay of the same orders whose events lie in that prefix; `finish` runs that single full replay on the original
-files and checks the equality (`Consistency`), and a fill reported earlier that a longer prefix would change raises
-`QT-ENGINE-001`. The agent acts only at the times it advances to, so its reaction time to a market event is its step
-plus `latency_ns`.
+Stepping. The fills and order states of each step are exactly those of one full exact replay (SPEC 5.1, 5.2, fill
+rule `exact`) of the same orders whose events lie in the visible prefix. Two ways of computing them give identical
+observations, acks, log entries and scorecards (`python/tests/sandbox/test_stepping.py`):
+
+- `session` (the default): one `queuetruth.api.Session.with_orders` over the certification view of the partition
+  takes every order, cancel and partial cancel as it is sent and is advanced, step by step, by whole events to the
+  visible cut (`Session.advance_events_to`, the tape's own cut rule), so an episode reads the data once. At each step
+  the open orders are read back with `Session.shadow_states` as a replay of the prefix would end them: an order that
+  has not ended is `open_at_end` there (still pending or working, its queue ahead and rank those a trajectory row
+  would show), except a pending order whose arrival falls in a trading halt announced before the cut, which such a
+  replay ends `censored_gap` at its arrival (`_window_view`). The session engine applies no record past the cut; it
+  reads the original files, so the no-look-ahead gate is the engine's whole-event cut rather than a scratch dataset.
+- `replay`: each `advance` re-runs the exact replay of the scratch dataset (the episode's prefix) with every order
+  that is still open (orders that have ended keep their final state: shadows never see each other, so dropping them
+  changes nothing). Its input physically ends at the visible cut. An episode costs one replay of its prefix per
+  step, i.e. it is quadratic in the episode length.
+
+Because instructions only take effect after the cut they were made at and prefixes nest, both equal one full replay;
+`finish` runs that single full replay on the original files and checks the equality (`Consistency`), and a fill
+reported earlier that a longer prefix would change raises `QT-ENGINE-001`. The agent acts only at the times it
+advances to, so its reaction time to a market event is its step plus `latency_ns`.
 
 Instruction arguments are validated in their logged form (`_util.wire`), so `verify` meets every rejection again.
 """
@@ -70,6 +82,8 @@ from queuetruth.score._io import rows as table_rows
 from queuetruth.stats import stable_seed
 
 M = TypeVar("M", bound=BaseModel)
+#: How a step brings the orders to the visible cut (module docstring); the outputs are identical.
+STEPPINGS = ("session", "replay")
 _CLIENT_ID = re.compile(r"[A-Za-z0-9_.:\-]{1,64}")
 #: The rules of the simulation, stated in every session document.
 RULES = (
@@ -171,7 +185,12 @@ class Sandbox:
         owned_workdir: bool,
         keep_workdir: bool,
         session_id: str | None,
+        stepping: str = "session",
     ) -> None:
+        if stepping not in STEPPINGS:
+            raise config_error(f"stepping: {stepping!r} is not one of {', '.join(STEPPINGS)}")
+        #: `session` or `replay` (module docstring).
+        self.stepping = stepping
         self.spec = spec
         self.src = src
         self.session_id = session_id
@@ -223,7 +242,12 @@ class Sandbox:
             spec_id=self.spec_id,
             spec=spec.model_dump(mode="json"),
         )
-        self.tape = Tape(src, workdir / "tape")
+        self.tape = Tape(src, workdir / "tape", materialize=stepping == "replay")
+        #: The one-pass session of `session` stepping and the fill rows it reported so far, by order (all of them:
+        #: `absorb` filters the IOC ones).
+        self._qs: Any = None
+        self._view: Path | None = None
+        self._qs_fills: dict[str, list[dict[str, Any]]] = {}
         self.book = BookView(
             instrument_id=self.instrument["instrument_id"],
             modify_records_present=src.modify_records_present,
@@ -245,6 +269,8 @@ class Sandbox:
         self._replayed_rows = -1
         self.rejected = 0
         self._timings: dict[str, float] = {"tape_s": 0.0, "book_s": 0.0, "replay_s": 0.0}
+        if stepping == "session":
+            self._open_session()
         self._sync()
         obs = self._observation()
         self.log.append(
@@ -292,12 +318,16 @@ class Sandbox:
         keep_workdir: bool = False,
         session_id: str | None = None,
         contain: Contain | None = None,
+        stepping: str = "session",
     ) -> Sandbox:
         """Opens an episode. `spec` is a `SandboxSpec` or a dict (friendly values allowed: `normalize_spec`).
         Scratch files go to a new temporary directory (inside `workdir` when given), removed by `close()`, `finish()`
         or garbage collection unless `keep_workdir`. `contain(path)` (MCP local mode) must return the real path of
         every dataset file it accepts and raise for one it refuses; it is applied before each file is read
-        (`tape.open_source`)."""
+        (`tape.open_source`). `stepping` chooses how each step brings the orders to the visible cut: `session` (one
+        pass over the data for the whole episode) or `replay` (a replay of the episode's prefix at every step, the
+        original method); both give identical observations, acks, logs and scorecards (module docstring). It is not
+        part of the spec, so it changes neither `spec_id` nor the log."""
         raw = spec.model_dump(mode="json") if isinstance(spec, BaseModel) else dict(spec)
         first = normalize_spec(raw, None)
         _validate(SandboxSpec, first)
@@ -322,6 +352,7 @@ class Sandbox:
                 owned_workdir=True,
                 keep_workdir=keep_workdir,
                 session_id=session_id,
+                stepping=stepping,
             )
         except BaseException:
             if not keep_workdir:
@@ -338,6 +369,7 @@ class Sandbox:
         """Ends the session without a scorecard and removes its scratch files (unless `keep_workdir`)."""
         with self._lock:
             self.closed = True
+            self._qs = None
             if self._finalizer is not None:
                 self._finalizer()
 
@@ -385,6 +417,8 @@ class Sandbox:
         t2 = time.perf_counter()
         self._timings["tape_s"] += t1 - t0
         self._timings["book_s"] += t2 - t1
+        if self._qs is not None:
+            self._advance_session()
         self._step_prints = new_prints
         self._step_stats = TradeStatsAcc()
         open_ns = self.instrument["open_ns"]
@@ -401,7 +435,10 @@ class Sandbox:
         # takes effect after that replay's cut, and no event of the prefix lies after it.
         if active and not self.tape.empty and self.tape.rows != self._replayed_rows:
             before = {o.order_id: (o.status, o.filled_qty) for o in active}
-            self._replay_window(active)
+            if self._qs is not None:
+                self._read_session(active)
+            else:
+                self._replay_window(active)
             self._replayed_rows = self.tape.rows
             for o in active:
                 if before[o.order_id] != (o.status, o.filled_qty):
@@ -457,15 +494,90 @@ class Sandbox:
             r = out["results"].get(o.order_id)
             if r is None:
                 raise QtError("QT-ENGINE-001", f"order {o.order_id}: no shadow_results row in the window replay")
-            new = absorb(
-                o, r, out["fills"].get(o.order_id, []), out["traj"].get(o.order_id), final_replay=False, step=self.step
-            )
-            for f in new:
-                self._step_fills.append(self._fill_view(o, f, self.step))
-                q, px = int(f["fill_qty"]), int(f["fill_px"])
-                self._acct.add(o.sign, q, px, str(f["liquidity"]), self.spec.fees, **self._units())
-                h0 = self.spec.markout_horizons_ns[0]
-                heapq.heappush(self._mo_due, (int(f["ts_event"]) + h0, o.index, int(f["fill_seq"]), 0, f))
+            self._absorb_step(o, r, out["fills"].get(o.order_id, []), out["traj"].get(o.order_id))
+
+    # ---- session stepping ---------------------------------------------------------------------------------------
+
+    def _open_session(self) -> None:
+        """Opens the one-pass session on the certification view (the partition alone, original files), configured as
+        `_run_replay` configures every replay (seed, hidden-print policy, the view's feed gaps and trading halts)."""
+        from queuetruth.api import Session
+
+        self._view = certification_view(self.src, self._workdir / "view")
+        self._qs = Session.with_orders(
+            {
+                "dataset": {"path": str(self._view)},
+                "bbo": "none",
+                "depth_levels": 0,
+                "trajectory": "none",
+                "seed": self.spec.seed,
+                "hidden_print_policy": self.spec.hidden_print_policy,
+            }
+        )
+
+    def _advance_session(self) -> None:
+        """Advances the session by whole events to the visible cut (the records the tape released, by the same rule)
+        and collects the fills it produced."""
+        t0 = time.perf_counter()
+        self._qs.advance_events_to(self.visible_ns)
+        fills = self._qs.take_fills()
+        if fills.num_rows:
+            for r in table_rows(fills):
+                self._qs_fills.setdefault(r["shadow_id"], []).append({k: r.get(k) for k in FILL_COLUMNS})
+        self._timings["session_s"] = self._timings.get("session_s", 0.0) + time.perf_counter() - t0
+
+    def _halted_at_cut(self, ts: int) -> bool:
+        """Whether `ts` falls in a trading halt of the instrument as the tape's `data_quality.json` at the visible cut
+        lists them (announced before the cut, ending at most at it; `tape._gap_doc`), `[start, end)` as the engine
+        tests it."""
+        cut = self.visible_ns
+        iid = self.src.partition.instrument_id
+        for h in (self.src.data_quality or {}).get("trading_halts") or []:
+            if int(h.get("instrument_id", -1)) != iid or int(h["ts_start"]) >= cut:
+                continue
+            if int(h["ts_start"]) <= ts < min(int(h["ts_end"]), cut):
+                return True
+        return False
+
+    def _window_view(self, st: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | None]:
+        """The `shadow_results` row and last `queue_trajectory` row a replay of the visible prefix would give an order
+        whose session state is `st` (`Session.shadow_states`): an ended order as it ended; one still open as the end
+        of the data ends it (`open_at_end`, with an `end` trajectory row holding its queue ahead and rank once it went
+        live), except a pending order whose arrival falls in a trading halt listed at the cut (`censored_gap` at its
+        arrival). `absorb` reads nothing else of either row."""
+        res = dict(st)
+        if st["status"] == "done":
+            return res, {"ts_event": st["ts_end"], "queue_ahead_after": st["queue_ahead"], "rank_after": st["rank"]}
+        if st["status"] == "pending" and self._halted_at_cut(int(st["ts_live"])):
+            res["end_state"] = "censored_gap"
+            return res, {"ts_event": int(st["ts_live"]), "queue_ahead_after": None, "rank_after": None}
+        res["end_state"] = "open_at_end"
+        if st["queue_ahead"] is None:
+            return res, None
+        return res, {"ts_event": None, "queue_ahead_after": st["queue_ahead"], "rank_after": st["rank"]}
+
+    def _read_session(self, active: list[Order]) -> None:
+        """Brings the open orders to the visible cut from the session (counted as `window_replays`: the steps at which
+        the orders were brought to a new cut, the same in both steppings)."""
+        t0 = time.perf_counter()
+        states = {st["shadow_id"]: st for st in self._qs.shadow_states([o.order_id for o in active])}
+        self.window_replays += 1
+        for o in active:
+            res, traj = self._window_view(states[o.order_id])
+            self._absorb_step(o, res, self._qs_fills.get(o.order_id, []), traj)
+        self._timings["session_s"] = self._timings.get("session_s", 0.0) + time.perf_counter() - t0
+
+    def _absorb_step(
+        self, o: Order, r: dict[str, Any], fill_rows: list[dict[str, Any]], traj: dict[str, Any] | None
+    ) -> None:
+        """Updates `o` from a step's view of it and books the fills new to the session."""
+        new = absorb(o, r, fill_rows, traj, final_replay=False, step=self.step)
+        for f in new:
+            self._step_fills.append(self._fill_view(o, f, self.step))
+            q, px = int(f["fill_qty"]), int(f["fill_px"])
+            self._acct.add(o.sign, q, px, str(f["liquidity"]), self.spec.fees, **self._units())
+            h0 = self.spec.markout_horizons_ns[0]
+            heapq.heappush(self._mo_due, (int(f["ts_event"]) + h0, o.index, int(f["fill_seq"]), 0, f))
 
     def _fill_view(self, o: Order, f: dict[str, Any], step: int | None) -> dict[str, Any]:
         u = self._units()
@@ -906,6 +1018,9 @@ class Sandbox:
                 decision_mid_x2=mid_x2,
                 request=req,
             )
+            if self._qs is not None:
+                shadows, _ = schedule([o], self.instrument["instrument_id"])
+                self._qs.submit(shadows)
             self.orders.append(o)
             self._by_id[order_id] = o
             self._open[order_id] = o
@@ -960,6 +1075,11 @@ class Sandbox:
             except QtError as e:
                 self._reject("cancel", req, e)
                 raise
+            if self._qs is not None:
+                if new_qty is None:
+                    self._qs.cancel(o.order_id, self.clock_ns)
+                else:
+                    self._qs.amend(o.order_id, self.clock_ns, new_qty)
             if new_qty is None:
                 o.cancel_send_ns = self.clock_ns
                 o.cancel_by = "agent"
@@ -1021,7 +1141,8 @@ class Sandbox:
                         rows_seen=self.tape.rows,
                         data={"order_id": o.order_id, "qty": None, "new_qty": None, "by": "finish"},
                     )
-            view = certification_view(self.src, self._workdir / "view")
+            view = self._view if self._view is not None else certification_view(self.src, self._workdir / "view")
+            self._qs = None  # the finish cancels are not sent: the final replay below decides every order
             final = None
             if self.orders:
                 final = self._run_replay(view, self.orders, self._workdir / "runs" / "final", bbo="change")
@@ -1046,4 +1167,4 @@ class Sandbox:
             return doc
 
 
-__all__ = ["RULES", "Sandbox", "normalize_spec", "spec_digest", "spec_id_of"]
+__all__ = ["RULES", "STEPPINGS", "Sandbox", "normalize_spec", "spec_digest", "spec_id_of"]

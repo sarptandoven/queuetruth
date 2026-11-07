@@ -1,9 +1,10 @@
 # Trading halts censor shadows (fix of finding F2; SPEC 1.2)
 
-Status: the engine side is built and tested (`crates/replay/src/engine.rs`, `crates/replay/src/shadow/mod.rs`,
-`crates/replay/src/run.rs`, `crates/replay/tests/halts.rs`). Ingest does not produce the trading state yet, so the fix
-is reachable only from Rust callers that supply the spans (H.5). This note is the contract the fix was built against,
-written to be merged into [the design specification](../spec.md) (sections 1.2 and 5.2.7).
+Status: built end to end for Nasdaq ITCH and IEX DEEP+ (H.6). The engine side came first (`crates/replay/src/engine.rs`,
+`crates/replay/src/shadow/mod.rs`, `crates/replay/tests/halts.rs`); ingest now records the trading state and every
+engine entry point applies it. DBN, NYSE and the crypto sources record no spans yet (H.5). This note is the contract
+the fix was built against, written to be merged into [the design specification](../spec.md) (sections 1.2 and
+5.2.7).
 
 ## H.1 The defect
 
@@ -100,17 +101,10 @@ is identical, and all 50 Parquet outputs the two runs wrote are byte-identical. 
 
 ## H.5 Open
 
-- **The trading state does not reach the engine.** The ITCH mapper drops `H` (Stock Trading Action), `h`
-  (Operational Halt) and `K` (IPO Quoting Period) (`crates/ingest/src/itch/mapper.rs`), and the IEX, DBN and NYSE
-  readers do not turn their status messages into spans either (IEX only counts trading-status messages, NYSE uses
-  its security status only for the open time, DBN skips status records), so no dataset carries the spans and the Python `ReplaySpec`, the binding
-  and the CLI have no field for them. Needed: ingest records each instrument's non-`T` spans (state, reason, and
-  the feed position of the message, which would also settle the same-nanosecond order at the halt instant exactly)
-  next to `qt.data_quality.feed_gaps`; `run_dataset`, `why` and the zoo, calibration and features engines load them
-  per partition as they load feed gaps; then `repro_halt_shadow_fill.py` exits 0, the strict xfail in
-  `scripts/scale/tests/test_trace_flags.py` turns into an unexpected pass, and `--flag-policy exclude` stops being
-  required for published atlas tables. Until then `docs/concepts/exact-truth.md` and `docs/venue-semantics.md`
-  need the caveat the atlas trace note asks for.
+- **Other sources.** The DBN, NYSE and crypto readers record no spans: DBN skips `status` records (and refuses
+  `status` files), NYSE uses its security status only for the open time, and the crypto venues publish no
+  per-instrument halt state in the captures read. Datasets from them replay as before. Feed positions of the state
+  messages are not recorded either; the engine's tie rule (H.2 rule 1) decides the halt instant.
 - **Halt crosses disseminated after the resumption.** Nasdaq sends the halt or IPO cross's executions after the
   `H` T message (54 to 148 crossed events per cross on 2020-01-30). A shadow that goes live in that window sees the
   still-crossed displayed book and can be filled `crossed_at_live`. The span ends at the resumption message, so this
@@ -121,3 +115,45 @@ is identical, and all 50 Parquet outputs the two runs wrote are byte-identical. 
   rules are checked by the tests above and the property against the engine's own unhalted replay.
 - **F1.** The replay checks still count crossed events and price-priority violations inside halts and crosses
   together with continuous trading.
+
+## H.6 Built: the trading state from ingest to every engine
+
+- **Ingest** (`crates/ingest/src/halts.rs`, `HaltTracker`): an instrument is halted while its trading status or an
+  operational halt says so; a span opens when it leaves continuous trading and closes at the message that returns
+  it (a change between halted states, such as ITCH `H` to `Q` before an IPO cross, keeps the span and its first
+  state). Nasdaq ITCH: `H` states `H`, `P`, `Q` and `h` of market `Q`; `T` closes (`K` and `W` only announce times
+  and levels). IEX DEEP+: Trading Status `H`, `O`, `P` and Operational Halt `O`; `T` and `N` close. Only selected
+  instruments are tracked, and a span always names an instrument of `instruments.parquet` (IEX writes rows for
+  instruments with records only, so the spans of a symbol without records, halted all session, are dropped). A span
+  still open at the end of an ITCH file ends at the next midnight of its day (ITCH
+  locates are per day); IEX ids are shared across inputs, so an IEX span may run from one day file into the next and
+  one still open ends at the end of the last message's session day.
+- **Contract** (schema 1.2, additive): `qt.data_quality.trading_halts`, a list of
+  `{instrument_id, ts_start, ts_end, state, reason}` (`state` e.g. `itch_H:P`, `iex_O:O`; `reason` the feed's code,
+  e.g. `LUDP`, `IPO1`). Halts are venue state, not a data defect: they never change the verdict. The key is omitted
+  when the list is empty, so a dataset without halts writes the same bytes as before.
+- **Engines.** `qt_replay::halts_of` reads the spans and `qt_replay::partition_halts` gives each partition those of
+  its instrument that overlap its records or its session day (so a span of another day never reaches a partition
+  of a source with per-day ids). `run_dataset_with` applies the dataset's spans unless the caller passes its own in
+  `ReplayOptions::trading_halts`, and adds one warning (`trading halts: N spans on M instruments applied ...`) when
+  a run with shadows applies any; `why` and `run_partition` do the same, and the zoo
+  (`StreamOptions::trading_halts`), calibration (`collect_events_with_spans`) and features
+  (`extract_events_with_spans`) set them on their exact engines. The agent sandbox cuts them like feed gaps: a
+  halt announced before the visible cut is in the scratch dataset with its end at most at the cut, a later one is
+  not.
+- **Zoo model arms.** The engine reports an end to its observers only for shadows that were live, so a shadow it
+  censors at its `ts_live` inside a halt is invisible to the L2 and `hbt_l3_fifo` arms, which go live on their own
+  clock. `PartitionSim::set_trading_halts` gives the arms the spans: each halt start is an administrative end
+  (audit A2) that ends every live pair `censored_gap`, and a shadow whose `ts_live` falls in a halt never goes live
+  in either arm (after the cancel and amend-to-zero checks, as in the engine).
+- **Evidence.** `crates/replay/tests/halts.rs` `f2_reproduction_itch_day_halt_censors_shadows` now ingests the
+  F2 day and checks that the recorded span equals the test's own reading of the `H` messages, that the default
+  replay censors `S1` and `S2`, that a dataset without spans (as written by 0.2.0) still reproduces the defect, and
+  that spans passed by the caller give the same outputs; `crates/ingest/src/itch/mapper.rs` and
+  `crates/ingest/tests/iex_messages.rs` test the span rules of each source; `crates/zoo/tests/trading_halts.rs`
+  checks that the zoo's exact arm equals replay, that no model books a fill during a halt or for a shadow submitted
+  in one, and that without the span the upper bound does fill there. `repro_halt_shadow_fill.py` exits 0 and
+  `scripts/scale/tests/test_trace_flags.py` asserts it (the strict xfail is gone).
+- **What changes in results.** Nothing for a dataset without halts, and nothing for datasets ingested before the
+  fix (their `data_quality.json` has no spans: re-ingest to apply them). On the two public Nasdaq days the four
+  published symbols have no non-`T` span in the session (H.4), so the published tables are unchanged.

@@ -21,9 +21,9 @@ def _hdr(t: bytes, loc: int, ts: int) -> bytes:
     return t + struct.pack(">HH", loc, 0) + ts.to_bytes(6, "big")
 
 
-def itch_day(symbols: list[str], orders_per_symbol: int = 400, seed: int = 3) -> bytes:
+def itch_day(symbols: list[str], orders_per_symbol: int = 400, seed: int = 3, max_step_ns: int = 50_000_000) -> bytes:
     """A framed ITCH 5.0 day: system events, one `R` per symbol, then interleaved adds, executions, partial cancels
-    and deletes around $100 (messages of all symbols mixed in time order)."""
+    and deletes around $100 (messages of all symbols mixed in time order, up to `max_step_ns` apart)."""
     rng = random.Random(seed)
     out = bytearray()
 
@@ -41,7 +41,7 @@ def itch_day(symbols: list[str], orders_per_symbol: int = 400, seed: int = 3) ->
     ts = 9 * 3600 * NS + 31 * 60 * NS
     match = 1
     for _ in range(orders_per_symbol * len(symbols) * 2):
-        ts += rng.randrange(1, 50_000_000)
+        ts += rng.randrange(1, max_step_ns)
         loc = rng.randrange(1, len(symbols) + 1)
         book = live[loc]
         op = rng.random()

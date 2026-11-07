@@ -110,13 +110,13 @@ sim-vs-live comparison on unusable data measures the data, not the simulator.
   (iceberg) quantity beyond the displayed slice and CME implied liquidity are not modelled.
 - **Your own order's effect on others.** A shadow never takes volume from orders behind it and never changes anyone's
   behaviour. See [Shadow orders](shadow-orders.md#what-a-shadow-does-not-do).
-- **Auctions and halts.** Not modelled as matching; orders resting through an auction are censored. Halts are not
-  handled yet: the engine can censor shadows over halt spans a Rust caller supplies, but ingest does not record
-  Nasdaq's trading-state (`H`) messages and no Python, CLI or service path passes halt spans, so `replay`, the zoo
-  and calibration treat a halted symbol as trading continuously. A shadow resting through a halt, LULD pause or IPO
-  quotation period can be filled during it, at once when the halted book is displayed crossed. None of the four
-  symbols of the published Nasdaq days halted; leave halted symbol-days out until halts are carried from ingest
-  ([halt censoring](../design/extensions/halt-censoring.md)).
+- **Auctions and halts.** Not modelled as matching. Ingest records when each instrument is halted, paused or quoting
+  before an IPO or halt cross (Nasdaq ITCH `H` and `h` messages, IEX DEEP+ trading status and operational halts:
+  `trading_halts` in `data_quality.json`), and `replay`, `why`, the zoo, calibration and features censor shadows
+  there: a shadow live when a halt starts ends `censored_gap`, and one that would go live during it never does.
+  Taking part in the halt or IPO cross is not modelled. Datasets ingested before this was added carry no spans and
+  treat a halted symbol as trading continuously: re-ingest them. DBN, NYSE and the crypto sources record no spans
+  yet ([halt censoring](../design/extensions/halt-censoring.md)).
 - **Pro-rata and allocation matching.** There is no rule set for them; FIFO replay of such a product is not exact.
 - **L2-only data** (for example Tardis `incremental_book_L2`) drives the zoo, markouts and `calibrate-live`, never
   exact truth.

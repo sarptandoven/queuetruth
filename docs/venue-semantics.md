@@ -179,13 +179,13 @@ depth-window source: Kraken sends no delete when a level leaves the subscribed w
 the window. See [Data and licensing](data-and-licensing.md#vendor-notes) for the terms of IEX, Kraken and the other
 sources.
 
-**Halts are not handled yet.** The replay engine can end a shadow `censored_gap` over trading-halt spans that a Rust
-caller supplies, but ingest does not record Nasdaq's trading-state (`H`) messages and no Python, CLI or service path
-passes halt spans. So `replay`, the zoo and calibration treat a halted symbol as trading continuously: a shadow
-resting through a halt, LULD pause or IPO quotation period can be filled during it, at once when the halted book is
-displayed crossed. None of the four symbols of the published Nasdaq days halted on either day. Leave halted
-symbol-days out until halts are carried from ingest
-([halt censoring](design/extensions/halt-censoring.md)).
+**Halts.** Ingest records the spans in which each instrument is not in continuous trading (`trading_halts` in
+`data_quality.json`): Nasdaq ITCH Stock Trading Action `H` states `H`, `P` and `Q` and Operational Halt `h` of market
+`Q`, closed by state `T`; IEX DEEP+ Trading Status `H`, `O` and `P` and Operational Halt `O`, closed by `T` and `N`.
+`replay`, `why`, the zoo, calibration and features censor shadows there: a shadow live when a halt starts ends
+`censored_gap`, one whose `ts_live` falls in a halt never goes live. Halt and IPO crosses are not modelled. DBN, NYSE
+and the crypto sources record no spans yet, and datasets ingested before spans were recorded have none: re-ingest
+them ([halt censoring](design/extensions/halt-censoring.md)).
 
 ## Adding a venue
 

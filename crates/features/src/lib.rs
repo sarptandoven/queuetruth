@@ -28,7 +28,7 @@ use qt_types::{QtError, QtResult, Xoshiro256StarStar, stable_seed};
 use qt_zoo::{Family, ModelId, QueueModel};
 use serde_json::Value;
 
-use crate::extract::{ExtractConfig, PopOrder, extract_events_with_gaps};
+use crate::extract::{ExtractConfig, PopOrder, extract_events_with_spans};
 
 /// Feature columns of SPEC 5.5.2 in column order (`side_sign` is a fixed column of `qt.features`).
 pub const FEATURES: &[&str] = &[
@@ -231,8 +231,11 @@ pub fn extract_rows(
         .cloned()
         .collect();
     let jobs: BTreeMap<(i32, u32), Mutex<Vec<PopOrder>>> = pops.into_iter().map(|(k, v)| (k, Mutex::new(v))).collect();
-    // Ingest-recorded feed gaps (as qt_replay::run_dataset): shadows live across a gap end censored there.
-    let gaps = qt_replay::ingest_dq(ds).map(|d| d.feed_gaps).unwrap_or_default();
+    // Ingest-recorded feed gaps and trading halts (as qt_replay::run_dataset): shadows live across a gap or at a
+    // halt end censored there.
+    let dq = qt_replay::ingest_dq(ds);
+    let gaps = dq.as_ref().map(|d| d.feed_gaps.clone()).unwrap_or_default();
+    let halts = dq.as_ref().map(qt_replay::halts_of).unwrap_or_default();
     let res = qt_replay::for_each_partition(&parts, spec.threads.max(1) as usize, |p| {
         let pop = jobs
             .get(&(p.session_date, p.instrument_id))
@@ -245,7 +248,8 @@ pub fn extract_rows(
                 msg: "partition without an instrument row".into(),
             })?;
         let part_gaps = qt_replay::partition_gaps(&gaps, p);
-        extract_events_with_gaps(p.mbo()?, inst, ds.rules(), pop, models, cfg, &part_gaps)
+        let part_halts = qt_replay::partition_halts(&halts, p, Some(inst.midnight_utc_ns));
+        extract_events_with_spans(p.mbo()?, inst, ds.rules(), pop, models, cfg, &part_gaps, &part_halts)
     })?;
     Ok(res.into_iter().flatten().collect())
 }

@@ -180,7 +180,7 @@ queuetruth jobs files "$JOB"
 queuetruth jobs download "$JOB" --out out/
 ```
 
-`jobs submit KIND` accepts `replay`, `calibration`, `scorecard` and `report`, sends an idempotency key (yours with
+`jobs submit KIND` accepts `replay`, `zoo`, `calibration`, `scorecard` and `report`, sends an idempotency key (yours with
 `--idempotency-key`, else a generated one reused on retries) and prints the `qt.job` document. With `--wait` it polls
 until the job is terminal; a failed, canceled or expired job exits with code 2. `jobs status ID`, `jobs wait ID`,
 `jobs files ID` and `jobs download ID --out DIR` complete the set; `download` verifies each file's size and sha256
@@ -207,8 +207,9 @@ the request's outcome rather than an error, such as `upload-size-mismatch`, whic
 stored and replayed like a success. Secrets in a response (`secret` fields) are never stored; a replay returns
 `null` for them.
 
-The service has no endpoints for the zoo, features, hazard fitting, live import, why traces or the referee in v0.1;
-run those with the local CLI.
+The service runs replays, zoos, calibrations, scorecards and reports. It has no endpoints for features, hazard
+fitting, live import, why traces, the referee, `zoo-toxicity`, `dq`, certificates, the forecast referee, the
+prediction-market kit or the agent sandbox; run those with the local CLI.
 
 ## Upload data and register datasets
 

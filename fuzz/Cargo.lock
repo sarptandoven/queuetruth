@@ -738,7 +738,6 @@ dependencies = [
  "queuetruth-schema",
  "queuetruth-types",
  "serde_json",
- "zstd",
 ]
 
 [[package]]

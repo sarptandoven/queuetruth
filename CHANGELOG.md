@@ -6,6 +6,234 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ## [Unreleased]
 
+### Added
+
+- **The P&L gap next to the fill-rate gap in `score`** (ROADMAP, the one-line reality gap): under its `RESULT:` line
+  `queuetruth score` prints a `P&L:` line, for example `the simulator's P&L is 5.78 USD per order too high (95% CI
+  +3.40 to +8.75) at the 1 s markout, mostly from fills it grants that live did not get (+3.09 USD per order)`, and
+  the report adds the same sentence to its answer block (one answer per currency) and under the verdict headline.
+  It is the per-order mean of `score_shortfall.parquet`'s `total_ccy` (simulator minus live markout P&L, net of
+  fees) with the decomposition's 95% block-bootstrap interval, at the markout equivalence horizon
+  (`--markout-horizon`, 1 s). A difference is stated only when the interval excludes 0, otherwise the line says no
+  P&L difference was found. The gap splits into fills the simulator grants that live did not get, fills live got
+  that it misses (whole or partial fills in both), timing and fees, each with an interval on the same draws; a
+  finding names a part only when its interval excludes 0 and it is more than half of the parts. A fills-only live
+  log is not answerable (the orders live never filled are missing), a scorecard blocked by own orders in the L2
+  depth prints no line, and a gap that cannot be valued says why. New summary field `qt.scorecard_summary.pnl_gap`
+  (schema 1.2, additive, optional; mirrored in `qt_schema`), computed by `queuetruth.score.pnl_gap`; for summaries
+  without it the report computes it from `score_shortfall.parquet`.
+  [Scorecard statistics](docs/concepts/scorecard.md#the-pl-gap) explains how to read it.
+- **`queuetruth-hftbacktest`** (`integrations/hftbacktest/plugin`, a separate package with its own `pyproject.toml`,
+  Apache-2.0, depends on `queuetruth>=0.2.0,<0.3`; ROADMAP "Plugins for more backtesters"): an hftbacktest user with
+  order-level data scores a backtest against exact-queue truth and calibrates its ProbQueue model in one or two calls,
+  wrapping queuetruth's own commands. `prepare(data, orders, out)` resolves the orders with the exact replay and
+  writes their absolute-price schedule and exact truth, one hftbacktest event file per instrument-day
+  (`export l2-npz`) and the hftbacktest replay script (`export replay-schedule`); `run(prepared, python=...,
+  snippet=...)` runs it in the venv that has hftbacktest; `score(prepared)` imports hftbacktest's order states
+  (`import_sim("hftbacktest")`), referees them order by order (`referee`) and gives, per horizon, the paired
+  fill-rate difference with a cluster-robust 95% CI and the exact McNemar p. A backtest stopped by hftbacktest #312
+  is scored up to the stop, with a warning. `calibrate(data, train, test, out=...)` runs `calibrate alloc` for
+  `power3`, `power2` and `power`, picks the exportable fit with the smallest held-out log loss at 60 s and returns
+  queuetruth's `export hftbacktest` snippet as paste-ready code (`CalibrationRefused`, `QT-CALIB-001`, when no fit
+  passes the trust check; `force=True` writes it under `NOT VALIDATED`). CLI `queuetruth-hftbacktest
+  prepare|run|score|calibrate`. Its tests run on the synthetic dataset in their own pytest session
+  (`make test-hftbacktest-plugin`, part of `make test`), with hftbacktest 2.4.4 itself when `QT_HBT_PY` names its
+  venv; `make hftbacktest-plugin-wheel` runs them on the built wheel against queuetruth from PyPI. Release workflow
+  `.github/workflows/release-hftbacktest.yml` (tags `queuetruth-hftbacktest-vX.Y.Z`: version checks, sdist and
+  wheel, the plugin's tests on the built wheel with queuetruth 0.2.0 and the newest 0.2.x and hftbacktest 2.4.4,
+  Trusted Publishing with attestations, a dry run on manual dispatch). Guide:
+  [Score and calibrate my hftbacktest backtest with the plugin](docs/how-to/score-and-calibrate-hftbacktest.md).
+- `ROADMAP.md`: what is being worked on and in what order (the Fill-Realism Atlas is `W1`).
+- **Sessions that take orders while they run** (`qt.Session.with_orders(spec)`; Rust `Session::open_replay`,
+  `Engine::new_interactive`, `add_shadow`, `cancel_shadow`, `amend_shadow`): `submit` (a `qt.shadow_spec` table or
+  row dicts), `cancel` and `amend` at or after the session's `position`, `take_fills` / `take_results`
+  (`qt.shadow_fills` / `qt.shadow_results` tables), `finish`. Partitions replay as `replay` replays them with the
+  spec, the session reads the data once however many orders it takes, and its fills and results equal one `replay`
+  with every order in its input (`crates/replay/tests/incremental.rs` checks this on random streams under both fill
+  rules, with jitter, a feed gap and a halt, and on a dataset against `run_dataset`). This is the engine an agent
+  benchmark needs: an episode costs one pass instead of a replay of its prefix per step.
+- **`Session.advance_events_to(ts)` and `Session.shadow_states(ids)`** (Rust `Session::advance_events_to`,
+  `Session::shadow_peek`, `Engine::end_open_events`, `Engine::shadow_peek`): advance a session that takes orders by
+  whole events only (the complete events whose records are all at or before `ts`; an event straddling `ts` waits, an
+  unterminated tail at the end of the data is applied and ended while orders are still taken), and read each order
+  as a replay ending now would report it (its `qt.shadow_results` columns so far, when it ended, its queue ahead and
+  rank). Tested against one batch run in `crates/replay/tests/incremental.rs`. A shadow of a known instrument that no
+  partition covers (a time outside its days) is now taken by `Session.submit` and ends `censored_gap` at its `ts_live`
+  without being replayed, as in `replay` (it was refused; an instrument without data is still refused), and `advance_to` applies records held by `advance_events_to` first, even at an earlier time.
+- **Upstream compatibility dashboard** (`.github/workflows/compat.yml`, `scripts/nightly/compat.py`,
+  `scripts/nightly/compat_site.py`): every day the nightly runner's engine checks run on a GitHub runner against the
+  newest hftbacktest and NautilusTrader release of each major line on PyPI (release candidates included) and against
+  the pinned versions, on the synthetic Nasdaq day. Each day's `compat-<date>.json` and one log per version are kept
+  on the `compat-results` release (90 days), and the atlas workflow renders `compat.html` (per library and version,
+  pass or fail per gate, the date, links to the logs) into the same Pages site and links it from the atlas index;
+  `compat.yml` dispatches `atlas.yml` with the new `site_only` input after each result (its own concurrency group;
+  the compatibility page is best effort and never blocks the atlas deploy). The run fails when a pinned version
+  does not pass; a newer release that disagrees is a warning. The job that installs the new releases has a
+  read-only token, saves no cache, and the publish job uploads only the day's validated result and its logs from
+  its artifact. Release assets of both workflows are now listed through the paged REST API
+  (`scripts/nightly/release_assets.sh`), so `atlas-days` past 100 assets is read in full. The runner gained `--hbt VERSION`, and its
+  hftbacktest venv lifts the 14-day cutoff for hftbacktest itself so a release is checked on the day it is
+  published. [Run the nightly cross-checks](docs/how-to/nightly-checks.md#upstream-compatibility-on-github).
+- **The scheduled public atlas** (`.github/workflows/atlas.yml`, `scripts/scale/iex_latest.py`): each new IEX
+  DEEP+ day runs through the scale pipeline on one runner, its reduced tables are kept as an asset of the
+  `atlas-days` release, and the site over the newest 20 days is published with GitHub Pages (a maintainer turns
+  Pages on once).
+- **`referee` GitHub Action** (`actions/referee`, `uses: sarptandoven/queuetruth/actions/referee@<ref>`): runs a
+  simulator's command on every referee bug-class fixture (`$QT_DATASET`, `$QT_SCHEDULE` in, `$QT_FILLS` out),
+  referees each class against the exact FIFO engine with the usual tolerances, writes a table to the job summary,
+  `summary.json` and a shields.io endpoint `badge.json`, and fails the step when a class fails. The runner,
+  `actions/referee/run.py`, also works outside GitHub. Guide: [Referee my simulator](docs/how-to/referee-your-simulator.md)
+  section 4.
+- **P&L error in the atlas** (ROADMAP W1, the reality gap in money): units compute the `zoo-toxicity` P&L terms of
+  every zoo run (one exact replay with quotes per shadow population, `evaluate_toxicity` per mode) and sum them per
+  symbol-day (`pnl_stats.parquet`, `queuetruth.eval.blocks.pnl_block_stats`); `atlas.py reduce-day` writes
+  `pnl_cells.parquet`, `combine` writes `pnl_by_tier.parquet` (simulated minus exact P&L per order in ticks and bps,
+  the model's and the exact P&L, the grant / deny / timing parts, with the two-way dates x symbols bootstrap), and
+  the site adds a P&L column and a second plain-words sentence on the largest clear P&L error among the 100 most
+  traded symbols (ticks pool there).
+  An atlas row equals `zoo-toxicity` on the same shadows (tested against the command). `plan.py --no-pnl` leaves it
+  out and keeps the plan's run id as before. `evaluate_toxicity` returns the per-shadow terms (`PnlTerms`).
+  [The Fill-Realism Atlas](docs/concepts/fill-realism-atlas.md) explains how to read the site, how a number is
+  made and checked, and its limits; the site links to it and carries a description and link-preview tags.
+- **Atlas site: which setting fixes it, library pages, charts** (`scripts/scale/atlas_site.py`). A "Best setting by
+  tier" table names, for each tier and library, the setting whose fill-rate bias at the headline horizon is closest
+  to 0 as a point estimate, says whether it is still clearly off (its 95% interval excludes 0) or not, lists the
+  settings whose intervals overlap it (the atlas does not rank those), gives its P&L error and the config
+  to paste: the hftbacktest `BacktestAsset` builder and exchange (as `queuetruth export hftbacktest` writes them) or
+  the NautilusTrader `add_venue` keywords (as the NautilusTrader integration sets them); no config is offered where
+  no released library reproduces the model (corrected mode, Databento with `k > 0`). `hftbacktest.html`,
+  `nautilustrader.html` and `databento.html` show one library's models across tiers and horizons, its best settings
+  and a plain-words summary, titled with the question people search for and linked from `index.html`. Each tier
+  has an inline SVG chart of every model's bias with its interval (no script, `role="img"` with a title and
+  description, themed with the page's colour variables). `data/leaderboard.json` adds `best_settings`. Long model
+  ids no longer widen the page on a phone, and links follow the page's colours in dark mode.
+- **Fill-Realism Atlas site** (`scripts/scale/atlas_site.py`, ROADMAP W1): a static site from an `atlas.py combine`
+  directory. For each liquidity tier it shows every fill model's fill-rate bias against the exact replay at every
+  horizon with its 95% interval, sorted by size, and leads with one plain-words sentence. It also shows the atlas and
+  day Merkle roots with the verify command, and writes `data/leaderboard.json` and the manifest. Pages run no
+  script and load nothing from the network, and the output is byte-identical for the same inputs. `--source iex`
+  puts IEX's required attribution on every page; `--per-symbol` adds a per-symbol page.
+- **Freqtrade and Hummingbot from the command line.** `queuetruth reconcile --kind freqtrade|hummingbot --sim PATH
+  --live PATH --out DIR` pairs a bot's simulator arm (Freqtrade backtest or dry run, Hummingbot paper bot) with its
+  live run, explains every difference and runs the scorecard, writing `reconcile.json` (`qt.bot_reconcile`),
+  `reconcile_orders.csv` and both logs; `--format json` prints the report. `live import` takes `--venue freqtrade`,
+  `hummingbot`, `sim-freqtrade` and `sim-hummingbot`, with importer options through `--option KEY=VALUE`
+  (`LiveImportSpec.venue`, schema 1.2, additive; Python `queuetruth.live.import_bot`).
+- **IEX DEEP+ in the atlas pipeline** (`scripts/scale/iex_split.py`): one IEX DEEP+ day (pcap or pcapng, gzip or
+  raw, from a file or streamed from a URL, never stored) is split into K symbol buckets by the ITCH splitter's rule.
+  System Events go to every bucket, and each bucket is renumbered per channel and session with the source's gaps
+  carried, so it is byte-identical to the `IexCutFilter` subset of its symbols. The manifest gives the unit ingest
+  spec (`iex_deep_plus`, venue `iex`), per-symbol instrument ids, messages and executions, test securities and the
+  Trading Status spans. `plan.py` reads it like an ITCH manifest, without changing the run ids of ITCH plans.
+  `local_day.py --source iex --site` runs a whole IEX day from capture to atlas site. Tested end to end on a
+  synthetic DEEP+ day: bucket = filter subset, bucket ingest = subset ingest, the manifest's ids = the ingest's,
+  and split, plan, units, reduce, combine and the site.
+  A URL day survives dropped connections (the stream resumes with HTTP ranges), and `local_day.py` runs only as
+  many units at once as the machine's memory holds at 6 GiB each (`--unit-mem-gib`): three units on a 16 GB
+  machine ran it out of memory on the real 2026-10-09 day.
+- **Backtrader and VectorBT backtests.** `live import --venue sim-backtrader` reads the order and trade
+  notifications written by a documented analyzer (`QtOrderLog`, one JSON line per `notify_order` / `notify_trade`
+  with the new execution bits), or a `Transactions` analyzer dump (fills only); `--venue sim-vectorbt` reads
+  `pf.orders.records_readable` (or `pf.trades`) exported with `.to_csv` or `.to_json(orient="records")`. Neither
+  library is imported. Option `pair_with=<live log dir>` pairs each simulated order with the live order of the same
+  instrument and side placed nearest to it, so `score --sim-log` matches them; `timeframe`, `fill_delay_bars`,
+  `instrument(s)`, `data_tz`, `column`, `order_type` describe the export. `queuetruth reconcile --kind backtrader |
+  vectorbt --sim EXPORT --live LIVE_LOG_DIR --out DIR` writes the same `qt.bot_reconcile` report as for Freqtrade
+  and Hummingbot (`kind` gains the two values, additive; `LiveImportSpec.venue` gains `sim_backtrader` and
+  `sim_vectorbt`, schema 1.3, additive). Guide: `docs/how-to/reconcile-backtrader-vectorbt.md`.
+- `.github/workflows/fuzz.yml`: the fuzz crate's seed, regression and known-crash tests on every change to a parser,
+  and a weekly libFuzzer campaign over every target (`fuzz/run.sh`, crashes uploaded as artifacts).
+- `.github/workflows/release-nautilus.yml`: releases the `queuetruth-nautilus` plugin to PyPI on a
+  `queuetruth-nautilus-vX.Y.Z` release (version checks, sdist and wheel, the plugin's tests on the built wheel with
+  nautilus_trader 1.231.0 and the newest 2.x, Trusted Publishing with attestations; a dry run on manual dispatch).
+  `release.yml` now runs only for `vX.Y.Z` tags.
+- **Why faithful `hbt_l3_fifo` fills fewer orders than the exact replay** (docs/concepts/l2-model-zoo.md (c),
+  `crates/zoo/tests/l3_faithful_gap.rs`, `python/tests/zoo/test_l3_faithful_gap.py`). hftbacktest fills a
+  better-priced order by trade-through only when the execution is below the feed's best on its side. On ITCH and
+  DEEP+ every executed order is at that best, so an order that improved the touch, or that is left alone above the
+  feed best, misses those fills. It also ignores hidden prints, and a GTX order that crosses at activation expires.
+  On synthetic Nasdaq days the first two rules cover every missed fill (95.9% the first; the third is not measured
+  there). On a sample of the 2026-10-09 IEX day, about 58% of the misses are trade-throughs and 42% hidden
+  executions. Both arms are scored on the same rows with the same "filled" label, so the comparison needed no fix;
+  faithful semantics are unchanged.
+
+### Changed
+
+- **The agent sandbox reads the data once per episode.** `Sandbox.open(spec, stepping="session")`, the new default,
+  keeps one `qt.Session.with_orders` on the episode's partition that takes every order, cancel and partial cancel as it
+  is sent and is advanced by whole events to each visible cut, instead of replaying the episode's prefix at every step.
+  Observations, acks, rejections, the order log and the scorecard are identical to the previous method, still available
+  as `stepping="replay"` (`python/tests/sandbox/test_stepping.py` compares both on random and scripted agents, including
+  halts, events straddling the cut, an unterminated tail and orders after the data). The spec, `spec_id`, logs and
+  `verify` are unchanged. On the synthetic fixture day a quoting agent in 5 s steps runs 4,000 steps in 7.7 s instead of
+  139.1 s (median of 3 runs, 18.1 times faster; `benches/sandbox_stepping.py`). How open orders, queue
+  position, IOC orders and the single partition map onto the session is in [Give an agent a realistic
+  exchange](docs/how-to/agent-sandbox.md#stepping-session-or-replay).
+
+- **`Session.submit` is all or none, and `take_fills` / `take_results` lose nothing.** A batch with one refused row
+  (duplicate id, `ts_submit` before the position, an instrument without data) used to leave the rows before it submitted; every
+  row is now checked before any is sent (`qt_replay::Session::submit_all`, `Engine::check_shadow`). The take methods
+  drop the rows only after the table reached Python (`pending_fills` / `consume_fills`), so a failed hand-off keeps
+  them for the next call. Found by the review of #8.
+- **The atlas site states only clear findings.** Its first sentence gives the exact fill rate, then the most
+  optimistic and the most pessimistic fill model among those whose 95% interval excludes 0, each with its relative
+  size, and the closest model; the P&L sentence names the largest clear error, or says that no model's P&L differs
+  beyond its interval. The default sort and headline horizon is 60 s (`--horizon`), where enough orders fill for
+  the differences to read (at 1 s the real IEX day fills 0.47% of orders).
+- **`block_stats` is about 4x faster and needs less than half the memory** (56 s and 4.8 GB above the input to 13 s
+  and 2.0 GB for one zoo run of 61,200 shadows on the real 2026-10-09 IEX day, where it was 60 to 85% of every
+  unit's time and ran units out of memory). Shadow and model ids are hashed by Arrow instead of sorting a Python
+  string per row (`queuetruth.eval._cols.unique_strings`, `unique_ints`), the population filter copies only the
+  columns read, and the cell keys are coded one column at a time. Outputs are byte-identical (checked on that unit;
+  `python/tests/eval/test_cols_unique.py` checks the helpers against `np.unique`). `common_population` and
+  `evaluate_toxicity` use the same helpers.
+- **`queuetruth zoo` leads with the reality gap**: the view's second line names the closest and the furthest model
+  from the exact replay at the sort horizon (`reality gap at 60 s: from +0.1 pp (...) to +13.3 pp (...)`).
+- README rewritten to fit one screen: the one-command demo first, the findings, a "pick your path" table and the
+  evidence in short; the full tables stay in `docs/RESULTS.md` and `docs/testing.md`. The docs entry page lists the
+  0.2 workflows (certificates, agent sandbox, prediction markets, forecasts, Freqtrade and Hummingbot).
+- Docs: the service reference names the `zoo_` id prefix and says rate limits are per tenant; the self-hosting guide
+  lists `zoo` among the `jobs submit` kinds and names the commands that stay local.
+- **Rust 1.88 or later** to build from source (arrow 60's minimum; was 1.85). Wheels are unaffected.
+- **`queuetruth._core` exchanges Arrow data through the Arrow PyCapsule interface directly**
+  (`crates/py/src/arrow_ffi.rs`) instead of `pyo3-arrow`, which has no release for arrow 60; `Cargo.lock` lists 26
+  fewer crates. `read_table`, `arrow_schema`, `write_table` and `Session.submit`, `take_fills` and `take_results`
+  behave as before, and `write_table` and `Session.submit` still accept any object with `__arrow_c_stream__`.
+- **Parquet files are written by `parquet` 60.1.0.** Data pages are unchanged, but the footer is not, so a file's
+  sha256 in summaries differs from 0.2.0's for the same rows: a dictionary-encoded column lists its dictionary page
+  first in its page encoding stats (Arrow C++ expects that order), and floating-point columns carry IEEE 754
+  total-order statistics with a NaN count, whose min and max pyarrow 25 does not read back. Some footers
+  are also a few bytes smaller. The committed test fixtures are regenerated with `make fixtures`; every regenerated
+  table reads back to the same rows, schema and metadata.
+
+### Fixed
+
+- **DBN files that crashed or exhausted the pinned decoder are input errors.** A DBN prelude announcing 100 to 103
+  metadata bytes made `dbn` 0.71.0 panic, and one announcing up to 256 MiB made it allocate that much before reading
+  any of it (a 24-byte file was enough). `qt_ingest::dbn::FrameCheck` now rejects a metadata block shorter than its
+  fixed fields (`MIN_METADATA_BYTES`, 104) or longer than the file can hold (its size for an uncompressed file, the
+  decompression guard's limit for a compressed one) as `QT-INPUT-002` before the decoder runs. The fuzz
+  reproducers moved from `fuzz/known-crashes/` to `fuzz/regressions/dbn/`, and the `dbn` and `ingest` fuzz targets
+  no longer skip them. The Parquet footer panic in `fuzz/known-crashes/parquet/` is still open.
+- **Trading halts censor shadows end to end (finding F2).** Ingest records the spans in which each instrument is
+  not in continuous trading in `data_quality.json` (`trading_halts`: `instrument_id`, `ts_start`, `ts_end`,
+  `state`, `reason`; schema 1.2, additive, omitted when empty, never part of the verdict): Nasdaq ITCH Stock
+  Trading Action `H` states `H`, `P` and `Q` and Operational Halt `h` of market `Q`, and IEX DEEP+ Trading Status
+  `H`, `O` and `P` and Operational Halt `O`; every span names an instrument of the dataset. `replay`, `why`, the
+  zoo, calibration, features and the agent sandbox apply them: a shadow live when a halt starts ends `censored_gap`
+  there, one whose `ts_live` falls in a halt never goes live. In the zoo both model arms follow (a halt start ends
+  every live model pair, and no model activates a shadow inside a halt), so no model books a fill while an
+  instrument is halted. `replay` adds one warning line when a run with shadows applies halts.
+  `scripts/scale/findings/repro_halt_shadow_fill.py` now exits 0. Nothing
+  changes for datasets without halts (the published Nasdaq tables included) or for datasets ingested before this
+  release, which carry no spans: re-ingest those. DBN, NYSE and crypto sources record no spans yet. Rust API:
+  `qt_ingest::halts`, `qt_replay::{halts_of, partition_halts}`, `qt_zoo::runner::StreamOptions::trading_halts`,
+  `qt_calib::collect::collect_events_with_spans`, `qt_features::extract::extract_events_with_spans`. Design note:
+  [halt censoring](docs/design/extensions/halt-censoring.md) H.6.
+- **Four of the five known Parquet decode panics** (the `arrow-ipc` schema sites found by the `parquet` fuzz target)
+  are fixed by arrow 60: their reproducers moved to `fuzz/regressions/parquet/`. The `parquet` footer panic on a
+  negative column chunk range remains in `fuzz/known-crashes/parquet/`.
+
 ### Security
 
 - **arrow and parquet 60.1.0 for RUSTSEC-2026-0442** (CVE-2026-111959, GHSA-gqmm-qrjq-4c7h, published 2026-11-02):
@@ -19,26 +247,6 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   `zstd-safe`): `zstd` 0.14.3, `zstd-safe` 8.2.0 and `zstd-sys` 2.1.2, through `arrow-*` and `parquet` 60.0.0 (whose
   `zstd` 0.14 replaces `parquet` 59's `zstd` 0.13) and a lockfile update of `dbn`'s `zstd`. `cargo audit --deny
   warnings` passes on `Cargo.lock` and `fuzz/Cargo.lock`. Every new release is at least two weeks old.
-
-### Changed
-
-- **Rust 1.88 or later** to build from source (arrow 60's minimum; was 1.85). Wheels are unaffected.
-- **`queuetruth._core` exchanges Arrow data through the Arrow PyCapsule interface directly**
-  (`crates/py/src/arrow_ffi.rs`) instead of `pyo3-arrow`, which has no release for arrow 60; `Cargo.lock` lists 26
-  fewer crates. `read_table`, `arrow_schema` and `write_table` behave as before, and `write_table` still accepts any
-  object with `__arrow_c_stream__`.
-- **Parquet files are written by `parquet` 60.1.0.** Data pages are unchanged, but the footer is not, so a file's
-  sha256 in summaries differs from 0.2.0's for the same rows: a dictionary-encoded column lists its dictionary page
-  first in its page encoding stats (Arrow C++ expects that order), and floating-point columns carry IEEE 754
-  total-order statistics with a NaN count, whose min and max pyarrow 25 does not read back. Some footers
-  are also a few bytes smaller. The committed test fixtures are regenerated with `make fixtures`; every regenerated
-  table reads back to the same rows, schema and metadata.
-
-### Fixed
-
-- **Four of the five known Parquet decode panics** (the `arrow-ipc` schema sites found by the `parquet` fuzz target)
-  are fixed by arrow 60: their reproducers moved to `fuzz/regressions/parquet/`. The `parquet` footer panic on a
-  negative column chunk range remains in `fuzz/known-crashes/parquet/`.
 
 ## [0.2.0] - 2026-10-25
 
