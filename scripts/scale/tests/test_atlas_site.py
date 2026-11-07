@@ -180,6 +180,16 @@ def test_site_shows_the_pnl_error_when_the_atlas_has_it(atlas: Path, tmp_path: P
     assert "P&amp;L" not in (tmp_path / "plain" / "index.html").read_text()
 
 
+def test_compat_link_only_when_asked(atlas: Path, tmp_path: Path) -> None:
+    S.build(atlas, tmp_path / "plain", horizon="1s")
+    assert 'href="compat.html"' not in (tmp_path / "plain" / "index.html").read_text()
+    S.build(atlas, tmp_path / "linked", horizon="1s", compat_link=True)
+    page = (tmp_path / "linked" / "index.html").read_text()
+    assert 'Upstream compatibility: <a href="compat.html">' in page
+    assert S.main(["--atlas", str(atlas), "--out", str(tmp_path / "cli"), "--horizon", "1s", "--compat-link"]) == 0
+    assert (tmp_path / "cli" / "index.html").read_text() == page
+
+
 def test_a_finding_needs_its_estimate_and_interval_on_one_side() -> None:
     # a percentile interval wholly above 0 around a negative estimate states nothing either way
     skewed = {"fill_rate_bias_value": -0.001, "fill_rate_bias_ci_lo": 0.0005, "fill_rate_bias_ci_hi": 0.003}

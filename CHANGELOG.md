@@ -60,6 +60,20 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   rank). Tested against one batch run in `crates/replay/tests/incremental.rs`. A shadow of a known instrument that no
   partition covers (a time outside its days) is now taken by `Session.submit` and ends `censored_gap` at its `ts_live`
   without being replayed, as in `replay` (it was refused; an instrument without data is still refused), and `advance_to` applies records held by `advance_events_to` first, even at an earlier time.
+- **Upstream compatibility dashboard** (`.github/workflows/compat.yml`, `scripts/nightly/compat.py`,
+  `scripts/nightly/compat_site.py`): every day the nightly runner's engine checks run on a GitHub runner against the
+  newest hftbacktest and NautilusTrader release of each major line on PyPI (release candidates included) and against
+  the pinned versions, on the synthetic Nasdaq day. Each day's `compat-<date>.json` and one log per version are kept
+  on the `compat-results` release (90 days), and the atlas workflow renders `compat.html` (per library and version,
+  pass or fail per gate, the date, links to the logs) into the same Pages site and links it from the atlas index;
+  `compat.yml` dispatches `atlas.yml` with the new `site_only` input after each result (its own concurrency group;
+  the compatibility page is best effort and never blocks the atlas deploy). The run fails when a pinned version
+  does not pass; a newer release that disagrees is a warning. The job that installs the new releases has a
+  read-only token, saves no cache, and the publish job uploads only the day's validated result and its logs from
+  its artifact. Release assets of both workflows are now listed through the paged REST API
+  (`scripts/nightly/release_assets.sh`), so `atlas-days` past 100 assets is read in full. The runner gained `--hbt VERSION`, and its
+  hftbacktest venv lifts the 14-day cutoff for hftbacktest itself so a release is checked on the day it is
+  published. [Run the nightly cross-checks](docs/how-to/nightly-checks.md#upstream-compatibility-on-github).
 - **The scheduled public atlas** (`.github/workflows/atlas.yml`, `scripts/scale/iex_latest.py`): each new IEX
   DEEP+ day runs through the scale pipeline on one runner, its reduced tables are kept as an asset of the
   `atlas-days` release, and the site over the newest 20 days is published with GitHub Pages (a maintainer turns

@@ -20,6 +20,9 @@ Reads `atlas_manifest.json` and `leaderboard_by_tier.parquet` (`pnl_by_tier.parq
   as combined (day roots, atlas root, flag policy, flagged symbol-days);
 - `symbols.html` with `--per-symbol`: per-symbol cross-day bias with empirical-Bayes shrinkage.
 
+With `--compat-link` the index links `compat.html`, the upstream compatibility page that
+`scripts/nightly/compat_site.py` writes into the same directory (`.github/workflows/atlas.yml` does both).
+
 The page loads nothing from the network and runs no script. Output is byte-identical for the same inputs (no
 wall-clock values; the build information comes from the manifest). With `--source iex` every page carries IEX's
 required attribution line and link (docs/data-and-licensing.md); publish Nasdaq-derived pages only as aggregates and
@@ -533,8 +536,9 @@ svg.bias .under .ci { stroke: var(--under); } svg.bias .under .dot { fill: var(-
 SUMMARY = "How far each backtester's fill model is from the exact replay of the real order queue."
 
 
-def _page(title: str, body: str, attribution: str, description: str = SUMMARY) -> str:
-    """A whole page; `description` is the search and link-preview text (the headline when there is one)."""
+def _page(title: str, body: str, attribution: str, description: str = SUMMARY, extra_css: str = "") -> str:
+    """A whole page; `description` is the search and link-preview text (the headline when there is one). Other pages
+    of the site (`scripts/nightly/compat_site.py`) pass `extra_css` for their own classes."""
     d = html.escape(description if len(description) <= 300 else description[:297].rstrip() + "...")
     t = html.escape(title)
     meta = (
@@ -545,7 +549,7 @@ def _page(title: str, body: str, attribution: str, description: str = SUMMARY) -
     return (
         '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
-        f"<title>{t}</title>\n{meta}<style>{CSS}</style>\n</head>\n<body>\n<main>\n"
+        f"<title>{t}</title>\n{meta}<style>{CSS}{extra_css}</style>\n</head>\n<body>\n<main>\n"
         f"{body}\n{attribution}\n</main>\n</body>\n</html>\n"
     )
 
@@ -822,8 +826,10 @@ def build(
     horizon: str | None = None,
     per_symbol: bool = False,
     pnl_horizon: str = "60s",
+    compat_link: bool = False,
 ) -> dict[str, Any]:
-    """Writes the site; returns {pages, rows, pnl_rows, atlas_root}."""
+    """Writes the site; returns {pages, rows, pnl_rows, atlas_root}. `compat_link` links `compat.html`, the upstream
+    compatibility page `scripts/nightly/compat_site.py` writes next to it."""
     if source not in ("nasdaq", "iex"):
         raise SystemExit(f"site: source must be nasdaq or iex, got {source!r}")
     manifest = json.loads((atlas / "atlas_manifest.json").read_text(encoding="utf-8"))
@@ -935,6 +941,12 @@ def build(
         f"<tbody>{day_rows}</tbody></table></div>"
         + built
         + (' Per symbol: <a href="symbols.html">symbols</a>.' if per_symbol else "")
+        + (
+            ' Upstream compatibility: <a href="compat.html">the newest hftbacktest and NautilusTrader releases '
+            "against the exact queue</a>, checked daily."
+            if compat_link
+            else ""
+        )
         + "</p>"
     )
     out.mkdir(parents=True, exist_ok=True)
@@ -1060,6 +1072,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     ap.add_argument("--per-symbol", action="store_true", help="also write symbols.html from per_symbol.parquet")
     ap.add_argument("--pnl-horizon", default="60s", help="markout horizon of the P&L column (atlases with P&L)")
+    ap.add_argument(
+        "--compat-link", action="store_true", help="link compat.html (scripts/nightly/compat_site.py) from the index"
+    )
     a = ap.parse_args(argv)
     r = build(
         a.atlas,
@@ -1070,6 +1085,7 @@ def main(argv: list[str] | None = None) -> int:
         horizon=a.horizon,
         per_symbol=a.per_symbol,
         pnl_horizon=a.pnl_horizon,
+        compat_link=a.compat_link,
     )
     print(json.dumps(r, indent=1))
     return 0
