@@ -12,12 +12,14 @@
 # --draft=false), since docs/data-and-licensing.md does not settle whether its aggregates may be published. A full
 # Nasdaq day may not fit one runner, so it runs with a symbol budget: above NASDAQ_BUDGET_CORE_H predicted
 # core-hours the day runs the same number of symbols in every liquidity tier, chosen by a hash
-# (plan.py --sample-budget-core-h), and the day's manifest and the site say so. The budget, NASDAQ_UNIT_CORE_S and NASDAQ_UNIT_MEM_GIB were sized with
-# scripts/scale/runner_budget.py on synthetic ITCH (docs/concepts/fill-realism-atlas.md).
+# (plan.py --sample-budget-core-h), and the day's manifest and the site say so. The budget, NASDAQ_UNIT_CORE_S and
+# NASDAQ_UNIT_MEM_GIB were sized with scripts/scale/runner_budget.py on synthetic ITCH
+# (docs/concepts/fill-realism-atlas.md).
 #
 # The site shows the kept Nasdaq days next to IEX (IEX stays the default page; Nasdaq is under nasdaq/) only when a
 # maintainer sets the repository variable ATLAS_NASDAQ_SITE to true or a manual run asks with nasdaq_site (which
-# lasts until the next scheduled deploy: set the variable to keep it). It is off by default, for the same reason.
+# lasts until the next scheduled deploy: set the variable to keep it), and only once the atlas-days-nasdaq release
+# is published, so every page's verify link works for its readers. It is off by default, for the same reason.
 # The Nasdaq part is best effort: when it cannot be built the IEX site still deploys. Before the first IEX day the
 # site is the compatibility page alone, without Nasdaq.
 #
@@ -146,7 +148,9 @@ jobs:
             exit 0
           fi
           have=false
-          if bash scripts/nightly/release_assets.sh names "$RELEASE" | grep -qx "${PREFIX}day-$DATE.tar.gz"; then
+          # a failed listing stops the step (assigned first, not tested in an `if`), so it never reads as "not kept"
+          kept="$(bash scripts/nightly/release_assets.sh names "$RELEASE")"
+          if grep -qx "${PREFIX}day-$DATE.tar.gz" <<< "$kept"; then
             have=true
           fi
           run_day=true
@@ -219,7 +223,14 @@ jobs:
           RELEASE: ${{ steps.day.outputs.release }}
           PREFIX: ${{ steps.day.outputs.prefix }}
         run: |
-          if ! bash scripts/nightly/release_assets.sh exists "$RELEASE"; then
+          # exists: 0 found (a draft too), 1 missing, 2 the lookup failed (stop rather than create a second draft)
+          found=0
+          bash scripts/nightly/release_assets.sh exists "$RELEASE" || found=$?
+          if [ "$found" -eq 2 ]; then
+            echo "::error::could not look up the release $RELEASE"
+            exit 1
+          fi
+          if [ "$found" -eq 1 ]; then
             if [ "$VENUE" = nasdaq ]; then
               # a draft until a maintainer decides to publish Nasdaq-derived aggregates (docs/data-and-licensing.md)
               gh release create "$RELEASE" --draft --prerelease \
@@ -278,6 +289,11 @@ jobs:
           # (set -e does not apply inside a function called as an `if` condition, so every step checks itself)
           nasdaq_atlas() {
             local ndays name d
+            # a public page must not send readers to a draft they cannot open: wait until the release is published
+            if ! gh api "repos/$GITHUB_REPOSITORY/releases/tags/$ATLAS_NASDAQ_RELEASE" > /dev/null 2>&1; then
+              echo "::warning::$ATLAS_NASDAQ_RELEASE is not published (still a draft, or missing)"
+              return 1
+            fi
             ndays="$(bash scripts/nightly/release_assets.sh names "$ATLAS_NASDAQ_RELEASE")" || return 1
             mapfile -t nwindow < <(grep -E '^nasdaq-day-.*\.tar\.gz$' <<< "$ndays" | sort | tail -n "$ATLAS_WINDOW")
             if [ "${#nwindow[@]}" -eq 0 ]; then
@@ -304,7 +320,15 @@ jobs:
           fi
           link=()
           if [ "$compat" = true ]; then link=(--compat-link); fi
-          uv run --frozen --no-sync python scripts/scale/atlas_site.py "${venues[@]}" --out .atlas/site "${link[@]}"
+          # the Nasdaq pages are best effort to the end: when the two-venue build fails, the IEX site is rebuilt alone
+          if ! uv run --frozen --no-sync python scripts/scale/atlas_site.py "${venues[@]}" --out .atlas/site \
+              "${link[@]}"; then
+            if [ "${#venues[@]}" -le 2 ]; then exit 1; fi
+            echo "::warning::the site could not be built with the Nasdaq days; the site shows IEX only"
+            rm -rf .atlas/site/nasdaq
+            uv run --frozen --no-sync python scripts/scale/atlas_site.py --venue iex=.atlas/atlas --out .atlas/site \
+              "${link[@]}"
+          fi
           echo "built=true" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         if: steps.site.outputs.built == 'true'

@@ -79,10 +79,13 @@ tables of the sample files may be published:
 
 - The reduced days are kept on a draft release, which only people with write access see. A maintainer publishes it
   with `gh release edit atlas-days-nasdaq --draft=false`.
-- The site shows them only when the repository variable `ATLAS_NASDAQ_SITE` is `true`. A manual run with
-  `nasdaq_site` shows them until the next scheduled deploy, which follows the variable again.
-- The Nasdaq part of the site is best effort: when its days cannot be combined, the IEX site still deploys. Before
-  the first IEX day the site is the compatibility page alone, without Nasdaq.
+- The site shows them only when the repository variable `ATLAS_NASDAQ_SITE` is `true` and the release is
+  published, so the verify link on every Nasdaq page works for its readers. Publish the release first, then set the
+  variable. A manual run with `nasdaq_site` shows them until the next scheduled deploy, which follows the variable
+  again.
+- The Nasdaq part of the site is best effort: when its days cannot be combined or its pages cannot be built, the
+  IEX site is built alone and still deploys. Before the first IEX day the site is the compatibility page alone,
+  without Nasdaq.
 
 ## A Nasdaq day on one runner
 

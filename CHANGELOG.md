@@ -22,8 +22,9 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   proportion when memory holds fewer units. `atlas_site.py --venue iex=DIR --venue nasdaq=DIR` builds one site with
   IEX as the default page and the Nasdaq pages under `nasdaq/`. Each venue has its own tables, headlines, roots,
   release, bucket and verify commands and attribution, and every page links the other venue. The workflow shows
-  Nasdaq only when the `ATLAS_NASDAQ_SITE` variable or the `nasdaq_site` input is true (off by default), and a Nasdaq
-  problem never blocks the IEX deploy. The atlas manifest's days now carry their `venue` and `buckets`; `atlas.py
+  Nasdaq only when the `ATLAS_NASDAQ_SITE` variable or the `nasdaq_site` input is true (off by default) and the
+  release is published, and a Nasdaq problem never blocks the IEX deploy: the IEX site is then built alone.
+  `release_assets.sh` treats a failed draft lookup as an error, never as a missing release. The atlas manifest's days now carry their `venue` and `buckets`; `atlas.py
   combine` refuses days of two venues and `atlas_site.py` refuses an atlas whose days are of another venue. IEX-only
   pages are unchanged.
 - **The P&L gap next to the fill-rate gap in `score`** (ROADMAP, the one-line reality gap): under its `RESULT:` line
