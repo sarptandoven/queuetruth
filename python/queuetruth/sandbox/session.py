@@ -88,6 +88,8 @@ M = TypeVar("M", bound=BaseModel)
 BlindHook = Callable[[Any, SandboxObservation], dict[str, Any]]
 #: How a step brings the orders to the visible cut (module docstring); the outputs are identical.
 STEPPINGS = ("session", "replay")
+#: The largest peg offset in ticks (a peg far beyond it would overflow the engine's fixed-point prices).
+MAX_PEG_TICKS = 1_000_000
 _CLIENT_ID = re.compile(r"[A-Za-z0-9_.:\-]{1,64}")
 #: The rules of the simulation, stated in every session document.
 RULES = (
@@ -834,6 +836,8 @@ class Sandbox:
             if isinstance(peg_offset_ticks, bool) or not isinstance(peg_offset_ticks, int):
                 raise config_error("peg_offset_ticks: expected an integer")
             peg = int(peg_offset_ticks)
+            if abs(peg) > MAX_PEG_TICKS:
+                raise config_error(f"peg_offset_ticks: {peg} is beyond +-{MAX_PEG_TICKS} ticks")
         cid = None
         if client_order_id is not None:
             cid = str(client_order_id)

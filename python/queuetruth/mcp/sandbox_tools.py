@@ -460,6 +460,8 @@ class SandboxTools:
             episodes.use_journal(self.out_dir / "episodes.jsonl")
         self._tools = BLIND_SANDBOX_TOOLS if self.blind else SANDBOX_TOOLS
         self.sessions: dict[str, Sandbox | BlindSandbox] = {}
+        #: Starts that hold a reserved slot while their session opens.
+        self._starting = 0
         self._last_used: dict[str, float] = {}
         self._lock = threading.Lock()
         self._schemas = {t.name: {"$schema": DRAFT, **t.args.model_json_schema()} for t, _ in self._tools}
@@ -631,15 +633,25 @@ class SandboxTools:
     # ---- handlers -----------------------------------------------------------------------------------------------
 
     async def _start(self, tool: ToolDef, args: StartArgs) -> Result:
-        if len(self.sessions) >= self.max_sessions:
+        if len(self.sessions) + self._starting >= self.max_sessions:
             self._evict_idle()
         with self._lock:
-            if len(self.sessions) >= self.max_sessions:
+            # The slot is reserved before the session opens, so a start that cannot get a slot never opens (and
+            # never uses up a single-use blind episode).
+            if len(self.sessions) + self._starting >= self.max_sessions:
                 raise QtError(
                     "QT-USAGE-001",
-                    f"{len(self.sessions)} sandbox sessions are open (max {self.max_sessions})",
+                    f"{len(self.sessions) + self._starting} sandbox sessions are open (max {self.max_sessions})",
                     "finish one with qt_sandbox_finish or close one with qt_sandbox_close first",
                 )
+            self._starting += 1
+        try:
+            return await self._open_reserved(args)
+        finally:
+            with self._lock:
+                self._starting -= 1
+
+    async def _open_reserved(self, args: Any) -> Result:
         session_id = "sbx_" + secrets.token_hex(8)
         sb: Any
         if self.episodes is not None:
@@ -656,14 +668,8 @@ class SandboxTools:
                 partial(Sandbox.open, spec, session_id=session_id, workdir=self.workdir, contain=self.outputs.contain)
             )
         with self._lock:
-            full = len(self.sessions) >= self.max_sessions
-            if not full:
-                self.sessions[session_id] = sb
-                self._last_used[session_id] = time.monotonic()
-        if full:
-            self._note("failed", session_id, sb)
-            sb.close()
-            raise QtError("QT-USAGE-001", f"{self.max_sessions} sandbox sessions are open (max {self.max_sessions})")
+            self.sessions[session_id] = sb
+            self._last_used[session_id] = time.monotonic()
         doc = sb.session.model_dump(mode="json")
         text = render.blind_session_text(doc) if self.blind else render.session_text(doc)
         return doc, [types.TextContent(text=text)]

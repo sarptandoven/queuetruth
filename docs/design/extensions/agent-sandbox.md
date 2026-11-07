@@ -267,7 +267,10 @@ a held-out day, or a blind episode (S.11), which hides the instrument-day from t
   created 0600 and renamed into place. `start(episode_id)` opens the episode; an unknown id, or one started
   `max_starts` times (a failed open counts), is `QT-USAGE-001` and names no pinned episode. A second session of one
   episode would let a scout read the future before the real session plays it. `use_journal(path)` appends every
-  start and end to a JSON-lines file and counts the starts it already lists.
+  start and end to a JSON-lines file; each start re-reads it under an exclusive `flock` (POSIX), counts the starts
+  of its episode, and appends `start` or `refused` before releasing the lock, so processes sharing the file never
+  exceed `max_starts`. `check_reveal(reveal, transform_sha256, collar_shift_raw=)` also checks the logged collar
+  shift against the revealed offset.
 - **Transform.** `time_origin_ns` = the instrument row's open. `price_offset_ticks = base - floor(reference / tick)`,
   where `reference` is the best bid in view at the start (else the best ask, else the last print; none of them is
   `QT-CONFIG-001` at start) and `base = 1000 + (HMAC-SHA256(secret, "price_base") mod 9001)`; an offset of
@@ -296,8 +299,8 @@ a held-out day, or a blind episode (S.11), which hides the instrument-day from t
   back) is added to the opposite best before the width and the one-tick floor are computed, and subtracted from the
   result. The blind mapping of a market order is a market order with that collar. `advance(to=)` takes ns or
   `HH:MM[:SS]` since the open. The operator's sandbox therefore receives exactly what a non-blind agent sending the true
-  values (and the same collar) would send: its log entries equal theirs except the `open` entry, and its scorecard equals theirs except
-  `run_id`, `certificate`, `timings` and `files` (tested).
+  values (and the same collar) would send: its log entries equal theirs except the `open` entry, and its scorecard
+  equals theirs except `run_id`, `certificate`, `timings` and `files` (tested).
 - **Concurrency.** A `BlindSandbox` holds its own lock around each call (read the log length, call the sandbox,
   record the agent's request, mirror the entry), so concurrent calls never misattribute an entry.
 - **Errors.** A `QtError` of the operator's sandbox has the true prices the call passed replaced by the agent's; then,
@@ -313,8 +316,9 @@ a held-out day, or a blind episode (S.11), which hides the instrument-day from t
   required) removes the server's own tools, replaces its instructions, and serves the eight sandbox tools with blind
   arguments (`qt_sandbox_start {episode_id}`, `qt_sandbox_advance` with `to` since the open,
   `qt_sandbox_list {episode_id}` listing only that episode's sessions, `qt_sandbox_finish {session_id,
-  include_log}`) and blind outputs. `<out_dir>/episodes.jsonl` journals every start and end (start, finish, close,
-  evict, failed, exit). The operator's files under `out_dir` are not linked; `include_log` embeds the blind log.
+  include_log}`) and blind outputs. `<out_dir>/episodes.jsonl` journals every start and end (start, refused, finish,
+  close, evict, failed, exit). A start reserves its slot before the episode opens, so a start without a slot never
+  counts against its pin. The operator's files under `out_dir` are not linked; `include_log` embeds the blind log.
 - **Not hidden.** Tick size, lot size, multiplier, currency, sizes, volumes, the session length and the shape of
   the price path in ticks. They narrow the instrument class and may let a very distinctive day be recognised. A fall
   of more than `base` ticks below the reference, or a deep stub quote, shows as a zero or negative rebased price,

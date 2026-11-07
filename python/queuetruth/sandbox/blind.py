@@ -63,6 +63,11 @@ from typing import Any
 
 from pydantic import BaseModel
 
+try:
+    import fcntl
+except ImportError:  # Windows: no flock; one live server per journal
+    fcntl = None  # type: ignore[assignment]
+
 from queuetruth._version import __version__
 from queuetruth.errors import QtError
 from queuetruth.sandbox._util import (
@@ -128,6 +133,17 @@ _REFUSED_PRICE = 2**63 - 1
 _TIME_TEXT = re.compile(r"[0-9]+:[0-9]{2}(:[0-9]{2})?")
 _LONG_INT = re.compile(r"[0-9]{15,}")
 _EPISODE = re.compile(EPISODE_ID_PATTERN)
+
+
+def _lock_file(f: Any) -> None:
+    """An exclusive lock on an open file (POSIX `flock`; elsewhere the process lock alone)."""
+    if fcntl is not None:
+        fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+
+
+def _unlock_file(f: Any) -> None:
+    if fcntl is not None:
+        fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
 
 def _derive(secret: bytes, label: str) -> bytes:
@@ -223,9 +239,14 @@ class BlindTransform:
         return int(raw) - self.offset_raw
 
 
-def check_reveal(reveal: dict[str, Any], transform_sha256: str) -> bool:
-    """Whether a revealed transform opens the commitment of a blind certificate."""
-    return digest(reveal) == transform_sha256
+def check_reveal(reveal: dict[str, Any], transform_sha256: str, collar_shift_raw: int | None = None) -> bool:
+    """Whether a revealed transform opens the commitment of a blind certificate; with `collar_shift_raw` (the
+    operator log's `open` entry) also whether the market collars were sized with the revealed offset."""
+    if digest(reveal) != transform_sha256:
+        return False
+    if collar_shift_raw is None:
+        return True
+    return int(collar_shift_raw) == int(reveal["price_offset_ticks"]) * int(reveal["tick_size"])
 
 
 # ---- document transforms ------------------------------------------------------------------------------------------
@@ -265,9 +286,10 @@ def _fill(tr: BlindTransform, f: dict[str, Any]) -> dict[str, Any]:
     return {**f, "ts_event": tr.t(f["ts_event"]), "ts_known": tr.t(f["ts_known"]), "price": tr.p(f["price"])}
 
 
-def _cash(tr: BlindTransform, cash: float, qty: int, size_exp: int, mult: float) -> float:
-    """Cash of the same fills at rebased prices: `cash - qty * offset * multiplier` (exact in decimals)."""
-    return float(Decimal(repr(float(cash))) - money(tr.offset_raw * int(qty), tr.price_exp + size_exp, mult))
+def _cash(tr: BlindTransform, cash_raw: int, qty: int, size_exp: int, mult: float) -> float:
+    """Cash of the same fills at rebased prices, from the exact true cash in raw price x size units:
+    `cash_raw - qty * offset`, converted to currency once (the sandbox's own `money`)."""
+    return float(money(int(cash_raw) - tr.offset_raw * int(qty), tr.price_exp + size_exp, mult))
 
 
 def blind_observation(
@@ -279,9 +301,11 @@ def blind_observation(
     notionals: dict[str, int],
     step_notional: int,
     session_notional: int,
+    cash_raw: int,
 ) -> dict[str, Any]:
     """A `qt.sandbox_observation` in blind units. `notionals` (order id -> true sum of price x size of its fills) and
-    the true print notionals since the last step and since the open give the averages exactly."""
+    the true print notionals since the last step and since the open give the averages exactly; `cash_raw` (the
+    running account's exact cash in raw units) gives the cash."""
     b = obs["book"]
     pos = obs["position"]
     return {
@@ -305,7 +329,7 @@ def blind_observation(
         "markouts": [{**m, "mo_bps": None} for m in obs["markouts"]],
         "position": {
             **pos,
-            "cash": _cash(tr, pos["cash"], pos["qty"], size_exp, mult),
+            "cash": _cash(tr, cash_raw, pos["qty"], size_exp, mult),
             "mark_price": tr.p_float(pos["mark_price"]),
         },
     }
@@ -327,17 +351,55 @@ class EpisodeBook:
         self._lock = threading.Lock()
 
     def use_journal(self, path: str | Path) -> None:
-        """Records every start and end of an episode in `path` (JSON lines, appended) and counts the starts it
-        already lists, so a restarted server does not start a single-use episode again."""
+        """Records every start and end of an episode in `path` (JSON lines, appended). With a journal the starts are
+        counted from it, under an exclusive file lock, at every start: servers sharing one journal (one `--out`) and
+        a restarted server never start a single-use episode twice. Servers with different journals do not see each
+        other's starts."""
         p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.touch(exist_ok=True)
         with self._lock:
-            if p.exists():
-                for line in p.read_text(encoding="utf-8").splitlines():
-                    rec = json.loads(line) if line.strip() else {}
-                    if rec.get("event") == "start":
-                        eid = str(rec.get("episode_id"))
-                        self.starts[eid] = self.starts.get(eid, 0) + 1
             self._journal = p
+
+    @staticmethod
+    def _record(event: str, episode_id: str, session_id: str | None, **extra: Any) -> str:
+        rec = {
+            "event": event,
+            "episode_id": episode_id,
+            "session_id": session_id,
+            "utc": _dt.datetime.now(_dt.UTC).isoformat(timespec="milliseconds"),
+            **extra,
+        }
+        return json.dumps(rec, sort_keys=True) + "\n"
+
+    def _claim(self, episode_id: str, session_id: str | None, max_starts: int) -> bool:
+        """Counts a start of `episode_id` if it has been started fewer than `max_starts` times, atomically across
+        the threads of this process and, through the journal's file lock, across processes sharing the journal.
+        A refused start is journaled too, so the operator sees an attempted second session."""
+        with self._lock:
+            if self._journal is None:
+                n = self.starts.get(episode_id, 0)
+                if n >= max_starts:
+                    return False
+                self.starts[episode_id] = n + 1
+                return True
+            with self._journal.open("a+", encoding="utf-8") as f:
+                _lock_file(f)
+                try:
+                    f.seek(0)
+                    n = 0
+                    for line in f.read().splitlines():
+                        rec = json.loads(line) if line.strip() else {}
+                        n += rec.get("event") == "start" and rec.get("episode_id") == episode_id
+                    ok = n < max_starts
+                    f.write(self._record("start" if ok else "refused", episode_id, session_id))
+                    f.flush()
+                    os.fsync(f.fileno())
+                finally:
+                    _unlock_file(f)
+            if ok:
+                self.starts[episode_id] = n + 1
+            return ok
 
     def note(self, event: str, episode_id: str, session_id: str | None, **extra: Any) -> None:
         """Appends one event (`start`, `finish`, `close`, `evict`, `failed`) to the journal, if there is one."""
@@ -351,7 +413,11 @@ class EpisodeBook:
             **extra,
         }
         with self._lock, self._journal.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(rec, sort_keys=True) + "\n")
+            _lock_file(f)
+            try:
+                f.write(json.dumps(rec, sort_keys=True) + "\n")
+            finally:
+                _unlock_file(f)
 
     def __contains__(self, episode_id: object) -> bool:
         return episode_id in self.pins
@@ -462,11 +528,8 @@ class EpisodeBook:
         pin = self.pins.get(episode_id) if isinstance(episode_id, str) else None
         if pin is None:
             raise usage_error("unknown episode id", "ask the operator for the id of a pinned episode")
-        with self._lock:
-            if self.starts.get(episode_id, 0) >= int(pin.get("max_starts", 1)):
-                raise usage_error("this episode was already started", "ask the operator for a new episode id")
-            self.starts[episode_id] = self.starts.get(episode_id, 0) + 1
-        self.note("start", episode_id, session_id)
+        if not self._claim(episode_id, session_id, int(pin.get("max_starts", 1))):
+            raise usage_error("this episode was already started", "ask the operator for a new episode id")
         try:
             return BlindSandbox.open(
                 episode_id,
@@ -773,6 +836,7 @@ class BlindSandbox:
             notionals={o["order_id"]: n for o in doc["orders"] if (n := self._notional(o["order_id"])) is not None},
             step_notional=self.inner._step_stats.notional,
             session_notional=self.inner._session_stats.notional,
+            cash_raw=self.inner._acct.cash_raw,
         )
         return SandboxObservation.model_validate(doc)
 
@@ -931,9 +995,10 @@ class BlindSandbox:
         p = doc["pnl"]
         pe, se = tr.price_exp, self._size_exp
         notional = sum(abs(int(tr.p(f["price"]) or 0)) * int(f["qty"]) for f in doc["fills"])
+        cash_raw = -sum((1 if f["side"] == "buy" else -1) * int(f["qty"]) * int(f["price"]) for f in doc["fills"])
         pnl = {
             **p,
-            "cash": _cash(tr, p["cash"], p["position_end"], se, self._mult),
+            "cash": _cash(tr, cash_raw, p["position_end"], se, self._mult),
             "mark_ns": tr.t(p["mark_ns"]),
             "mark_price": tr.p_float(p["mark_price"]),
             "notional_traded": float(money(notional, pe + se, self._mult)),

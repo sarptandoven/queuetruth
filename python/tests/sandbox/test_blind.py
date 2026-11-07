@@ -21,6 +21,7 @@ from queuetruth.errors import QtError
 from queuetruth.mcp.sandbox_tools import SANDBOX_TOOL_NAMES, register_sandbox_tools
 from queuetruth.mcp.server import build_server
 from queuetruth.sandbox import Sandbox, render, verify
+from queuetruth.sandbox._util import money
 from queuetruth.sandbox.blind import (
     BASE_MAX_TICKS,
     BASE_MIN_TICKS,
@@ -347,6 +348,13 @@ def test_takers_cancels_and_finish_cancels_leak_nothing_and_match_a_non_blind_ep
     true = card.pnl.model_dump(mode="json")
     for k in ("pnl_gross", "pnl_net", "pnl_net_at_touch", "fees", "fees_maker", "fees_taker", "position_end"):
         assert fin["pnl"][k] == true[k], k
+    # cash: the operator's cash recomputed from the fills, and the agent's from the same integers at rebased prices
+    u = sb.inner._units()
+    cash_raw = -sum((1 if f.side == "buy" else -1) * f.qty * f.price for f in card.fills)
+    assert true["cash"] == float(money(cash_raw, u["price_exp"] + u["size_exp"], u["mult"]))
+    pos = true["position_end"]
+    want = float(money(cash_raw - pos * sb.transform.offset_raw, u["price_exp"] + u["size_exp"], u["mult"]))
+    assert fin["pnl"]["cash"] == want
     assert fin["execution_cost"] == card.execution_cost.model_dump(mode="json")
     # average prices are recomputed from the rebased integers, never from the true float's digits
     tr, exp = sb.transform, sb.instrument["price_exp"]
@@ -469,6 +477,9 @@ def test_the_blind_certificate_verifies_and_commits_to_the_transform(tmp_path: P
     reveal = json.loads((out / "blind.json").read_text())["transform"]
     assert check_reveal(reveal, card["certificate"]["blind"]["transform_sha256"])
     assert check_reveal(reveal, fin.transform_sha256)
+    shift = log["entries"][0]["data"]["blind_collar_shift_raw"]
+    assert check_reveal(reveal, fin.transform_sha256, collar_shift_raw=shift)
+    assert not check_reveal(reveal, fin.transform_sha256, collar_shift_raw=shift + 1)
     assert not check_reveal({**reveal, "price_offset_ticks": reveal["price_offset_ticks"] + 1}, fin.transform_sha256)
     # a certificate whose blind field was changed or dropped does not verify
     for blind in (None, {**card["certificate"]["blind"], "transform_sha256": "0" * 64}):
@@ -520,6 +531,8 @@ def test_pins_and_the_book_file(tmp_path: Path) -> None:
     assert [x.name for x in tmp_path.iterdir()] == ["episodes.json"]  # no temporary file left behind
     with pytest.raises(QtError, match="max_starts"):
         EpisodeBook().pin(SPEC, max_starts=0)
+    with Sandbox.open(SPEC) as plain, pytest.raises(QtError, match="peg_offset_ticks"):
+        plain.submit("buy", 1, peg_offset_ticks=10**18)  # a range error, not an Arrow overflow
     loaded = EpisodeBook.load(p)
     assert loaded.pins == book.pins
     with pytest.raises(QtError) as e:
@@ -543,7 +556,20 @@ def test_pins_and_the_book_file(tmp_path: Path) -> None:
     restarted.use_journal(journal)
     with pytest.raises(QtError, match="already started"):
         restarted.start(eid)
-    assert [json.loads(x)["event"] for x in journal.read_text().splitlines()] == ["start"]
+    assert [json.loads(x)["event"] for x in journal.read_text().splitlines()] == ["start", "refused"]
+    # two live servers sharing one journal (one --out): the count is read under the file lock at every start
+    a, b = EpisodeBook(loaded.pins), EpisodeBook(loaded.pins)
+    shared = tmp_path / "shared.jsonl"
+    a.use_journal(shared)
+    b.use_journal(shared)
+    a.start(twice).close()
+    b.start(twice).close()
+    with pytest.raises(QtError, match="already started"):
+        a.start(twice)
+    with pytest.raises(QtError, match="already started"):
+        b.start(twice)
+    events = [json.loads(x)["event"] for x in shared.read_text().splitlines()]
+    assert events.count("start") == 2 and events.count("refused") == 2
 
 
 # ---- through the MCP tools ----------------------------------------------------------------------------------------
@@ -636,9 +662,40 @@ async def test_a_blind_episode_through_the_mcp_tools(tmp_path: Path) -> None:
     events = [json.loads(x) for x in (out / "episodes.jsonl").read_text().splitlines()]
     assert [(e["event"], e["episode_id"]) for e in events] == [
         ("start", eid),
+        ("refused", eid),
         ("finish", eid),
         ("start", eid2),
         ("close", eid2),
     ]
     with pytest.raises(QtError, match="output directory"):
         register_sandbox_tools(build_server(local=True, root=SYNTH.parent), episodes=book)
+
+
+@pytest.mark.asyncio
+async def test_a_start_refused_for_lack_of_a_slot_does_not_use_up_the_pin(tmp_path: Path) -> None:
+    """Concurrent starts on a server with one slot: the slot is reserved before the episode opens, so the start
+    that gets no slot never counts against its single-use pin and can be retried once a slot is free."""
+    import anyio
+
+    book = EpisodeBook()
+    e1, e2 = book.pin(SPEC, secret=SECRET), book.pin(SPEC, secret="77" * 32)
+    app = build_server(local=True, root=SYNTH.parent)
+    register_sandbox_tools(app, episodes=book, out_dir=tmp_path / "out", max_sessions=1, idle_timeout_s=None)
+    results: dict[str, types.CallToolResult] = {}
+    async with McpClient(app.server) as c:
+
+        async def start(eid: str) -> None:
+            results[eid] = await c.call_tool("qt_sandbox_start", {"episode_id": eid})
+
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(start, e1)
+            tg.start_soon(start, e2)
+        won = [e for e, r in results.items() if not r.is_error]
+        lost = [e for e, r in results.items() if r.is_error]
+        assert len(won) == 1 and len(lost) == 1
+        assert "sessions are open" in results[lost[0]].structured_content["message"]
+        await c.call_tool("qt_sandbox_close", {"session_id": results[won[0]].structured_content["session_id"]})
+        retry = await c.call_tool("qt_sandbox_start", {"episode_id": lost[0]})
+        assert not retry.is_error, retry.content
+        events = [json.loads(x) for x in (tmp_path / "out" / "episodes.jsonl").read_text().splitlines()]
+        assert [e["event"] for e in events if e["episode_id"] == lost[0]] == ["start"]

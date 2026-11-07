@@ -440,8 +440,11 @@ python -m queuetruth.mcp.sandbox_tools --episodes /operator/episodes.json --out 
 With `--episodes` (or `register_sandbox_tools(app, episodes=book, out_dir=...)`) the server lists only the eight
 sandbox tools, since the dataset, run and output tools could show the data. A blind server needs `--out`: the
 operator's scorecards go there, and so does `episodes.jsonl`, a journal of every start and end of an episode (start,
-finish, close, evict, failed, exit). The server reads the journal when it starts, so a restart does not start a
-single-use episode again.
+refused, finish, close, evict, failed, exit). Starts are counted from the journal under a file lock at every start,
+so neither a restart nor a second server on the same `--out` starts a single-use episode twice; servers with
+different `--out` directories do not see each other's starts. A refused second start is journaled, so the operator
+sees an attempted scout. A start takes its session slot before the episode opens, so one refused for lack of a slot
+does not use up the pin.
 
 - `qt_sandbox_start` takes only `episode_id`.
 - `qt_sandbox_advance` takes `to` as a time since the open (`"+00:12:00"`).
