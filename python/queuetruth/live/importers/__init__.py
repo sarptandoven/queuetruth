@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from queuetruth.live.builder import ImportResult
 from queuetruth.live.importers._base import Importer, ImportOptions
+from queuetruth.live.importers.backtrader import import_backtrader_sim
 from queuetruth.live.importers.binance import import_binance
 from queuetruth.live.importers.bybit import import_bybit
 from queuetruth.live.importers.coinbase import import_coinbase
@@ -17,6 +18,7 @@ from queuetruth.live.importers.ibkr_flex import import_ibkr_flex
 from queuetruth.live.importers.kraken import import_kraken
 from queuetruth.live.importers.okx import import_okx
 from queuetruth.live.importers.sim import import_hftbacktest, import_nautilus
+from queuetruth.live.importers.vectorbt import import_vectorbt_sim
 
 #: The nine venue importers of SPEC 5.7.1 (`LiveImportSpec.venue` values).
 VENUE_IMPORTERS: dict[str, Importer] = {
@@ -36,6 +38,8 @@ SIM_IMPORTERS: dict[str, Importer] = {
     "nautilus": import_nautilus,
     "freqtrade": import_freqtrade_sim,
     "hummingbot": import_hummingbot_sim,
+    "backtrader": import_backtrader_sim,
+    "vectorbt": import_vectorbt_sim,
 }
 #: Trading-bot importers of the live arm (Freqtrade trades database + bot log, Hummingbot database / trades CSV);
 #: not `LiveImportSpec` venues: `import_freqtrade_live` / `import_hummingbot_live` write their logs.

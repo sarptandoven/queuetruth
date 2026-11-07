@@ -170,7 +170,9 @@
         "freqtrade",
         "hummingbot",
         "sim_freqtrade",
-        "sim_hummingbot"
+        "sim_hummingbot",
+        "sim_backtrader",
+        "sim_vectorbt"
       ],
       "title": "Venue",
       "type": "string"
