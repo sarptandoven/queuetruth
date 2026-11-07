@@ -9,7 +9,15 @@ use qt_ingest::dbn::{DbnReader, MIN_METADATA_BYTES};
 
 fn regressions() -> Vec<PathBuf> {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fuzz/regressions/dbn");
-    let mut v: Vec<PathBuf> = std::fs::read_dir(dir).unwrap().map(|e| e.unwrap().path()).collect();
+    // `status_*` inputs are record faults, read past the metadata (`tests/dbn_status.rs`).
+    let mut v: Vec<PathBuf> = std::fs::read_dir(dir)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| {
+            !p.file_name()
+                .is_some_and(|n| n.to_string_lossy().starts_with("status_"))
+        })
+        .collect();
     v.sort();
     v
 }

@@ -370,7 +370,8 @@ fn iex_drive<R: Read>(
 // ---- DBN -----------------------------------------------------------------------------------------------------------
 
 /// DBN (plain or zstd, inferred from content): `[selector][file]`. Selector bits 0-1: price exponent. Reads the file
-/// as `ingest_dbn` does for its schema (definitions, MBO or trades) and resolves the dated symbology.
+/// as `ingest_dbn` does for its schema (definitions, MBO, trades or status; status records inside an MBO file are
+/// kept by the reader) and resolves the dated symbology.
 ///
 /// The two faults of the pinned `dbn` 0.71.0 decoder this target found (a panic on 100 to 103 metadata bytes and an
 /// up-front allocation of the announced metadata length) are kept out by `qt_ingest::dbn::FrameCheck` (fixed after
@@ -405,10 +406,21 @@ pub fn dbn(data: &[u8]) {
                     ids.push((t.instrument_id, t.ts_event));
                 }
             }
+            Some(Schema::Status) => {
+                while let Some(s) = r.next_status()? {
+                    assert!(s.ts_event >= 0 && s.ts_recv >= 0);
+                    let _ = qt_ingest::dbn::status_halted(&s);
+                    ids.push((s.instrument_id, s.ts_recv));
+                }
+            }
             _ => {
                 while let Some(e) = r.next_mbo(price_exp)? {
                     assert!(e.ts_event >= 0 && e.ts_recv >= 0);
                     ids.push((e.instrument_id, e.ts_recv));
+                }
+                for s in std::mem::take(&mut r.status) {
+                    assert!(s.ts_event >= 0 && s.ts_recv >= 0);
+                    let _ = qt_ingest::dbn::status_halted(&s);
                 }
             }
         }

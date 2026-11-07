@@ -24,14 +24,14 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
 use ::dbn::Schema;
-use qt_schema::json::{DataQuality, FeedGap, IngestSummary, InputFile};
+use qt_schema::json::{DataQuality, FeedGap, IngestSummary, InputFile, TradingHaltSpan};
 use qt_schema::rows::{TradeKind, TradeRow};
 use qt_schema::specs::{IngestFormat, IngestSpec, SessionTz};
 use qt_schema::{codec, io as qio, spec_echo};
 use qt_types::{Instrument, MboEvent, QtError, QtResult, RuleSet, Ts, Venue, VenueRules, flags, rules_for};
 use serde_json::Value;
 
-use crate::dbn::{DbnReader, Symbology, utc_day};
+use crate::dbn::{DbnReader, DbnStatus, Symbology, status_halted, utc_day};
 use crate::dq::MboDqScan;
 use crate::etcsv::{CsvKind, MboCsvReader, detect, first_trade_ts, read_instruments_csv, read_trades_csv};
 use crate::guard::GuardLimits;
@@ -1039,6 +1039,12 @@ impl<'a> Resolver<'a> {
         Ok(v)
     }
 
+    /// The partition id a record of `(id, day, date)` was already resolved to (`None`: no record had that key, or
+    /// the symbol filter dropped it). Never resolves anew, so it raises no symbology error.
+    fn resolved(&self, id: u32, day: i32, date: i32) -> Option<u32> {
+        self.cache.get(&(id, day, date)).copied().flatten()
+    }
+
     fn compute(&mut self, c: &Common, id: u32, day: i32, date: i32) -> QtResult<Option<u32>> {
         let (iid, name) = match self.sym.symbol_at(id, day) {
             Some(s) if day != date => (self.sym.id_at(s, date).unwrap_or(id), Some(s)),
@@ -1109,6 +1115,7 @@ fn ingest_dbn_into(spec: &IngestSpec, inputs: &[PathBuf], out: &Path, created: &
     let mut sym = Symbology::new();
     let mut mbo_files: Vec<(u64, PathBuf)> = Vec::new();
     let mut trade_files: Vec<(u64, PathBuf)> = Vec::new();
+    let mut status_files: Vec<(u64, PathBuf)> = Vec::new();
     for p in inputs {
         let mut r = DbnReader::open(p)?;
         let (schema, start) = (r.metadata().schema, r.metadata().start);
@@ -1128,10 +1135,14 @@ fn ingest_dbn_into(spec: &IngestSpec, inputs: &[PathBuf], out: &Path, created: &
                 sym.add_metadata_from(r.metadata(), p);
                 trade_files.push((start, p.clone()));
             }
+            Some(Schema::Status) => {
+                sym.add_metadata_from(r.metadata(), p);
+                status_files.push((start, p.clone()));
+            }
             Some(other) => {
                 return Err(QtError::InputFormat {
                     location: p.display().to_string(),
-                    msg: format!("unsupported DBN schema {other} (use mbo, trades or definition files)"),
+                    msg: format!("unsupported DBN schema {other} (use mbo, trades, status or definition files)"),
                 });
             }
         }
@@ -1139,6 +1150,7 @@ fn ingest_dbn_into(spec: &IngestSpec, inputs: &[PathBuf], out: &Path, created: &
     sym.check()?;
     mbo_files.sort_by_key(|(s, _)| *s);
     trade_files.sort_by_key(|(s, _)| *s);
+    status_files.sort_by_key(|(s, _)| *s);
     let mut w = c.writer(out, DatasetKind::Mbo)?;
     *created = true;
     let job = InputsJob::start(inputs);
@@ -1147,6 +1159,7 @@ fn ingest_dbn_into(spec: &IngestSpec, inputs: &[PathBuf], out: &Path, created: &
     let mut dates = Dates::new();
     let mut res = Resolver::new(&sym);
     let mut remapped = 0u64;
+    let mut status: Vec<DbnStatus> = Vec::new();
     for (_, p) in &mbo_files {
         let mut r = DbnReader::open(p)?;
         while let Some(mut e) = r.next_mbo(c.price_exp)? {
@@ -1164,6 +1177,7 @@ fn ingest_dbn_into(spec: &IngestSpec, inputs: &[PathBuf], out: &Path, created: &
             scan_record(&mut scan, &e, date, &c.rules);
             w.push_mbo_at(&e, date)?;
         }
+        status.append(&mut r.status);
         // Other record types are expected in a mixed-schema file (INFO), not in an mbo-schema one.
         let mixed = r.metadata().schema.is_none();
         scan.add_source(
@@ -1190,6 +1204,16 @@ fn ingest_dbn_into(spec: &IngestSpec, inputs: &[PathBuf], out: &Path, created: &
         scan.add_source("dbn_other_records_skipped", r.skipped);
         scan.add_source("dbn_gateway_error_records", r.gateway_errors);
     }
+    for (_, p) in &status_files {
+        let mut r = DbnReader::open(p)?;
+        while let Some(st) = r.next_status()? {
+            status.push(st);
+        }
+        scan.add_source("dbn_other_records_skipped", r.skipped);
+        scan.add_source("dbn_gateway_error_records", r.gateway_errors);
+    }
+    scan.add_source("dbn_status_records", status.len() as u64);
+    let halts = dbn_trading_halts(&c, &res, &mut dates, &t.seen, &mut status)?;
     scan.add_source("dbn_instrument_id_remapped", remapped);
     t.part_symbol = res.part.into_iter().collect();
     for &(date, iid) in &t.seen {
@@ -1218,8 +1242,143 @@ fn ingest_dbn_into(spec: &IngestSpec, inputs: &[PathBuf], out: &Path, created: &
     t.apply(&c, &mut scan, &mut w)?;
     job.join(&mut w)?;
     let mut dq = scan.finish();
+    dq.trading_halts = halts;
     gaps.finish(&mut dq);
     w.finish(dq)
+}
+
+/// Trading-halt spans of the DBN status records (SPEC 1.2 halt censoring; `dbn::status_halted` maps a record to a
+/// state). Records apply in `ts_event` order (stable, so records of one time keep their file order) to the
+/// partition their `(instrument id, UTC date of ts_recv, session date)` resolved to for the MBO and trade records; a
+/// record whose key no such record had is ignored, so status records never resolve symbology of their own.
+///
+/// The state is kept per symbol, so a halt that runs past a session date's midnight carries on in the symbol's
+/// partition of the next date (its instrument id may differ), as long as that date has status records of the symbol:
+/// the span is cut at each midnight into one span per partition with records, and ends at the midnight before the
+/// first later date without status records of the symbol. A partition without a symbol keeps its own state for its
+/// session date only (ids are per UTC date). A span still open at the end ends at the next local midnight of the
+/// symbol's last session date with status records.
+fn dbn_trading_halts(
+    c: &Common,
+    res: &Resolver<'_>,
+    dates: &mut Dates,
+    seen: &BTreeSet<(i32, u32)>,
+    status: &mut [DbnStatus],
+) -> QtResult<Vec<TradingHaltSpan>> {
+    /// Whose state a record changes: a symbol across dates, or one unnamed partition.
+    #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+    enum Key {
+        Sym(String),
+        Part(i32, u32),
+    }
+    struct Open {
+        ts_start: Ts,
+        state: String,
+        reason: String,
+    }
+    // Partition of each (symbol, session date) with records; the smallest id if a symbol had two on one date, so the
+    // choice never depends on hash order.
+    let mut parts: Vec<(&(i32, u32), &String)> = res.part.iter().filter(|(k, _)| seen.contains(k)).collect();
+    parts.sort();
+    let mut sym_part: BTreeMap<(&str, i32), u32> = BTreeMap::new();
+    for ((date, iid), name) in parts {
+        sym_part.entry((name.as_str(), *date)).or_insert(*iid);
+    }
+    status.sort_by_key(|s| s.ts_event);
+    // Each record's key and session date (`None`: ignored); the session dates with status records of each symbol.
+    let mut keyed: Vec<Option<(Key, i32)>> = Vec::with_capacity(status.len());
+    let mut covered: BTreeSet<(String, i32)> = BTreeSet::new();
+    for s in status.iter() {
+        let date = dates.of(c, s.ts_event)?;
+        let k = res
+            .resolved(s.instrument_id, utc_day(s.ts_recv), date)
+            .map(|iid| match res.part.get(&(date, iid)) {
+                Some(name) => {
+                    covered.insert((name.clone(), date));
+                    Key::Sym(name.clone())
+                }
+                None => Key::Part(date, iid),
+            });
+        keyed.push(k.map(|k| (k, date)));
+    }
+    // The spans of `key` from `start` (on session date `first`) to `end`, one per session date with a partition
+    // with records; a symbol's span stops at the first later date without status records of the symbol.
+    let pieces = |key: &Key, first: i32, start: Ts, end: Ts, open: &Open, out: &mut Vec<TradingHaltSpan>| {
+        let mut push = |date: i32, iid: u32, lo: Ts, hi: Ts| {
+            if lo < hi && seen.contains(&(date, iid)) {
+                out.push(TradingHaltSpan {
+                    instrument_id: iid,
+                    ts_start: lo,
+                    ts_end: hi,
+                    state: open.state.clone(),
+                    reason: open.reason.clone(),
+                });
+            }
+        };
+        match key {
+            Key::Part(date, iid) => push(*date, *iid, start, end),
+            Key::Sym(name) => {
+                let last = c.date_of(end.saturating_sub(1).max(start))?.max(first);
+                for date in first..=last {
+                    if date > first && !covered.contains(&(name.clone(), date)) {
+                        break;
+                    }
+                    // Only the inner midnights cut (with a fixed session date every record has that date).
+                    let lo = if date == first { start } else { c.midnight(date)? };
+                    let hi = if date == last {
+                        end
+                    } else {
+                        c.midnight(date.saturating_add(1))?
+                    };
+                    if let Some(&iid) = sym_part.get(&(name.as_str(), date)) {
+                        push(date, iid, lo, hi);
+                    }
+                }
+            }
+        }
+        QtResult::Ok(())
+    };
+    let mut open: BTreeMap<Key, (i32, Open)> = BTreeMap::new();
+    let mut out = Vec::new();
+    for (s, k) in status.iter().zip(keyed) {
+        let (Some(halted), Some((key, date))) = (status_halted(s), k) else {
+            continue;
+        };
+        match (halted, open.contains_key(&key)) {
+            (true, false) => {
+                let reason = if s.reason == 0 {
+                    String::new()
+                } else {
+                    s.reason.to_string()
+                };
+                let o = Open {
+                    ts_start: s.ts_event,
+                    state: format!("dbn_status:{}", s.action),
+                    reason,
+                };
+                open.insert(key, (date, o));
+            }
+            (false, true) => {
+                if let Some((first, o)) = open.remove(&key) {
+                    pieces(&key, first, o.ts_start, s.ts_event, &o, &mut out)?;
+                }
+            }
+            _ => {}
+        }
+    }
+    for (key, (first, o)) in &open {
+        // The last session date the span can reach: consecutive dates with status records of the symbol.
+        let mut last = *first;
+        if let Key::Sym(name) = key {
+            while covered.contains(&(name.clone(), last.saturating_add(1))) {
+                last += 1;
+            }
+        }
+        let end = c.midnight(last.saturating_add(1))?.max(o.ts_start.saturating_add(1));
+        pieces(key, *first, o.ts_start, end, o, &mut out)?;
+    }
+    crate::halts::sort(&mut out);
+    Ok(out)
 }
 
 // ---- etcsv ------------------------------------------------------------------------------------------------------

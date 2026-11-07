@@ -21,6 +21,15 @@
 //! | Cross Trade 111 | `T` side `N`, print kind `cross` (none for 0 shares) |
 //! | Symbol Index Mapping 3, Security Status 34, Imbalance 105, Trade Cancel 112, Cross Correction 113, Retail Price Improvement 114, Stock Summary 223 | none (statistics and counters) |
 //!
+//! Trading halts (SPEC 1.2 halt censoring): every Security Status of a selected symbol carries its status and the
+//! latest Halt Condition (`~` when not halted). Status `4` (trading halt) or `6` (suspend) opens a trading-halt span
+//! of the instrument and `5` (resume) closes it (`Mapper::take_trading_halts`). Until the symbol's first `4`, `5` or
+//! `6` of the day, any other status (a session change, a price indication) opens a span while its Halt Condition is
+//! not `~` and closes it when it is `~`: a halt carried over from the previous day has no `4` today. After it, the
+//! explicit statuses govern, and another status whose Halt Condition disagrees with the state is only counted
+//! (`halt_condition_disagreements`). A blank Halt Condition changes nothing. A span still open at the end of a file
+//! ends at the next local midnight of the file's session date (one more day per midnight rollover).
+//!
 //! A live Order ID added again first cancels the old order (`C`). Anomalies (unknown references, over-executions,
 //! bad fields, ...) are counted and never fatal, except that a file whose first lines are not Integrated Feed
 //! messages is `QT-INPUT-002`.
@@ -47,12 +56,13 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use qt_schema::json::FeedGap;
+use qt_schema::json::{FeedGap, TradingHaltSpan};
 use qt_schema::rows::{TradeKind, TradeRow};
 use qt_types::{MboEvent, QtError, QtResult, Side, Ts, flags};
 
 use super::message::{Message, ParseError, parse_line};
 use super::rules::{Allocation, Market};
+use crate::halts::{HaltKind, HaltTracker};
 use crate::itch::IdBuild;
 use crate::time::NS_PER_DAY;
 use crate::units::rescale;
@@ -216,6 +226,9 @@ pub struct MapperStats {
     pub zero_volume_crosses: u64,
     /// Orders added by Add Order Refresh.
     pub refresh_orders: u64,
+    /// Security Status messages (other than `4`, `5` and `6`) whose Halt Condition disagreed with the trading state
+    /// that the symbol's explicit `4`, `5` and `6` set (the explicit statuses were kept).
+    pub halt_condition_disagreements: u64,
     /// Time of day (ns after midnight) of Security Status transitions to the core session (`O`), at most 100,000.
     pub core_open_times: Vec<u64>,
     /// MBO records emitted.
@@ -312,6 +325,8 @@ struct Sym {
     refreshed_in: u32,
     /// Its latest symbol-sequenced message was an Add Order Refresh (selected or not).
     in_refresh: bool,
+    /// A Security Status `4`, `5` or `6` was seen today: from then on these statuses govern its trading state.
+    halt_explicit: bool,
 }
 
 /// Add, Modify, Delete, Execution, Replace and Add Order Refresh: the messages that change a book.
@@ -370,6 +385,10 @@ pub struct Mapper {
     /// Lines by message type below 256 (`stats.by_type` is filled from it by `finish`; other types go there
     /// directly).
     types: [u64; 256],
+    /// Trading state of the current file's selected symbols.
+    halts: HaltTracker,
+    /// Trading-halt spans of the files ended so far.
+    halt_spans: Vec<TradingHaltSpan>,
 }
 
 impl Mapper {
@@ -403,6 +422,8 @@ impl Mapper {
             files: 0,
             failovers: 0,
             types: [0; 256],
+            halts: HaltTracker::new(),
+            halt_spans: Vec::new(),
         })
     }
 
@@ -419,6 +440,7 @@ impl Mapper {
                 s.refresh = None;
                 s.home = None;
                 s.booked = false;
+                s.halt_explicit = false;
             }
         }
         self.file = Some(ctx);
@@ -455,6 +477,12 @@ impl Mapper {
                 self.refresh_gap(si, r, r.last);
             }
         }
+        if let Some(f) = &self.file {
+            // A span still open ends at the next local midnight of the file's last clock day.
+            let days = self.st.rollover_days.saturating_add(1);
+            let end = f.midnight.saturating_add(days.saturating_mul(NS_PER_DAY));
+            self.halt_spans.extend(self.halts.finish(end));
+        }
         if self.st.order_messages == 0 {
             self.stats.anomalies.files_without_order_messages += 1;
             if self.files_without_orders.len() < MAX_NAMED_FILES {
@@ -475,6 +503,13 @@ impl Mapper {
             "nyse mapper: end_file before {caller} ({} records would be lost)",
             dropped.mbo.len()
         );
+    }
+
+    /// The trading-halt spans of the files ended since the last call (`crate::halts`), sorted.
+    pub fn take_trading_halts(&mut self) -> Vec<TradingHaltSpan> {
+        let mut out = std::mem::take(&mut self.halt_spans);
+        crate::halts::sort(&mut out);
+        out
     }
 
     /// Feed gaps found so far (symbol-sequence gaps and refresh runs), in the order found.
@@ -697,7 +732,39 @@ impl Mapper {
             }
             Message::TradeCancel(_) => self.stats.trade_cancels += 1,
             Message::CrossCorrection(_) => self.stats.cross_corrections += 1,
-            Message::SecurityStatus(_) | Message::Imbalance(_) | Message::RetailPriceImprovement(_) => {}
+            Message::SecurityStatus(st) => {
+                // 4 trading halt and 6 suspend leave continuous trading and 5 resume returns to it. Any other status
+                // carries the latest Halt Condition (`~` not halted, blank unknown); it decides only until the
+                // symbol's first explicit status of the day (a halt carried over from the previous day).
+                let by_condition = match st.halt_condition {
+                    b'~' => Some(false),
+                    0 => None,
+                    _ => Some(true),
+                };
+                let halted = match st.status {
+                    b'4' | b'6' => Some(true),
+                    b'5' => Some(false),
+                    _ if self.syms[c.si].halt_explicit => {
+                        if by_condition.is_some_and(|h| h != self.halts.is_halted(c.iid)) {
+                            self.stats.halt_condition_disagreements += 1;
+                        }
+                        None
+                    }
+                    _ => by_condition,
+                };
+                if matches!(st.status, b'4' | b'5' | b'6') {
+                    self.syms[c.si].halt_explicit = true;
+                }
+                if let Some(h) = halted {
+                    let reason = match st.halt_condition {
+                        0 | b'~' => String::new(),
+                        b => char::from(b).to_string(),
+                    };
+                    let state = format!("nyse_34:{}", char::from(st.status));
+                    self.halts.apply(ts, c.iid, HaltKind::Status, h, state, reason);
+                }
+            }
+            Message::Imbalance(_) | Message::RetailPriceImprovement(_) => {}
             Message::SymbolIndexMapping(_)
             | Message::StockSummary(_)
             | Message::OtherProduct { .. }
