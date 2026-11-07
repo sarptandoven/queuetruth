@@ -5,7 +5,7 @@
 use std::ffi::CStr;
 use std::sync::Mutex;
 
-use arrow_array::ffi_stream::{ArrowArrayStreamReader, FFI_ArrowArrayStream};
+use arrow_array::ffi_stream::{FFI_ArrowArrayStream, RecordBatchStreamReader};
 use arrow_array::{RecordBatch, RecordBatchIterator, RecordBatchReader};
 use arrow_schema::ffi::FFI_ArrowSchema;
 use arrow_schema::{ArrowError, SchemaRef};
@@ -102,7 +102,7 @@ pub fn stream_from_python(ob: &Bound<'_, PyAny>) -> PyResult<(Vec<RecordBatch>, 
     // SAFETY: the capsule's name says it holds an ArrowArrayStream, and the capsule outlives this call. `from_raw`
     // moves the stream out and leaves a released one behind, so the capsule's destructor does not release it again.
     let stream = unsafe { FFI_ArrowArrayStream::from_raw(ptr.as_ptr()) };
-    let reader = ArrowArrayStreamReader::try_new(stream).map_err(arrow_err)?;
+    let reader = RecordBatchStreamReader::try_new(stream).map_err(arrow_err)?;
     let schema = reader.schema();
     let batches = reader.collect::<Result<Vec<_>, _>>().map_err(arrow_err)?;
     Ok((batches, schema))
