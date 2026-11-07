@@ -1268,6 +1268,39 @@ class ArmCounts(QtModel):
     sim: int
 
 
+class PnlGapParts(QtModel):
+    """1.2: one value per part of the P&L gap (`queuetruth.score.pnl_gap`): fills the simulator grants that live did
+    not get, fills live got that it misses, the timing of fills both arms got, and fees."""
+
+    granted: float | None
+    denied: float | None
+    timing: float | None
+    fees: float | None
+
+
+class PnlGap(QtModel):
+    """1.2: the scorecard's P&L gap in one currency at one markout horizon (`queuetruth.score.pnl_gap`): the per-order
+    mean of `qt.score_shortfall.total_ccy` (simulator minus live, net of fees; positive = the simulator's P&L is too
+    high) with its 95% block-bootstrap CI, the direction (a finding only when the CI excludes 0), why it is not
+    computable or not answerable, the parts (per-order means that add up to the gap) with their CIs on the same
+    draws, the part a finding mostly comes from, and the plain sentence."""
+
+    horizon_ns: int
+    currency: str | None
+    n_valued: int
+    n_unvalued: int
+    mean_ccy: float | None
+    ci_lo: float | None
+    ci_hi: float | None
+    direction: Literal["sim_too_high", "sim_too_low", "no_significant_difference", "not_computable", "not_answerable"]
+    reason: str | None
+    parts_ccy: PnlGapParts
+    parts_ci_lo: PnlGapParts
+    parts_ci_hi: PnlGapParts
+    main_part: Literal["granted", "denied", "timing", "fees"] | None
+    headline: str
+
+
 class ScorecardSummary(QtDoc):
     """Summary of `score` (SPEC 5.7)."""
 
@@ -1308,6 +1341,9 @@ class ScorecardSummary(QtDoc):
     n_taker_fills: ArmCounts | None = None
     #: 1.1 (3.11 #9): the live log is fills-only; null = not reported (v0.1: `fills_only:` warning).
     fills_only: bool | None = None
+    #: 1.2: the P&L gap per currency at the markout equivalence horizon (from `qt.score_shortfall`); null = not
+    #: reported (no `--out`, or a summary written before 1.2).
+    pnl_gap: list[PnlGap] | None = None
 
 
 # ---- referee, why, report, export, misc -------------------------------------------------------------------------

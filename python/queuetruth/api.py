@@ -662,11 +662,12 @@ def import_live(
     spec: s.LiveImportSpec | dict[str, Any], *, tz: str | None = None, **options: Any
 ) -> m.LiveImportSummary:
     """`live import`: venue exports (`queuetruth.live.import_venue`), simulator reports (venues `sim_hftbacktest`,
-    `sim_nautilus`, `sim_freqtrade`, `sim_hummingbot`: `queuetruth.live.import_sim`, log venue `sim:<name>`, for
-    `score --sim-log`) or a trading bot's live run (`freqtrade`, `hummingbot`: `queuetruth.live.import_bot`). `tz`
-    (default: the spec's `tz`) is the account time zone of venue-local times (IBKR Flex). `options` go to the
-    simulator or bot importer (`venue` = live venue of the instrument-map rows, `size_exp`, `key_from_client_id`,
-    `order_key_map`; for bots `dry_run`, `log_tz`, `timeframe`, `pair_with`, ...)."""
+    `sim_nautilus`, `sim_freqtrade`, `sim_hummingbot`, `sim_backtrader`, `sim_vectorbt`: `queuetruth.live.import_sim`,
+    log venue `sim:<name>`, for `score --sim-log`) or a trading bot's live run (`freqtrade`, `hummingbot`:
+    `queuetruth.live.import_bot`). `tz` (default: the spec's `tz`) is the account time zone of venue-local times
+    (IBKR Flex). `options` go to the simulator or bot importer (`venue` = live venue of the instrument-map rows,
+    `size_exp`, `key_from_client_id`, `order_key_map`; for bots `dry_run`, `log_tz`, `timeframe`, `pair_with`, ...;
+    for backtesters `pair_with` = a canonical live-log directory, `timeframe`, `instrument`, ...)."""
     from queuetruth import live as qlive
 
     sp = _validate(s.LiveImportSpec, spec)
@@ -1564,15 +1565,37 @@ class Session:
 
     @property
     def position(self) -> int:
-        """Every record with `ts_event` at or before this was applied."""
+        """Every record with `ts_event` at or before this was applied, except after `advance_events_to` the records of
+        an event not complete by then, held until it completes or the next `advance_to`."""
         return int(self._s.position)
+
+    def advance_events_to(self, ts: int) -> None:
+        """Replays whole events up to `ts`: in each partition, the complete events (runs ending with `F_LAST`) whose
+        records are all at or before `ts`, read in feed order up to the first record past it; the records of an
+        event not complete by then wait for a later call. When the data ends with every remaining record at or
+        before `ts`, an unterminated tail is applied and ended as the end of a `replay` ends it (orders are still
+        taken until `finish`). This is the cut of the agent sandbox's tape, so the state after a call is that of a
+        `replay` of exactly that prefix (GIL released). `position` becomes `ts`; the held records of an incomplete
+        event are applied first by the next `advance_to`, whatever its time."""
+        self._wrap(self._s.advance_events_to, int(ts))
+
+    def shadow_states(self, shadow_ids: list[str]) -> list[dict[str, Any]]:
+        """Each shadow as a `replay` ending now would report it, one dict per id: `status` (`pending`, `live` or
+        `done`); the `qt.shadow_results` columns its state determines (`price` as resolved, `ts_live`,
+        `ts_activated_event`, `ts_cancel_effective`, `ts_first_fill`, `ts_last_fill`, `ts_full_fill`, `filled_qty`,
+        `n_fills`, `out_of_session`, ...) with `end_state` None until it is done; `ts_end`, when it ended; and
+        `queue_ahead` / `rank` after the last processed event once it went live (the values a `queue_trajectory`
+        row would show; sessions keep no trajectory)."""
+        return list(self._wrap(self._s.shadow_states, [str(i) for i in shadow_ids]))
 
     def submit(self, shadows: Any) -> None:
         """Sends shadows, each with `ts_submit` at or after `position`: a `qt.shadow_spec` table (any Arrow stream)
         or a list of row dicts (`shadow_id`, `instrument_id`, `side` `"B"` or `"A"`, `qty`, `ts_submit` in ns, and
         `price` for an absolute price or `offset_ticks` for a touch-relative one; optional `latency_ns`, `group`,
-        `order_key`). All or none: when any row is refused (a duplicate id, a `ts_submit` before `position`, no
-        partition for it), none of them is sent. A cancel or amend is sent later with `cancel` / `amend`."""
+        `order_key`). All or none: when any row is refused (a duplicate id, a `ts_submit` before `position`, an
+        instrument the dataset has no data for), none of them is sent. A row of a known instrument that no partition
+        covers (a time outside its days) is taken and ends `censored_gap` at its `ts_live` without being replayed, as
+        in `replay`. A cancel or amend is sent later with `cancel` / `amend`."""
         if isinstance(shadows, list):
             shadows = _shadow_rows_table(shadows)
         self._wrap(self._s.submit, shadows)

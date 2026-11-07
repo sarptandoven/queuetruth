@@ -42,17 +42,21 @@ an issue to argue for one. Ids (`W1`, ...) are referenced from code and scripts.
 - **`referee` as a GitHub Action**: done after 0.2.0 (`actions/referee`); next is getting simulator maintainers to
   run it and show the badge.
 - **Plugins for more backtesters**: hftbacktest packaged like the NautilusTrader plugin, then Hummingbot, Freqtrade,
-  LEAN, VectorBT and Backtrader adapters.
+  LEAN, VectorBT and Backtrader adapters. Backtrader and VectorBT exports import as simulator logs and reconcile
+  against a live log (done after 0.2.0, [guide](docs/how-to/reconcile-backtrader-vectorbt.md)); next: LEAN, and
+  real exports from users.
 - **A one-line "reality gap"** in every report: how much a simulator overstates fills and P&L, in plain words, first.
   In fill rates it is there (the `zoo` view's first line, `score`'s RESULT line, the report's answer block, the
-  atlas headline), and in P&L in the atlas (`pnl_by_tier`, `zoo-toxicity`'s `bias_ticks`; done after 0.2.0). Next:
-  the P&L error in `score` and the report, and the sandbox on the one-pass sessions.
+  atlas headline), and in P&L in the atlas (`pnl_by_tier`, `zoo-toxicity`'s `bias_ticks`) and in `score` and its
+  report (the `P&L:` line, `pnl_gap`, the answer block; both done after 0.2.0). Next: the sandbox on the one-pass
+  sessions.
 
 ## Later
 
 - **Agent arena.** The agent sandbox as a repeatable, look-ahead-free benchmark for trading agents: the sandbox on
-  the one-pass sessions that take orders (`qt.Session.with_orders`, done after 0.2.0; linear rather than quadratic
-  in episode length), a blind mode that hides instrument and date, event-driven wake-ups, multi-instrument
+  the one-pass sessions that take orders (done after 0.2.0: `stepping="session"`, the default, is linear rather than
+  quadratic in episode length and gives the same outputs as the per-step prefix replay), a blind mode that hides
+  instrument and date, event-driven wake-ups (now cheap: a step no longer replays the prefix), multi-instrument
   episodes and certified results on days after the agents' training data.
 - **Hosted service.** Accounts, a web interface and a hosted MCP endpoint on top of the existing multi-tenant
   service, with the same rules as the self-hosted one: customers' data only, no pooling, no vendor credentials.

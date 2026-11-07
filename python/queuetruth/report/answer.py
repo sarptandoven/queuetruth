@@ -7,7 +7,8 @@ Questions, in order, each asked once per input run (the referee: once per simula
 - zoo (`qt.zoo_summary` with a leaderboard): which L2 queue model fills most like the exact replay, and would a
   backtest with them overstate passive fills (fill significantly more often than the exact replay) at the
   leaderboard's sort horizon;
-- scorecard (`qt.scorecard_summary`): does the simulator fill like live trading;
+- scorecard (`qt.scorecard_summary`): does the simulator fill like live trading, and does its P&L match live
+  (`pnl_gap`, per currency);
 - calibration (`qt.calibration_result`): can the fitted parameters be exported;
 - learned model (`qt.hazard_model_card`): does it beat the climatology base rate;
 - referee (`qt.referee_report`): does the simulator reproduce the exact FIFO fills;
@@ -288,6 +289,41 @@ def _score(run: Any, s: ScorecardSummary, many: bool) -> Answer:
     return Answer(st, lab, q, sentence, "#verdict", "Scorecard verdict, 2×2 and tests")
 
 
+#: Badge per `pnl_gap.direction`: no difference found is not a pass (absence of evidence), so it is INFO.
+_PNL_STATUS: dict[str, tuple[Status, str]] = {
+    "sim_too_high": (CRIT, "P&L TOO HIGH"),
+    "sim_too_low": (WARN, "P&L TOO LOW"),
+    "no_significant_difference": (INFO, "NO DIFFERENCE FOUND"),
+    "not_computable": (NEUTRAL, "NOT COMPUTABLE"),
+    "not_answerable": (WARN, "FILLS ONLY"),
+}
+
+
+def _score_pnl(run: Any, s: ScorecardSummary, many: bool) -> list[Answer]:
+    """The P&L gap (`pnl_gap`, one answer per currency): the scorer's sentence, which states a difference only when
+    its 95% CI excludes 0. [] for a scorecard without a P&L gap, not scored, or blocked by own orders."""
+    if si.not_scored(s) or si.blocked_by_own_orders(s):
+        return []
+    gaps = si.pnl_gaps(run, s)
+    out = []
+    for g in gaps:
+        cur = f" in {g.currency}" if len(gaps) > 1 and g.currency else ""
+        st, lab = _PNL_STATUS[g.direction]
+        h = g.headline
+        out.append(
+            Answer(
+                st,
+                lab,
+                f"Does the simulator's P&L match live{cur}?{_suffix(run.label, many)}",
+                f"{h[:1].upper()}{h[1:]}. The gap is the simulator's minus live's markout P&L per scored order, net "
+                "of fees; positive means the simulator's P&L is too high.",
+                "#verdict",
+                "Scorecard verdict and the P&L gap",
+            )
+        )
+    return out
+
+
 # ---- calibration, learned model, referee, data quality ------------------------------------------------------------
 
 
@@ -460,7 +496,8 @@ def answers(ctx: Ctx, sections: set[str]) -> list[Answer]:
     for run, z in zs:
         out += _zoo(zoo_view(ctx, run, z), len(zs) > 1)
     scs = ctx.runs_with(ScorecardSummary)
-    out += [_score(run, s, len(scs) > 1) for run, s in scs]
+    for run, s in scs:
+        out += [_score(run, s, len(scs) > 1), *_score_pnl(run, s, len(scs) > 1)]
     cals = ctx.runs_with(CalibrationResult)
     out += [_calibration(run, c, len(cals) > 1) for run, c in cals]
     cards = ctx.runs_with(HazardModelCard)

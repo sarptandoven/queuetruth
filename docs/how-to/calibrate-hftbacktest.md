@@ -14,6 +14,11 @@ both: this page gives the parameter, the other checks that it transfers to your 
 The method (teacher-forced allocation quasi-likelihood, the bootstrap and the held-out protocol) is explained in
 [Calibration](../concepts/calibration.md). This page is the recipe.
 
+The `queuetruth-hftbacktest` plugin does steps 2, 3 and 6 below in one call (sampling orders, fitting each power
+family and exporting the winner) and also scores hftbacktest itself against the exact queue: see
+[Score and calibrate my hftbacktest backtest with the plugin](score-and-calibrate-hftbacktest.md). It does not do the
+queue-decile check of step 4 or the latency fit of step 5.
+
 ## Try it on the synthetic dataset first
 
 Every block in this section runs as written (the docs check executes them in order in one empty directory).

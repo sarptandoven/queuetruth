@@ -21,8 +21,9 @@ Tools, in listing order (input -> output document):
 Datasets are resolved against the server's root (`QT_MCP_ROOT`) like the local tools: every file and directory the
 session reads is checked before it is read (after resolving symlinks it must stay inside the root, else
 `QT-CONFIG-001`), and the partition's files are opened only through the real paths checked at start. The tools write
-nothing under the root; each session keeps its tape and replay outputs in a private temporary directory, removed when
-the session finishes, fails to finish, is closed or evicted, or the server exits. Sessions are bounded
+nothing under the root; each session keeps its scratch files (the certification view, replay outputs, and with
+`replay` stepping the tape) in a private temporary directory, removed when the session finishes, fails to finish, is
+closed or evicted, or the server exits. Sessions are bounded
 (`max_sessions`); when the limit is reached, starting a session first evicts the sessions idle for longer than
 `idle_timeout_s`. Results carry the document as `structuredContent` (validated by the declared output schema) and,
 after the server's headline, a plain-text rendering with decimal prices and local times for agents that read text.

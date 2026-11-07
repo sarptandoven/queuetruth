@@ -21,6 +21,7 @@ from queuetruth.schemas import models as m
 from queuetruth.schemas import run_id, specs
 from queuetruth.schemas.arrow import ENGINE_VERSION, SCHEMAS
 from queuetruth.score._io import resolve_ref
+from queuetruth.score._io import rows as table_rows
 
 pytestmark = pytest.mark.requires_core
 
@@ -252,6 +253,51 @@ def test_session_orders_from_dicts_and_refusals(synth: Path) -> None:
         )
     sess.finish()
     assert sorted(sess.take_results()["shadow_id"].to_pylist()) == ["o1", "o2"]
+
+
+def test_session_whole_events_and_shadow_states(synth: Path) -> None:
+    """`advance_events_to` and `shadow_states`: an order is pending until the first event after its arrival, then
+    live with its queue position, then done; the states match the result rows `finish` gives, and whole-event
+    advances give the fills of record-by-record ones."""
+    t = 1_781_540_000_000_000_000
+    runs = []
+    for whole in (False, True):
+        sess = qt.Session.with_orders({"dataset": {"path": str(synth)}})
+        adv = sess.advance_events_to if whole else sess.advance_to
+        adv(t)
+        bid = sess.bbo(1)["bid"]
+        rows = [
+            {"shadow_id": "p", "instrument_id": 1, "side": "B", "price": bid[0], "qty": 2, "ts_submit": t},
+            {"shadow_id": "q", "instrument_id": 1, "side": "A", "offset_ticks": 0, "qty": 1, "ts_submit": t},
+        ]
+        sess.submit(rows)
+        (p0,) = sess.shadow_states(["p"])
+        assert (p0["status"], p0["end_state"], p0["ts_activated_event"], p0["queue_ahead"]) == (
+            "pending",
+            None,
+            None,
+            None,
+        )
+        adv(t + 2_000_000_000)
+        p1, _q1 = sess.shadow_states(["p", "q"])
+        assert p1["status"] in ("live", "done") and p1["ts_activated_event"] is not None
+        if p1["status"] == "live":
+            assert p1["queue_ahead"] is not None and p1["rank"] is not None
+        sess.cancel("p", t + 2_000_000_000)
+        sess.cancel("q", t + 2_000_000_000)
+        adv(t + 60_000_000_000)
+        states = {st["shadow_id"]: st for st in sess.shadow_states(["p", "q"])}
+        assert all(st["status"] == "done" and st["ts_end"] is not None for st in states.values())
+        fills = sess.take_fills()
+        sess.finish()
+        results = {r["shadow_id"]: r for r in table_rows(sess.take_results())}
+        for sid, st in states.items():
+            for k in ("end_state", "price", "ts_live", "ts_activated_event", "ts_cancel_effective", "filled_qty"):
+                assert st[k] == results[sid][k], (sid, k)
+        with pytest.raises(qt.QtError, match="already finished"):
+            sess.shadow_states(["p"])
+        runs.append((fills.to_pylist(), results))
+    assert runs[0] == runs[1]
 
 
 def test_export_l2_npz(synth: Path, tmp_path: Path) -> None:

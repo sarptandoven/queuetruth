@@ -109,10 +109,9 @@ impl MiniBook {
                     .levels
                     .get_mut(&(e.instrument_id, side))
                     .and_then(|l| l.get_mut(&px))
+                    && q.is_empty()
                 {
-                    if q.is_empty() {
-                        self.levels.get_mut(&(e.instrument_id, side)).map(|l| l.remove(&px));
-                    }
+                    self.levels.get_mut(&(e.instrument_id, side)).map(|l| l.remove(&px));
                 }
             }
             b'F' if !self.orders.contains_key(&key) => {

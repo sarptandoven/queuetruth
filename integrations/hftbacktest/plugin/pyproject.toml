@@ -1,0 +1,61 @@
+[build-system]
+requires = ["hatchling>=1.26.3"]  # PEP 639 `license-files` array: older hatchling rejects it
+build-backend = "hatchling.build"
+
+[project]
+name = "queuetruth-hftbacktest"
+version = "0.1.0"
+description = "Score hftbacktest fills against exact-queue truth and calibrate its queue model with queuetruth"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+authors = [{ name = "Sarp Tandoven" }]
+keywords = ["hftbacktest", "backtesting", "queue model", "order book", "market microstructure", "queuetruth"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Financial and Insurance Industry",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Office/Business :: Financial :: Investment",
+  "Typing :: Typed",
+]
+# queuetruth does the replay, the import, the referee and the calibration. hftbacktest is not a dependency: it runs
+# in its own venv (its numba and numpy pins are not queuetruth's), which `run` calls by path.
+dependencies = ["queuetruth>=0.2.0,<0.3"]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[project.urls]
+Homepage = "https://github.com/sarptandoven/queuetruth"
+Documentation = "https://github.com/sarptandoven/queuetruth/tree/main/integrations/hftbacktest/plugin"
+
+[project.scripts]
+queuetruth-hftbacktest = "queuetruth_hftbacktest.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/queuetruth_hftbacktest"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "tests", "README.md", "LICENSE", "pyproject.toml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+  "requires_hftbacktest: needs a venv with hftbacktest 2.4.4 (QT_HBT_PY; integrations/hftbacktest/setup_venvs.sh)",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "RUF"]
+ignore = ["RUF001", "RUF002", "RUF003"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["queuetruth_hftbacktest"]

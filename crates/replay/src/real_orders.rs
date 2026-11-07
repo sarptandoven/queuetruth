@@ -122,12 +122,11 @@ impl RealOrders {
         match *effect {
             Effect::Add { side, price, size, .. } => self.start(e, side, price, size, book),
             Effect::Reduce { order_id, by, .. } => {
-                if let Some((unpaired, _)) = self.pair(order_id, by, key) {
-                    if unpaired > 0 {
-                        if let Some(l) = self.lives.get_mut(&order_id) {
-                            l.row.n_reduces += 1;
-                        }
-                    }
+                if let Some((unpaired, _)) = self.pair(order_id, by, key)
+                    && unpaired > 0
+                    && let Some(l) = self.lives.get_mut(&order_id)
+                {
+                    l.row.n_reduces += 1;
                 }
             }
             Effect::Remove { order_id, size, .. } => {
@@ -153,18 +152,18 @@ impl RealOrders {
             Effect::Clear => self.end_all(RealOrderEnd::Cleared, Some(e.ts_event), sink)?,
             Effect::None => {}
         }
-        if e.action == Action::Fill.as_byte() {
-            if let Some(l) = self.lives.get_mut(&e.order_id) {
-                if l.pend_key != key {
-                    l.pend_fill = 0;
-                    l.pend_key = key;
-                }
-                l.pend_fill = l.pend_fill.saturating_add(e.size);
-                l.row.filled_qty = l.row.filled_qty.saturating_add(e.size);
-                l.row.n_fills += 1;
-                l.row.ts_first_fill.get_or_insert(e.ts_event);
-                l.row.ts_last_fill = Some(e.ts_event);
+        if e.action == Action::Fill.as_byte()
+            && let Some(l) = self.lives.get_mut(&e.order_id)
+        {
+            if l.pend_key != key {
+                l.pend_fill = 0;
+                l.pend_key = key;
             }
+            l.pend_fill = l.pend_fill.saturating_add(e.size);
+            l.row.filled_qty = l.row.filled_qty.saturating_add(e.size);
+            l.row.n_fills += 1;
+            l.row.ts_first_fill.get_or_insert(e.ts_event);
+            l.row.ts_last_fill = Some(e.ts_event);
         }
         Ok(())
     }

@@ -1,5 +1,6 @@
 //! PyO3 extension module `queuetruth._core` (abi3-py311, SPEC 4.3): one function per native operation (spec JSON in,
-//! summary JSON out), the shared CLI grammar, Arrow interchange through `pyo3-arrow`, and the interactive `Session`.
+//! summary JSON out), the shared CLI grammar, Arrow interchange through the Arrow PyCapsule interface (`arrow_ffi`),
+//! and the interactive `Session`.
 //! Every call that does work releases the GIL; Rust errors raise `QtCoreError(code, message)` with `.code` and
 //! `.message`, re-raised by `queuetruth.api` as `queuetruth.QtError`.
 
@@ -10,13 +11,14 @@ use pyo3::create_exception;
 use pyo3::exceptions::{PyException, PyKeyError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
-use pyo3_arrow::PyTable;
 use qt_cli::ops;
 use qt_schema::specs::{
     CalibrationSpec, ExportSpec, FeatureSpec, IngestSpec, MirrorSpec, ReplaySpec, ShadowSampleSpec, WhySpec, ZooSpec,
 };
 use qt_types::{BookSide, QtError, QtResult, Venue};
 use serde_json::Value;
+
+mod arrow_ffi;
 
 create_exception!(
     _core,
@@ -67,7 +69,7 @@ fn schema_names() -> Vec<&'static str> {
 #[pyfunction(name = "arrow_schema")]
 fn table_schema(py: Python<'_>, name: &str) -> PyResult<Py<PyAny>> {
     let schema = qt_schema::schema(name).ok_or_else(|| PyKeyError::new_err(format!("unknown table {name:?}")))?;
-    Ok(pyo3_arrow::PySchema::new(schema).into_pyarrow(py)?.unbind())
+    Ok(arrow_ffi::schema_to_pyarrow(py, schema)?.unbind())
 }
 
 /// Parses argv with the shared clap grammar; returns the `CliCommand` JSON or raises `CliExit`.
@@ -264,14 +266,14 @@ fn read_table(py: Python<'_>, path: &str, expect: Option<&str>) -> PyResult<Py<P
         let batches = reader.collect::<QtResult<Vec<_>>>()?;
         Ok((batches, schema))
     }))?;
-    Ok(PyTable::try_new(batches, schema)?.into_pyarrow(py)?.unbind())
+    Ok(arrow_ffi::table_to_pyarrow(py, batches, schema)?.unbind())
 }
 
 /// Writes any Arrow stream object (`__arrow_c_stream__`) whose schema metadata names a queuetruth table, with the
 /// Parquet settings of SPEC 0.1; returns the file entry JSON `{name, rows, bytes, sha256}`.
 #[pyfunction]
-fn write_table(py: Python<'_>, table: PyTable, path: &str) -> PyResult<String> {
-    let (batches, schema) = table.into_inner();
+fn write_table(py: Python<'_>, table: Bound<'_, PyAny>, path: &str) -> PyResult<String> {
+    let (batches, schema) = arrow_ffi::stream_from_python(&table)?;
     let name = schema
         .metadata()
         .get("qt.schema")
@@ -331,6 +333,13 @@ impl Session {
         to_py(r)
     }
 
+    /// Replays whole events up to `ts` (complete events whose records are all at or before `ts`; the end of the data
+    /// also applies and ends an unterminated tail).
+    fn advance_events_to(&self, py: Python<'_>, ts: i64) -> PyResult<()> {
+        let r = py.detach(|| self.with(|s| s.advance_events_to(ts)))?;
+        to_py(r)
+    }
+
     /// `{"bid": (price, qty, count) | None, "ask": ...}` or None before the instrument's first record.
     fn bbo<'py>(&self, py: Python<'py>, instrument_id: u32) -> PyResult<Option<Bound<'py, PyDict>>> {
         let Some(b) = self.with(|s| s.bbo(instrument_id))? else {
@@ -375,8 +384,8 @@ impl Session {
 
     /// Sends the shadows of a `qt.shadow_spec` table (any `__arrow_c_stream__` object), each with `ts_submit` at or
     /// after the position, in row order.
-    fn submit(&self, py: Python<'_>, shadows: PyTable) -> PyResult<()> {
-        let (batches, _) = shadows.into_inner();
+    fn submit(&self, py: Python<'_>, shadows: Bound<'_, PyAny>) -> PyResult<()> {
+        let (batches, _) = arrow_ffi::stream_from_python(&shadows)?;
         let r = py.detach(|| {
             // decode everything first, then submit all or none
             let mut specs = Vec::new();
@@ -403,11 +412,54 @@ impl Session {
         to_py(r)
     }
 
+    /// Each shadow as a replay ending now would report it: a dict per id with `status` (`pending`, `live`,
+    /// `done`), the `qt.shadow_results` columns the state determines (`end_state` None until done), `ts_end`,
+    /// `queue_ahead` and `rank`.
+    fn shadow_states<'py>(&self, py: Python<'py>, shadow_ids: Vec<String>) -> PyResult<Vec<Bound<'py, PyDict>>> {
+        let peeks = to_py(self.with(|s| {
+            shadow_ids
+                .iter()
+                .map(|id| s.shadow_peek(id))
+                .collect::<QtResult<Vec<_>>>()
+        })?)?;
+        let mut out = Vec::with_capacity(peeks.len());
+        for p in peeks {
+            let r = &p.result;
+            let d = PyDict::new(py);
+            let status = match p.status {
+                qt_replay::ShadowStatus::Pending => "pending",
+                qt_replay::ShadowStatus::Live => "live",
+                qt_replay::ShadowStatus::Done => "done",
+            };
+            d.set_item("shadow_id", &r.shadow_id)?;
+            d.set_item("status", status)?;
+            let done = p.status == qt_replay::ShadowStatus::Done;
+            d.set_item("end_state", done.then(|| r.end_state.to_string()))?;
+            d.set_item("price", r.price)?;
+            d.set_item("qty", r.qty)?;
+            d.set_item("ts_submit", r.ts_submit)?;
+            d.set_item("ts_live", r.ts_live)?;
+            d.set_item("ts_activated_event", r.ts_activated_event)?;
+            d.set_item("ts_cancel_effective", r.ts_cancel_effective)?;
+            d.set_item("ts_first_fill", r.ts_first_fill)?;
+            d.set_item("ts_last_fill", r.ts_last_fill)?;
+            d.set_item("ts_full_fill", r.ts_full_fill)?;
+            d.set_item("filled_qty", r.filled_qty)?;
+            d.set_item("n_fills", r.n_fills)?;
+            d.set_item("out_of_session", r.out_of_session)?;
+            d.set_item("ts_end", p.ts_end)?;
+            d.set_item("queue_ahead", p.queue_ahead)?;
+            d.set_item("rank", p.rank)?;
+            out.push(d);
+        }
+        Ok(out)
+    }
+
     /// The shadow fills since the last call, as a `qt.shadow_fills` pyarrow.Table.
     fn take_fills(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         let (b, n) = to_py(self.with(|s| s.pending_fills())?)?;
         let schema = b.schema();
-        let t = PyTable::try_new(vec![b], schema)?.into_pyarrow(py)?.unbind();
+        let t = arrow_ffi::table_to_pyarrow(py, vec![b], schema)?.unbind();
         self.with(|s| s.consume_fills(n))?; // only once the table exists: a failed hand-off loses no fill
         Ok(t)
     }
@@ -416,7 +468,7 @@ impl Session {
     fn take_results(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         let (b, n) = to_py(self.with(|s| s.pending_results())?)?;
         let schema = b.schema();
-        let t = PyTable::try_new(vec![b], schema)?.into_pyarrow(py)?.unbind();
+        let t = arrow_ffi::table_to_pyarrow(py, vec![b], schema)?.unbind();
         self.with(|s| s.consume_results(n))?;
         Ok(t)
     }

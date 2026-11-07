@@ -23,8 +23,8 @@ section below is the command's own `--help` text.
   to stdout: the summary on exit 0 or 1, a `qt.error` document on exit 2 (see [Error codes](errors.md)). Logs,
   warnings and progress go to stderr.
 - Human output is answer-first: `zoo` prints the leaderboard of fill-rate bias by horizon (sorted at
-  `--sort-horizon`, default 60 s) and one plain sentence per model; `score` a `RESULT:` line, the equivalence result,
-  order counts, gate status and the 2x2 table (`--verbose` for every statistic); `calibrate` and `calibrate-live` the
+  `--sort-horizon`, default 60 s) and one plain sentence per model; `score` a `RESULT:` line, a `P&L:` line, the
+  equivalence result, order counts, gate status and the 2x2 table (`--verbose` for every statistic); `calibrate` and `calibrate-live` the
   fitted value, the held-out comparison with the default and a trust verdict; `why` the order, its event table and a
   one-sentence conclusion. The full document is always in the output directory and in `--format json`.
 - `queuetruth-core` runs the native commands; Python-only commands exit 2 with `QT-USAGE-001` there.
@@ -109,7 +109,7 @@ section below is the command's own `--help` text.
 | [`queuetruth cert pubkey`](#queuetruth-cert-pubkey) | show the public key and fingerprint of a key file |
 | [`queuetruth cert render`](#queuetruth-cert-render) | render a certificate as HTML |
 | [`queuetruth cert partial-opening`](#queuetruth-cert-partial-opening) | write an opening that opens only some committed items |
-| [`queuetruth reconcile`](#queuetruth-reconcile) | a Freqtrade or Hummingbot simulator arm against its live run, order by order |
+| [`queuetruth reconcile`](#queuetruth-reconcile) | a bot's or backtester's simulated orders against the live run, order by order |
 
 ## queuetruth ingest
 
@@ -740,7 +740,7 @@ venue exports -> canonical live log
 Usage: queuetruth live import [OPTIONS] --venue <venue> --in <PATH> --out <VALUE>
 
 Options:
-      --venue <venue>                  venue [possible values: binance, bybit, okx, coinbase, kraken, deribit, hyperliquid, ibkr-flex, fix44, sim-hftbacktest, sim-nautilus, freqtrade, hummingbot, sim-freqtrade, sim-hummingbot]
+      --venue <venue>                  venue [possible values: binance, bybit, okx, coinbase, kraken, deribit, hyperliquid, ibkr-flex, fix44, sim-hftbacktest, sim-nautilus, freqtrade, hummingbot, sim-freqtrade, sim-hummingbot, sim-backtrader, sim-vectorbt]
       --in <PATH>                      input file (repeatable)
       --out <VALUE>                    output live-log directory
       --account <VALUE>                account label
@@ -754,7 +754,7 @@ Options:
       --fix-data-dictionary <VALUE>    QuickFIX data dictionary XML (custom tags and enums; repeatable)
       --fix-session-venue <KEY=VALUE>  SESSION=VENUE: venue of a FIX session (file stem or counterparty CompID; repeatable)
       --fix-instrument-tag <N>         tag holding the instrument instead of Symbol(55), e.g. 107
-      --option <KEY=VALUE>             importer option KEY=VALUE (sim-* venues: venue, size_exp, key_from_client_id; freqtrade, hummingbot: dry_run, log_tz, timeframe, pair_with, ...)
+      --option <KEY=VALUE>             importer option KEY=VALUE (sim-* venues: venue, size_exp, key_from_client_id; freqtrade, hummingbot: dry_run, log_tz, timeframe, pair_with, ...; sim-backtrader, sim-vectorbt: pair_with, timeframe, instrument, ...)
   -h, --help                           Print help
       --log-level <log_level>          stderr log level (default warn) [possible values: error, warn, info, debug]
       --output-format <human|json>     output format (also --format human|json) [possible values: human, json]
@@ -2412,21 +2412,21 @@ Options:
 ## queuetruth reconcile
 
 ```text
-A trading bot's simulator arm (Freqtrade backtest or dry run, Hummingbot paper bot) against its live run: paired orders, why each differs, and the sim-vs-live scorecard.
+A trading bot's simulator arm (Freqtrade backtest or dry run, Hummingbot paper bot) against its live run, or a Backtrader or VectorBT backtest against a canonical live log: paired orders, why each differs, and the sim-vs-live scorecard.
 
 Usage: queuetruth reconcile [OPTIONS] --kind <kind> --sim <PATH> --live <PATH> --out <DIR>
 
 Options:
       --kind <kind>
-          the bot
+          the bot or backtester
           
-          [possible values: freqtrade, hummingbot]
+          [possible values: freqtrade, hummingbot, backtrader, vectorbt]
 
       --sim <PATH>
-          simulator arm: backtest result, dry-run database and logs, or paper-bot database (repeatable)
+          simulator arm: backtest result, dry-run database and logs, paper-bot database, Backtrader notification lines or VectorBT records (repeatable)
 
       --live <PATH>
-          live arm: the bot's database, logs or trades CSV (repeatable)
+          live arm: the bot's database, logs or trades CSV (repeatable); for backtrader and vectorbt one canonical live-log directory (queuetruth live import)
 
       --out <DIR>
           output directory
@@ -2438,7 +2438,7 @@ Options:
           instrument_map.csv (default: generated, with a warning)
 
       --window <DURATION>
-          scorer evaluation horizon, e.g. 1h (default 1 day freqtrade, 60 s hummingbot)
+          scorer evaluation horizon, e.g. 1h (default 60 s hummingbot, else 1 day)
 
       --price-tol-bps <X>
           price difference that counts (default 0.5 bps)
@@ -2450,7 +2450,7 @@ Options:
           pair and explain only; do not run the scorer
 
       --arms-as-given
-          do not refuse a bot simulator arm against a dry run
+          do not refuse arms that look swapped (a simulated live arm, a live bot as the simulator)
 
       --option <KEY=VALUE>
           importer option, e.g. timeframe=5m, strategy=NAME, dry_run=true, log_tz=Europe/Berlin (repeatable)
