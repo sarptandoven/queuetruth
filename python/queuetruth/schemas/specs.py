@@ -435,7 +435,8 @@ class LiveImportSpec(SpecModel):
 
     #: 1.1 (3.11 #13) adds `sim_hftbacktest` and `sim_nautilus` (simulator outputs; log venue `sim:<name>`); 1.2
     #: adds the trading bots `freqtrade` and `hummingbot` (live arm; venue = the exchange) and their `sim_*` arms;
-    #: 1.3 adds the backtesters `sim_backtrader` and `sim_vectorbt` (simulator arm only; additive).
+    #: 1.3 adds the backtesters `sim_backtrader` and `sim_vectorbt` (simulator arm only; additive), then
+    #: `sim_lean` (QuantConnect LEAN backtests, simulator arm only; additive).
     venue: Literal[
         "binance",
         "bybit",
@@ -454,6 +455,7 @@ class LiveImportSpec(SpecModel):
         "sim_hummingbot",
         "sim_backtrader",
         "sim_vectorbt",
+        "sim_lean",
     ]
     inputs: Annotated[list[FileRef], Field(min_length=1)]
     out: str | None = None

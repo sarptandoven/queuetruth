@@ -598,6 +598,7 @@ def certify(sb: Sandbox, card: dict[str, Any], *, timings: dict[str, float]) -> 
         "log_root": root,
         "run_id": run_id,
         "scorecard_sha256": sha,
+        "blind": sb.blind,
     }
     body["timings"] = {k: round(v, 6) for k, v in sorted(timings.items())}
     body["files"] = []

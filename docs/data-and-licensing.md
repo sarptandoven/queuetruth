@@ -67,7 +67,7 @@ reformatted, filtered or sampled is not derived data.
 | Run queuetruth on data you licensed, for your own research and backtests | internal use, generally permitted | that your plan covers non-display or research use |
 | Share a report or tables inside your firm | internal use | user or device limits of your licence |
 | Send a report to a vendor, broker, client or consultant | external distribution of derived information | your vendor's redistribution terms; Coinbase bars derived works to third parties |
-| Publish aggregate model-error statistics (what the project does with Nasdaq sample days) | usually acceptable for aggregates that cannot reconstruct the data and are not price data | name the source; link, never mirror; no event-level rows |
+| Publish aggregate model-error statistics (what the project does with Nasdaq sample days in its results) | usually acceptable for aggregates that cannot reconstruct the data and are not price data | name the source; link, never mirror; no event-level rows; the atlas keeps its per-symbol-day Nasdaq tables unpublished until a maintainer decides (below) |
 | Publish event-level replay traces, per-order "why" timelines or example datasets | allowed for IEX HIST with IEX's attribution line; not for Nasdaq samples or licensed vendor data | carry the IEX attribution on every artifact (below) |
 | Use Binance Vision archive files (`data.binance.vision`) | non-commercial only (CC BY-NC-SA 4.0) | no production calibration, no commercial products, no hosting (so not the hosted service); derived works must keep the same licence |
 | Publish or sell fitted parameters or a fill model | often restricted | Tardis restricts models developed with its data to internal use; Coinbase bars derived works to third parties; Databento requires distribution rights and attribution; CME requires a derived-data agreement for external derivative works |
@@ -81,9 +81,12 @@ Short summaries of the terms as we read them on 2026-10-18. Follow the links for
   derived data as information that cannot be reverse engineered into the source or used as a substitute for it, and
   treat derived data that contains prices as generally fee-liable. Nasdaq has a declaration form for derived-data
   uses ([US Equities and Options Data Policies](https://www.nasdaqtrader.com/content/AdministrationSupport/Policy/USEquitiesandOptionsDataPolicies.pdf)).
-  The project links to the files and publishes only aggregate statistics. `queuetruth demo` streams a prefix of one
-  sample day from Nasdaq's server to your machine after your consent, keeps the filtered subset in your cache and
-  prints aggregates only. Do not redistribute the cached subset.
+  The project links to the files and publishes only aggregate statistics. The Fill-Realism Atlas's Nasdaq days go
+  further than the summary results: their reduced tables hold per-symbol-day cells and the plan with per-symbol
+  message and execution counts. Whether those may be published is not settled here, so they stay on a draft release
+  and off the site until a maintainer decides ([two venues](concepts/fill-realism-atlas.md#two-venues)).
+  `queuetruth demo` streams a prefix of one sample day from Nasdaq's server to your machine after your consent,
+  keeps the filtered subset in your cache and prints aggregates only. Do not redistribute the cached subset.
 - **Databento** ([user agreement](https://databento.com/legal/databento-user-agreement),
   [pricing](https://databento.com/pricing)). The licence is for internal business purposes, used by the customer's
   employees and contractors acting for the customer. "Redistribution" covers information derived from the data;

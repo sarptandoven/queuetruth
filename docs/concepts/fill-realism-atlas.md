@@ -3,7 +3,8 @@
 The atlas is a public table that answers one question for every popular backtester fill model: on a real market
 day, how far are its fills and its P&L from what the real order queue would have given? It is rebuilt from public
 data each trading day by `.github/workflows/atlas.yml`, and every number on it can be re-run and checked against a
-published Merkle root.
+published Merkle root. The daily venue is IEX. Nasdaq TotalView-ITCH sample days can sit next to it
+([two venues](#two-venues)).
 
 ## How to read it
 
@@ -63,6 +64,86 @@ and horizon (fill rate and P&L), its best settings by tier with the configs, a c
 summary: the exact fill rate, how many of the library's settings fill clearly more or fewer orders, its closest point
 estimate with whether it is still clearly off, and the settings it cannot be ranked against. The index links to them.
 
+## Two venues
+
+The site can show two venues: IEX DEEP+ at its top address (the default) and Nasdaq TotalView-ITCH under
+`nasdaq/`. A line at the top of every page switches venue. Each venue has its own pages: its own tables,
+headlines, library pages, atlas and day roots, the command that re-creates a day's buckets from its public file,
+and its own attribution line. The two are never pooled: a model's error on IEX and on Nasdaq are separate rows on
+separate pages.
+
+The Nasdaq days are the free TotalView-ITCH 5.0 sample days Nasdaq publishes at
+[emi.nasdaq.com](https://emi.nasdaq.com/ITCH/Nasdaq%20ITCH/). Nothing derived from them is public until a
+maintainer decides, because [Data and licensing](../data-and-licensing.md) does not settle whether the atlas's
+tables of the sample files may be published:
+
+- The reduced days are kept on a draft release, which only people with write access see. A maintainer publishes it
+  with `gh release edit atlas-days-nasdaq --draft=false`.
+- The site shows them only when the repository variable `ATLAS_NASDAQ_SITE` is `true` and the release is
+  published, so the verify link on every Nasdaq page works for its readers. Publish the release first, then set the
+  variable. A manual run with `nasdaq_site` shows them until the next scheduled deploy, which follows the variable
+  again.
+- The Nasdaq part of the site is best effort: when its days cannot be combined or its pages cannot be built, the
+  IEX site is built alone and still deploys. Before the first IEX day the site is the compatibility page alone,
+  without Nasdaq.
+
+## A Nasdaq day on one runner
+
+A manual run of `.github/workflows/atlas.yml` with `venue: nasdaq` and a day such as `01302020` runs that sample day
+on one GitHub-hosted runner (4 cores, 16 GB, a 6 h job). It keeps the reduced day as
+`nasdaq-day-<date>.tar.gz` on the draft `atlas-days-nasdaq` release, apart from the IEX days.
+
+A Nasdaq day is far larger than an IEX day: 2020-01-30 has 423 million messages and about 8,900 symbols. The local
+pilot of that day (run `45c0dd05ddf70b67`, `scripts/scale/findings/README.md`) planned 130 units of at most 300
+predicted core-seconds, so its plan predicts at most about 10.8 core-hours; the pilot's plan file is not kept, so
+whether the day fits the budget below is decided by the first run and recorded in its `local_day.json`. When the
+plan predicts more than the workflow's budget (10 core-hours), the day runs a symbol sample:
+
+- Symbols are ranked into the liquidity tiers on the whole day first.
+- Every tier keeps the same number of symbols, the largest number that fits the budget. A tier with fewer symbols
+  keeps them all.
+- Within a tier, the kept symbols are the ones with the smallest `sha256("<seed>:<date>:<symbol>")`. The choice
+  depends on the symbol and the date only, never on a result.
+- The other symbols are excluded with the reason `outside the symbol sample`, so the kept symbols are part of the
+  run id. Only the rule, the seed and the per-tier count enter it besides: another budget or a refit cost model that
+  keeps the same symbols gives the same run id.
+- The plan, the day's `day_manifest.json` (`symbol_sample`), the atlas manifest and the venue's pages say how many
+  symbols each tier kept of how many.
+
+The buckets are still the whole day's, so a unit re-runs from buckets re-created from the public file as for any
+day. A day whose prediction fits the budget runs every symbol and has no `symbol_sample`. In a sampled day the
+`ALL` rows pool the sampled symbols, so each tier counts with its sample size, not with its share of the market.
+Read the tier tables for a market-wide picture.
+
+**How the budget was sized.** `scripts/scale/runner_budget.py` runs synthetic ITCH days
+(`python/tests/scale/scale_itch.py`, no market data) through the same split, plan and units on a given machine.
+On a 4-core, 15 GiB machine like the runner, four units at a time with one thread each:
+
+- Unit CPU time was 0.38 to 0.56 of the cost model's prediction (three runs). The prediction carries a x1.5
+  safety, so the slow end was used.
+- The units kept the cores about 82% busy.
+- Peak memory was about 0.42 GB plus 40 MB per 1,000 orders and 0.15 to 0.22 GB per million records.
+- With a margin of 2 for real order flow, which is busier than synthetic, 3.5 h of units hold
+  `3.5 x 4 x 0.82 / (0.56 x 2)`, about 10 predicted core-hours. That leaves more than 2 h of the job for the
+  build, the stream and split of the 5.6 GB file, and the reduce.
+- Units of at most 100 predicted core-seconds (`--unit-core-s 100`) held about 40,000 orders and peaked near 2 GB.
+  So four fit at 3 GiB each (`--unit-mem-gib 3`), with room on a runner whose available memory is below 14 GiB. A
+  single symbol gets a unit of its own and fits 3 GiB up to about 11 million records.
+- When memory holds fewer units than asked, `local_day.py` shrinks the budget in proportion before it plans the
+  day (three workers of four: 7.5 core-hours), so the units still fit their wall time.
+
+Two things the synthetic days do not measure: the runner's own speed (its 4 vCPUs may be 2 cores with two threads
+each) and the time each unit spends reading its whole bucket (about 13 million messages on a real day; smaller units
+mean about three times as many). Check both in the first run's `local_day.json` (unit wall times and CPU), and run
+`runner_budget.py` once on a hosted runner, before relying on the budget.
+
+Re-run the measurement on another machine before changing the budget:
+
+<!-- check-docs: skip (runs about two minutes of synthetic units) -->
+```bash
+uv run --frozen --no-sync python scripts/scale/runner_budget.py --workers 4 --unit-hours 3.5
+```
+
 ## How a number is made
 
 1. **Data.** One full IEX DEEP+ day: every order book update of every symbol on IEX, which IEX publishes and
@@ -86,17 +167,47 @@ estimate with whether it is still clearly off, and the settings it cannot be ran
 ## Verify a number
 
 The page shows the atlas root and every day's root. A day root is a Merkle root over the leaves of that day's
-units; a leaf holds the unit's spec, the sha256 of its input bucket and the content digests of its outputs. To check
-one unit, re-create its bucket from IEX's public file and re-run it:
+units. A leaf holds the unit's spec, the sha256 of its input bucket and of the files it wrote, and the content
+digests of its outputs. Every day is kept as `day-<date>.tar.gz` on the repository's `atlas-days` release: its
+reduced tables, its `day_manifest.json` (the day root and every leaf's proof) and the `plan.json` it ran. To check
+one unit:
+
+1. Download and unpack the day, and take `atlas_manifest.json` from the site's `data/` folder.
+2. Check out the commit the day was built at (the site's "built at" column, or `builds` in `day_manifest.json`)
+   and run `make develop`. The file sha256 values depend on the build's Parquet writer, so another commit can
+   compute the same numbers and still give a different leaf.
+3. Re-create the unit's bucket from IEX's public file (about 9 GB is streamed, never stored; the URL is the day's
+   `source.url` in `day_manifest.json`).
+4. Re-run the unit.
 
 <!-- check-docs: skip (needs the 9 GB IEX day file) -->
 ```bash
-uv run --frozen --no-sync python scripts/scale/verify_unit.py --plan plan.json \
-    --atlas atlas_manifest.json --unit-id 10092026-b000-u0001 --split split/10092026
+uv run --frozen --no-sync python scripts/scale/iex_split.py --url "$URL" --date 2026-10-09 --out split
+uv run --frozen --no-sync python scripts/scale/verify_unit.py --day day-2026-10-09 \
+    --atlas-manifest atlas_manifest.json --unit-id 10092026-b000-u0001 --split split/10092026
 ```
 
-It re-runs the unit, compares its leaf with the published one and checks the leaf's proof up to the root. Every
-day's reduced tables are kept as assets of the repository's `atlas-days` release.
+`verify_unit.py` checks that the unit's spec hashes to the leaf's, re-runs the unit and compares its leaf with the
+published one. It also checks the leaf's proof up to the day root, and that the atlas lists that day root and
+recomputes its own root from the day roots. It says when the checkout is not the commit the day was built at.
+
+### Verify a Nasdaq day
+
+The steps are the same, with the Nasdaq names:
+
+1. The day is `nasdaq-day-<date>.tar.gz` on the `atlas-days-nasdaq` release (a draft until a maintainer publishes
+   it), and the atlas manifest is in the site's `nasdaq/data/` folder.
+2. Re-create the buckets from Nasdaq's sample file. For the two pinned days (2019-12-30 and 2020-01-30) pass only
+   `--date`, so `itch_split.py` checks the stream against the pinned hashes; for another day add `--url` with the
+   day's `source.url`.
+3. Re-run the unit. A unit of a sampled day re-runs from the whole day's buckets like any other.
+
+<!-- check-docs: skip (streams the 5.6 GB Nasdaq sample file) -->
+```bash
+uv run --frozen --no-sync python scripts/scale/itch_split.py --date 01302020 --buckets 32 --out split
+uv run --frozen --no-sync python scripts/scale/verify_unit.py --day nasdaq-day-2020-01-30 \
+    --atlas-manifest atlas_manifest.json --unit-id 01302020-b000-u0000 --split split/01302020
+```
 
 ## Run a day yourself
 
@@ -109,13 +220,24 @@ uv run --frozen --no-sync python scripts/scale/local_day.py --source iex --date 
     --url https://storage.googleapis.com/iex/data/feeds/20261009/20261009_IEXTP1_DPLS1.0.pcap.gz --site
 ```
 
+A Nasdaq sample day runs the same way, on a symbol sample when the whole day is above the budget (the 5.6 GB file is
+streamed, never stored; its buckets need about 7 GB of disk):
+
+<!-- check-docs: skip (streams a 5.6 GB public file) -->
+```bash
+uv run --frozen --no-sync python scripts/scale/local_day.py --source itch --date 01302020 \
+    --workers 4 --threads 1 --unit-core-s 100 --unit-mem-gib 3 --sample-budget-core-h 10 --site
+```
+
 To score your own simulator rather than the ones in the zoo, start from [getting started](../getting-started.md):
 `pipx run queuetruth demo --yes` places orders in the real queue of a public day in about a minute.
 
 ## Limits
 
-- **One venue.** IEX carries a few percent of US equity volume and has its own order types and speed bump. Its
-  queues are thinner than Nasdaq's, so the size of a model's error can differ elsewhere; the method does not.
+- **One venue by default.** IEX carries a few percent of US equity volume and has its own order types and speed
+  bump. Its queues are thinner than Nasdaq's, so the size of a model's error can differ elsewhere; the method does
+  not. Nasdaq sample days can be shown next to it ([two venues](#two-venues)), but they are a few old days, often
+  on a symbol sample, not a daily series.
 - **Your orders do not move the market.** A shadow order rests in the real queue without changing it: there is no
   market impact and no reaction by other traders ([what a shadow does not do](shadow-orders.md#what-a-shadow-does-not-do)).
   Large orders (`large`) are the least realistic for that reason.

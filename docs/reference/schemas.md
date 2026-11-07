@@ -106,6 +106,11 @@ directory with `orders.parquet` (`qt.live_orders`), `events.parquet` (`qt.live_e
 | [`qt.report_spec`](#qtreport_spec) | `report`: static HTML report from output directories. |
 | [`qt.report_summary`](#qtreport_summary) | Summary of `report`. |
 | [`qt.sandbox_ack`](#qtsandbox_ack) | `submit` / `cancel` result: the order as now known and the receipt of the committed log entry. |
+| [`qt.sandbox_blind_finish`](#qtsandbox_blind_finish) | `finish` result of a blind episode, for the agent: the scorecard's aggregates in blind units (times since the open, rebased prices; `mean_bps` is null because basis points would give the price level away) and the root of the agent's blind log. The operator's scorecard and certificate, in true values, are not shown to the agent. |
+| [`qt.sandbox_blind_order_log`](#qtsandbox_blind_order_log) | The agent's view of the committed log of a blind episode: one entry per entry of the operator's log, in blind units (times since the open, rebased prices, `rows_seen` counted from the episode start, the requests as the agent sent them), hash-chained like the operator's log from its own genesis. Ack receipts name these entries. |
+| [`qt.sandbox_blind_session`](#qtsandbox_blind_session) | `open` result of a blind episode. Times are ns since the session open (`time_origin`), prices are rebased by a secret whole number of ticks, sizes are as recorded. `settings` are the simulation settings of the spec without the dataset, instrument, date and window; `transform_sha256` commits to the transform. |
+| [`qt.sandbox_blind_session_list`](#qtsandbox_blind_session_list) | `qt_sandbox_list` / `qt_sandbox_close` result of a blind server. |
+| [`qt.sandbox_episodes`](#qtsandbox_episodes) | The operator's pinned blind episodes (`queuetruth.sandbox.blind.EpisodeBook`). Holds the secrets: never give this file to the agent. |
 | [`qt.sandbox_finish`](#qtsandbox_finish) | `qt_sandbox_finish` result: the scorecard without its per-order and per-fill arrays (so a tool result stays small however long the episode), with the counts of orders and fills and the certificate; the full scorecard and order log are files the server wrote (`out_dir`, `files`) or, on request, inline (`scorecard`). |
 | [`qt.sandbox_observation`](#qtsandbox_observation) | What the agent sees after `open`, `observe` or `advance`: the market and its own orders at the visible cut, and what happened since the previous step (prints, fills, markouts that became computable). |
 | [`qt.sandbox_order_log`](#qtsandbox_order_log) | The committed order log of an episode: every instruction in order with the information set it was made on, hash-chained; `root` = the last entry's hash. |
@@ -190,7 +195,7 @@ File: `schemas/json/qt.bot_reconcile.schema.json`.
 |---|---|---|---|---|
 | `schema` | const "qt.bot_reconcile" | yes | `"qt.bot_reconcile"` |  |
 | `schema_version` | const 1 | yes | `1` |  |
-| `kind` | one of "freqtrade", "hummingbot", "backtrader", "vectorbt" | yes |  |  |
+| `kind` | one of "freqtrade", "hummingbot", "backtrader", "vectorbt", "lean" | yes |  |  |
 | `run_id` | string | yes |  |  |
 | `live_log` | string | yes |  |  |
 | `sim_log` | string | yes |  |  |
@@ -3438,7 +3443,7 @@ File: `schemas/json/qt.live_import_spec.schema.json`.
 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `venue` | one of "binance", "bybit", "okx", "coinbase", "kraken", "deribit", "hyperliquid", "ibkr_flex", "fix44", "sim_hftbacktest", "sim_nautilus", "freqtrade", "hummingbot", "sim_freqtrade", "sim_hummingbot", "sim_backtrader", "sim_vectorbt" | yes |  |  |
+| `venue` | one of "binance", "bybit", "okx", "coinbase", "kraken", "deribit", "hyperliquid", "ibkr_flex", "fix44", "sim_hftbacktest", "sim_nautilus", "freqtrade", "hummingbot", "sim_freqtrade", "sim_hummingbot", "sim_backtrader", "sim_vectorbt", "sim_lean" | yes |  |  |
 | `inputs` | array of PathRef or UploadRef or JobFileRef | yes |  |  |
 | `out` | string or null | no | `null` |  |
 | `account` | string or null | no | `null` |  |
@@ -4249,6 +4254,407 @@ An order as the agent knows it at the visible cut. `pending` = sent, not yet con
 | `n_fills` | integer | yes |  |  |
 | `avg_fill_price` | number or null | yes |  |  |
 
+### qt.sandbox_blind_finish
+
+File: `schemas/json/qt.sandbox_blind_finish.schema.json`.
+
+`finish` result of a blind episode, for the agent: the scorecard's aggregates in blind units (times since the open, rebased prices; `mean_bps` is null because basis points would give the price level away) and the root of the agent's blind log. The operator's scorecard and certificate, in true values, are not shown to the agent.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.sandbox_blind_finish" | yes | `"qt.sandbox_blind_finish"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `session_id` | string or null | yes |  |  |
+| `episode_id` | string | yes |  |  |
+| `engine_version` | string | yes |  |  |
+| `start_ns` | integer | yes |  |  |
+| `end_ns` | integer | yes |  |  |
+| `finish_ns` | integer | yes |  |  |
+| `steps` | integer | yes |  |  |
+| `n_orders` | integer | yes |  |  |
+| `n_fills` | integer | yes |  |  |
+| `n_fills_maker` | integer | yes |  |  |
+| `pnl` | PnLView | yes |  |  |
+| `fill_rates` | array of FillRateRow | yes |  |  |
+| `markouts` | array of MarkoutRow | yes |  |  |
+| `adverse_selection` | array of AdverseSelection | yes |  |  |
+| `execution_cost` | ExecutionCost | yes |  |  |
+| `consistency` | Consistency | yes |  |  |
+| `diagnostics` | Diagnostics | yes |  |  |
+| `data_quality` | string | yes |  |  |
+| `warnings` | array of string | yes |  |  |
+| `transform_sha256` | string | yes |  |  |
+| `log_root` | string | yes |  |  |
+
+**`AdverseSelection`** (in `qt.sandbox_blind_finish`)
+
+Adverse selection of passive (maker) fills at each horizon: `cost_ccy = -sum(maker mo_ccy)` (positive = the market moved against your resting orders after they filled) and the share of maker fills with a negative markout.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `horizon_ns` | integer | yes |  |  |
+| `n_maker_fills` | integer | yes |  |  |
+| `cost_ccy` | number or null | yes |  |  |
+| `mean_ticks` | number or null | yes |  |  |
+| `adverse_fraction` | number or null | yes |  |  |
+
+**`Consistency`** (in `qt.sandbox_blind_finish`)
+
+Runtime proof that the step-by-step session equals one exact replay of the committed orders: every fill reported during the session is a row of the single full replay (all columns equal), every fill of that replay that was knowable by the last visible cut was reported, at the step whose cut first covered it, and every order was shown working and shown ended at the steps whose cuts first covered its activation and the event that decided its end, with the replay's end (`statuses_mismatched` counts the orders where any of this differs).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `method` | string | yes |  |  |
+| `steps` | integer | yes |  |  |
+| `window_replays` | integer | yes |  |  |
+| `fills_reported` | integer | yes |  |  |
+| `fills_matched` | integer | yes |  |  |
+| `fills_unreported` | integer | yes |  |  |
+| `fills_misattributed` | integer | yes |  |  |
+| `fills_after_last_cut` | integer | yes |  |  |
+| `statuses_checked` | integer | yes |  |  |
+| `statuses_mismatched` | integer | yes |  |  |
+| `timestamps_monotone` | boolean | yes |  |  |
+| `equal` | boolean | yes |  |  |
+
+**`Diagnostics`** (in `qt.sandbox_blind_finish`)
+
+Simulation limits made visible: your orders never see each other (SPEC 1.2), so two of them working at the same price both assume the full queue, taker fills in one event can take the same displayed size twice, and a buy and a sell at crossing prices would have traded with each other.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `same_price_overlaps` | integer | yes |  |  |
+| `taker_same_event_overlaps` | integer | yes |  |  |
+| `self_cross_pairs` | integer | yes |  |  |
+| `out_of_session_orders` | integer | yes |  |  |
+| `rejected_instructions` | integer | yes |  |  |
+
+**`ExecutionCost`** (in `qt.sandbox_blind_finish`)
+
+Execution versus the mid you saw when you decided: `edge_ccy = sum d (mid_decision - P) q` (positive = you bought below / sold above that mid), by liquidity, over fills whose decision-time mid existed.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `n_fills` | integer | yes |  |  |
+| `edge_ccy` | number or null | yes |  |  |
+| `edge_maker_ccy` | number or null | yes |  |  |
+| `edge_taker_ccy` | number or null | yes |  |  |
+| `mean_edge_ticks` | number or null | yes |  |  |
+
+**`FillRateRow`** (in `qt.sandbox_blind_finish`)
+
+Fill rates of one order class over the orders that reached the venue (`n_live`).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `order_class` | one of "passive_limit", "marketable_limit", "ioc_limit", "market", "all" | yes |  |  |
+| `n_orders` | integer | yes |  |  |
+| `n_live` | integer | yes |  |  |
+| `n_any_fill` | integer | yes |  |  |
+| `n_full_fill` | integer | yes |  |  |
+| `qty_live` | integer | yes |  |  |
+| `filled_qty` | integer | yes |  |  |
+| `rate_any` | number or null | yes |  |  |
+| `rate_full` | number or null | yes |  |  |
+| `rate_qty` | number or null | yes |  |  |
+| `median_ttf_ns` | integer or null | yes |  |  |
+
+**`MarkoutRow`** (in `qt.sandbox_blind_finish`)
+
+Markouts at one horizon over fills of one liquidity (`all`, `maker`, `taker`): counts, means and the total in currency. `n_adverse` counts fills whose markout is negative (the price moved against you).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `horizon_ns` | integer | yes |  |  |
+| `liquidity` | one of "all", "maker", "taker" | yes |  |  |
+| `n` | integer | yes |  |  |
+| `n_null` | integer | yes |  |  |
+| `mean_ticks` | number or null | yes |  |  |
+| `mean_bps` | number or null | yes |  |  |
+| `total_ccy` | number or null | yes |  |  |
+| `n_adverse` | integer | yes |  |  |
+
+**`PnLView`** (in `qt.sandbox_blind_finish`)
+
+Episode PnL: cash flows of every fill (including fills while the final cancels were in flight), the end position marked at the mid at `mark_ns` (else the last print), fees by liquidity, and the conservative mark at the touch (long at the bid, short at the ask).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `currency` | string | yes |  |  |
+| `position_end` | integer | yes |  |  |
+| `bought_qty` | integer | yes |  |  |
+| `sold_qty` | integer | yes |  |  |
+| `cash` | number | yes |  |  |
+| `mark_ns` | integer | yes |  |  |
+| `mark_price` | number or null | yes |  |  |
+| `mark_source` | one of "mid", "last_trade" or null | yes |  |  |
+| `pnl_gross` | number or null | yes |  |  |
+| `fees` | number | yes |  |  |
+| `fees_maker` | number | yes |  |  |
+| `fees_taker` | number | yes |  |  |
+| `pnl_net` | number or null | yes |  |  |
+| `pnl_net_at_touch` | number or null | yes |  |  |
+| `notional_traded` | number | yes |  |  |
+
+### qt.sandbox_blind_order_log
+
+File: `schemas/json/qt.sandbox_blind_order_log.schema.json`.
+
+The agent's view of the committed log of a blind episode: one entry per entry of the operator's log, in blind units (times since the open, rebased prices, `rows_seen` counted from the episode start, the requests as the agent sent them), hash-chained like the operator's log from its own genesis. Ack receipts name these entries.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.sandbox_blind_order_log" | yes | `"qt.sandbox_blind_order_log"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `episode_id` | string | yes |  |  |
+| `entries` | array of LogEntry | yes |  |  |
+| `root` | string | yes |  |  |
+
+**`LogEntry`** (in `qt.sandbox_blind_order_log`)
+
+One committed log entry. `clock_ns` = the agent's clock when it acted, `visible_ns` / `rows_seen` = the data it had seen (the visible cut and the number of source records at or before it); `data` holds the instruction (submit, cancel), the error (reject) or the digest of what the step reported (advance, finish). `hash = sha256(canonical_json(entry without hash))`, chained through `prev`.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `seq` | integer | yes |  |  |
+| `kind` | one of "open", "submit", "cancel", "reject", "advance", "finish" | yes |  |  |
+| `clock_ns` | integer | yes |  |  |
+| `visible_ns` | integer | yes |  |  |
+| `rows_seen` | integer | yes |  |  |
+| `data` | object | yes |  |  |
+| `prev` | string | yes |  |  |
+| `hash` | string | yes |  |  |
+
+### qt.sandbox_blind_session
+
+File: `schemas/json/qt.sandbox_blind_session.schema.json`.
+
+`open` result of a blind episode. Times are ns since the session open (`time_origin`), prices are rebased by a secret whole number of ticks, sizes are as recorded. `settings` are the simulation settings of the spec without the dataset, instrument, date and window; `transform_sha256` commits to the transform.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.sandbox_blind_session" | yes | `"qt.sandbox_blind_session"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `session_id` | string or null | yes |  |  |
+| `episode_id` | string | yes |  |  |
+| `engine_version` | string | yes |  |  |
+| `time_origin` | const "session_open" | yes |  |  |
+| `instrument` | BlindInstrument | yes |  |  |
+| `settings` | object | yes |  |  |
+| `start_ns` | integer | yes |  |  |
+| `end_ns` | integer | yes |  |  |
+| `transform_sha256` | string | yes |  |  |
+| `rules` | array of string | yes |  |  |
+| `observation` | SandboxObservation | yes |  |  |
+
+**`BlindInstrument`** (in `qt.sandbox_blind_session`)
+
+What a blind agent knows of the instrument: the units it needs to trade (tick, lot, fixed-point exponents) and to read money (multiplier, currency). The symbol, venue, date, ids and session times are hidden.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `tick_size` | integer | yes |  |  |
+| `lot_size` | integer | yes |  |  |
+| `price_exp` | integer | yes |  |  |
+| `size_exp` | integer | yes |  |  |
+| `contract_multiplier` | number | yes |  |  |
+| `currency` | string | yes |  |  |
+
+**`BookState`** (in `qt.sandbox_blind_session`)
+
+The displayed book at the visible cut: best levels and the top `depth_levels` per side as `[price, size, count]`, best first. `ts_event` = time of the last event in view.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `ts_event` | integer or null | yes |  |  |
+| `bid` | array of any or null | yes |  |  |
+| `ask` | array of any or null | yes |  |  |
+| `bids` | array of array of any | yes |  |  |
+| `asks` | array of array of any | yes |  |  |
+| `spread_ticks` | integer or null | yes |  |  |
+
+**`FillView`** (in `qt.sandbox_blind_session`)
+
+One fill of one of your orders (a `qt.shadow_fills` row). `ts_known` = when the sandbox could know it: the fill's event, or for an arrival (taker) fill the first event after arrival. `step` = the step that reported it (null: after the session's last visible cut, reported only by the scorecard).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `order_id` | string | yes |  |  |
+| `fill_seq` | integer | yes |  |  |
+| `ts_event` | integer | yes |  |  |
+| `ts_known` | integer | yes |  |  |
+| `side` | one of "buy", "sell" | yes |  |  |
+| `price` | integer | yes |  |  |
+| `qty` | integer | yes |  |  |
+| `liquidity` | one of "maker", "taker" | yes |  |  |
+| `reason` | one of "queue_depleted", "trade_through", "crossed", "crossed_at_live" | yes |  |  |
+| `queue_ahead_before` | integer | yes |  |  |
+| `fee` | number | yes |  |  |
+| `step` | integer or null | yes |  |  |
+
+**`MarkoutView`** (in `qt.sandbox_blind_session`)
+
+Markout of one fill at one horizon against the mid (SPEC 5.7.5): `d (mid(t+h) - P)` in ticks, basis points and currency (positive = the fill was good for you). Listed once `t + h` is visible.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `order_id` | string | yes |  |  |
+| `fill_seq` | integer | yes |  |  |
+| `horizon_ns` | integer | yes |  |  |
+| `mo_ticks` | number or null | yes |  |  |
+| `mo_bps` | number or null | yes |  |  |
+| `mo_ccy` | number or null | yes |  |  |
+
+**`OrderView`** (in `qt.sandbox_blind_session`)
+
+An order as the agent knows it at the visible cut. `pending` = sent, not yet confirmed at the venue (the first market event after its arrival confirms it, SPEC 5.2.1); `working` = resting (queue fields set); `expired` = still open at the end of the data; `censored` = the venue cleared the book or the feed had a gap.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `order_id` | string | yes |  |  |
+| `client_order_id` | string or null | yes |  |  |
+| `side` | one of "buy", "sell" | yes |  |  |
+| `type` | one of "limit", "market" | yes |  |  |
+| `tif` | one of "day", "ioc" | yes |  |  |
+| `price` | integer or null | yes |  |  |
+| `peg_offset_ticks` | integer or null | yes |  |  |
+| `qty` | integer | yes |  |  |
+| `filled_qty` | integer | yes |  |  |
+| `leaves_qty` | integer | yes |  |  |
+| `status` | one of "pending", "working", "filled", "cancelled", "rejected", "expired", "censored" | yes |  |  |
+| `reason` | string or null | yes |  |  |
+| `ts_submit` | integer | yes |  |  |
+| `ts_activated` | integer or null | yes |  |  |
+| `ts_done` | integer or null | yes |  |  |
+| `queue_ahead` | integer or null | yes |  |  |
+| `rank` | integer or null | yes |  |  |
+| `level_qty` | integer or null | yes |  |  |
+| `cancel_sent_ns` | integer or null | yes |  |  |
+| `n_fills` | integer | yes |  |  |
+| `avg_fill_price` | number or null | yes |  |  |
+
+**`PositionView`** (in `qt.sandbox_blind_session`)
+
+Position (size units, signed), cash and fees (currency) from the fills so far, marked at `mark_price` (the mid at the visible cut, else the last print). `pnl_gross = cash + position * mark`, `pnl_net = pnl_gross - fees`.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `qty` | integer | yes |  |  |
+| `bought_qty` | integer | yes |  |  |
+| `sold_qty` | integer | yes |  |  |
+| `cash` | number | yes |  |  |
+| `fees` | number | yes |  |  |
+| `mark_price` | number or null | yes |  |  |
+| `mark_source` | one of "mid", "last_trade" or null | yes |  |  |
+| `pnl_gross` | number or null | yes |  |  |
+| `pnl_net` | number or null | yes |  |  |
+| `currency` | string | yes |  |  |
+
+**`SandboxObservation`** (in `qt.sandbox_blind_session`)
+
+What the agent sees after `open`, `observe` or `advance`: the market and its own orders at the visible cut, and what happened since the previous step (prints, fills, markouts that became computable).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.sandbox_observation" | yes | `"qt.sandbox_observation"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `step` | integer | yes |  |  |
+| `clock_ns` | integer | yes |  |  |
+| `visible_ns` | integer | yes |  |  |
+| `time_local` | string | yes |  |  |
+| `done` | boolean | yes |  |  |
+| `book` | BookState | yes |  |  |
+| `trades` | array of TradeView | yes |  |  |
+| `trades_since_last` | TradeStats | yes |  |  |
+| `session_trades` | TradeStats | yes |  |  |
+| `orders` | array of OrderView | yes |  |  |
+| `n_orders` | integer | yes |  |  |
+| `n_open` | integer | yes |  |  |
+| `fills` | array of FillView | yes |  |  |
+| `markouts` | array of MarkoutView | yes |  |  |
+| `position` | PositionView | yes |  |  |
+| `warnings` | array of string | yes |  |  |
+
+**`TradeStats`** (in `qt.sandbox_blind_session`)
+
+Prints over an interval: count, volume (size units), `vwap_price` (a real price, float), high/low/last (raw fixed-point prices, like every other price field).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `n` | integer | yes |  |  |
+| `volume` | integer | yes |  |  |
+| `vwap_price` | number or null | yes |  |  |
+| `high` | integer or null | yes |  |  |
+| `low` | integer or null | yes |  |  |
+| `last` | integer or null | yes |  |  |
+| `first_ts` | integer or null | yes |  |  |
+| `last_ts` | integer or null | yes |  |  |
+
+**`TradeView`** (in `qt.sandbox_blind_session`)
+
+One print (`T` record): aggressor side `B`/`A`, or `N` (none); kind as in `qt.trades`.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `ts_event` | integer | yes |  |  |
+| `price` | integer | yes |  |  |
+| `size` | integer | yes |  |  |
+| `aggressor` | one of "B", "A", "N" | yes |  |  |
+| `kind` | one of "displayed", "hidden", "cross" | yes |  |  |
+
+### qt.sandbox_blind_session_list
+
+File: `schemas/json/qt.sandbox_blind_session_list.schema.json`.
+
+`qt_sandbox_list` / `qt_sandbox_close` result of a blind server.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.sandbox_blind_session_list" | yes | `"qt.sandbox_blind_session_list"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `sessions` | array of BlindSessionItem | yes |  |  |
+| `max_sessions` | integer | yes |  |  |
+| `idle_timeout_s` | number or null | yes |  |  |
+| `closed` | BlindSessionItem or null | yes |  |  |
+
+**`BlindSessionItem`** (in `qt.sandbox_blind_session_list`)
+
+One open blind session of an MCP server: its episode id, clock (ns since the open), step, orders and seconds since its last tool call.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `session_id` | string | yes |  |  |
+| `episode_id` | string | yes |  |  |
+| `clock_ns` | integer | yes |  |  |
+| `time_local` | string | yes |  |  |
+| `step` | integer | yes |  |  |
+| `n_orders` | integer | yes |  |  |
+| `n_open` | integer | yes |  |  |
+| `idle_s` | number | yes |  |  |
+
+### qt.sandbox_episodes
+
+File: `schemas/json/qt.sandbox_episodes.schema.json`.
+
+The operator's pinned blind episodes (`queuetruth.sandbox.blind.EpisodeBook`). Holds the secrets: never give this file to the agent.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.sandbox_episodes" | yes | `"qt.sandbox_episodes"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `episodes` | array of EpisodePin | yes |  |  |
+
+**`EpisodePin`** (in `qt.sandbox_episodes`)
+
+One operator-pinned blind episode: its id, its spec (true dataset, instrument, day and window), the secret its transform derives from and how often it may be started. Private to the operator.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `episode_id` | string | yes |  |  |
+| `spec` | object | yes |  |  |
+| `secret` | string | yes |  |  |
+| `max_starts` | integer | no | `1` |  |
+
 ### qt.sandbox_finish
 
 File: `schemas/json/qt.sandbox_finish.schema.json`.
@@ -4298,9 +4704,18 @@ Adverse selection of passive (maker) fills at each horizon: `cost_ccy = -sum(mak
 | `mean_ticks` | number or null | yes |  |  |
 | `adverse_fraction` | number or null | yes |  |  |
 
+**`BlindCommitment`** (in `qt.sandbox_finish`)
+
+A blind episode (`queuetruth.sandbox.blind`): its opaque id and the sha256 of its transform (time origin, price offset in ticks, salt), which commits to the transform without revealing it. The log's `open` entry holds it, so the log root commits to it too.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `episode_id` | string | yes |  |  |
+| `transform_sha256` | string | yes |  |  |
+
 **`Certificate`** (in `qt.sandbox_finish`)
 
-What a third party needs to recompute this scorecard: the dataset, the engine, the spec identity and the root of the committed log; `scorecard_sha256` covers the scorecard without `certificate`, `timings` and `files`.
+What a third party needs to recompute this scorecard: the dataset, the engine, the spec identity and the root of the committed log; `scorecard_sha256` covers the scorecard without `certificate`, `timings` and `files`. `blind` is set when the agent played the episode blind (null otherwise).
 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
@@ -4310,6 +4725,7 @@ What a third party needs to recompute this scorecard: the dataset, the engine, t
 | `log_root` | string | yes |  |  |
 | `run_id` | string | yes |  |  |
 | `scorecard_sha256` | string | yes |  |  |
+| `blind` | BlindCommitment or null | no | `null` |  |
 
 **`Consistency`** (in `qt.sandbox_finish`)
 
@@ -4743,9 +5159,18 @@ Adverse selection of passive (maker) fills at each horizon: `cost_ccy = -sum(mak
 | `mean_ticks` | number or null | yes |  |  |
 | `adverse_fraction` | number or null | yes |  |  |
 
+**`BlindCommitment`** (in `qt.sandbox_scorecard`)
+
+A blind episode (`queuetruth.sandbox.blind`): its opaque id and the sha256 of its transform (time origin, price offset in ticks, salt), which commits to the transform without revealing it. The log's `open` entry holds it, so the log root commits to it too.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `episode_id` | string | yes |  |  |
+| `transform_sha256` | string | yes |  |  |
+
 **`Certificate`** (in `qt.sandbox_scorecard`)
 
-What a third party needs to recompute this scorecard: the dataset, the engine, the spec identity and the root of the committed log; `scorecard_sha256` covers the scorecard without `certificate`, `timings` and `files`.
+What a third party needs to recompute this scorecard: the dataset, the engine, the spec identity and the root of the committed log; `scorecard_sha256` covers the scorecard without `certificate`, `timings` and `files`. `blind` is set when the agent played the episode blind (null otherwise).
 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
@@ -4755,6 +5180,7 @@ What a third party needs to recompute this scorecard: the dataset, the engine, t
 | `log_root` | string | yes |  |  |
 | `run_id` | string | yes |  |  |
 | `scorecard_sha256` | string | yes |  |  |
+| `blind` | BlindCommitment or null | no | `null` |  |
 
 **`Consistency`** (in `qt.sandbox_scorecard`)
 

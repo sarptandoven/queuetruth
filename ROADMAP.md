@@ -31,8 +31,11 @@ an issue to argue for one. Ids (`W1`, ...) are referenced from code and scripts.
   statistics. The pipeline (`scripts/scale/`), the site generator (`scripts/scale/atlas_site.py`) and the IEX DEEP+
   splitter (`scripts/scale/iex_split.py`; `local_day.py --source iex --site` runs a day from capture to site) exist,
   and `.github/workflows/atlas.yml` runs each new IEX day and publishes the site over the newest 20 days with
-  GitHub Pages. The P&L error is computed next to the fill-rate bias (done after 0.2.0). Next are turning Pages on
-  and the cloud run over the 19 public Nasdaq days.
+  GitHub Pages. The P&L error is computed next to the fill-rate bias (done after 0.2.0). A manual run of the same
+  workflow runs one Nasdaq TotalView-ITCH sample day on a runner, on a per-tier symbol sample when the whole day
+  does not fit, and the site can show it next to IEX with a venue switch (done after 0.2.0; off until the terms of
+  Nasdaq's sample files are settled). Next are turning Pages on, the first Nasdaq day and the cloud run over the 19
+  public Nasdaq days.
 - **Upstream compatibility dashboard.** `scripts/nightly` made public: every new hftbacktest and NautilusTrader
   release checked against the exact queue within a day. `.github/workflows/compat.yml` runs the engine checks daily
   on the synthetic day against the newest release of each major line and the pinned versions, keeps each result on
@@ -43,8 +46,8 @@ an issue to argue for one. Ids (`W1`, ...) are referenced from code and scripts.
   run it and show the badge.
 - **Plugins for more backtesters**: hftbacktest packaged like the NautilusTrader plugin, then Hummingbot, Freqtrade,
   LEAN, VectorBT and Backtrader adapters. Backtrader and VectorBT exports import as simulator logs and reconcile
-  against a live log (done after 0.2.0, [guide](docs/how-to/reconcile-backtrader-vectorbt.md)); next: LEAN, and
-  real exports from users.
+  against a live log (done after 0.2.0, [guide](docs/how-to/reconcile-backtrader-vectorbt.md)), and so do LEAN
+  backtests (done after 0.2.0, [guide](docs/how-to/reconcile-lean.md)); next: real exports from users.
 - **A one-line "reality gap"** in every report: how much a simulator overstates fills and P&L, in plain words, first.
   In fill rates it is there (the `zoo` view's first line, `score`'s RESULT line, the report's answer block, the
   atlas headline), and in P&L in the atlas (`pnl_by_tier`, `zoo-toxicity`'s `bias_ticks`) and in `score` and its
@@ -56,7 +59,8 @@ an issue to argue for one. Ids (`W1`, ...) are referenced from code and scripts.
 - **Agent arena.** The agent sandbox as a repeatable, look-ahead-free benchmark for trading agents: the sandbox on
   the one-pass sessions that take orders (done after 0.2.0: `stepping="session"`, the default, is linear rather than
   quadratic in episode length and gives the same outputs as the per-step prefix replay), a blind mode that hides
-  instrument and date, event-driven wake-ups (now cheap: a step no longer replays the prefix), multi-instrument
+  instrument and date (done: operator-pinned episodes with times since the open and rebased prices,
+  `queuetruth.sandbox.blind`), event-driven wake-ups (now cheap: a step no longer replays the prefix), multi-instrument
   episodes and certified results on days after the agents' training data.
 - **Hosted service.** Accounts, a web interface and a hosted MCP endpoint on top of the existing multi-tenant
   service, with the same rules as the self-hosted one: customers' data only, no pooling, no vendor credentials.

@@ -188,6 +188,7 @@ const LIVE_VENUES: &[&str] = &[
     "sim-hummingbot",
     "sim-backtrader",
     "sim-vectorbt",
+    "sim-lean",
 ];
 const REPLAY_TARGETS: &[&str] = &["hftbacktest", "nautilus"];
 const FIX_CHECKSUM: &[&str] = &["exclude", "keep"];
@@ -841,8 +842,8 @@ pub(crate) const COMMANDS: &[Cmd] = &[
                 Kind::KeyValue,
                 "_cli.options",
                 "importer option KEY=VALUE (sim-* venues: venue, size_exp, key_from_client_id; freqtrade, hummingbot: \
-                 dry_run, log_tz, timeframe, pair_with, ...; sim-backtrader, sim-vectorbt: pair_with, timeframe, \
-                 instrument, ...)",
+                 dry_run, log_tz, timeframe, pair_with, ...; sim-backtrader, sim-vectorbt, sim-lean: pair_with, \
+                 timeframe, instrument, ...)",
             ),
         ],
         positional: &[],

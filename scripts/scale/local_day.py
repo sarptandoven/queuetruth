@@ -19,6 +19,12 @@ records the policy). Writes `<out>/local_day.json`.
 `--source iex` splits an IEX DEEP+ capture with `iex_split.py` (`--input FILE` or `--url URL`; `--date` is the
 session date YYYY-MM-DD, the day's directory is its MMDDYYYY form as for ITCH). `--site` builds the Fill-Realism
 Atlas site of the day into `<out>/site` (`atlas_site.py`; IEX's attribution on every page for an IEX day).
+
+`--sample-budget-core-h B` (or `--sample-per-tier N`) passes the symbol sample to `plan.py`: a day whose predicted
+cost is above `B` runs a deterministic sample of symbols per liquidity tier, recorded in the plan, the reduced day's
+`day_manifest.json` and the site. `.github/workflows/atlas.yml` runs a Nasdaq sample day this way on one runner.
+The budget is sized for `--workers` units at a time: when memory holds fewer, it shrinks in proportion before the
+plan is made (recorded in `local_day.json` `workers`), so the day still fits its wall time.
 """
 
 from __future__ import annotations
@@ -98,6 +104,14 @@ def cap_workers(workers: int, unit_mem_gib: float, avail_gib: float | None) -> i
     return max(1, min(workers, int(avail_gib // unit_mem_gib)))
 
 
+def scaled_budget(budget: float | None, asked: int, used: int) -> float | None:
+    """The sample budget for `used` of `asked` workers: a budget sized for `asked` units at a time takes `asked / used`
+    times as long on fewer, so it shrinks in proportion (None stays None)."""
+    if budget is None or used >= asked:
+        return budget
+    return round(budget * used / asked, 3)
+
+
 def _unit(args: tuple[dict, str, str, int]) -> dict[str, Any]:
     from unit import run_unit
 
@@ -140,6 +154,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--unit-core-s", type=float, default=300.0)
     ap.add_argument("--min-free-gib", type=float, default=10.0)
     ap.add_argument("--keep-buckets", action="store_true")
+    ap.add_argument(
+        "--sample-budget-core-h",
+        type=float,
+        help="plan.py: run a per-tier symbol sample when the day's predicted core-h is above this budget",
+    )
+    ap.add_argument("--sample-per-tier", type=int, help="plan.py: run this many symbols per tier")
     ap.add_argument(
         "--flag-policy",
         choices=["exclude", "label"],
@@ -206,6 +226,18 @@ def main(argv: list[str] | None = None) -> int:
         )
 
         t0 = time.perf_counter()
+        # the pool is sized before the plan, so a sample budget can follow the workers the machine really holds
+        mem = avail_mem_gib()
+        workers = cap_workers(a.workers, a.unit_mem_gib, mem)
+        rep["workers"] = {"asked": a.workers, "used": workers, "avail_mem_gib": None if mem is None else round(mem, 1)}
+        budget = scaled_budget(a.sample_budget_core_h, a.workers, workers)
+        if budget is not None and budget != a.sample_budget_core_h:
+            rep["workers"]["sample_budget_core_h"] = {"asked": a.sample_budget_core_h, "used": budget}
+            print(
+                f"  sample budget {budget:g} core-h, not {a.sample_budget_core_h:g}: {workers} of {a.workers} workers",
+                file=sys.stderr,
+                flush=True,
+            )
         plan_path = out / "plan.json"
         P.main(
             [
@@ -217,10 +249,19 @@ def main(argv: list[str] | None = None) -> int:
                 "scale",
                 "--unit-core-s",
                 str(a.unit_core_s),
+                *(["--sample-budget-core-h", str(budget)] if budget is not None else []),
+                *(["--sample-per-tier", str(a.sample_per_tier)] if a.sample_per_tier is not None else []),
             ]
         )
         plan = json.loads(plan_path.read_text())
-        stage("plan", t0, run_id=plan["run_id"], units=len(plan["units"]), estimate=plan["estimate"])
+        stage(
+            "plan",
+            t0,
+            run_id=plan["run_id"],
+            units=len(plan["units"]),
+            estimate=plan["estimate"],
+            **({"symbol_sample": plan["symbol_sample"]} if "symbol_sample" in plan else {}),
+        )
 
         t0 = time.perf_counter()
         shards = out / "shards"
@@ -233,9 +274,6 @@ def main(argv: list[str] | None = None) -> int:
                     continue
             todo.append((u, str(split_dir), str(shards / u["unit_id"]), a.threads))
         results = []
-        mem = avail_mem_gib()
-        workers = cap_workers(a.workers, a.unit_mem_gib, mem)
-        rep["workers"] = {"asked": a.workers, "used": workers, "avail_mem_gib": None if mem is None else round(mem, 1)}
         if workers < a.workers:
             print(
                 f"  {workers} workers, not {a.workers}: {mem:.1f} GiB available, {a.unit_mem_gib} GiB per unit",

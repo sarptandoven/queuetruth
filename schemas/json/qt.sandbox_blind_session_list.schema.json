@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.sandbox_blind_session_list",
+  "$defs": {
+    "BlindSessionItem": {
+      "additionalProperties": false,
+      "description": "One open blind session of an MCP server: its episode id, clock (ns since the open), step, orders and seconds\nsince its last tool call.",
+      "properties": {
+        "session_id": {
+          "title": "Session Id",
+          "type": "string"
+        },
+        "episode_id": {
+          "pattern": "^ep_[0-9a-f]{16}$",
+          "title": "Episode Id",
+          "type": "string"
+        },
+        "clock_ns": {
+          "title": "Clock Ns",
+          "type": "integer"
+        },
+        "time_local": {
+          "title": "Time Local",
+          "type": "string"
+        },
+        "step": {
+          "title": "Step",
+          "type": "integer"
+        },
+        "n_orders": {
+          "title": "N Orders",
+          "type": "integer"
+        },
+        "n_open": {
+          "title": "N Open",
+          "type": "integer"
+        },
+        "idle_s": {
+          "title": "Idle S",
+          "type": "number"
+        }
+      },
+      "required": [
+        "session_id",
+        "episode_id",
+        "clock_ns",
+        "time_local",
+        "step",
+        "n_orders",
+        "n_open",
+        "idle_s"
+      ],
+      "title": "BlindSessionItem",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`qt_sandbox_list` / `qt_sandbox_close` result of a blind server.",
+  "properties": {
+    "schema": {
+      "const": "qt.sandbox_blind_session_list",
+      "default": "qt.sandbox_blind_session_list",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "sessions": {
+      "items": {
+        "$ref": "#/$defs/BlindSessionItem"
+      },
+      "title": "Sessions",
+      "type": "array"
+    },
+    "max_sessions": {
+      "title": "Max Sessions",
+      "type": "integer"
+    },
+    "idle_timeout_s": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Idle Timeout S"
+    },
+    "closed": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BlindSessionItem"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "sessions",
+    "max_sessions",
+    "idle_timeout_s",
+    "closed"
+  ],
+  "type": "object"
+}

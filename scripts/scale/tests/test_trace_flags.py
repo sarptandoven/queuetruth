@@ -461,6 +461,18 @@ def test_pipeline_attributes_labels_excludes_and_traces(tmp_path, day, monkeypat
     common = ["--plan", str(pl), "--unit-id", uid0, "--split", str(split)]
     assert verify_unit.main([*common, "--atlas", str(tmp_path / "day_old" / "day_manifest.json")]) == 0
     assert verify_unit.main([*common, "--atlas", str(day_dir / "day_manifest.json")]) == 0
+    # the reduced day as published (its plan.json inside) verifies on its own, and against the atlas that lists it
+    at = ["--unit-id", uid0, "--split", str(split), "--day", str(day_dir)]
+    capsys.readouterr()
+    assert verify_unit.main([*at, "--atlas-manifest", str(tmp_path / "atlas_label" / "atlas_manifest.json")]) == 0
+    said = capsys.readouterr().out
+    assert "a build the day ran with" in said and "the atlas lists this day root" in said
+    bad = json.loads((tmp_path / "atlas_label" / "atlas_manifest.json").read_text())
+    bad["atlas_root"] = "00" * 32
+    (tmp_path / "bad_atlas.json").write_text(json.dumps(bad))
+    assert verify_unit.main([*at, "--atlas-manifest", str(tmp_path / "bad_atlas.json")]) == 1
+    with pytest.raises(SystemExit):
+        verify_unit.main([*at, "--plan", str(pl)])
 
     # the re-stream command names every symbol of the flagged units' buckets and their expected bytes
     capsys.readouterr()

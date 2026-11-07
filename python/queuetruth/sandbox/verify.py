@@ -115,7 +115,10 @@ def verify(
     card = None
     sb = None
     try:
-        sb = Sandbox.open(spec, workdir=workdir)
+        logged_blind = opened.get("blind")
+        shift = int(opened.get("blind_collar_shift_raw") or 0)
+        hook = None if logged_blind is None else (lambda _sb, _obs: {**logged_blind, "collar_shift_raw": shift})
+        sb = Sandbox.open(spec, workdir=workdir, blind=hook)
         dataset_ok = sb.dataset_id == doc["dataset_id"]
         if not dataset_ok:
             problems.append(f"dataset_id {sb.dataset_id} differs from the logged {doc['dataset_id']}")
@@ -179,6 +182,7 @@ def verify(
             and cert.get("scorecard_sha256") == want
             and cert.get("log_root") == root
             and given.get("run_id") == card.run_id
+            and cert.get("blind") == card.certificate.model_dump(mode="json")["blind"]
         )
         if not scorecard_ok:
             problems.append("the scorecard does not match the re-executed one (content, digest, run id or log root)")

@@ -23,6 +23,56 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   `dbn_mixed_schema_other_records`. Testkit: `encode_dbn_with_status`, `encode_dbn_status` and `StatusRecord` write synthetic DBN status
   records. See [halt censoring](docs/design/extensions/halt-censoring.md) H.6 for the mappings.
 
+- **Blind episodes for the agent sandbox** (ROADMAP, Agent arena; `queuetruth.sandbox.blind`): an agent plays an
+  operator-pinned episode without being able to tell which instrument or day it is on. `EpisodeBook.pin(spec)` returns
+  an opaque episode id (the book, a `qt.sandbox_episodes` file, holds the secrets); `start(episode_id)` gives a
+  `BlindSandbox` whose observations, acks, fills, errors, log and text renderings show times since the session open and
+  prices moved by a secret whole number of ticks, with sizes as recorded and the symbol, venue, date and ids hidden.
+  Orders are mapped back exactly, so the operator's scorecard (true values) equals that of a non-blind episode sent the
+  same instructions. The log's `open` entry and the new optional `certificate.blind` field of `qt.sandbox_scorecard` and
+  `qt.sandbox_finish` record `{episode_id, transform_sha256}`, a commitment to the transform that does not reveal it;
+  `verify` checks it. Over MCP, `python -m queuetruth.mcp.sandbox_tools --episodes FILE` (`register_sandbox_tools(app,
+  episodes=book)`) serves only the sandbox tools, started by `episode_id`, requires `--out` and journals every start and
+  end there (`episodes.jsonl`, counted under a file lock at every start, refused starts included; a start reserves its
+  slot first). A pin can be started once by default (`max_starts`), so no scout session can read the future;
+  `qt_sandbox_list` on a blind server lists only the caller's episode. Acceptance of an order never depends on the
+  hidden offset: out-of-range prices are refused in blind units and market collars are sized on the rebased best. New
+  documents `qt.sandbox_blind_session`, `qt.sandbox_blind_finish`, `qt.sandbox_blind_session_list`,
+  `qt.sandbox_blind_order_log` and `qt.sandbox_episodes`. Ordinary certificates now carry `"blind": null` (schema
+  version unchanged: an additive optional field). Fees in basis points and instruments without a positive tick are
+  refused in a blind pin; a peg beyond 1,000,000 ticks is a `QT-CONFIG-001` in every sandbox. A leak test scans
+  everything a blind agent receives, through the Python API and the MCP tools, for the fixture day's names, ids,
+  absolute times and true prices. Guide: [Blind episodes](docs/how-to/agent-sandbox.md#blind-episodes).
+- **Nasdaq TotalView-ITCH sample days in the Fill-Realism Atlas** (ROADMAP W1): a manual run of
+  `.github/workflows/atlas.yml` with `venue: nasdaq` runs one sample day from emi.nasdaq.com on a GitHub-hosted runner
+  (`local_day.py --source itch`). It keeps the reduced day on its own release, `atlas-days-nasdaq`, created as a
+  draft: only people with write access see it until a maintainer publishes it, since whether its tables may be
+  published is not settled (`docs/data-and-licensing.md`). `release_assets.sh` finds a draft by its pending tag name.
+  When the day's predicted cost is above the budget, `plan.py --sample-budget-core-h` (or `--sample-per-tier`)
+  keeps the same number of symbols in every liquidity tier, chosen by a hash of seed, date and symbol, with tiers
+  ranked on the whole day. The plan, `day_manifest.json`, the atlas manifest and the site record the sample; only the
+  rule, the seed and the per-tier count (and the kept symbols) enter the run id. A day that fits keeps every symbol
+  and its run id. `scripts/scale/runner_budget.py` measures a machine on synthetic ITCH and gave the workflow's
+  budget (10 predicted core-hours, units of 100 core-s at 3 GiB, four at a time); `local_day.py` shrinks the budget in
+  proportion when memory holds fewer units. `atlas_site.py --venue iex=DIR --venue nasdaq=DIR` builds one site with
+  IEX as the default page and the Nasdaq pages under `nasdaq/`. Each venue has its own tables, headlines, roots,
+  release, bucket and verify commands and attribution, and every page links the other venue. The workflow shows
+  Nasdaq only when the `ATLAS_NASDAQ_SITE` variable or the `nasdaq_site` input is true (off by default) and the
+  release is published, and a Nasdaq problem never blocks the IEX deploy: the IEX site is then built alone.
+  `release_assets.sh` treats a failed draft lookup as an error, never as a missing release. The atlas manifest's days now carry their `venue` and `buckets`; `atlas.py
+  combine` refuses days of two venues and `atlas_site.py` refuses an atlas whose days are of another venue. IEX-only
+  pages are unchanged.
+- **QuantConnect LEAN backtests.** `live import --venue sim-lean` reads a LEAN backtest's result JSON (its
+  `orders`) and its `<algorithm id>-order-events.json` (or an order-events CSV with the same names), formats read
+  from LEAN's source at release tag 18241; LEAN is not imported. Market, limit, stop-market and stop-limit orders
+  (also market-on-open and -close, trailing stops and limit-if-touched), partial fills, cancels and invalid orders
+  map to the canonical log, expiries as `expire`; a crypto buy's fee in the base asset, which LEAN subtracts from
+  the fill quantity, is added back and converted to quote. Option exercises and combo orders, and inputs from two
+  backtests, are refused. Option
+  `timeframe` moves a fill stamped at the end of its bar (LEAN's time) to the bar's start. `queuetruth reconcile
+  --kind lean --sim RESULT --sim EVENTS --live LIVE_LOG_DIR --out DIR` writes the same `qt.bot_reconcile` report as
+  for Backtrader and VectorBT (`kind` gains `lean` and `LiveImportSpec.venue` gains `sim_lean`, both additive).
+  Guide: `docs/how-to/reconcile-lean.md`.
 - **The P&L gap next to the fill-rate gap in `score`** (ROADMAP, the one-line reality gap): under its `RESULT:` line
   `queuetruth score` prints a `P&L:` line, for example `the simulator's P&L is 5.78 USD per order too high (95% CI
   +3.40 to +8.75) at the 1 s markout, mostly from fills it grants that live did not get (+3.09 USD per order)`, and
@@ -92,7 +142,11 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 - **The scheduled public atlas** (`.github/workflows/atlas.yml`, `scripts/scale/iex_latest.py`): each new IEX
   DEEP+ day runs through the scale pipeline on one runner, its reduced tables are kept as an asset of the
   `atlas-days` release, and the site over the newest 20 days is published with GitHub Pages (a maintainer turns
-  Pages on once).
+  Pages on once). A kept day carries the `plan.json` it ran and the builds that ran its units (`day_manifest.json`
+  `plan_sha256` and `builds`; the atlas manifest lists each day's `git_heads`). So `verify_unit.py --day DAY_DIR
+  --atlas-manifest atlas_manifest.json` re-runs any unit from the published day and checks it up to the atlas root,
+  and it says when the checkout is not the commit the day was built at: a leaf's file digests depend on the build's
+  Parquet writer. The site shows each day's commit and the site's own version and commit.
 - **`referee` GitHub Action** (`actions/referee`, `uses: sarptandoven/queuetruth/actions/referee@<ref>`): runs a
   simulator's command on every referee bug-class fixture (`$QT_DATASET`, `$QT_SCHEDULE` in, `$QT_FILLS` out),
   referees each class against the exact FIFO engine with the usual tolerances, writes a table to the job summary,

@@ -43,6 +43,7 @@ import tempfile
 import threading
 import time
 import weakref
+from collections.abc import Callable
 from decimal import ROUND_CEILING, Decimal
 from pathlib import Path
 from typing import Any, TypeVar
@@ -82,8 +83,13 @@ from queuetruth.score._io import rows as table_rows
 from queuetruth.stats import stable_seed
 
 M = TypeVar("M", bound=BaseModel)
+#: Called with the sandbox and its first observation when a blind episode opens; returns the commitment its `open`
+#: entry records (`queuetruth.sandbox.blind`), plus `collar_shift_raw`, the offset market collars are sized with.
+BlindHook = Callable[[Any, SandboxObservation], dict[str, Any]]
 #: How a step brings the orders to the visible cut (module docstring); the outputs are identical.
 STEPPINGS = ("session", "replay")
+#: The largest peg offset in ticks (a peg far beyond it would overflow the engine's fixed-point prices).
+MAX_PEG_TICKS = 1_000_000
 _CLIENT_ID = re.compile(r"[A-Za-z0-9_.:\-]{1,64}")
 #: The rules of the simulation, stated in every session document.
 RULES = (
@@ -186,6 +192,7 @@ class Sandbox:
         keep_workdir: bool,
         session_id: str | None,
         stepping: str = "session",
+        blind: BlindHook | None = None,
     ) -> None:
         if stepping not in STEPPINGS:
             raise config_error(f"stepping: {stepping!r} is not one of {', '.join(STEPPINGS)}")
@@ -271,8 +278,19 @@ class Sandbox:
         self._timings: dict[str, float] = {"tape_s": 0.0, "book_s": 0.0, "replay_s": 0.0}
         if stepping == "session":
             self._open_session()
+        #: Added to the opposite best when a market order's collar is sized (blind episodes: the rebasing offset).
+        self._collar_shift = 0
         self._sync()
         obs = self._observation()
+        #: The commitment of a blind episode (`queuetruth.sandbox.blind`): in the `open` entry, so the log root and
+        #: the certificate commit to it; None for an ordinary episode.
+        self.blind: dict[str, Any] | None = None
+        opened: dict[str, Any] = {}
+        if blind is not None:
+            commit = dict(blind(self, obs))
+            self._collar_shift = int(commit.pop("collar_shift_raw", 0))
+            self.blind = commit
+            opened = {"blind": commit, "blind_collar_shift_raw": self._collar_shift}
         self.log.append(
             "open",
             clock_ns=self.clock_ns,
@@ -288,6 +306,7 @@ class Sandbox:
                 "start_ns": self.start_ns,
                 "end_ns": self.end_ns,
                 "observation_sha256": digest(obs.model_dump(mode="json")),
+                **opened,
             },
         )
         self.session = SandboxSession.model_validate(
@@ -319,6 +338,7 @@ class Sandbox:
         session_id: str | None = None,
         contain: Contain | None = None,
         stepping: str = "session",
+        blind: BlindHook | None = None,
     ) -> Sandbox:
         """Opens an episode. `spec` is a `SandboxSpec` or a dict (friendly values allowed: `normalize_spec`).
         Scratch files go to a new temporary directory (inside `workdir` when given), removed by `close()`, `finish()`
@@ -327,7 +347,9 @@ class Sandbox:
         (`tape.open_source`). `stepping` chooses how each step brings the orders to the visible cut: `session` (one
         pass over the data for the whole episode) or `replay` (a replay of the episode's prefix at every step, the
         original method); both give identical observations, acks, logs and scorecards (module docstring). It is not
-        part of the spec, so it changes neither `spec_id` nor the log."""
+        part of the spec, so it changes neither `spec_id` nor the log. `blind` (used by `queuetruth.sandbox.blind`)
+        is called once with the sandbox and its first observation and returns the blind commitment that the `open`
+        entry and the certificate carry; it changes the log, not the spec or the simulation."""
         raw = spec.model_dump(mode="json") if isinstance(spec, BaseModel) else dict(spec)
         first = normalize_spec(raw, None)
         _validate(SandboxSpec, first)
@@ -353,6 +375,7 @@ class Sandbox:
                 keep_workdir=keep_workdir,
                 session_id=session_id,
                 stepping=stepping,
+                blind=blind,
             )
         except BaseException:
             if not keep_workdir:
@@ -813,6 +836,8 @@ class Sandbox:
             if isinstance(peg_offset_ticks, bool) or not isinstance(peg_offset_ticks, int):
                 raise config_error("peg_offset_ticks: expected an integer")
             peg = int(peg_offset_ticks)
+            if abs(peg) > MAX_PEG_TICKS:
+                raise config_error(f"peg_offset_ticks: {peg} is beyond +-{MAX_PEG_TICKS} ticks")
         cid = None
         if client_order_id is not None:
             cid = str(client_order_id)
@@ -859,7 +884,10 @@ class Sandbox:
                 raise config_error(
                     "order rejected: no opposite quote in view to price the market order", reason="no_quote"
                 )
-            best = int(opp[0])
+            # The collar is sized on the prices the agent sees: `best + collar_shift_raw` (0 unless blind, where
+            # it is the rebasing offset), so its width and floor never depend on a hidden price level.
+            shift = self._collar_shift
+            best = int(opp[0]) + shift
             delta = Decimal(abs(best)) * Decimal(repr(self.spec.market_collar_bps)) / Decimal(10_000)
             step = max(tick, 1)
             k = int((delta / step).to_integral_value(rounding=ROUND_CEILING))
@@ -867,6 +895,7 @@ class Sandbox:
             price = best + delta_raw if req["side"] == "buy" else best - delta_raw
             if req["side"] == "sell" and best > 0 and price <= 0:
                 price = step
+            price -= shift
             est = price
         elif req["peg_offset_ticks"] is not None:
             if req["price"] is not None:
