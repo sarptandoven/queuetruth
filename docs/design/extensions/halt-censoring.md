@@ -108,9 +108,11 @@ is identical, and all 50 Parquet outputs the two runs wrote are byte-identical. 
   halt instant.
 - **DBN and NYSE mappings wait for real files.** Both mappings are taken from the documentation and checked on
   synthetic files only. On DBN the state does not carry from one session date to the next (instrument ids are per
-  UTC date), so a halt that lasts overnight needs a status record on the next date to continue. On NYSE a halted
-  symbol is assumed not to get a core session `O` while it stays halted; a status `3` (opening delay, in some
-  versions of the XDP specification) is not read as a halt.
+  UTC date) for a partition that no symbol names; a named one carries its state into the symbol's partition of the
+  next date. On NYSE a halted
+  Halt Condition is taken to be filled with the latest value on every Security Status message (as the XDP
+  specifications describe); a status `3` (opening delay, in some
+  versions of the XDP specification) is not read as a halt by itself (its Halt Condition is).
 - **Halt crosses disseminated after the resumption.** Nasdaq sends the halt or IPO cross's executions after the
   `H` T message (54 to 148 crossed events per cross on 2020-01-30). A shadow that goes live in that window sees the
   still-crossed displayed book and can be filled `crossed_at_live`. The span ends at the resumption message, so this
@@ -150,20 +152,28 @@ is identical, and all 50 Parquet outputs the two runs wrote are byte-identical. 
   at a close would turn `censored_session_end` and `open_at_end` ends into `censored_gap`. `state` is
   `dbn_status:<action>` and `reason` the `StatusReason` code (empty for 0), for example `dbn_status:9` with `50`
   (LULD pause). Records apply in `ts_event` order to the partition their `(instrument id, UTC date of ts_recv,
-  session date)` resolved to for the MBO records; a record whose key no MBO record had is ignored, so status records
-  never resolve symbology of their own. A span still open ends at the next local midnight of its session date.
+  session date)` resolved to for the MBO and trade records; a record whose key no such record had is ignored, so
+  status records never resolve symbology of their own. The state is kept per symbol: a halt past a session date's
+  midnight continues in the symbol's partition of the next date (its id may differ) and is written as one span per
+  partition, cut at midnight. A partition without a symbol keeps its state for its own session date. A span still
+  open at the end ends at the next local midnight of the symbol's last session date.
   INFO counter `dbn_status_records`. A status record with an undefined or out-of-range time, or shorter than
   `StatusMsg`, is `QT-INPUT-002` (`fuzz/regressions/dbn/status_record_too_short`).
 - **NYSE TAQ Integrated Feed** (`crates/ingest/src/nyse/mapper.rs`): Security Status (type 34) of a selected
   symbol, from the XDP Integrated Feed and Pillar Common Client specifications' `SecurityStatus` field:
 
-  | `SecurityStatus` | state |
-  |---|---|
-  | `4` trading halt, `6` suspend | halted |
-  | `5` resume, `O` core session | trading: closes the span |
-  | `P`, `B`, `E`, `L`, `X` (session phases), `A`, `C`, `D` (short-sale codes), `I`, `G` (price indications) | no change |
+  | `SecurityStatus` | `HaltCondition` | state |
+  |---|---|---|
+  | `4` trading halt, `6` suspend | any | halted |
+  | `5` resume | any | trading: closes the span |
+  | any other (session phases `P`, `B`, `E`, `O`, `L`, `X`; short-sale codes `A`, `C`, `D`; price indications `I`, `G`) | not `~` and not blank | halted (a session change or price indication during a halt, a halt carried over from the previous day) |
+  | any other | `~` | trading: closes the span |
+  | any other | blank | no change |
 
-  `state` is `nyse_34:<status>` and `reason` the Halt Condition (empty for `~`), for example `nyse_34:4` with `M`
+  The Halt Condition is filled with the latest value on every Security Status message, so an `O` at the open of a
+  symbol that is still halted keeps the span open until its `5`.
+
+  `state` is `nyse_34:<status>` of the message that opened the span and `reason` its Halt Condition (empty for `~`), for example `nyse_34:4` with `M`
   (LULD pause). A span still open at the end of a file ends at the next midnight of the file's session date (one more
   day per midnight rollover), and only spans of an instrument with records on the file's date are kept.
 - **Contract** (schema 1.2, additive): `qt.data_quality.trading_halts`, a list of

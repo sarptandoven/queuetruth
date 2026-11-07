@@ -49,15 +49,18 @@ added, modified, deleted, replaced or executed under its Order ID, so the displa
 | Add Order Refresh (106) | the book is cleared (`R`) and rebuilt from the refresh, inside a feed gap |
 | Non-Displayed Trade (110) | `T` with side `N`: a hidden print that consumes no displayed queue |
 | Cross Trade (111) | `T` with side `N`, kind `cross` |
-| Security Status (34) | no records; status `4` (trading halt) or `6` (suspend) opens a trading-halt span, `5` (resume) or `O` (core session) closes it |
+| Security Status (34) | no records; status `4` (trading halt) or `6` (suspend), or a Halt Condition other than `~`, opens a trading-halt span; `5` (resume), or another status with Halt Condition `~`, closes it |
 | Symbol Index Mapping (3), Imbalance (105), Trade Cancel (112), Cross Correction (113), Retail Price Improvement (114), Stock Summary (223) | no records (counters) |
 
 A few things the reader does that matter for exactness:
 
-- **Trading halts.** A Security Status message of a selected symbol with status `4` (trading halt) or `6`
-  (suspend) opens a trading-halt span, and the next one with status `5` (resume) or `O` (core session) closes it.
-  Session phases (`P`, `B`, `E`, `L`, `X`), short-sale codes and price indications (`I`, `G`) change nothing. The
-  span is labelled `nyse_34:<status>` and keeps the Halt Condition (for example `M`, a LULD pause). A span still
+- **Trading halts.** Every Security Status message carries the symbol's status and its latest Halt Condition (`~`
+  when it is not halted). Status `4` (trading halt) or `6` (suspend) opens a trading-halt span, and `5` (resume)
+  closes it. Any other status (a session phase `P`, `B`, `E`, `O`, `L`, `X`, a short-sale code, a price indication
+  `I` or `G`) opens a span, or keeps it open, while its Halt Condition is not `~`, and closes it when it is `~`. So a
+  symbol still halted at the 09:30 open stays halted until its resume, and a halt carried over from the previous day
+  opens a span at the first message that reports it. A blank Halt Condition changes nothing. The span is labelled
+  `nyse_34:<status>` of the message that opened it and keeps the Halt Condition (for example `M`, a LULD pause). A span still
   open at the end of a file ends at the next midnight. The spans go to `data_quality.json` (`trading_halts`), and
   replay censors shadows in them ([halt censoring](../design/extensions/halt-censoring.md)).
 - **Which changes keep the queue place.** On Pillar a cancel/replace keeps its time priority and its Order ID only

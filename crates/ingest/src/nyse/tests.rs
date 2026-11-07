@@ -1141,9 +1141,10 @@ mod props {
 }
 
 /// SPEC 1.2 halt censoring: Security Status `4` (trading halt) and `6` (suspend) open a trading-halt span of a
-/// selected symbol with records, `5` (resume) and `O` (core session) close it, the session phases and price
-/// indications change nothing, and a span still open at the end of the file ends at the next midnight. The committed
-/// fixtures have no halts.
+/// selected symbol with records, `5` (resume) closes it; any other status opens or keeps a span while its Halt
+/// Condition is not `~` (a core-session `O` during a halt, a halt carried over from the previous day) and closes it
+/// when it is `~`; a span still open at the end of the file ends at the next midnight. The committed fixtures have no
+/// halts.
 #[test]
 fn security_status_halts_become_trading_halt_spans() {
     let d = scratch("halts");
@@ -1152,29 +1153,47 @@ fn security_status_halts_become_trading_halt_spans() {
         "3,1,QTH,3,1,P,C,100,10.00,1000000,0,Y,1,100",
         "3,2,QTK,3,1,P,C,100,10.00,1000000,0,Y,1,100",
         "3,3,QTX,3,1,P,C,100,10.00,1000000,0,Y,1,100",
-        "34,4,06:30:00.000000000,QTH,1,P,~,,,,,,~,P",
-        "34,5,06:30:00.000000000,QTK,1,P,~,,,,,,~,P",
-        "34,6,06:30:00.000000000,QTX,1,P,~,,,,,,~,P",
-        // QTK halted before the open: the core session opening closes the span.
-        "34,7,08:00:00.000000000,QTK,2,4,D,,,,,,~,P",
-        "34,8,09:30:00.000000000,QTH,2,O,~,,,,,,~,O",
-        "34,9,09:30:00.000000000,QTK,3,O,~,,,,,,~,O",
-        "34,10,09:30:00.000000000,QTX,2,O,~,,,,,,~,O",
-        "100,11,09:31:00.000000000,QTH,3,1,9.98,100,B,,",
-        "100,12,09:31:00.000000000,QTK,4,2,9.98,100,B,,",
-        "100,13,09:31:00.000000000,QTX,3,3,9.98,100,B,,",
-        // QTH: LULD pause, a price indication and a resume; then suspended to the end of the file.
-        "34,14,10:00:00.000000000,QTH,4,4,M,,,,,,~,O",
-        "34,15,10:04:00.000000000,QTH,5,I,M,,,,,,~,O",
-        "34,16,10:05:00.000000000,QTH,6,5,~,,,,,,~,O",
-        "34,17,15:00:00.000000000,QTH,7,6,~,,,,,,~,O",
-        "34,18,16:01:00.000000000,QTH,8,X,~,,,,,,~,X",
+        "3,4,QTC,3,1,P,C,100,10.00,1000000,0,Y,1,100",
+        "3,5,QTO,3,1,P,C,100,10.00,1000000,0,Y,1,100",
+        "34,6,06:30:00.000000000,QTH,1,P,~,,,,,,~,P",
+        "34,7,06:30:00.000000000,QTK,1,P,~,,,,,,~,P",
+        "34,8,06:30:00.000000000,QTX,1,P,~,,,,,,~,P",
+        // QTC is halted since the previous day: no `4` today, only its Halt Condition.
+        "34,9,06:30:00.000000000,QTC,1,P,P,,,,,,~,P",
+        "34,10,06:30:00.000000000,QTO,1,P,~,,,,,,~,P",
+        // QTK halted before the open and still halted at it (Halt Condition D on the `O`): only `5` resumes it.
+        "34,11,08:00:00.000000000,QTK,2,4,D,,,,,,~,P",
+        // QTO halted before the open; its `O` comes with Halt Condition `~`, so the open lifts it.
+        "34,12,08:00:00.000000000,QTO,2,4,D,,,,,,~,P",
+        "34,13,09:30:00.000000000,QTH,2,O,~,,,,,,~,O",
+        "34,14,09:30:00.000000000,QTK,3,O,D,,,,,,~,O",
+        "34,15,09:30:00.000000000,QTX,2,O,~,,,,,,~,O",
+        "34,16,09:30:00.000000000,QTC,2,O,P,,,,,,~,O",
+        "34,17,09:30:00.000000000,QTO,3,O,~,,,,,,~,O",
+        "100,18,09:31:00.000000000,QTH,3,1,9.98,100,B,,",
+        "100,19,09:31:00.000000000,QTK,4,2,9.98,100,B,,",
+        "100,20,09:31:00.000000000,QTX,3,3,9.98,100,B,,",
+        "100,21,09:31:00.000000000,QTC,3,4,9.98,100,B,,",
+        "100,22,09:31:00.000000000,QTO,4,5,9.98,100,B,,",
+        // QTH: LULD pause, a price indication and a resume; then suspended (regulatory concern) to the end of the file,
+        // the close keeping its Halt Condition.
+        "34,23,10:00:00.000000000,QTH,4,4,M,,,,,,~,O",
+        "34,24,10:04:00.000000000,QTH,5,I,M,,,,,,~,O",
+        "34,25,10:05:00.000000000,QTH,6,5,~,,,,,,~,O",
+        "34,26,10:15:00.000000000,QTK,5,5,~,,,,,,~,O",
+        "34,27,10:20:00.000000000,QTC,4,5,~,,,,,,~,O",
+        "34,28,15:00:00.000000000,QTH,7,6,C,,,,,,~,O",
+        "34,29,16:01:00.000000000,QTH,8,X,C,,,,,,~,X",
         // QTX is not selected.
-        "34,19,10:00:00.000000000,QTX,4,4,M,,,,,,~,O",
+        "34,30,10:00:00.000000000,QTX,4,4,M,,,,,,~,O",
     ];
     std::fs::write(&src, lines.join("\n") + "\n").unwrap();
     let out = d.join("ds");
-    let sum = run(std::slice::from_ref(&src), &out, json!({"symbols": ["QTH", "QTK"]}));
+    let sum = run(
+        std::slice::from_ref(&src),
+        &out,
+        json!({"symbols": ["QTH", "QTK", "QTC", "QTO"]}),
+    );
     let span = |iid: u32, a: i64, b: i64, state: &str, reason: &str| qt_schema::json::TradingHaltSpan {
         instrument_id: iid,
         ts_start: a,
@@ -1187,8 +1206,10 @@ fn security_status_halts_become_trading_halt_spans() {
         sum.data_quality.trading_halts,
         vec![
             span(1, MID + 10 * h, MID + 10 * h + 300 * S, "nyse_34:4", "M"),
-            span(1, MID + 15 * h, MID + 24 * h, "nyse_34:6", ""),
-            span(2, MID + 8 * h, MID + 9 * h + 1_800 * S, "nyse_34:4", "D"),
+            span(1, MID + 15 * h, MID + 24 * h, "nyse_34:6", "C"),
+            span(2, MID + 8 * h, MID + 10 * h + 900 * S, "nyse_34:4", "D"),
+            span(4, MID + 6 * h + 1_800 * S, MID + 10 * h + 1_200 * S, "nyse_34:P", "P"),
+            span(5, MID + 8 * h, MID + 9 * h + 1_800 * S, "nyse_34:4", "D"),
         ]
     );
     assert_eq!(

@@ -21,7 +21,7 @@ you share anything.
 | Session date | the UTC date (default `--tz UTC`) | the US/Eastern date (default `--tz America/New_York`) |
 | Tick without a definition | none: a 1-unit tick and a warning | $0.01 (the venue default) |
 
-Download two schemas for the same symbols and the same time range, on the same day:
+Download these schemas for the same symbols, on the same day:
 
 - **`mbo`** (required): the order-by-order records queuetruth replays.
 - **`definition`** (strongly recommended): one record per instrument and UTC date with the raw symbol, the tick
@@ -31,7 +31,8 @@ Download two schemas for the same symbols and the same time range, on the same d
 - **`trades`** (optional): source prints, kept as `source_trades` next to the MBO partitions.
 - **`status`** (recommended where the dataset has it, for example `XNAS.ITCH` and `GLBX.MDP3`): trading halts,
   pauses and resumptions. queuetruth records them as trading-halt spans, and replay censors shadows there (step 4).
-  Without it a halt is replayed as continuous trading.
+  Without it a halt is replayed as continuous trading. Request it over whole UTC dates, as for definitions: a halt
+  that started before a shorter window would be missed.
 
 Ask for symbols with `stype_in="raw_symbol"` (for example `ESZ6`, `AAPL`) when you can: the MBO file's metadata
 then maps each instrument id to its symbol on each date, which is also what lets queuetruth check that the MBO and
@@ -75,7 +76,7 @@ query = dict(
     end="2026-10-21",
 )
 print(client.metadata.get_dataset_range(dataset=query["dataset"]))  # first and last available times
-for schema in ("mbo", "definition", "trades"):
+for schema in ("mbo", "definition", "trades", "status"):
     cost = client.metadata.get_cost(schema=schema, **query)  # US dollars
     size = client.metadata.get_billable_size(schema=schema, **query)  # uncompressed bytes
     count = client.metadata.get_record_count(schema=schema, **query)
@@ -106,19 +107,20 @@ import databento as db
 
 client = db.Historical()
 query = dict(dataset="GLBX.MDP3", symbols=["ESZ6"], stype_in="raw_symbol", start="2026-10-20", end="2026-10-21")
-for schema in ("mbo", "definition"):
+for schema in ("mbo", "definition", "status"):
     client.timeseries.get_range(schema=schema, path=f"glbx-esz6-20261020.{schema}.dbn.zst", **query)
 
-# Nasdaq session 2026-01-14 (EST): the MBO over the session window, the definitions over whole UTC dates.
+# Nasdaq session 2026-01-14 (EST): the MBO over the session window, definitions and status over whole UTC dates.
 nasdaq = dict(dataset="XNAS.ITCH", symbols=["AAPL", "MSFT"], stype_in="raw_symbol")
 client.timeseries.get_range(
     schema="mbo", start="2026-01-14T05:00", end="2026-01-15T01:00",
     path="xnas-aapl-msft-20260114.mbo.dbn.zst", **nasdaq,
 )
-client.timeseries.get_range(
-    schema="definition", start="2026-01-14", end="2026-01-16",
-    path="xnas-aapl-msft-20260114.definition.dbn.zst", **nasdaq,
-)
+for schema in ("definition", "status"):
+    client.timeseries.get_range(
+        schema=schema, start="2026-01-14", end="2026-01-16",
+        path=f"xnas-aapl-msft-20260114.{schema}.dbn.zst", **nasdaq,
+    )
 ```
 
 Write down, next to the files, the dataset, the download date and the gateway you used. Vendors re-issue history
@@ -134,10 +136,10 @@ gives the same dataset.
 ```bash
 queuetruth ingest --format dbn --venue cme \
   --in glbx-esz6-20261020.mbo.dbn.zst --in glbx-esz6-20261020.definition.dbn.zst \
-  --out ds/esz6-20261020
+  --in glbx-esz6-20261020.status.dbn.zst --out ds/esz6-20261020
 queuetruth ingest --format dbn --venue nasdaq \
   --in xnas-aapl-msft-20260114.mbo.dbn.zst --in xnas-aapl-msft-20260114.definition.dbn.zst \
-  --symbols AAPL,MSFT --out ds/xnas-20260114
+  --in xnas-aapl-msft-20260114.status.dbn.zst --symbols AAPL,MSFT --out ds/xnas-20260114
 ```
 
 Plain `.dbn` and zstd `.dbn.zst` files of DBN versions 1 to 3 are read as stored. What queuetruth takes from the
@@ -163,11 +165,13 @@ USD. queuetruth does not take the round lot or display factor from definitions: 
 unless `is_trading` is `N`, closes it. Other actions, such as pre-open, close or a short-sale restriction change, do
 not change the state. A span is labelled `dbn_status:<action>` and keeps the record's `reason` code (for example
 `50`, a LULD pause). A status record applies to the partition its instrument id and dates resolve to for the MBO
-records; a record of an instrument with no MBO records that day is ignored. A span still open at the end of a session
-date ends at the next local midnight, because instrument ids are only unique per UTC date. Replay censors shadows in
-these spans as on Nasdaq ITCH
+and trade records; a record of an instrument with no such records that day is ignored. The state is kept per symbol,
+so a halt that runs past a session date's midnight continues in the symbol's partition of the next date, as one span
+per partition. A partition without a symbol (no metadata mapping or definition names it) keeps its state for its own
+session date only, because instrument ids are only unique per UTC date. A span still open at the end ends at the next
+local midnight of the symbol's last session date. Replay censors shadows in these spans as on Nasdaq ITCH
 ([halt censoring](../design/extensions/halt-censoring.md)). The counter `dbn_status_records` counts the status
-records read and never changes the verdict.
+records read, including those that matched no partition, and never changes the verdict.
 
 `--symbols` matches a raw symbol or an alias, case-insensitively, so `--symbols ES.FUT` keeps every contract of a
 parent request and `--symbols ESZ6` keeps one.

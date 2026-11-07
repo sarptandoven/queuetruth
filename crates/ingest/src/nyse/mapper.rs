@@ -21,11 +21,13 @@
 //! | Cross Trade 111 | `T` side `N`, print kind `cross` (none for 0 shares) |
 //! | Symbol Index Mapping 3, Security Status 34, Imbalance 105, Trade Cancel 112, Cross Correction 113, Retail Price Improvement 114, Stock Summary 223 | none (statistics and counters) |
 //!
-//! Trading halts (SPEC 1.2 halt censoring): a Security Status of a selected symbol with status `4` (trading halt) or
-//! `6` (suspend) opens a trading-halt span of the instrument; status `5` (resume) or `O` (core session) closes it
-//! (`Mapper::take_trading_halts`). Other statuses (session phases `P`, `B`, `E`, `L`, `X`, short-sale and price
-//! indication codes) change nothing. A span still open at the end of a file ends at the next local midnight of the
-//! file's session date (one more day per midnight rollover).
+//! Trading halts (SPEC 1.2 halt censoring): every Security Status of a selected symbol carries its status and the
+//! latest Halt Condition (`~` when not halted). Status `4` (trading halt) or `6` (suspend), or any other status with a
+//! Halt Condition other than `~` (a session change or price indication during a halt, or a halt carried over from the
+//! previous day), opens a trading-halt span of the instrument when none is open; status `5` (resume), or any other
+//! status with Halt Condition `~`, closes it (`Mapper::take_trading_halts`). A blank Halt Condition changes nothing.
+//! A span still open at the end of a file ends at the next local midnight of the file's session date (one more day
+//! per midnight rollover).
 //!
 //! A live Order ID added again first cancels the old order (`C`). Anomalies (unknown references, over-executions,
 //! bad fields, ...) are counted and never fatal, except that a file whose first lines are not Integrated Feed
@@ -724,11 +726,15 @@ impl Mapper {
             Message::TradeCancel(_) => self.stats.trade_cancels += 1,
             Message::CrossCorrection(_) => self.stats.cross_corrections += 1,
             Message::SecurityStatus(st) => {
-                // 4 trading halt and 6 suspend leave continuous trading; 5 resume and O (core session) return to it.
-                let halted = match st.status {
-                    b'4' | b'6' => Some(true),
-                    b'5' | b'O' => Some(false),
-                    _ => None,
+                // 4 trading halt and 6 suspend leave continuous trading and 5 resume returns to it; any other status
+                // (a session change, a price indication) carries the latest Halt Condition: `~` not halted, another
+                // code halted (blank: unknown, no change).
+                let halted = match (st.status, st.halt_condition) {
+                    (b'4' | b'6', _) => Some(true),
+                    (b'5', _) => Some(false),
+                    (_, b'~') => Some(false),
+                    (_, 0) => None,
+                    _ => Some(true),
                 };
                 if let Some(h) = halted {
                     let reason = match st.halt_condition {

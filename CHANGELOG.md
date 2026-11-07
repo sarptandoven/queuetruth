@@ -11,11 +11,15 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 - **Halts censor shadows on DBN and NYSE data** (ROADMAP "Now", halt censoring H.5): the DBN reader reads `status`
   records (`StatusMsg`) from `status` files, which it refused before, and from MBO and mixed-schema files, where it
   skipped them. Actions `Halt`, `Pause`, `Suspend`, and `Quoting` while not trading, open a trading-halt span;
-  `Trading` closes it; other actions change nothing. The NYSE TAQ Integrated Feed reader turns Security Status
-  (type 34) `4` (trading halt) and `6` (suspend) into spans that `5` (resume) or `O` (core session) close. The spans
-  go to `qt.data_quality.trading_halts` and every engine censors shadows there, as on Nasdaq ITCH and IEX DEEP+.
-  New INFO counter `dbn_status_records`. Datasets without status records, or without halts, are written exactly as
-  before. Testkit: `encode_dbn_with_status`, `encode_dbn_status` and `StatusRecord` write synthetic DBN status
+  `Trading` closes it; other actions change nothing; a halt past a session date's midnight carries on in the
+  symbol's partition of the next date. The NYSE TAQ Integrated Feed reader turns Security Status (type 34) into
+  spans: `4` (trading halt), `6` (suspend) or a Halt Condition other than `~` opens one, `5` (resume) or another
+  status with Halt Condition `~` closes it, so a symbol still halted at the open stays halted. The spans go to
+  `qt.data_quality.trading_halts` and every engine censors shadows there, as on Nasdaq ITCH and IEX DEEP+. New INFO
+  counter `dbn_status_records`. Datasets without status records are written exactly as before. With status records,
+  besides the spans: status records inside an `mbo`-schema file no longer count in `dbn_other_records_skipped` (so
+  they no longer raise the verdict to `warnings`), and those in a mixed-schema file no longer count in
+  `dbn_mixed_schema_other_records`. Testkit: `encode_dbn_with_status`, `encode_dbn_status` and `StatusRecord` write synthetic DBN status
   records. See [halt censoring](docs/design/extensions/halt-censoring.md) H.6 for the mappings.
 
 - **The P&L gap next to the fill-rate gap in `score`** (ROADMAP, the one-line reality gap): under its `RESULT:` line

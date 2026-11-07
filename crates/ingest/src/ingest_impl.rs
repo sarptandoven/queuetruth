@@ -35,7 +35,6 @@ use crate::dbn::{DbnReader, DbnStatus, Symbology, status_halted, utc_day};
 use crate::dq::MboDqScan;
 use crate::etcsv::{CsvKind, MboCsvReader, detect, first_trade_ts, read_instruments_csv, read_trades_csv};
 use crate::guard::GuardLimits;
-use crate::halts::{HaltKind, HaltTracker};
 use crate::iex::{
     CaptureReader, FeedEvent, FeedReader as IexFeed, MapOutput as IexMapOutput, Mapper as IexMapper, MsgCtx,
     ParseError as IexParseError, parse as iex_parse,
@@ -1250,10 +1249,13 @@ fn ingest_dbn_into(spec: &IngestSpec, inputs: &[PathBuf], out: &Path, created: &
 
 /// Trading-halt spans of the DBN status records (SPEC 1.2 halt censoring; `dbn::status_halted` maps a record to a
 /// state). Records apply in `ts_event` order (stable, so records of one time keep their file order) to the
-/// partition their `(instrument id, UTC date of ts_recv, session date)` resolved to for the MBO records; a record
-/// whose key no MBO record had is ignored, so status records never resolve symbology of their own. Instrument ids
-/// are per UTC date, so the state does not carry from one session day to the next: a span still open ends at the
-/// next local midnight of its session day. Only spans of partitions with records are kept.
+/// partition their `(instrument id, UTC date of ts_recv, session date)` resolved to for the MBO and trade records; a
+/// record whose key no such record had is ignored, so status records never resolve symbology of their own.
+///
+/// The state is kept per symbol, so a halt that runs past a session date's midnight carries on in the symbol's
+/// partition of the next date (its instrument id may differ): the span is cut at each midnight into one span per
+/// partition with records. A partition without a symbol keeps its own state for its session date only (ids are per
+/// UTC date). A span still open at the end ends at the next local midnight of the symbol's last session date.
 fn dbn_trading_halts(
     c: &Common,
     res: &Resolver<'_>,
@@ -1261,36 +1263,101 @@ fn dbn_trading_halts(
     seen: &BTreeSet<(i32, u32)>,
     status: &mut [DbnStatus],
 ) -> QtResult<Vec<TradingHaltSpan>> {
+    /// Whose state a record changes: a symbol across dates, or one unnamed partition.
+    #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+    enum Key {
+        Sym(String),
+        Part(i32, u32),
+    }
+    struct Open {
+        ts_start: Ts,
+        state: String,
+        reason: String,
+    }
+    let mut sym_part: HashMap<(&str, i32), u32> = HashMap::new();
+    let mut last_date: HashMap<&str, i32> = HashMap::new();
+    for ((date, iid), name) in &res.part {
+        if seen.contains(&(*date, *iid)) {
+            sym_part.insert((name.as_str(), *date), *iid);
+            let d = last_date.entry(name.as_str()).or_insert(*date);
+            *d = (*d).max(*date);
+        }
+    }
+    // The spans of `key` over `[start, end)`, one per session date with a partition with records.
+    let pieces = |key: &Key, start: Ts, end: Ts, open: &Open, out: &mut Vec<TradingHaltSpan>| -> QtResult<()> {
+        let mut push = |date: i32, iid: u32, lo: Ts, hi: Ts| {
+            if lo < hi && seen.contains(&(date, iid)) {
+                out.push(TradingHaltSpan {
+                    instrument_id: iid,
+                    ts_start: lo,
+                    ts_end: hi,
+                    state: open.state.clone(),
+                    reason: open.reason.clone(),
+                });
+            }
+        };
+        match key {
+            Key::Part(date, iid) => push(*date, *iid, start, end),
+            Key::Sym(name) => {
+                let (first, last) = (c.date_of(start)?, c.date_of(end.saturating_sub(1).max(start))?);
+                for date in first..=last {
+                    if let Some(&iid) = sym_part.get(&(name.as_str(), date)) {
+                        let lo = start.max(c.midnight(date)?);
+                        let hi = end.min(c.midnight(date.saturating_add(1))?);
+                        push(date, iid, lo, hi);
+                    }
+                }
+            }
+        }
+        Ok(())
+    };
     status.sort_by_key(|s| s.ts_event);
-    let mut trackers: BTreeMap<i32, HaltTracker> = BTreeMap::new();
+    let mut open: BTreeMap<Key, Open> = BTreeMap::new();
+    let mut out = Vec::new();
     for s in status.iter() {
         let Some(halted) = status_halted(s) else { continue };
         let date = dates.of(c, s.ts_event)?;
         let Some(iid) = res.resolved(s.instrument_id, utc_day(s.ts_recv), date) else {
             continue;
         };
-        let reason = if s.reason == 0 {
-            String::new()
-        } else {
-            s.reason.to_string()
+        let key = match res.part.get(&(date, iid)) {
+            Some(name) => Key::Sym(name.clone()),
+            None => Key::Part(date, iid),
         };
-        trackers.entry(date).or_default().apply(
-            s.ts_event,
-            iid,
-            HaltKind::Status,
-            halted,
-            format!("dbn_status:{}", s.action),
-            reason,
-        );
+        match (halted, open.contains_key(&key)) {
+            (true, false) => {
+                let reason = if s.reason == 0 {
+                    String::new()
+                } else {
+                    s.reason.to_string()
+                };
+                let o = Open {
+                    ts_start: s.ts_event,
+                    state: format!("dbn_status:{}", s.action),
+                    reason,
+                };
+                open.insert(key, o);
+            }
+            (false, true) => {
+                if let Some(o) = open.remove(&key) {
+                    pieces(&key, o.ts_start, s.ts_event, &o, &mut out)?;
+                }
+            }
+            _ => {}
+        }
     }
-    let mut out = Vec::new();
-    for (date, mut t) in trackers {
-        let end = c.midnight(date.saturating_add(1))?;
-        out.extend(
-            t.finish(end)
-                .into_iter()
-                .filter(|h| seen.contains(&(date, h.instrument_id))),
-        );
+    for (key, o) in &open {
+        let start_date = dates.of(c, o.ts_start)?;
+        let last = match key {
+            Key::Sym(name) => last_date
+                .get(name.as_str())
+                .copied()
+                .unwrap_or(start_date)
+                .max(start_date),
+            Key::Part(date, _) => *date,
+        };
+        let end = c.midnight(last.saturating_add(1))?.max(o.ts_start.saturating_add(1));
+        pieces(key, o.ts_start, end, o, &mut out)?;
     }
     crate::halts::sort(&mut out);
     Ok(out)
