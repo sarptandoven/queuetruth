@@ -55,31 +55,33 @@ column-oriented JSON. More than one column fails `QT-CONFIG-001` unless option `
 (`instrument` alone does not choose a column). Epoch values are read in `data_tz` (pandas writes a naive index's
 wall-clock time as UTC).
 
-**LEAN** (formats of release tag 18241): the result JSON's `orders` (`Order`: `id`, `symbol` `{value, id,
-permtick}`, `time`, `type` and `status` and `direction` as numbers, signed `quantity`, `limitPrice`, `stopPrice`,
-`properties.timeInForce`) and the order events (`SerializedOrderEvent`: `orderId`, `orderEventId`, `symbolValue`,
-`time` in Unix seconds, `status` as a camelCase name, `fillPrice`, signed `fillQuantity`, `direction`, `orderType`,
-`quantity`, `limitPrice`, `orderFeeAmount`, `orderFeeCurrency`, `message`) from `<algorithm id>-order-events.json`,
-a result's `orderEvents`, or a CSV with those names. Names are matched without case, `-` or `_` (camelCase,
-hyphenated and C# property names); enums as numbers or names. One order per id: `submit_sent` at `time`, `ack` at
-the first `submitted` event, one fill per `partiallyFilled` / `filled` event with a non-zero fill quantity
-(`fill_id = <order id>:<order event id>`; a zero one, written after a refused update, is counted), `cancel_ack` at
-`canceled`, `expire` at `canceled` with "The order has expired.", `reject` at `invalid` (an invalid order without a
-`submitted` event gets no `ack`); `new`, `none`, `cancelPending`, `updateSubmitted` are counted, and so is an order
-rounded to quantity 0 and invalidated (left out). Fees: a fee in the fill price's currency is kept; a crypto buy's
-fee in its base asset (subtracted from `fillQuantity` by LEAN) is added back to the quantity and converted to quote
-at the fill price; other currencies are dropped and counted. Contingent orders are warned. Decimals are exact. Types: Market, MarketOnOpen, MarketOnClose -> market; Limit -> limit; StopMarket,
-TrailingStop -> stop; StopLimit, LimitIfTouched -> stop_limit at `limitPrice`; OptionExercise and the combo types
-fail `QT-INPUT-002`. Without an orders section the order is built from its events (`orderType` required; quantity and prices of the
-last event).
+**LEAN** (formats of release tag 18241): the result JSON's `orders` (`Order`: `id`, `symbol` `{value, id, permtick}`,
+`time`, `type` and `status` and `direction` as numbers, signed `quantity`, `limitPrice`, `stopPrice`,
+`properties.timeInForce`) and the order events (`SerializedOrderEvent`: `orderId`, `orderEventId`, `symbolValue`, `time`
+in Unix seconds, `status` as a camelCase name, `fillPrice`, signed `fillQuantity`, `direction`, `orderType`, `quantity`,
+`limitPrice`, `orderFeeAmount`, `orderFeeCurrency`, `message`) from `<algorithm id>-order-events.json`, a result's
+`orderEvents`, or a CSV with those names. Names are matched without case, `-` or `_` (camelCase, hyphenated and C#
+property names); enums as numbers or names. One order per id: `submit_sent` at `time`, `ack` at the first `submitted`
+event, one fill per `partiallyFilled` / `filled` event with a non-zero fill quantity (`fill_id = <order id>:<order event
+id>`; a zero one, written after a refused update, is counted), `cancel_ack` at `canceled`, `expire` at `canceled` with
+"The order has expired.", `reject` at `invalid` (an invalid order without a `submitted` event gets no `ack`); `new`,
+`none`, `cancelPending`, `updateSubmitted` are counted, and so is an order rounded to quantity 0 and invalidated (left
+out). Fees: a fee in the fill price's currency is kept (zero too; only currency `QCC` means none); a spot crypto buy's
+(security type Crypto) fee in its base asset (subtracted from `fillQuantity` by LEAN) is added back to the quantity and
+converted to quote at the fill price; other currencies are dropped and counted. Contingent orders are warned. Decimals
+are exact. Types: Market, MarketOnOpen, MarketOnClose -> market; Limit -> limit; StopMarket, TrailingStop -> stop;
+StopLimit, LimitIfTouched -> stop_limit at `limitPrice`; OptionExercise and the combo types fail `QT-INPUT-002`. Without
+an orders section the order is built from its events (`orderType` required; quantity and prices of the last event).
 Events given twice are counted once. `QT-CONFIG-001`: two orders sections, two `algorithmId`s, the same input twice,
-appending to an existing log, option `data_tz` (LEAN times are UTC). `QT-INPUT-002`: an orders section without any event, an event of an order the
-section does not hold, of another symbol, or the same event id with other content, fills beyond the order quantity,
-a final status (filled, canceled, invalid) without its event. With `timeframe`, a fill stamped after its order's
-submission (LEAN stamps the bar's end) moves one bar earlier, never before the submission (counted).
+appending to an existing log, option `data_tz` (LEAN times are UTC). `QT-INPUT-002`: an orders section without any
+event, an event of an order the section does not hold, of another symbol, or the same event id with other content, fills
+beyond the order quantity, a final status (filled, canceled, invalid) without its event. With `timeframe`, a fill
+stamped after its order's submission (LEAN stamps the bar's end) moves one bar earlier, never before the submission
+(counted).
 
-**Shared** (all three; LEAN has no `data_tz`): times are ISO 8601 text, or a date alone (midnight; precision `s`), naive in option `data_tz`
-(default UTC; precision from the text), or epoch ms; doubles are read as decimals rounded to 15 significant digits, then rounded half-even to the instrument
+**Shared** (all three; LEAN has no `data_tz`): times are ISO 8601 text, or a date alone (midnight; precision
+`s`), naive in option `data_tz` (default UTC; precision from the text), or epoch ms; doubles are read as decimals
+rounded to 15 significant digits (LEAN's decimals exactly), then rounded half-even to the instrument
 exponents (counted), in place, so a reconciliation quotes the logged values. Options: `timeframe` (bar length; the
 fill time is known to `[t, t + timeframe)`), `fill_delay_bars` (fills `k` bars later; needs `timeframe`),
 `instrument` / `instruments` (`LABEL:NAME,...`; a label naming no data feed or column fails `QT-CONFIG-001`), `venue`, `map_venue`, `price_exp`, `size_exp`, `pair_with`,
@@ -98,10 +100,10 @@ takes the live `order_key`, and each of its fills stamped before the live order'
 placement (counted; the bar time kept in the fill's `reason`). With option `pair_with` the importer pairs against
 that log and warns with its orders' sha256 and venue.
 
-`reconcile_backtrader(sim, live, out, ...)` / `reconcile_vectorbt(...)` / `reconcile_lean(...)`: a live arm whose every order is a
-simulator's or simulated fails `QT-CONFIG-001` unless `arms_as_given`; several venues need option `venue`. Without
-an instrument map the live log's ids and scales are used, instruments without an id numbered after its largest id.
-Writes `<out>/live` (the live rows with those ids), `<out>/sim`, `<out>/score` (`window_ns` default 1 day) and
+`reconcile_backtrader(sim, live, out, ...)` / `reconcile_vectorbt(...)` / `reconcile_lean(...)`: a live arm whose every
+order is a simulator's or simulated fails `QT-CONFIG-001` unless `arms_as_given`; several venues need option `venue`.
+Without an instrument map the live log's ids and scales are used, instruments without an id numbered after its largest
+id. Writes `<out>/live` (the live rows with those ids), `<out>/sim`, `<out>/score` (`window_ns` default 1 day) and
 `reconcile.json` / `reconcile_orders.csv` with `kind = backtrader | vectorbt | lean`; `time_tol_ns` defaults to 0 with
 `timeframe` (bar resolution) and 60 s without. The spec's `live` inputs are the live log's table files, hashed into
 `run_id`. Below 50% pairing coverage, and for simulator instruments absent from the live log, the report warns.

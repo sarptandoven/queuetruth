@@ -443,6 +443,56 @@ def test_what_lean_emits_beyond_the_happy_path(w: Any) -> None:
     assert r.orders[3].fills[0].px == Decimal("61210.1234567890123")
 
 
+def _b36(n: int) -> str:
+    digits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    out = ""
+    while n:
+        n, r = divmod(n, 36)
+        out = digits[r] + out
+    return out
+
+
+def test_base_asset_fee_add_back_is_spot_crypto_only(w: Any) -> None:
+    """LEAN subtracts a base-asset fee from fillQuantity for SecurityType.Crypto (7) only: an inverse crypto future
+    (CryptoFuture, 11: BTCUSD with the fee in BTC) keeps its fill quantity, and so does a sell."""
+    assert lean._sid_security_type("BTCUSDT 18N") == 7
+    assert lean._sid_security_type(f"BTCUSD {_b36(1611)}") == 11
+    assert lean._sid_security_type("BTCUSDT") is None and lean._sid_security_type("X ???") is None
+    # an inverse future buy of 0.01 contracts, filled in full, the fee 0.00001 BTC: not added back
+    orders = _orders()
+    orders["1"]["securityType"] = 11
+    ev = _events()
+    ev[1] |= {"fillQuantity": 0.01, "fillPriceCurrency": "USD", "orderFeeCurrency": "BTC", "symbolValue": "BTCUSD"}
+    ev[0]["symbolValue"] = "BTCUSD"
+    orders["1"]["symbol"] = {"value": "BTCUSD", "id": f"BTCUSD {_b36(1611)}", "permtick": "BTCUSD"}
+    r = lean.read_lean([w({"orders": orders}), w(ev)], {})
+    f = r.orders[0].fills[0]
+    assert (f.qty, f.fee) == (Decimal("0.01"), None)
+    assert any(x.startswith("1 fill fee(s) in another currency") for x in r.warnings)
+    # events only: the type comes from the security identifier
+    fut = [dict(e, symbol=f"BTCUSD {_b36(1611)}") for e in ev[:2]]
+    assert lean.read_lean([w(fut)], {}).orders[0].fills[0].qty == Decimal("0.01")
+    spot = lean.read_lean([w(_events()[:2])], {})  # "BTCUSDT 18N": Crypto, added back
+    assert spot.orders[0].fills[0].qty == Decimal("0.01") and spot.orders[0].fills[0].fee == Decimal("0.61")
+    # an unknown security type: not added back
+    unknown = [dict(e, symbol="BTCUSDT") for e in _events()[:2]]
+    assert lean.read_lean([w(unknown)], {}).orders[0].fills[0].qty == Decimal("0.00999")
+    # a sell charged in the base asset: LEAN does not subtract it, nor does the importer add it
+    sell = _events()[2:4]
+    sell[1] |= {"orderFeeAmount": 0.00001, "orderFeeCurrency": "BTC"}
+    sr = lean.read_lean([w(sell)], {})
+    assert (sr.orders[0].fills[0].qty, sr.orders[0].fills[0].fee) == (Decimal("0.01"), None)
+
+
+def test_zero_fee_is_a_known_zero(w: Any) -> None:
+    """LEAN's default fee model writes orderFeeAmount 0 in USD: a known zero fee; only currency QCC means none."""
+    ev = _events()
+    ev[3] |= {"orderFeeAmount": 0, "orderFeeCurrency": "USDT"}
+    assert lean.read_lean([str(RESULT), w(ev)], {}).orders[1].fills[0].fee == Decimal(0)
+    ev[3]["orderFeeCurrency"] = "QCC"
+    assert lean.read_lean([str(RESULT), w(ev)], {}).orders[1].fills[0].fee is None
+
+
 def test_append_is_refused(tmp_path: Path) -> None:
     out = tmp_path / "s"
     qlive.import_sim("lean", [str(p) for p in SIM], out, instrument_map=str(IMAP), venue="binance")

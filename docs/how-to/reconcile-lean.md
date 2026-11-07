@@ -64,10 +64,11 @@ How the files are read:
 - An order below the lot size is rounded to quantity 0 and invalidated by LEAN (direction Hold). It is counted and
   left out.
 - Fees: LEAN charges the whole order's fee on the final `filled` event; partial fills carry none. A fee in the fill
-  price's currency is kept. A crypto buy charged in its base asset (LEAN's Binance fee model charges BTC on a
-  BTCUSDT buy) has that fee subtracted from `fillQuantity` by LEAN: the importer logs the gross quantity
-  (`fillQuantity` plus the fee) and the fee in the quote currency at the fill price. A fee in any other currency is
-  left out, with a warning.
+  price's currency is kept, a zero fee too. A spot crypto buy charged in its base asset (LEAN's Binance fee model
+  charges BTC on a BTCUSDT buy) has that fee subtracted from `fillQuantity` by LEAN: the importer logs the gross
+  quantity (`fillQuantity` plus the fee) and the fee in the quote currency at the fill price. LEAN does this for spot
+  crypto only, so a crypto future's fee in its base asset is not added back. A fee in any other currency is left
+  out, with a warning.
 - `Market`, `MarketOnOpen` and `MarketOnClose` are market orders, `Limit` a limit order at `limitPrice`,
   `StopMarket` and `TrailingStop` stop orders, `StopLimit` a stop-limit at `limitPrice`, and `LimitIfTouched` a
   stop-limit at `limitPrice` (as for Binance's `TAKE_PROFIT_LIMIT`). Option exercises and combo orders fail

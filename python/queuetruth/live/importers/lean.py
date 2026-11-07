@@ -38,7 +38,9 @@ message; an order invalidated after it rested keeps its `ack`). A fill-status ev
 `updateSubmitted` events are counted: the orders section holds the order's final price and quantity. An order LEAN
 rounded to quantity 0 and invalidated (below the lot size: quantity 0, direction Hold, status Invalid) is counted
 and left out. Fees: LEAN charges the whole fee on the final `filled` event. A fee in the fill price's currency is
-kept; a crypto buy charged in its base asset (`BinanceFeeModel` and similar) has that fee subtracted from
+kept (a zero fee too; only the null currency `QCC` means none); a spot crypto buy (security type Crypto, from
+`securityType` or the symbol's identifier) charged in its base asset (`BinanceFeeModel` and similar) has that fee
+subtracted from
 `fillQuantity` by LEAN (`BrokerageTransactionHandler.HandleOrderEvent`), so the gross quantity (`fillQuantity` +
 fee) is logged and the fee converted to the quote currency at the fill price; a fee in any other currency is left
 out (counted). Order types: Market, MarketOnOpen and MarketOnClose -> market, Limit -> limit at `limitPrice`,
@@ -213,6 +215,37 @@ def _symbol(v: Any, loc: str) -> str:
     return str(v).split()[0]
 
 
+#: `SecurityType` (Common/Global.cs): Crypto is 7. LEAN subtracts a base-asset fee from the fill quantity only for it.
+_CRYPTO = 7
+_SECURITY_TYPES = ("base", "equity", "option", "commodity", "forex", "future", "cfd", "crypto")
+
+
+def _sid_security_type(sid: Any) -> int | None:
+    """The `SecurityType` of a security identifier text (`BTCUSDT 18N`): its second word is the properties number in
+    base 36, and the security type is that number mod 100 (`SecurityIdentifier`); None when it cannot be read."""
+    if not isinstance(sid, str):
+        return None
+    parts = sid.split("|", 1)[0].split()
+    if len(parts) < 2:
+        return None
+    try:
+        return int(parts[1], 36) % 100
+    except ValueError:
+        return None
+
+
+def _security_type(v: Any, symbol: Any) -> int | None:
+    """`Order.securityType` (number or name), else the type encoded in the symbol's security identifier."""
+    if isinstance(v, bool):
+        v = None
+    if isinstance(v, (int, Decimal)) or (isinstance(v, str) and v.strip().isdigit()):
+        return int(Decimal(str(v).strip()))
+    if isinstance(v, str) and _norm(v) in _SECURITY_TYPES:
+        return _SECURITY_TYPES.index(_norm(v))
+    sid = _fields(symbol).get("id") if isinstance(symbol, dict) else symbol
+    return _sid_security_type(sid)
+
+
 def _tif(f: dict[str, Any], loc: str) -> str:
     props = f.get("properties")
     t = _fields(props).get("timeinforce") if isinstance(props, dict) else None
@@ -297,8 +330,8 @@ class _Event:
             vf = _fields(val) if isinstance(val, dict) else _fields(fee)
             amount, cur = vf.get("amount"), vf.get("currency")
         value = None if amount in (None, "") else _num(amount, "orderFeeAmount", loc)
-        if value is None or value == 0:
-            return None, None  # OrderFee.Zero (currency QCC): no fee on this event
+        if value is None or str(cur or "").upper() == _NO_FEE:
+            return None, None  # OrderFee.Zero (currency QCC, `Currencies.NullCurrency`): no fee on this event
         return value, (None if cur in (None, "") else str(cur))
 
 
@@ -422,9 +455,9 @@ def _zero_invalid(f: dict[str, Any], qty_key: str, status: str | None, loc: str)
     return (q is None or q == 0) and status == "invalid"
 
 
-def _order_from_record(rec: Record) -> tuple[int, SimOrder | None, str, bool]:
-    """(order id, order or None for a zero-quantity Invalid order, the orders section's status name, contingent)
-    of one `Order` object."""
+def _order_from_record(rec: Record) -> tuple[int, SimOrder | None, str, bool, int | None]:
+    """(order id, order or None for a zero-quantity Invalid order, the orders section's status name, contingent,
+    security type) of one `Order` object."""
     loc = rec.location
     if not isinstance(rec.obj, dict):
         raise input_error(loc, "an order must be an object")
@@ -436,7 +469,7 @@ def _order_from_record(rec: Record) -> tuple[int, SimOrder | None, str, bool]:
         raise input_error(loc, "order without type")
     status = _enum(f.get("status", 0), _STATUS_NAMES, "OrderStatus", loc)
     if _zero_invalid(f, "quantity", status, loc):
-        return oid, None, status, False
+        return oid, None, status, False, None
     otype = _order_type(f["type"], loc)
     qty_raw = _num(f.get("quantity"), "quantity", loc)
     if f.get("direction") is not None:
@@ -449,7 +482,7 @@ def _order_from_record(rec: Record) -> tuple[int, SimOrder | None, str, bool]:
     t = f.get("createdtime") if f.get("time") is None else f.get("time")
     submit = _time(t, "time", loc)
     o = _new_order(str(oid), _symbol(f.get("symbol"), loc), side, otype, _tif(f, loc), qty, f, rec, submit)
-    return oid, o, status, _contingent(f)
+    return oid, o, status, _contingent(f), _security_type(f.get("securitytype"), f.get("symbol"))
 
 
 def _order_from_events(evs: list[_Event]) -> SimOrder | None:
@@ -475,10 +508,11 @@ def _order_from_events(evs: list[_Event]) -> SimOrder | None:
                       (first.ts, first.prec))  # fmt: skip
 
 
+_NO_FEE = "QCC"
 _EXPIRED = "the order has expired"  # BacktestingBrokerage: Day and GoodTilDate orders past their expiry
 
 
-def _apply_events(o: SimOrder, evs: list[_Event], run: SimRun, fees: dict[str, int]) -> None:
+def _apply_events(o: SimOrder, evs: list[_Event], run: SimRun, fees: dict[str, int], security_type: int | None) -> None:
     for ev in evs:
         f, loc = ev.f, ev.rec.location
         st = ev.status
@@ -500,11 +534,12 @@ def _apply_events(o: SimOrder, evs: list[_Event], run: SimRun, fees: dict[str, i
                 raise input_error(loc, "fillPrice must be positive")
             fee, cur = ev.fee()
             pcur = None if f.get("fillpricecurrency") in (None, "") else str(f["fillpricecurrency"])
-            if fee is not None and cur is not None and pcur is not None and cur != pcur:
+            if fee and cur is not None and pcur is not None and cur != pcur:
                 sym = ev.symbol() if (f.get("symbolvalue") or f.get("symbol")) else o.instrument
-                if o.side == "buy" and sym.upper() == f"{cur}{pcur}".upper():
-                    # a crypto buy charged in the base asset: LEAN subtracts the fee from fillQuantity
-                    # (BrokerageTransactionHandler.HandleOrderEvent), so the gross quantity is the sum
+                if o.side == "buy" and security_type == _CRYPTO and sym.upper() == f"{cur}{pcur}".upper():
+                    # a spot crypto buy charged in the base asset: LEAN subtracts the fee from fillQuantity
+                    # (BrokerageTransactionHandler.HandleOrderEvent, SecurityType.Crypto only), so the gross
+                    # quantity is the sum
                     q += fee
                     fee *= px
                     fees["base"] += 1
@@ -645,10 +680,10 @@ def read_lean(paths: list[str], opts: dict[str, Any]) -> SimRun:
     zero = 0
     contingent = 0
     if order_recs:
-        orders: dict[int, tuple[SimOrder, str, str]] = {}
+        orders: dict[int, tuple[SimOrder, str, str, int | None]] = {}
         seen_ids: set[int] = set()
         for rec in order_recs:
-            oid, o, status, cont = _order_from_record(rec)
+            oid, o, status, cont, sectype = _order_from_record(rec)
             if oid in seen_ids:
                 raise input_error(rec.location, f"order id {oid} twice in the orders section")
             seen_ids.add(oid)
@@ -657,7 +692,7 @@ def read_lean(paths: list[str], opts: dict[str, Any]) -> SimRun:
                 by_order.pop(oid, None)
                 continue
             contingent += cont
-            orders[oid] = (o, status, rec.location)
+            orders[oid] = (o, status, rec.location, sectype)
         stray = sorted(set(by_order) - seen_ids)
         if stray:
             ev = by_order[stray[0]][0]
@@ -667,8 +702,8 @@ def read_lean(paths: list[str], opts: dict[str, Any]) -> SimRun:
                 "and the order-events file come from different backtests?",
             )
         for oid in sorted(orders):
-            o, status, loc = orders[oid]
-            _apply_events(o, by_order.get(oid, []), run, fees)
+            o, status, loc, sectype = orders[oid]
+            _apply_events(o, by_order.get(oid, []), run, fees, sectype)
             _check_fills(o, by_order.get(oid, []))
             _check_status(oid, o, status, loc)
             run.orders.append(o)
@@ -683,7 +718,8 @@ def read_lean(paths: list[str], opts: dict[str, Any]) -> SimRun:
             if o is None:
                 zero += 1
                 continue
-            _apply_events(o, evs, run, fees)
+            sym = evs[0].f.get("symbol")
+            _apply_events(o, evs, run, fees, _security_type(evs[0].f.get("securitytype"), sym))
             _check_fills(o, evs)
             run.orders.append(o)
     for o in run.orders:
