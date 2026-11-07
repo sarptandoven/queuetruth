@@ -231,8 +231,9 @@ def _clustered_sub(cl: si.Clustered | None) -> str:
 
 
 def verdict(ctx: Ctx) -> Raw | None:
-    """Scorecard headline cards: signed bias, the cluster-robust primary discordance test (A10), plain McNemar as
-    secondary, coverage, equivalence; fills-only sources show the blocked statistics as not computable."""
+    """Scorecard headline cards (the fill-rate headline, then the P&L gap): signed bias, the cluster-robust primary
+    discordance test (A10), plain McNemar as secondary, coverage, equivalence; fills-only sources show the blocked
+    statistics as not computable."""
     runs = ctx.runs_with(ScorecardSummary)
     if not runs:
         return None
@@ -251,6 +252,8 @@ def verdict(ctx: Ctx) -> Raw | None:
             "no_significant_bias": "no significant bias",
         }[b.direction]
         dc = s.mcnemar.b + s.mcnemar.c
+        # the P&L gap under the fill-rate headline; left out when blocked (it would describe the blocked run)
+        pnl = [] if si.blocked_by_own_orders(s) else si.pnl_gaps(run, s)
         nc = "not computable: no order scored" if unscored else si.NOT_COMPUTABLE
         tiles = [
             _tile(
@@ -287,6 +290,7 @@ def verdict(ctx: Ctx) -> Raw | None:
             '<div class="verdict">',
             f'<div class="kicker">Scorecard · {F.esc(_run_label(run, s))} · sim arm: {F.esc(sim_label(s))}</div>',
             f'<p class="headline">{F.esc(si.headline_text(s))}</p>',
+            *(f'<p class="headline">P&amp;L: {F.esc(g.headline)}</p>' for g in pnl),
             f"<p>{badge(st, gate_label)} " + ("" if fo else f"{badge(INFO, direction)}") + "</p>",
             f'<div class="tiles">{"".join(tiles)}</div>',
         ]

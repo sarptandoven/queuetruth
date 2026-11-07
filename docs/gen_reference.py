@@ -69,8 +69,8 @@ section below is the command's own `--help` text.
   to stdout: the summary on exit 0 or 1, a `qt.error` document on exit 2 (see [Error codes](errors.md)). Logs,
   warnings and progress go to stderr.
 - Human output is answer-first: `zoo` prints the leaderboard of fill-rate bias by horizon (sorted at
-  `--sort-horizon`, default 60 s) and one plain sentence per model; `score` a `RESULT:` line, the equivalence result,
-  order counts, gate status and the 2x2 table (`--verbose` for every statistic); `calibrate` and `calibrate-live` the
+  `--sort-horizon`, default 60 s) and one plain sentence per model; `score` a `RESULT:` line, a `P&L:` line, the
+  equivalence result, order counts, gate status and the 2x2 table (`--verbose` for every statistic); `calibrate` and `calibrate-live` the
   fitted value, the held-out comparison with the default and a trust verdict; `why` the order, its event table and a
   one-sentence conclusion. The full document is always in the output directory and in `--format json`.
 - `queuetruth-core` runs the native commands; Python-only commands exit 2 with `QT-USAGE-001` there.
