@@ -61,5 +61,8 @@ def test_day_problem_names_each_unusable_day(tmp_path: Path) -> None:
     assert atlas.day_problem(day("ok", 2, pa.table({**rows, "exact_ok": [True, False]}))) is None
     assert atlas.day_problem(day("none", 0, pa.table({}))).startswith("no valid unit (0 of 2")
     assert atlas.day_problem(day("empty", 1, pa.table({}))).startswith("no cells")
-    flagged = atlas.day_problem(day("flagged", 2, pa.table({**rows, "exact_ok": [False, False]})))
-    assert flagged.startswith("every symbol-day is flagged")
+    all_flagged = day("flagged", 2, pa.table({**rows, "exact_ok": [False, False]}))
+    assert atlas.day_problem(all_flagged).startswith("every symbol-day is flagged")
+    # under --flag-policy label a fully flagged day still makes a (labelled) atlas; an empty one never does
+    assert atlas.day_problem(all_flagged, "label") is None
+    assert atlas.day_problem(tmp_path / "empty", "label").startswith("no cells")

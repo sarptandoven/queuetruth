@@ -151,7 +151,7 @@ jobs:
           have=false
           # a failed listing stops the step (assigned first, not tested in an `if`), so it never reads as "not kept"
           kept="$(bash scripts/nightly/release_assets.sh names "$RELEASE")"
-          if grep -qx "${PREFIX}day-$DATE.tar.gz" <<< "$kept"; then
+          if grep -qxF "${PREFIX}day-$DATE.tar.gz" <<< "$kept"; then
             have=true
           fi
           run_day=true

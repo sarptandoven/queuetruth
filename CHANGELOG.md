@@ -20,8 +20,9 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 - `scripts/scale/local_day.py --no-combine` stops after the reduce. `atlas.yml` and the backfill use it, since their
   site step combines the kept days anyway; it saves about 11 minutes per IEX day.
-- `local_day.py` exits non-zero for a day no atlas can use: no valid unit, no cells, or every symbol-day flagged or
-  not trading (`atlas.day_problem`, recorded as `problem` in `local_day.json`). The workflows keep only a day that
+- `local_day.py` exits non-zero for a day no atlas can use: no valid unit, no cells, or (under `--flag-policy
+  exclude`, the default) every symbol-day flagged or not trading (`atlas.day_problem`, recorded as `problem` in
+  `local_day.json`). The workflows keep only a day that
   exits 0 and do not run a kept day again, so such a day used to be stopped only by the single-day combine failing;
   now it is stopped with or without the combine. `atlas.py combine` names a day without valid units or cells.
 - `atlas.yml`: a failed `iex_latest.py` lookup fails its step (`pipefail`; the `tee` used to hide it).

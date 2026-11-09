@@ -331,7 +331,7 @@ def main(argv: list[str] | None = None) -> int:
         stage("reduce", t0, **r)
         # a day no atlas can use must not look finished: the workflows keep (upload) a day when this exits 0, and a
         # kept day is not run again, so an empty one would block every later combine of its window
-        problem = atlas.day_problem(out / "day")
+        problem = atlas.day_problem(out / "day", a.flag_policy)
         if problem is not None:
             rep["problem"] = problem
             raise SystemExit(f"local_day: the day cannot go into an atlas: {problem}")

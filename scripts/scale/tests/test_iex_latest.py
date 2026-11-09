@@ -89,6 +89,13 @@ def test_count_lists_the_newest_sessions_and_leaves_kept_days_out(
     monkeypatch.setattr(L, "head", _probe({})[0])
     assert L.main(["--today", MON.isoformat(), "--count", "2"]) == 1
     assert capsys.readouterr().out.splitlines() == ["days=[]", "n=0"]
-    for bad in (["--count", "0"], ["--count", "61"], ["--count", "2", "--date", "2026-10-30"], ["--rebuild"]):
+    for bad in (
+        ["--count", "0"],
+        ["--count", "61"],
+        ["--count", "2", "--date", "2026-10-30"],
+        ["--rebuild"],
+        ["--lookback", "0"],
+        ["--count", "2", "--lookback", "-3"],
+    ):
         with pytest.raises(SystemExit):
             L.main(bad)

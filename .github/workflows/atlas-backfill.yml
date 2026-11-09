@@ -54,6 +54,19 @@ env:
   ATLAS_RELEASE: atlas-days
 
 jobs:
+  # a run from a branch or a tag does nothing (plan is skipped): say so instead of finishing silently
+  branch:
+    if: github.repository == 'sarptandoven/queuetruth' && github.ref_name != github.event.repository.default_branch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: the backfill runs only from the default branch
+        env:
+          REF: ${{ github.ref_name }}
+        run: |
+          echo "::error::the backfill writes the production atlas-days release: run it from the default branch, not $REF"
+          exit 1
+
   plan:
     # the production release and site: never from a branch
     if: github.repository == 'sarptandoven/queuetruth' && github.ref_name == github.event.repository.default_branch
@@ -145,7 +158,7 @@ jobs:
         run: |
           kept="$(bash scripts/nightly/release_assets.sh names "$ATLAS_RELEASE")"
           run=true
-          if [ "$REBUILD" != true ] && grep -qx "day-$DATE.tar.gz" <<< "$kept"; then run=false; fi
+          if [ "$REBUILD" != true ] && grep -qxF "day-$DATE.tar.gz" <<< "$kept"; then run=false; fi
           echo "run=$run" >> "$GITHUB_OUTPUT"
           echo "day $DATE: run it: $run"
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master 2026-10-16
@@ -173,7 +186,7 @@ jobs:
           make develop
       # as atlas.yml: local_day.py lowers --workers to two IEX units of 6 GiB on a 16 GB runner; the site step of
       # atlas.yml combines the kept days, so the single-day combine is skipped. local_day.py exits non-zero for a day
-      # no atlas can use (no valid unit, no cells, every symbol-day flagged), which is then not kept.
+      # no atlas can use (no valid unit, no cells, every symbol-day flagged under exclude), which is then not kept.
       - name: run the day (stream, split, units, reduce)
         if: steps.have.outputs.run == 'true'
         env:

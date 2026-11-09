@@ -64,7 +64,8 @@ hold yet as a job matrix, each day runs on its own runner (up to `max_parallel` 
 hours for a 10 to 15 GB file; one that fails or times out (the job limit is 6 hours) is not kept, and running the
 backfill again runs only the days still missing. It runs only from the default branch, since it writes the
 production release, and each day checks again that it is still missing before it runs. `local_day.py` exits non-zero
-for a day no atlas can use (no valid unit, no cells, or every symbol-day flagged; `atlas.day_problem`), so such a day
+for a day no atlas can use (no valid unit, no cells, or every symbol-day flagged under `--flag-policy exclude`;
+`atlas.day_problem`), so such a day
 is never kept, and `atlas.py combine` names a day without valid units or cells instead of failing inside.
 
 **Nasdaq sample days on a runner.** A manual run with `venue: nasdaq` and `nasdaq_day: MMDDYYYY` runs that

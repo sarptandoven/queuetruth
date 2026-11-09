@@ -233,9 +233,10 @@ def day_venue(day: dict[str, Any]) -> str:
     return "iex" if (day.get("source") or {}).get("format") == "iex_deep_plus" else "nasdaq"
 
 
-def day_problem(day_dir: Path) -> str | None:
-    """Why a reduced day cannot go into an atlas, or None: no valid unit, no cells (every unit failed), or no
-    symbol-day that passed the replay checks and traded normally (nothing would survive `--flag-policy exclude`)."""
+def day_problem(day_dir: Path, flag_policy: str = "exclude") -> str | None:
+    """Why a reduced day cannot go into an atlas, or None: no valid unit, no cells (every unit failed), or, under
+    `flag_policy` "exclude", no symbol-day that passed the replay checks and traded normally (nothing would survive).
+    Under "label" a fully flagged day still makes a labelled atlas, which is how to see why everything was flagged."""
     import pyarrow.compute as pc
     import pyarrow.parquet as pq
 
@@ -245,7 +246,7 @@ def day_problem(day_dir: Path) -> str | None:
     cells = pq.read_table(day_dir / "cells_all.parquet")
     if not cells.num_rows or "symbol" not in cells.column_names:
         return "no cells: no unit produced block statistics"
-    if "exact_ok" in cells.column_names and not pc.any(cells["exact_ok"]).as_py():
+    if flag_policy == "exclude" and "exact_ok" in cells.column_names and not pc.any(cells["exact_ok"]).as_py():
         return "every symbol-day is flagged or not trading: nothing passes --flag-policy exclude"
     return None
 
