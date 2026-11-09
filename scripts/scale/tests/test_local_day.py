@@ -41,3 +41,25 @@ def test_no_combine_refuses_a_site(capsys) -> None:
     with pytest.raises(SystemExit):
         D.main(["--source", "iex", "--date", "2026-10-09", "--no-combine", "--site"])
     assert "--no-combine" in capsys.readouterr().err
+
+
+def test_day_problem_names_each_unusable_day(tmp_path: Path) -> None:
+    import json
+
+    import atlas
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    def day(name: str, units_valid: int, cells: pa.Table) -> Path:
+        d = tmp_path / name
+        d.mkdir()
+        (d / "day_manifest.json").write_text(json.dumps({"units_valid": units_valid, "units_planned": 2}))
+        pq.write_table(cells, d / "cells_all.parquet")
+        return d
+
+    rows = {"symbol": ["A", "B"], "n": [3, 4]}
+    assert atlas.day_problem(day("ok", 2, pa.table({**rows, "exact_ok": [True, False]}))) is None
+    assert atlas.day_problem(day("none", 0, pa.table({}))).startswith("no valid unit (0 of 2")
+    assert atlas.day_problem(day("empty", 1, pa.table({}))).startswith("no cells")
+    flagged = atlas.day_problem(day("flagged", 2, pa.table({**rows, "exact_ok": [False, False]})))
+    assert flagged.startswith("every symbol-day is flagged")

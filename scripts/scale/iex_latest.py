@@ -97,11 +97,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--kept", type=argparse.FileType("r"), help="with --count: kept asset names, one per line")
     ap.add_argument("--rebuild", action="store_true", help="with --count: run kept days again")
     a = ap.parse_args(argv)
+    if a.lookback is not None and a.lookback < 1:
+        ap.error("--lookback takes 1 day or more")
     today = a.today or dt.datetime.now(dt.UTC).date()
     if a.count is not None:
         if a.date is not None or not 1 <= a.count <= 60:
             ap.error("--count takes 1 to 60 sessions and no --date")
-        lookback = a.lookback or 2 * a.count + 14
+        lookback = a.lookback if a.lookback is not None else 2 * a.count + 14
         found = newest(today, a.count, lookback)
         if len(found) < a.count:
             print(f"iex_latest: {len(found)} of {a.count} sessions found in {lookback} days", file=sys.stderr)
@@ -111,7 +113,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if found else 1
     if a.kept is not None or a.rebuild:
         ap.error("--kept and --rebuild go with --count")
-    a.lookback = a.lookback or 10
+    if a.lookback is None:
+        a.lookback = 10
     found = find(today, a.lookback, a.date)
     if found is None:
         what = a.date.isoformat() if a.date else f"the {a.lookback} days before {today}"

@@ -281,3 +281,37 @@ def test_url_split_resumes_after_a_dropped_connection(tmp_path: Path) -> None:
     assert ranges[0] is None and ranges[1] == f"bytes={len(body) // 2}-"
     assert [b["content_sha256"] for b in got["buckets"]] == [b["content_sha256"] for b in want["buckets"]]
     assert got["ok"] and got["stream"]["messages"] == want["stream"]["messages"]
+
+
+@pytest.mark.requires_core
+def test_a_day_no_atlas_can_use_is_never_finished(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A day whose units all fail must not exit 0, with or without --no-combine: the workflows keep (upload) a day
+    that exits 0 and do not run a kept day again, and an empty day would break every later combine of its window."""
+    import atlas
+    import local_day
+    import unit
+
+    src = tmp_path / "20261009_IEXTP1_DPLS1.0.pcap.gz"
+    F.write_gz(src, iex_capture())
+    common = ["--source", "iex", "--date", DATE, "--input", str(src), "--buckets", "2", "--workers", "1",
+              "--threads", "1", "--min-free-gib", "0"]  # fmt: skip
+    assert local_day.main([*common, "--out", str(tmp_path / "good"), "--no-combine"]) == 0
+    good = tmp_path / "good" / MMDD / "day"
+    assert atlas.day_problem(good) is None
+    rep = json.loads((tmp_path / "good" / MMDD / "local_day.json").read_text())
+    assert "combine" not in rep["stages"] and "reduce" in rep["stages"]
+
+    def boom(*a, **k):
+        raise RuntimeError("unit failed")
+
+    monkeypatch.setattr(unit, "run_unit", boom)  # the unit pool forks, so the workers see the patch
+    for extra in (["--no-combine"], []):
+        out = tmp_path / f"bad{len(extra)}"
+        with pytest.raises(SystemExit, match="cannot go into an atlas: no valid unit"):
+            local_day.main([*common, "--out", str(out), *extra])
+        assert "no valid unit" in json.loads((out / MMDD / "local_day.json").read_text())["problem"]
+    bad = tmp_path / "bad1" / MMDD / "day"
+    assert atlas.day_problem(bad).startswith("no valid unit")
+    # had such a day been kept, combine names it instead of failing deep inside
+    with pytest.raises(SystemExit, match=f"day {MMDD} .* has no valid unit or no cells"):
+        atlas.combine([good, bad], tmp_path / "multi", bootstrap_b=20, flag_policy="exclude")

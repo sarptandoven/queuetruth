@@ -329,6 +329,12 @@ def main(argv: list[str] | None = None) -> int:
         t0 = time.perf_counter()
         r = atlas.reduce_day(plan, shards, out / "day")
         stage("reduce", t0, **r)
+        # a day no atlas can use must not look finished: the workflows keep (upload) a day when this exits 0, and a
+        # kept day is not run again, so an empty one would block every later combine of its window
+        problem = atlas.day_problem(out / "day")
+        if problem is not None:
+            rep["problem"] = problem
+            raise SystemExit(f"local_day: the day cannot go into an atlas: {problem}")
         if not a.no_combine:
             t0 = time.perf_counter()
             r = atlas.combine([out / "day"], out / "atlas", flag_policy=a.flag_policy)

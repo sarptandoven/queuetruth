@@ -13,12 +13,18 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   release does not hold yet (`--rebuild` keeps them in) as a job matrix; each day runs on its own runner, up to
   `max_parallel` at a time, with the same steps as `atlas.yml`'s IEX path and is kept on the release; then `atlas.yml`
   is dispatched with `site_only` to rebuild the site over the newest 20 kept days. A day that fails or times out is
-  not kept and runs again on the next backfill.
+  not kept and runs again on the next backfill. It runs only from the default branch, takes 1 to 20 sessions and 1 to
+  20 parallel days, and each day checks again that it is still missing before it runs.
 
 ### Changed
 
 - `scripts/scale/local_day.py --no-combine` stops after the reduce. `atlas.yml` and the backfill use it, since their
   site step combines the kept days anyway; it saves about 11 minutes per IEX day.
+- `local_day.py` exits non-zero for a day no atlas can use: no valid unit, no cells, or every symbol-day flagged or
+  not trading (`atlas.day_problem`, recorded as `problem` in `local_day.json`). The workflows keep only a day that
+  exits 0 and do not run a kept day again, so such a day used to be stopped only by the single-day combine failing;
+  now it is stopped with or without the combine. `atlas.py combine` names a day without valid units or cells.
+- `atlas.yml`: a failed `iex_latest.py` lookup fails its step (`pipefail`; the `tee` used to hide it).
 
 ## [0.3.0] - 2026-11-07
 

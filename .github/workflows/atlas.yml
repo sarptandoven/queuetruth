@@ -128,6 +128,7 @@ jobs:
             } | tee -a "$GITHUB_OUTPUT"
             exit 0
           fi
+          set -o pipefail
           args=()
           if [ -n "$DATE_INPUT" ]; then args=(--date "$DATE_INPUT"); fi
           python3 scripts/scale/iex_latest.py "${args[@]}" | tee -a "$GITHUB_OUTPUT"
