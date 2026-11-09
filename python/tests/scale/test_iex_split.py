@@ -9,6 +9,7 @@ import gzip
 import json
 import struct
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import iex_split
@@ -304,7 +305,10 @@ def test_a_day_no_atlas_can_use_is_never_finished(tmp_path: Path, monkeypatch: p
     def boom(*a, **k):
         raise RuntimeError("unit failed")
 
-    monkeypatch.setattr(unit, "run_unit", boom)  # the unit pool forks, so the workers see the patch
+    # units run in threads here, so they see the patched run_unit whatever the platform's process start method
+    # (macOS spawns, and a spawned worker would import an unpatched unit module)
+    monkeypatch.setattr(local_day, "ProcessPoolExecutor", ThreadPoolExecutor)
+    monkeypatch.setattr(unit, "run_unit", boom)
     for extra in (["--no-combine"], []):
         out = tmp_path / f"bad{len(extra)}"
         with pytest.raises(SystemExit, match="cannot go into an atlas: no valid unit"):
