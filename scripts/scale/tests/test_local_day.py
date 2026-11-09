@@ -5,6 +5,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import local_day as D
@@ -32,3 +34,35 @@ def test_sample_budget_follows_the_workers_that_fit() -> None:
     assert D.scaled_budget(10.0, 4, 4) == 10.0 and D.scaled_budget(None, 4, 1) is None
     # a budget of 0 is a budget (one symbol per tier), not "no budget"
     assert D.scaled_budget(0.0, 4, 2) == 0.0
+
+
+def test_no_combine_refuses_a_site(capsys) -> None:
+    # the site is built from the single-day combine, so the two cannot go together; refused before any work
+    with pytest.raises(SystemExit):
+        D.main(["--source", "iex", "--date", "2026-10-09", "--no-combine", "--site"])
+    assert "--no-combine" in capsys.readouterr().err
+
+
+def test_day_problem_names_each_unusable_day(tmp_path: Path) -> None:
+    import json
+
+    import atlas
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    def day(name: str, units_valid: int, cells: pa.Table) -> Path:
+        d = tmp_path / name
+        d.mkdir()
+        (d / "day_manifest.json").write_text(json.dumps({"units_valid": units_valid, "units_planned": 2}))
+        pq.write_table(cells, d / "cells_all.parquet")
+        return d
+
+    rows = {"symbol": ["A", "B"], "n": [3, 4]}
+    assert atlas.day_problem(day("ok", 2, pa.table({**rows, "exact_ok": [True, False]}))) is None
+    assert atlas.day_problem(day("none", 0, pa.table({}))).startswith("no valid unit (0 of 2")
+    assert atlas.day_problem(day("empty", 1, pa.table({}))).startswith("no cells")
+    all_flagged = day("flagged", 2, pa.table({**rows, "exact_ok": [False, False]}))
+    assert atlas.day_problem(all_flagged).startswith("every symbol-day is flagged")
+    # under --flag-policy label a fully flagged day still makes a (labelled) atlas; an empty one never does
+    assert atlas.day_problem(all_flagged, "label") is None
+    assert atlas.day_problem(tmp_path / "empty", "label").startswith("no cells")

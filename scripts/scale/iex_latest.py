@@ -8,13 +8,19 @@ IEX publishes each session's DEEP+ capture the next morning (UTC) at a fixed pub
 listed anonymously, so the newest day is found by asking for each weekday's file, newest first, from the day before
 `--today` (default: the current UTC date) back `--lookback` days (holidays have no file). With `--date`, that day
 only. Prints `date=`, `url=` and `bytes=` lines (the `$GITHUB_OUTPUT` format); exit 1 when no file is found.
-Using the data means accepting IEX's Historical Data Terms of Use (`docs/data-and-licensing.md`).
+
+With `--count N` (the backfill, `.github/workflows/atlas-backfill.yml`) it finds the N newest published sessions
+instead and prints `days=` (a JSON list of `{"date", "url", "bytes"}`, newest first, for a job matrix) and `n=`.
+`--kept FILE` (asset names, one per line, as `release_assets.sh names` prints them) leaves out the sessions whose
+`day-<date>.tar.gz` is already kept, unless `--rebuild`; they still count towards N. Using the data means accepting
+IEX's Historical Data Terms of Use (`docs/data-and-licensing.md`).
 """
 
 from __future__ import annotations
 
 import argparse
 import datetime as dt
+import json
 import sys
 import urllib.error
 import urllib.request
@@ -58,13 +64,57 @@ def find(
     return None
 
 
+def newest(
+    today: dt.date, count: int, lookback: int, probe: Callable[[str], int | None] | None = None
+) -> list[tuple[dt.date, str, int]]:
+    """The `count` newest published days before `today` (newest first, at most `lookback` days back)."""
+    probe = probe or head
+    out: list[tuple[dt.date, str, int]] = []
+    for d in candidates(today, lookback):
+        if len(out) == count:
+            break
+        size = probe(url_of(d))
+        if size:
+            out.append((d, url_of(d), size))
+    return out
+
+
+def backfill(found: list[tuple[dt.date, str, int]], kept: set[str], rebuild: bool) -> list[dict[str, object]]:
+    """The matrix rows of the days to run: every found day, less those already kept (unless `rebuild`)."""
+    return [
+        {"date": d.isoformat(), "url": url, "bytes": size}
+        for d, url, size in found
+        if rebuild or f"day-{d.isoformat()}.tar.gz" not in kept
+    ]
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--date", type=dt.date.fromisoformat, help="this session date only (YYYY-MM-DD)")
     ap.add_argument("--today", type=dt.date.fromisoformat, help="search back from this date (default: UTC today)")
-    ap.add_argument("--lookback", type=int, default=10)
+    ap.add_argument("--lookback", type=int, help="calendar days to search back (default 10; with --count, 2N + 14)")
+    ap.add_argument("--count", type=int, help="the N newest published sessions, as a job matrix (the backfill)")
+    ap.add_argument("--kept", type=argparse.FileType("r"), help="with --count: kept asset names, one per line")
+    ap.add_argument("--rebuild", action="store_true", help="with --count: run kept days again")
     a = ap.parse_args(argv)
+    if a.lookback is not None and a.lookback < 1:
+        ap.error("--lookback takes 1 day or more")
     today = a.today or dt.datetime.now(dt.UTC).date()
+    if a.count is not None:
+        if a.date is not None or not 1 <= a.count <= 60:
+            ap.error("--count takes 1 to 60 sessions and no --date")
+        lookback = a.lookback if a.lookback is not None else 2 * a.count + 14
+        found = newest(today, a.count, lookback)
+        if len(found) < a.count:
+            print(f"iex_latest: {len(found)} of {a.count} sessions found in {lookback} days", file=sys.stderr)
+        kept = {line.strip() for line in a.kept} if a.kept else set()
+        rows = backfill(found, kept, a.rebuild)
+        print(f"days={json.dumps(rows, separators=(',', ':'))}\nn={len(rows)}")
+        return 0 if found else 1
+    if a.kept is not None or a.rebuild:
+        ap.error("--kept and --rebuild go with --count")
+    if a.lookback is None:
+        a.lookback = 10
     found = find(today, a.lookback, a.date)
     if found is None:
         what = a.date.isoformat() if a.date else f"the {a.lookback} days before {today}"

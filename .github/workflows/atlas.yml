@@ -128,6 +128,7 @@ jobs:
             } | tee -a "$GITHUB_OUTPUT"
             exit 0
           fi
+          set -o pipefail
           args=()
           if [ -n "$DATE_INPUT" ]; then args=(--date "$DATE_INPUT"); fi
           python3 scripts/scale/iex_latest.py "${args[@]}" | tee -a "$GITHUB_OUTPUT"
@@ -150,7 +151,7 @@ jobs:
           have=false
           # a failed listing stops the step (assigned first, not tested in an `if`), so it never reads as "not kept"
           kept="$(bash scripts/nightly/release_assets.sh names "$RELEASE")"
-          if grep -qx "${PREFIX}day-$DATE.tar.gz" <<< "$kept"; then
+          if grep -qxF "${PREFIX}day-$DATE.tar.gz" <<< "$kept"; then
             have=true
           fi
           run_day=true
@@ -191,7 +192,8 @@ jobs:
           make develop
       # local_day.py lowers --workers to what memory holds per unit: two IEX units of 6 GiB on a 16 GB runner; four
       # Nasdaq units of 3 GiB, which smaller units (--unit-core-s 100) keep within (runner_budget.py). With fewer
-      # workers than asked, local_day.py shrinks the Nasdaq sample budget in proportion before planning.
+      # workers than asked, local_day.py shrinks the Nasdaq sample budget in proportion before planning. The site step
+      # combines the kept days, so the single-day combine (about 11 minutes for an IEX day) is skipped.
       - name: run the day (stream, split, units, reduce)
         if: steps.have.outputs.run_day == 'true'
         env:
@@ -207,10 +209,10 @@ jobs:
             case "$MMDD" in 12302019 | 01302020) ;; *) url=(--url "$URL") ;; esac
             uv run --frozen --no-sync python scripts/scale/local_day.py --source itch --date "$MMDD" "${url[@]}" \
               --out .atlas/run --workers 4 --threads 1 --min-free-gib 2 --unit-core-s "$NASDAQ_UNIT_CORE_S" \
-              --unit-mem-gib "$NASDAQ_UNIT_MEM_GIB" --sample-budget-core-h "$NASDAQ_BUDGET_CORE_H"
+              --unit-mem-gib "$NASDAQ_UNIT_MEM_GIB" --sample-budget-core-h "$NASDAQ_BUDGET_CORE_H" --no-combine
           else
             uv run --frozen --no-sync python scripts/scale/local_day.py --source iex --date "$DATE" --url "$URL" \
-              --out .atlas/run --workers 4 --threads 1 --min-free-gib 2
+              --out .atlas/run --workers 4 --threads 1 --min-free-gib 2 --no-combine
           fi
           day_dir=".atlas/run/$(date -d "$DATE" +%m%d%Y)"
           tar -C "$day_dir/day" -czf "${PREFIX}day-$DATE.tar.gz" .

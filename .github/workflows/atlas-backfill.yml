@@ -1,0 +1,228 @@
+# Backfill of the public Fill-Realism Atlas (ROADMAP W1): runs the newest IEX DEEP+ sessions the `atlas-days` release
+# does not hold yet, one runner per day and up to max_parallel at a time, with the same steps as atlas.yml's IEX path
+# (scripts/scale/local_day.py: stream, split, units, reduce), keeps each reduced day on the release, then dispatches
+# atlas.yml with site_only so the site is rebuilt over the newest ATLAS_WINDOW kept days. atlas.yml adds one day per
+# session after that, so this is for filling the window at once (a new atlas, or after a gap), not for daily use.
+# It runs only from the default branch, since it writes the production atlas-days release.
+#
+# A day takes 3 to 4 hours on a hosted runner for a 10 to 15 GB IEX file (split about 6 min per GB, units about as
+# long again); a very large file can come near the 6 hour job limit, and a day that fails or times out is simply not
+# kept: run the backfill again (kept days are skipped) or the day alone with atlas.yml. The days run from the same
+# commit, which every kept day records (day_manifest.json builds), so verify_unit.py re-runs any unit at that commit.
+# Manual only; actions are pinned by commit SHA (tag in the trailing comment), as in atlas.yml.
+#
+# Using IEX's data means accepting IEX's Historical Data Terms of Use; pages show aggregates only and carry IEX's
+# attribution (docs/data-and-licensing.md).
+name: atlas-backfill
+
+on:
+  workflow_dispatch:
+    inputs:
+      sessions:
+        description: "Fill the newest N IEX sessions, 1 to 20 (the site shows the newest 20); kept days are skipped"
+        required: true
+        default: "20"
+      max_parallel:
+        description: "Days run at the same time (one runner each), 1 to 20"
+        required: true
+        default: "10"
+      rebuild:
+        description: "Run the days again even when the atlas-days release already has them"
+        type: boolean
+        default: false
+      publish:
+        description: "Deploy the rebuilt site to GitHub Pages (needs Pages turned on)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+# one backfill at a time. atlas.yml keeps its own groups: each backfill day checks again that it is still missing
+# before it runs, so the two only overlap on a day the scheduled run starts while that day's backfill job runs
+concurrency:
+  group: atlas-backfill
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  UV_PYTHON_DOWNLOADS: never
+  UV_VERSION: "0.11.31"
+  PYTHON_VERSION: "3.13"
+  RUST_TOOLCHAIN: "1.97.1"
+  ATLAS_RELEASE: atlas-days
+
+jobs:
+  # a run from a branch or a tag does nothing (plan is skipped): say so instead of finishing silently
+  branch:
+    if: github.repository == 'sarptandoven/queuetruth' && github.ref_name != github.event.repository.default_branch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: the backfill runs only from the default branch
+        env:
+          REF: ${{ github.ref_name }}
+        run: |
+          echo "::error::the backfill writes the production atlas-days release: run it from the default branch, not $REF"
+          exit 1
+
+  plan:
+    # the production release and site: never from a branch
+    if: github.repository == 'sarptandoven/queuetruth' && github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write # creates the atlas-days release once, before the days upload to it in parallel
+    outputs:
+      days: ${{ steps.days.outputs.days }}
+      n: ${{ steps.days.outputs.n }}
+      max_parallel: ${{ steps.check.outputs.max_parallel }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: check the inputs
+        id: check
+        env:
+          SESSIONS: ${{ inputs.sessions }}
+          MAX_PARALLEL: ${{ inputs.max_parallel }}
+        run: |
+          if ! [[ "$SESSIONS" =~ ^[0-9]{1,2}$ ]] || [ "$((10#$SESSIONS))" -lt 1 ] || [ "$((10#$SESSIONS))" -gt 20 ]; then
+            echo "::error::sessions must be 1 to 20, got '$SESSIONS'"
+            exit 1
+          fi
+          if ! [[ "$MAX_PARALLEL" =~ ^[0-9]{1,2}$ ]] || [ "$((10#$MAX_PARALLEL))" -lt 1 ] \
+              || [ "$((10#$MAX_PARALLEL))" -gt 20 ]; then
+            echo "::error::max_parallel must be 1 to 20, got '$MAX_PARALLEL'"
+            exit 1
+          fi
+          # decimal, without leading zeros, for fromJSON
+          echo "sessions=$((10#$SESSIONS))" >> "$GITHUB_OUTPUT"
+          echo "max_parallel=$((10#$MAX_PARALLEL))" >> "$GITHUB_OUTPUT"
+      - name: the sessions to run
+        id: days
+        env:
+          SESSIONS: ${{ steps.check.outputs.sessions }}
+          REBUILD: ${{ inputs.rebuild }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -o pipefail
+          # a failed listing stops the step (assigned first, not tested in an `if`), so it never reads as "not kept"
+          kept="$(bash scripts/nightly/release_assets.sh names "$ATLAS_RELEASE")"
+          printf '%s\n' "$kept" > kept.txt
+          rebuild=()
+          if [ "$REBUILD" = true ]; then rebuild=(--rebuild); fi
+          python3 scripts/scale/iex_latest.py --count "$SESSIONS" --kept kept.txt "${rebuild[@]}" | tee -a "$GITHUB_OUTPUT"
+      - name: the release exists before the days upload
+        if: steps.days.outputs.n != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # exists: 0 found, 1 missing, 2 the lookup failed
+          found=0
+          bash scripts/nightly/release_assets.sh exists "$ATLAS_RELEASE" || found=$?
+          if [ "$found" -eq 2 ]; then
+            echo "::error::could not look up the release $ATLAS_RELEASE"
+            exit 1
+          fi
+          if [ "$found" -eq 1 ]; then
+            gh release create "$ATLAS_RELEASE" --prerelease --title "Fill-Realism Atlas: reduced IEX days" \
+              --notes "Per-day reduced tables of the public atlas (.github/workflows/atlas.yml). Aggregates of IEX DEEP+ data; IEX's attribution and terms apply (docs/data-and-licensing.md)."
+          fi
+
+  day:
+    needs: plan
+    if: needs.plan.outputs.n != '0'
+    name: day ${{ matrix.date }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 355
+    permissions:
+      contents: write # the reduced day is kept as an asset of the atlas-days release
+    strategy:
+      fail-fast: false
+      max-parallel: ${{ fromJSON(needs.plan.outputs.max_parallel) }}
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.days) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # the scheduled atlas.yml may have kept this day since the plan was made: then there is nothing to run
+      - name: still missing?
+        id: have
+        env:
+          DATE: ${{ matrix.date }}
+          REBUILD: ${{ inputs.rebuild }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          kept="$(bash scripts/nightly/release_assets.sh names "$ATLAS_RELEASE")"
+          run=true
+          if [ "$REBUILD" != true ] && grep -qxF "day-$DATE.tar.gz" <<< "$kept"; then run=false; fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          echo "day $DATE: run it: $run"
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master 2026-10-16
+        if: steps.have.outputs.run == 'true'
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        if: steps.have.outputs.run == 'true'
+        id: py
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        if: steps.have.outputs.run == 'true'
+        with:
+          version: ${{ env.UV_VERSION }}
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        if: steps.have.outputs.run == 'true'
+      - name: venv + sync + develop
+        if: steps.have.outputs.run == 'true'
+        env:
+          PY: ${{ steps.py.outputs.python-path }}
+        run: |
+          uv venv --python "$PY" .venv
+          make sync
+          make develop
+      # as atlas.yml: local_day.py lowers --workers to two IEX units of 6 GiB on a 16 GB runner; the site step of
+      # atlas.yml combines the kept days, so the single-day combine is skipped. local_day.py exits non-zero for a day
+      # no atlas can use (no valid unit, no cells, every symbol-day flagged under exclude), which is then not kept.
+      - name: run the day (stream, split, units, reduce)
+        if: steps.have.outputs.run == 'true'
+        env:
+          DATE: ${{ matrix.date }}
+          URL: ${{ matrix.url }}
+        run: |
+          if ! [[ "$DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+            echo "::error::bad date '$DATE'"
+            exit 1
+          fi
+          uv run --frozen --no-sync python scripts/scale/local_day.py --source iex --date "$DATE" --url "$URL" \
+            --out .atlas/run --workers 4 --threads 1 --min-free-gib 2 --no-combine
+          day_dir=".atlas/run/$(date -d "$DATE" +%m%d%Y)"
+          tar -C "$day_dir/day" -czf "day-$DATE.tar.gz" .
+          cp "$day_dir/local_day.json" "local_day-$DATE.json"
+      - name: keep the reduced day
+        if: steps.have.outputs.run == 'true'
+        env:
+          DATE: ${{ matrix.date }}
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$ATLAS_RELEASE" "day-$DATE.tar.gz" "local_day-$DATE.json" --clobber
+
+  site:
+    needs: [plan, day]
+    # rebuild the site from whatever is kept, also when some days failed (a failed day is simply not in the window);
+    # never when the plan failed or was skipped (bad inputs, a branch, a lookup error)
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.n != '0' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: write # dispatches atlas.yml, which owns the Pages site
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PUBLISH: ${{ inputs.publish }}
+    steps:
+      - name: rebuild the site over the kept days
+        run: |
+          gh workflow run atlas.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME" -f site_only=true \
+            -f publish="$PUBLISH"
