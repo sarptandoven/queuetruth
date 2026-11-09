@@ -6,6 +6,20 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ## [Unreleased]
 
+### Added
+
+- **Atlas backfill** (`.github/workflows/atlas-backfill.yml`, ROADMAP W1): a manual run fills the atlas window at once.
+  `scripts/scale/iex_latest.py --count N --kept FILE` lists the N newest published IEX sessions the `atlas-days`
+  release does not hold yet (`--rebuild` keeps them in) as a job matrix; each day runs on its own runner, up to
+  `max_parallel` at a time, with the same steps as `atlas.yml`'s IEX path and is kept on the release; then `atlas.yml`
+  is dispatched with `site_only` to rebuild the site over the newest 20 kept days. A day that fails or times out is
+  not kept and runs again on the next backfill.
+
+### Changed
+
+- `scripts/scale/local_day.py --no-combine` stops after the reduce. `atlas.yml` and the backfill use it, since their
+  site step combines the kept days anyway; it saves about 11 minutes per IEX day.
+
 ## [0.3.0] - 2026-11-07
 
 The public Fill-Realism Atlas: each new IEX DEEP+ day runs through the scale pipeline on a GitHub runner and the site

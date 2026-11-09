@@ -14,7 +14,8 @@ reserved resources). `--workers` is lowered to what the available memory holds a
 Bucket files are deleted after the units unless `--keep-buckets`. Stops (and deletes the buckets) when free space falls
 below `--min-free-gib`. The single-day atlas uses `--flag-policy exclude` unless told otherwise (symbol-days whose
 replay checks flagged or that were not trading in the session are left out; the combine stage of `local_day.json`
-records the policy). Writes `<out>/local_day.json`.
+records the policy; `--no-combine` stops after the reduce, for the workflows that combine the kept days themselves).
+Writes `<out>/local_day.json`.
 
 `--source iex` splits an IEX DEEP+ capture with `iex_split.py` (`--input FILE` or `--url URL`; `--date` is the
 session date YYYY-MM-DD, the day's directory is its MMDDYYYY form as for ITCH). `--site` builds the Fill-Realism
@@ -140,6 +141,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--url", help="for a day not pinned in itch_subset.PUBLIC_DAYS, or the IEX capture to stream")
     ap.add_argument("--input", help="with --source iex: a local IEX DEEP+ capture (pcap or pcapng, gzip or raw)")
     ap.add_argument("--site", action="store_true", help="build the atlas site of the day into <out>/site")
+    ap.add_argument(
+        "--no-combine",
+        action="store_true",
+        help="stop after the reduce: no single-day combine (atlas.yml and atlas-backfill.yml combine the kept days "
+        "themselves)",
+    )
     ap.add_argument("--out", type=Path, default=K.REPO / ".realdata" / "scale" / "local")
     ap.add_argument("--buckets", type=int, default=32)
     ap.add_argument("--workers", type=int, default=4)
@@ -168,6 +175,8 @@ def main(argv: list[str] | None = None) -> int:
         "flagged, or not trading in the session: findings/README.md)",
     )
     a = ap.parse_args(argv)
+    if a.no_combine and a.site:
+        ap.error("--site builds the site from the single-day combine: it cannot go with --no-combine")
     if a.source == "iex":
         import datetime as dt
 
@@ -320,9 +329,10 @@ def main(argv: list[str] | None = None) -> int:
         t0 = time.perf_counter()
         r = atlas.reduce_day(plan, shards, out / "day")
         stage("reduce", t0, **r)
-        t0 = time.perf_counter()
-        r = atlas.combine([out / "day"], out / "atlas", flag_policy=a.flag_policy)
-        stage("combine", t0, **r)
+        if not a.no_combine:
+            t0 = time.perf_counter()
+            r = atlas.combine([out / "day"], out / "atlas", flag_policy=a.flag_policy)
+            stage("combine", t0, **r)
         if a.site:
             import atlas_site
 

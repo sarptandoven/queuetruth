@@ -55,7 +55,14 @@ runs it with `local_day.py --url` on one runner, keeps the reduced day (`<out>/<
 asset `day-<YYYY-MM-DD>.tar.gz` of the `atlas-days` release, combines the newest 20 days with `atlas.py combine
 --flag-policy exclude` and deploys `atlas_site.py`'s site with GitHub Pages. A day already in the release is not run
 again (a manual run can force it, or pick a date). A maintainer turns Pages on once: Settings > Pages > Source:
-GitHub Actions.
+GitHub Actions. `local_day.py --no-combine` stops each day after its reduce, since the site step combines the kept days.
+
+**Backfill** (`.github/workflows/atlas-backfill.yml`). A manual run fills the window at once instead of a day per
+session: `iex_latest.py --count N --kept FILE` lists the N newest published sessions the `atlas-days` release does not
+hold yet as a job matrix, each day runs on its own runner (up to `max_parallel` at a time) with the same steps, and
+`atlas.yml` is then dispatched with `site_only` to rebuild the site over the newest 20 kept days. A day takes 3 to 4
+hours for a 10 to 15 GB file; one that fails or times out (the job limit is 6 hours) is not kept, and running the
+backfill again runs only the days still missing.
 
 **Nasdaq sample days on a runner.** A manual run with `venue: nasdaq` and `nasdaq_day: MMDDYYYY` runs that
 emi.nasdaq.com day with `local_day.py --source itch --unit-core-s 100 --unit-mem-gib 3 --sample-budget-core-h 10`

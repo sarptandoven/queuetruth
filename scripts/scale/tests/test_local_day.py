@@ -5,6 +5,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import local_day as D
@@ -32,3 +34,10 @@ def test_sample_budget_follows_the_workers_that_fit() -> None:
     assert D.scaled_budget(10.0, 4, 4) == 10.0 and D.scaled_budget(None, 4, 1) is None
     # a budget of 0 is a budget (one symbol per tier), not "no budget"
     assert D.scaled_budget(0.0, 4, 2) == 0.0
+
+
+def test_no_combine_refuses_a_site(capsys) -> None:
+    # the site is built from the single-day combine, so the two cannot go together; refused before any work
+    with pytest.raises(SystemExit):
+        D.main(["--source", "iex", "--date", "2026-10-09", "--no-combine", "--site"])
+    assert "--no-combine" in capsys.readouterr().err

@@ -2,8 +2,9 @@
 
 The atlas is a public table that answers one question for every popular backtester fill model: on a real market
 day, how far are its fills and its P&L from what the real order queue would have given? It is rebuilt from public
-data each trading day by `.github/workflows/atlas.yml`, and every number on it can be re-run and checked against a
-published Merkle root. The daily venue is IEX. Nasdaq TotalView-ITCH sample days can sit next to it
+data each trading day by `.github/workflows/atlas.yml` (`.github/workflows/atlas-backfill.yml` fills the newest 20
+sessions at once, one runner per day), and every number on it can be re-run and checked against a published Merkle
+root. The daily venue is IEX. Nasdaq TotalView-ITCH sample days can sit next to it
 ([two venues](#two-venues)).
 
 ## How to read it
