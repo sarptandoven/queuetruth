@@ -60,9 +60,14 @@ GitHub Actions. `local_day.py --no-combine` stops each day after its reduce, sin
 **Backfill** (`.github/workflows/atlas-backfill.yml`). A manual run fills the window at once instead of a day per
 session: `iex_latest.py --count N --kept FILE` lists the N newest published sessions the `atlas-days` release does not
 hold yet as a job matrix, each day runs on its own runner (up to `max_parallel` at a time) with the same steps, and
-`atlas.yml` is then dispatched with `site_only` to rebuild the site over the newest 20 kept days. A day takes 3 to 4
-hours for a 10 to 15 GB file; one that fails or times out (the job limit is 6 hours) is not kept, and running the
-backfill again runs only the days still missing. It runs only from the default branch, since it writes the
+`atlas.yml` is then dispatched with `site_only` to rebuild the site over the newest 20 kept days. The first
+backfill's 20 days (290 to 570 million messages) took 2.3 to 4.7 hours each with two units at a time: the split 55 to
+142 minutes and the units 81 to 140, the same size of day running up to twice as long on a slower runner. Both
+workflows now run IEX units of at most 100 predicted core-seconds, four at a time (`--unit-core-s 100
+--unit-mem-gib 3.5`): on 2026-10-09 all 359 such units peaked below 2.9 GB, against about 6.2 GB for units of 300,
+and the day's tables were the same (per-symbol cells identical, tier sums equal up to the order of floating-point
+additions). A day that fails or times out (the job limit is 6 hours) is not kept, and running the backfill again runs
+only the days still missing. It runs only from the default branch, since it writes the
 production release, and each day checks again that it is still missing before it runs. `local_day.py` exits non-zero
 for a day no atlas can use (no valid unit, no cells, or every symbol-day flagged under `--flag-policy exclude`;
 `atlas.day_problem`), so such a day

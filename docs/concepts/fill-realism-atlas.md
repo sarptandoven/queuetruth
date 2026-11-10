@@ -213,12 +213,14 @@ uv run --frozen --no-sync python scripts/scale/verify_unit.py --day nasdaq-day-2
 ## Run a day yourself
 
 One command takes an IEX day from the public file to the site (about 9 GB is streamed, never stored; plan on two
-to four hours on a 4-core, 16 GB machine):
+to four hours on a 4-core, 16 GB machine). Units of at most 100 predicted core-seconds peak below 3 GB, so four run
+at a time there, as in the workflows; the day's numbers do not depend on the unit size:
 
 <!-- check-docs: skip (streams a 9 GB public file) -->
 ```bash
 uv run --frozen --no-sync python scripts/scale/local_day.py --source iex --date 2026-10-09 \
-    --url https://storage.googleapis.com/iex/data/feeds/20261009/20261009_IEXTP1_DPLS1.0.pcap.gz --site
+    --url https://storage.googleapis.com/iex/data/feeds/20261009/20261009_IEXTP1_DPLS1.0.pcap.gz \
+    --workers 4 --threads 1 --unit-core-s 100 --unit-mem-gib 3.5 --site
 ```
 
 A Nasdaq sample day runs the same way, on a symbol sample when the whole day is above the budget (the 5.6 GB file is

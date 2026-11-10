@@ -26,6 +26,19 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   exits 0 and do not run a kept day again, so such a day used to be stopped only by the single-day combine failing;
   now it is stopped with or without the combine. `atlas.py combine` names a day without valid units or cells.
 - `atlas.yml`: a failed `iex_latest.py` lookup fails its step (`pipefail`; the `tee` used to hide it).
+- `atlas.yml` and the backfill run IEX units of at most 100 predicted core-seconds, four at a time
+  (`--unit-core-s 100 --unit-mem-gib 3.5`, the `IEX_UNIT_*` variables), instead of units of 300 two at a time.
+  Units of 300 peaked near 6.2 GB on every backfill day, so only two fit a 16 GB runner; on 2026-10-09 all 359 units
+  of 100 peaked below 2.9 GB, four at a time. The day's tables do not change: per-symbol cells were identical and the
+  tier sums equal up to the order of floating-point additions (at most 4e-14 relative).
+
+### Fixed
+
+- `atlas.py combine` no longer runs out of memory on a full window. It read every day's cells and P&L cells into
+  one table: about 1.2 GB per IEX day, so 20 days needed about 25 GB, and the first site rebuild after the backfill
+  stopped the 16 GB runner two minutes in. It now reads the days one (mode, shadow population) slice at a time, with
+  one light pass for what spans the slices; the per-symbol table is grouped with numpy instead of a Python object per
+  row.
 
 ## [0.3.0] - 2026-11-07
 

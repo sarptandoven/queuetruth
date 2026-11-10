@@ -550,11 +550,29 @@ def combine(
             f"{no_trading} would keep unverified symbol-days; re-reduce them (reduce-day --symbol-flags / "
             "--trading-state) or pass allow_legacy_days"
         )
-    cells = pa.concat_tables(
-        [_with_exact_ok(pq.read_table(d / "cells_all.parquet"), dm) for dm, d in days], promote_options="default"
-    )
-    never = pc.equal(cells["population"], "")
-    cells = cells.filter(never)
+
+    # A day's cells take about 0.65 GB in memory and its P&L cells about 0.6 GB, so a window of 20 days does not fit
+    # a 16 GB runner at once. The tables are read a day at a time: one light pass for what spans every slice (modes,
+    # populations, tiers, dates, symbols, flagged cells), then one (mode, shadow population) slice at a time, each
+    # concatenated over the days in date order exactly as the whole table filtered to it, so every number and every
+    # output byte is what one concatenated table gives.
+    def day_cells(dm: dict[str, Any], d: Path, columns: list[str] | None = None) -> Any:
+        if columns is not None:
+            have = set(pq.read_schema(d / "cells_all.parquet").names)
+            columns = [c for c in columns if c in have]
+        t = _with_exact_ok(pq.read_table(d / "cells_all.parquet", columns=columns), dm)
+        return t.filter(pc.equal(t["population"], ""))
+
+    def cells_slice(mode: str, pop: str) -> Any:
+        parts = []
+        for dm, d in days:
+            t = day_cells(dm, d)
+            if flag_policy == "exclude":
+                t = t.filter(t["exact_ok"])
+            parts.append(t.filter(pc.and_(pc.equal(t["mode"], mode), pc.equal(t["shadow_pop"], pop))))
+            del t
+        return pa.concat_tables(parts, promote_options="default")
+
     flagged_days = []
     for dm, _ in days:
         if "flagged_symbols" in dm:
@@ -564,20 +582,44 @@ def combine(
     labels: dict[str, list[str]] = defaultdict(list)
     for f in flagged_days:
         labels[f["symbol"]].append(_label(f))
-    n_rows_flagged = int(pc.sum(pc.invert(cells["exact_ok"])).as_py() or 0)
-    if flag_policy == "exclude":
-        cells = cells.filter(cells["exact_ok"])
-        if not cells.num_rows:
-            raise ValueError("flag_policy exclude: every symbol-day with cells is flagged; nothing left to combine")
-    h_max = int(pc.max(cells["horizon_ns"]).as_py())
+    n_rows_flagged = 0
+    n_rows = 0
+    modes: set[str] = set()
+    pops: set[str] = set()
+    tier_set: set[str] = set()
+    date_set: set[int] = set()
+    sym_set: set[str] = set()
+    h_maxes = []
+    flagged_cells: dict[str, set] = defaultdict(set)
+    light = ["mode", "shadow_pop", "population", "horizon_ns", "symbol", "session_date", "tier", "exact_ok"]
+    for dm, d in days:
+        t = day_cells(dm, d, light)
+        n_rows_flagged += int(pc.sum(pc.invert(t["exact_ok"])).as_py() or 0)
+        if flag_policy == "exclude":
+            t = t.filter(t["exact_ok"])
+        n_rows += t.num_rows
+        for s, col in ((modes, "mode"), (pops, "shadow_pop"), (tier_set, "tier"), (date_set, "session_date")):
+            s.update(pc.unique(t[col]).to_pylist())
+        sym_set.update(pc.unique(t["symbol"]).to_pylist())
+        h_maxes.append(pc.max(t["horizon_ns"]).as_py())
+        bad = t.filter(pc.invert(t["exact_ok"])).select(["symbol", "session_date"])
+        for s_, d_ in zip(bad.column("symbol").to_pylist(), bad.column("session_date").to_pylist(), strict=True):
+            flagged_cells[s_].add(d_)
+        del t, bad
+    if flag_policy == "exclude" and not n_rows:
+        raise ValueError("flag_policy exclude: every symbol-day with cells is flagged; nothing left to combine")
+    h_max = int(max(h for h in h_maxes if h is not None))
     out.mkdir(parents=True, exist_ok=True)
+    date_list = sorted(date_set)
+    di = {d: i for i, d in enumerate(date_list)}
 
-    # 1. leaderboard by tier: two-way dates x symbols
+    # 1. leaderboard by tier: two-way dates x symbols (and 2. per symbol, below, from the same slice)
     board = []
-    tiers = [*sorted(set(cells.column("tier").to_pylist())), "ALL"]
-    for mode in sorted(set(cells.column("mode").to_pylist())):
-        for pop in sorted(set(cells.column("shadow_pop").to_pylist())):
-            base = cells.filter(pc.and_(pc.equal(cells["mode"], mode), pc.equal(cells["shadow_pop"], pop)))
+    per = []
+    tiers = [*sorted(tier_set), "ALL"]
+    for mode in sorted(modes):
+        for pop in sorted(pops):
+            base = cells_slice(mode, pop)
             for tr in tiers:
                 st = base if tr == "ALL" else base.filter(pc.equal(base["tier"], tr))
                 rows: dict[tuple, dict[str, Any]] = {}
@@ -632,26 +674,42 @@ def combine(
                 for r, q in zip(lb, adj, strict=True):
                     r["fill_rate_bias_p_bh"] = None if np.isnan(q) else float(q)
                 board += lb
+            # 2. per symbol across days, from the same slice
+            per += _per_symbol(base, mode, pop, date_list, flagged_cells, labels, bootstrap_b, seed)
+            del base
     pq.write_table(pa.Table.from_pylist(board), out / "leaderboard_by_tier.parquet", compression="zstd")
+    pq.write_table(pa.Table.from_pylist(per), out / "per_symbol.parquet", compression="zstd")
 
-    # 1b. P&L error by tier (the days whose units computed it), the same two-way bootstrap
+    # 1b. P&L error by tier (the days whose units computed it), the same two-way bootstrap, a slice at a time
     pnl_days = [dm["date"] for dm, d in days if (d / "pnl_cells.parquet").exists()]
-    pnl_tables = [pq.read_table(d / "pnl_cells.parquet") for dm, d in days if dm["date"] in pnl_days]
-    pnl_cells = (
-        pa.concat_tables([t for t in pnl_tables if t.num_rows], promote_options="default")
-        if any(t.num_rows for t in pnl_tables)
-        else None
-    )
-    if pnl_cells is not None and flag_policy == "exclude":
-        pnl_cells = pnl_cells.filter(pnl_cells["exact_ok"])
+    pnl_paths = [
+        p for p in (d / "pnl_cells.parquet" for dm, d in days if dm["date"] in pnl_days) if pq.read_metadata(p).num_rows
+    ]
+    pnl_modes: set[str] = set()
+    pnl_pops: set[str] = set()
+    for p in pnl_paths:
+        t = pq.read_table(p, columns=["mode", "shadow_pop", *(["exact_ok"] if flag_policy == "exclude" else [])])
+        if flag_policy == "exclude":
+            t = t.filter(t["exact_ok"])
+        pnl_modes.update(pc.unique(t["mode"]).to_pylist())
+        pnl_pops.update(pc.unique(t["shadow_pop"]).to_pylist())
+
+    def pnl_slice(mode: str, pop: str) -> Any:
+        parts = []
+        for p in pnl_paths:
+            t = pq.read_table(p)
+            if flag_policy == "exclude":
+                t = t.filter(t["exact_ok"])
+            parts.append(t.filter(pc.and_(pc.equal(t["mode"], mode), pc.equal(t["shadow_pop"], pop))))
+            del t
+        return pa.concat_tables(parts, promote_options="default")
+
     pnl_board = []
-    if pnl_cells is not None and pnl_cells.num_rows:
-        for mode in sorted(set(pnl_cells.column("mode").to_pylist())):
-            for pop in sorted(set(pnl_cells.column("shadow_pop").to_pylist())):
-                base = pnl_cells.filter(
-                    pc.and_(pc.equal(pnl_cells["mode"], mode), pc.equal(pnl_cells["shadow_pop"], pop))
-                )
-                for tr in [*sorted(set(base.column("tier").to_pylist())), "ALL"]:
+    if pnl_modes:
+        for mode in sorted(pnl_modes):
+            for pop in sorted(pnl_pops):
+                base = pnl_slice(mode, pop)
+                for tr in [*sorted(pc.unique(base["tier"]).to_pylist()), "ALL"]:
                     st = base if tr == "ALL" else base.filter(pc.equal(base["tier"], tr))
                     rows = {}
                     for metric in PNL_METRICS:
@@ -688,72 +746,6 @@ def combine(
                     pnl_board += lb
     if pnl_days:
         pq.write_table(pa.Table.from_pylist(pnl_board), out / "pnl_by_tier.parquet", compression="zstd")
-
-    # 2. per symbol across days (vectorised day bootstrap per (mode, pop, model, horizon))
-    date_list = sorted(set(cells.column("session_date").to_pylist()))
-    di = {d: i for i, d in enumerate(date_list)}
-    per = []
-    keys = cells.select(["mode", "shadow_pop", "model_id", "horizon_ns"]).to_pylist()
-    groups: dict[tuple, list[int]] = defaultdict(list)
-    for i, k in enumerate(keys):
-        groups[(k["mode"], k["shadow_pop"], k["model_id"], k["horizon_ns"])].append(i)
-    sym_all = cells.column("symbol").to_pylist()
-    day_all = cells.column("session_date").to_pylist()
-    tier_all = cells.column("tier").to_pylist()
-    ok_all = cells.column("exact_ok").to_pylist()
-    flagged_cells: dict[str, set] = defaultdict(set)
-    for s_, d_, ok_ in zip(sym_all, day_all, ok_all, strict=True):
-        if not ok_:
-            flagged_cells[s_].add(d_)
-    sum_d = cells.column("sum_d").to_numpy()
-    n_all = cells.column("n").to_numpy().astype(float)
-    for (mode, pop, model, hz), idx in sorted(groups.items()):
-        syms = sorted({sym_all[i] for i in idx})
-        si = {s: j for j, s in enumerate(syms)}
-        num = np.zeros((len(syms), len(date_list)))
-        den = np.zeros((len(syms), len(date_list)))
-        tiers_of: dict[str, list[str]] = defaultdict(list)
-        for i in idx:
-            num[si[sym_all[i]], di[day_all[i]]] += sum_d[i]
-            den[si[sym_all[i]], di[day_all[i]]] += n_all[i]
-            tiers_of[sym_all[i]].append(tier_all[i])
-        value, lo, hi, se = _day_bootstrap(num, den, bootstrap_b, seed, f"{mode}:{pop}:{model}:{hz}")
-        home = {s: max(set(v), key=v.count) for s, v in tiers_of.items()}
-        post = np.full(len(syms), np.nan)
-        for tr in set(home.values()):
-            j = [si[s] for s in syms if home[s] == tr]
-            post[j] = B.shrink(value[j], se[j])["posterior"]
-        # p-values from the day-bootstrap SE (normal approximation; the replicates are not kept per symbol)
-        from scipy.stats import norm
-
-        z = np.where(se > 0, value / np.where(se > 0, se, 1.0), np.nan)
-        p = 2 * norm.sf(np.abs(z))
-        p_bh = B.bh(p)
-        n_days = (den > 0).sum(axis=1)
-        for s in syms:
-            j = si[s]
-            per.append(
-                {
-                    "mode": mode,
-                    "shadow_pop": pop,
-                    "model_id": model,
-                    "horizon_ns": hz,
-                    "symbol": s,
-                    "tier": home[s],
-                    "n": int(den[j].sum()),
-                    "n_days": int(n_days[j]),
-                    "bias": _f(value[j]),
-                    "ci_lo": _f(lo[j]),
-                    "ci_hi": _f(hi[j]),
-                    "se": _f(se[j]),
-                    "bias_shrunk": _f(post[j]),
-                    "p_normal": _f(p[j]),
-                    "p_bh": _f(p_bh[j]),
-                    "n_flagged_days": len(flagged_cells.get(s, ())),
-                    "flags": "; ".join(labels[s]) if s in flagged_cells else None,
-                }
-            )
-    pq.write_table(pa.Table.from_pylist(per), out / "per_symbol.parquet", compression="zstd")
 
     # 3. maps: tier x queue decile / liquidity bucket, day-cluster bootstrap
     st = pa.concat_tables([pq.read_table(d / "strata_by_tier.parquet") for _, d in days], promote_options="default")
@@ -821,7 +813,7 @@ def combine(
             for d, _ in days
         ],
         "symbol_days": sum(d["symbol_days"] for d, _ in days),
-        "distinct_symbols": len(set(sym_all)),
+        "distinct_symbols": len(sym_set),
         "flag_policy": flag_policy,
         "pnl_days": pnl_days,
         "flagged_symbol_days": flagged_days,
@@ -843,6 +835,110 @@ def combine(
         "flagged_symbol_days": len(flagged_days),
         "pnl_days": len(pnl_days),
     }
+
+
+def _per_symbol(
+    base: Any,
+    mode: str,
+    pop: str,
+    date_list: list[int],
+    flagged_cells: dict[str, set],
+    labels: dict[str, list[str]],
+    bootstrap_b: int,
+    seed: int,
+) -> list[dict[str, Any]]:
+    """`per_symbol.parquet` rows of one (mode, shadow population) slice of the cells: per (model_id, horizon_ns), in
+    that sorted order, every symbol's bias across days with a day bootstrap, shrunk within its home tier (the tier it
+    has on most days). The rows of a group are taken in table order, so the sums are added in the same order as a
+    loop over the rows."""
+    import numpy as np
+    import pyarrow.compute as pc
+    from scipy.stats import norm
+
+    from queuetruth.eval import blocks as B
+
+    if not base.num_rows:
+        return []
+
+    def codes(col: str) -> tuple[list[Any], Any]:
+        u = pc.unique(base[col])
+        return u.to_pylist(), pc.index_in(base[col], value_set=u).to_numpy()
+
+    models, mcode = codes("model_id")
+    syms_u, scode = codes("symbol")
+    tiers_u, tcode = codes("tier")
+    hz_all = base.column("horizon_ns").to_numpy()
+    dpos = np.searchsorted(np.asarray(date_list), base.column("session_date").to_numpy())
+    sum_d = base.column("sum_d").to_numpy()
+    n_all = base.column("n").to_numpy().astype(float)
+    mrank = np.empty(len(models), dtype=np.int64)
+    mrank[sorted(range(len(models)), key=models.__getitem__)] = np.arange(len(models))
+    hz_u = np.unique(hz_all)
+    gkey = mrank[mcode] * len(hz_u) + np.searchsorted(hz_u, hz_all)
+    order = np.argsort(gkey, kind="stable")
+    present, counts = np.unique(gkey, return_counts=True)
+    model_of = sorted(models)
+    out: list[dict[str, Any]] = []
+    start = 0
+    for g, k in zip(present, counts, strict=True):
+        rows = order[start : start + k]
+        start += k
+        model, hz = model_of[int(g) // len(hz_u)], int(hz_u[int(g) % len(hz_u)])
+        srows = scode[rows]
+        su = np.unique(srows)
+        names = [syms_u[c] for c in su]
+        perm = sorted(range(len(names)), key=names.__getitem__)
+        syms = [names[i] for i in perm]
+        pos = np.empty(len(syms_u), dtype=np.int64)
+        pos[su[perm]] = np.arange(len(syms))
+        sp = pos[srows]
+        num = np.zeros((len(syms), len(date_list)))
+        den = np.zeros((len(syms), len(date_list)))
+        np.add.at(num, (sp, dpos[rows]), sum_d[rows])
+        np.add.at(den, (sp, dpos[rows]), n_all[rows])
+        value, lo, hi, se = _day_bootstrap(num, den, bootstrap_b, seed, f"{mode}:{pop}:{model}:{hz}")
+        # the home tier: the most common of a symbol's tiers over its rows (the few symbols with more than one tier
+        # are counted from their tiers in row order, as before)
+        tr = tcode[rows]
+        cnt = np.zeros((len(syms), len(tiers_u)), dtype=np.int64)
+        np.add.at(cnt, (sp, tr), 1)
+        many = (cnt > 0).sum(axis=1) > 1
+        home = {s: tiers_u[int(np.argmax(cnt[j] > 0))] for j, s in enumerate(syms) if not many[j]}
+        for j in np.flatnonzero(many):
+            v = [tiers_u[t] for t in tr[sp == j]]
+            home[syms[j]] = max(set(v), key=v.count)
+        post = np.full(len(syms), np.nan)
+        for t in set(home.values()):
+            j = [i for i, s in enumerate(syms) if home[s] == t]
+            post[j] = B.shrink(value[j], se[j])["posterior"]
+        # p-values from the day-bootstrap SE (normal approximation; the replicates are not kept per symbol)
+        z = np.where(se > 0, value / np.where(se > 0, se, 1.0), np.nan)
+        p = 2 * norm.sf(np.abs(z))
+        p_bh = B.bh(p)
+        n_days = (den > 0).sum(axis=1)
+        for j, s in enumerate(syms):
+            out.append(
+                {
+                    "mode": mode,
+                    "shadow_pop": pop,
+                    "model_id": model,
+                    "horizon_ns": hz,
+                    "symbol": s,
+                    "tier": home[s],
+                    "n": int(den[j].sum()),
+                    "n_days": int(n_days[j]),
+                    "bias": _f(value[j]),
+                    "ci_lo": _f(lo[j]),
+                    "ci_hi": _f(hi[j]),
+                    "se": _f(se[j]),
+                    "bias_shrunk": _f(post[j]),
+                    "p_normal": _f(p[j]),
+                    "p_bh": _f(p_bh[j]),
+                    "n_flagged_days": len(flagged_cells.get(s, ())),
+                    "flags": "; ".join(labels[s]) if s in flagged_cells else None,
+                }
+            )
+    return out
 
 
 def _f(x: Any) -> float | None:

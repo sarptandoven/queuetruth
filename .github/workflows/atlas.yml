@@ -88,6 +88,10 @@ env:
   NASDAQ_BUDGET_CORE_H: "10"
   NASDAQ_UNIT_CORE_S: "100"
   NASDAQ_UNIT_MEM_GIB: "3"
+  # IEX units of at most 100 predicted core-seconds peak below 2.9 GB (all 359 units of 2026-10-09, four at a time),
+  # so four run at once at 3.5 GiB each; units of 300 peaked near 6.2 GB and left room for two
+  IEX_UNIT_CORE_S: "100"
+  IEX_UNIT_MEM_GIB: "3.5"
   NASDAQ_SITE: ${{ (inputs.nasdaq_site || vars.ATLAS_NASDAQ_SITE == 'true') && 'true' || 'false' }}
   COMPAT_RELEASE: compat-results
 
@@ -190,8 +194,8 @@ jobs:
           uv venv --python "${{ steps.py.outputs.python-path }}" .venv
           make sync
           make develop
-      # local_day.py lowers --workers to what memory holds per unit: two IEX units of 6 GiB on a 16 GB runner; four
-      # Nasdaq units of 3 GiB, which smaller units (--unit-core-s 100) keep within (runner_budget.py). With fewer
+      # local_day.py lowers --workers to what memory holds per unit: four IEX units of 3.5 GiB on a 16 GB runner and
+      # four Nasdaq units of 3 GiB, which smaller units (--unit-core-s 100) keep within (runner_budget.py). With fewer
       # workers than asked, local_day.py shrinks the Nasdaq sample budget in proportion before planning. The site step
       # combines the kept days, so the single-day combine (about 11 minutes for an IEX day) is skipped.
       - name: run the day (stream, split, units, reduce)
@@ -212,7 +216,8 @@ jobs:
               --unit-mem-gib "$NASDAQ_UNIT_MEM_GIB" --sample-budget-core-h "$NASDAQ_BUDGET_CORE_H" --no-combine
           else
             uv run --frozen --no-sync python scripts/scale/local_day.py --source iex --date "$DATE" --url "$URL" \
-              --out .atlas/run --workers 4 --threads 1 --min-free-gib 2 --no-combine
+              --out .atlas/run --workers 4 --threads 1 --min-free-gib 2 --unit-core-s "$IEX_UNIT_CORE_S" \
+              --unit-mem-gib "$IEX_UNIT_MEM_GIB" --no-combine
           fi
           day_dir=".atlas/run/$(date -d "$DATE" +%m%d%Y)"
           tar -C "$day_dir/day" -czf "${PREFIX}day-$DATE.tar.gz" .

@@ -5,9 +5,11 @@
 # session after that, so this is for filling the window at once (a new atlas, or after a gap), not for daily use.
 # It runs only from the default branch, since it writes the production atlas-days release.
 #
-# A day takes 3 to 4 hours on a hosted runner for a 10 to 15 GB IEX file (split about 6 min per GB, units about as
-# long again); a very large file can come near the 6 hour job limit, and a day that fails or times out is simply not
-# kept: run the backfill again (kept days are skipped) or the day alone with atlas.yml. The days run from the same
+# The first backfill's days (290 to 570 million messages, two units at a time) took 2.3 to 4.7 hours on a hosted runner: the
+# split 55 to 142 minutes, the units 81 to 140, the same day size running up to twice as long on a slower runner. Four
+# smaller units at a time (IEX_UNIT_CORE_S, as atlas.yml) shorten the units; a very large file can still come near the
+# 6 hour job limit (a 22.7 GB day split for 185 minutes), and a day that fails or times out is simply not kept: run
+# the backfill again (kept days are skipped) or the day alone with atlas.yml. The days run from the same
 # commit, which every kept day records (day_manifest.json builds), so verify_unit.py re-runs any unit at that commit.
 # Manual only; actions are pinned by commit SHA (tag in the trailing comment), as in atlas.yml.
 #
@@ -52,6 +54,9 @@ env:
   PYTHON_VERSION: "3.13"
   RUST_TOOLCHAIN: "1.97.1"
   ATLAS_RELEASE: atlas-days
+  # as atlas.yml: four IEX units at a time on a 16 GB runner
+  IEX_UNIT_CORE_S: "100"
+  IEX_UNIT_MEM_GIB: "3.5"
 
 jobs:
   # a run from a branch or a tag does nothing (plan is skipped): say so instead of finishing silently
@@ -184,7 +189,7 @@ jobs:
           uv venv --python "$PY" .venv
           make sync
           make develop
-      # as atlas.yml: local_day.py lowers --workers to two IEX units of 6 GiB on a 16 GB runner; the site step of
+      # as atlas.yml: local_day.py runs four IEX units of 3.5 GiB at a time on a 16 GB runner; the site step of
       # atlas.yml combines the kept days, so the single-day combine is skipped. local_day.py exits non-zero for a day
       # no atlas can use (no valid unit, no cells, every symbol-day flagged under exclude), which is then not kept.
       - name: run the day (stream, split, units, reduce)
@@ -198,7 +203,8 @@ jobs:
             exit 1
           fi
           uv run --frozen --no-sync python scripts/scale/local_day.py --source iex --date "$DATE" --url "$URL" \
-            --out .atlas/run --workers 4 --threads 1 --min-free-gib 2 --no-combine
+            --out .atlas/run --workers 4 --threads 1 --min-free-gib 2 --unit-core-s "$IEX_UNIT_CORE_S" \
+            --unit-mem-gib "$IEX_UNIT_MEM_GIB" --no-combine
           day_dir=".atlas/run/$(date -d "$DATE" +%m%d%Y)"
           tar -C "$day_dir/day" -czf "day-$DATE.tar.gz" .
           cp "$day_dir/local_day.json" "local_day-$DATE.json"
