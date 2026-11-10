@@ -83,20 +83,29 @@ def iex_capture(*, gap_at: int | None = 7, duplicate_at: int | None = 11, seed: 
     return F.pcapng(frames)
 
 
-def _split(tmp: Path, raw: bytes, k: int, symbols: str | None = None) -> dict:
+@pytest.fixture(params=["python", pytest.param("fast", marks=pytest.mark.requires_core)])
+def engine(request: pytest.FixtureRequest) -> str:
+    """Each engine of `iex_split.py` (`test_iex_split_engines.py` compares them byte for byte)."""
+    return request.param
+
+
+def _args(**kw: object) -> argparse.Namespace:
+    a = {"url": None, "date": None, "level": 1, "min_free_gib": 0.0, "symbols": None, "engine": "fast", "threads": 2}
+    return argparse.Namespace(**{**a, **kw})
+
+
+def _split(tmp: Path, raw: bytes, k: int, symbols: str | None = None, engine: str = "fast") -> dict:
     tmp.mkdir(parents=True, exist_ok=True)
     src = tmp / "20261009_IEXTP1_DPLS1.0.pcap.gz"
     F.write_gz(src, raw, members=2)
-    a = argparse.Namespace(
-        input=str(src), url=None, date=None, buckets=k, out=tmp / "split", symbols=symbols, level=1, min_free_gib=0.0
-    )
+    a = _args(input=str(src), buckets=k, out=tmp / "split", symbols=symbols, engine=engine)
     assert iex_split.run_split(a) == 0
     return json.loads((tmp / "split" / MMDD / "split_manifest.json").read_text())
 
 
-def test_buckets_are_the_subset_filter_of_their_symbols(tmp_path: Path) -> None:
+def test_buckets_are_the_subset_filter_of_their_symbols(tmp_path: Path, engine: str) -> None:
     raw = iex_capture()
-    m = _split(tmp_path, raw, 3)
+    m = _split(tmp_path, raw, 3, engine=engine)
     assert m["ok"], {k: v for k, v in m["checks"].items() if not v["ok"]}
     assert m["date"] == MMDD and m["format"] == "iex_deep_plus" and m["ingest"] == iex_split.INGEST
     assert m["stream"]["sequence_gaps"] == 1 and m["stream"]["duplicate_messages"] > 0
@@ -125,19 +134,17 @@ def test_buckets_are_the_subset_filter_of_their_symbols(tmp_path: Path) -> None:
     n_exec = sum(v[2] for b in m["buckets"] for v in b["symbols"].values())
     assert n_exec > 0
     # deterministic: a second split of the same bytes writes the same files
-    m2 = _split(tmp_path / "again", raw, 3)
+    m2 = _split(tmp_path / "again", raw, 3, engine=engine)
     assert [b["file_sha256"] for b in m2["buckets"]] == [b["file_sha256"] for b in m["buckets"]]
 
 
-def test_symbol_filter_and_bad_input(tmp_path: Path) -> None:
-    m = _split(tmp_path, iex_capture(gap_at=None, duplicate_at=None), 2, symbols="AAPL,TSLA")
+def test_symbol_filter_and_bad_input(tmp_path: Path, engine: str) -> None:
+    m = _split(tmp_path, iex_capture(gap_at=None, duplicate_at=None), 2, symbols="AAPL,TSLA", engine=engine)
     assert m["ok"] and {s for b in m["buckets"] for s in b["symbols"]} == {"AAPL", "TSLA"}
     assert m["routing"]["dropped_messages"] > 0
     bad = tmp_path / "20261009_bad.pcap"
     bad.write_bytes(b"not a capture at all" * 10)
-    a = argparse.Namespace(
-        input=str(bad), url=None, date=None, buckets=2, out=tmp_path / "x", symbols=None, level=1, min_free_gib=0.0
-    )
+    a = _args(input=str(bad), buckets=2, out=tmp_path / "x", engine=engine)
     assert iex_split.run_split(a) == iex_split.EXIT_INPUT
     assert not list((tmp_path / "x" / MMDD).glob("*.pcap.gz*"))
 
@@ -238,14 +245,14 @@ def atlas_site_attribution() -> str:
     return atlas_site.IEX_ATTRIBUTION
 
 
-def test_url_split_resumes_after_a_dropped_connection(tmp_path: Path) -> None:
+def test_url_split_resumes_after_a_dropped_connection(tmp_path: Path, engine: str) -> None:
     """`--url` reads through the demo's resumable stream: the first connection is cut halfway, the split resumes
     with a byte range and writes the same buckets as a split of the local file."""
     import http.server
     import threading
 
     raw = iex_capture()
-    want = _split(tmp_path / "local", raw, 2)
+    want = _split(tmp_path / "local", raw, 2, engine=engine)
     body = (tmp_path / "local" / "20261009_IEXTP1_DPLS1.0.pcap.gz").read_bytes()
     ranges: list[str | None] = []
 
@@ -272,9 +279,7 @@ def test_url_split_resumes_after_a_dropped_connection(tmp_path: Path) -> None:
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     try:
         url = f"http://127.0.0.1:{srv.server_address[1]}/20261009_IEXTP1_DPLS1.0.pcap.gz"
-        a = argparse.Namespace(
-            input=None, url=url, date=None, buckets=2, out=tmp_path / "url", symbols=None, level=1, min_free_gib=0.0
-        )
+        a = _args(input=None, url=url, buckets=2, out=tmp_path / "url", engine=engine)
         assert iex_split.run_split(a) == 0
     finally:
         srv.shutdown()

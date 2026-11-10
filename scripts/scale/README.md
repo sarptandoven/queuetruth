@@ -15,7 +15,7 @@ itch_split.py ─▶ split/<date>/ (K buckets) ─▶ plan.py ─▶ units ─�
 | script | does |
 |---|---|
 | `itch_split.py` | streams a day (`--date` for a public EMI day with pinned hashes, or `--url`), routes each symbol's messages from its `R` on to bucket `crc32(symbol) mod K` and locate 0 to all buckets; checks the stream against the pinned values; per bucket the file and content sha256 and per symbol `[locate, messages, executions]` |
-| `iex_split.py` | the same for an IEX DEEP+ day (`--input` capture or `--url`, gzip or raw, pcap or pcapng): every symbol's messages to bucket `crc32(symbol) mod K`, System Events to all buckets, each bucket renumbered per (channel, session) with the source's gaps carried, so it is byte-identical to the `IexCutFilter` subset of its symbols; the manifest names the unit ingest spec (`iex_deep_plus`, venue `iex`), per symbol `[instrument id, messages, executions]`, test securities and the Trading Status spans |
+| `iex_split.py` | the same for an IEX DEEP+ day (`--input` capture or `--url`, gzip or raw, pcap or pcapng): every symbol's messages to bucket `crc32(symbol) mod K`, System Events to all buckets, each bucket renumbered per (channel, session) with the source's gaps carried, so it is byte-identical to the `IexCutFilter` subset of its symbols; the manifest names the unit ingest spec (`iex_deep_plus`, venue `iex`), per symbol `[instrument id, messages, executions]`, test securities and the Trading Status spans; `--engine fast` (the default, Rust through `queuetruth._core`, gzip by Python on `--threads` writer threads) and `--engine python` (the pure-Python reference) write the same bytes |
 | `plan.py` | universe, exclusions with reasons (Nasdaq test symbols), per-symbol shadow quotas (`scale`, `fixed`, `breadth`), cost model, first-fit-decreasing units within a bucket, `run_id`; the units compute the P&L error unless `--no-pnl`; `--sample-budget-core-h B` (or `--sample-per-tier N`) keeps a hash-chosen, equal-size symbol sample per liquidity tier when the day predicts more than `B` core-hours, recorded as `symbol_sample` |
 | `unit.py` | one unit: bucket sha256 check, ingest of its symbols, replay exactness checks, `per_partition` shadow sample, native zoo per population and mode, `block_stats`, the P&L terms of `zoo-toxicity` summed per symbol-day (`pnl_stats`: one exact replay with quotes per population, `evaluate_toxicity` per mode), 1% audit sample of predictions, `shard_manifest.json` with telemetry |
 | `aggregate.py` | verifies every shard (leaf hash, unit spec hash, output content digests), Merkle root, `zoo_errors_by_group`, `leaderboard` (two-way dates x symbols cluster bootstrap, BH), `per_symbol` (day-cluster CI, empirical-Bayes shrinkage, BH), summed exactness |
@@ -39,6 +39,10 @@ from the capture to the site (`--url` streams IEX's file instead of reading a lo
 uv run --frozen --no-sync python scripts/scale/local_day.py --source iex --date 2026-10-09 \
     --input 20261009_IEXTP1_DPLS1.0.pcap.gz --workers 4 --threads 2 --site
 ```
+
+The split runs in Rust (`iex_split.py --engine fast`, built by `make develop`): on real 2026-10-09 bucket files it
+was 10 to 14 times as fast as the pure-Python engine (`--engine python`, the reference, about 81k messages/s, which
+took 185 minutes for an 898M-message day), with byte-identical buckets and manifest.
 
 The planner reads an `iex_split.py` manifest like an ITCH one: the units ingest with `format: iex_deep_plus`, the
 regular session comes from the `R` and `M` System Events, test securities are excluded, and the Trading Status

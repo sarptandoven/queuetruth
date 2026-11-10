@@ -18,6 +18,15 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ### Changed
 
+- `scripts/scale/iex_split.py` splits an IEX DEEP+ day 10 to 14 times as fast. The capture is read, routed and
+  renumbered in Rust (`queuetruth._core.IexSplit`, a port of the Python reader in `crates/ingest/src/iex/split.rs`)
+  with the GIL released; a reader thread downloads, hashes and inflates the input, and writer threads (`--threads`,
+  default the CPU count) gzip the buckets with Python's `gzip`. The bucket files and `split_manifest.json` are byte
+  for byte those of the Python engine (only `timings` differ), which stays as the reference behind `--engine python`;
+  `python/tests/scale/test_iex_split_engines.py` compares the two on generated pcap and pcapng captures cut at random.
+  Re-splitting real 2026-10-09 bucket files on a 4-core machine ran at 1.0M to 1.7M messages/s against 79k to 167k,
+  so an 898M-message day, which took 185 minutes to split on a 4-vCPU runner, should take about 15. On the few
+  malformed inputs where the Python engine stops with an uncaught exception, the fast engine exits 2 (input error).
 - `scripts/scale/local_day.py --no-combine` stops after the reduce. `atlas.yml` and the backfill use it, since their
   site step combines the kept days anyway; it saves about 11 minutes per IEX day.
 - `local_day.py` exits non-zero for a day no atlas can use: no valid unit, no cells, or (under `--flag-policy

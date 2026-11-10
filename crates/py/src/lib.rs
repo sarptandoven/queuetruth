@@ -1,17 +1,18 @@
 //! PyO3 extension module `queuetruth._core` (abi3-py311, SPEC 4.3): one function per native operation (spec JSON in,
 //! summary JSON out), the shared CLI grammar, Arrow interchange through the Arrow PyCapsule interface (`arrow_ffi`),
-//! and the interactive `Session`.
+//! the interactive `Session`, and `IexSplit`, the incremental IEX DEEP+ splitter of `scripts/scale/iex_split.py`.
 //! Every call that does work releases the GIL; Rust errors raise `QtCoreError(code, message)` with `.code` and
 //! `.message`, re-raised by `queuetruth.api` as `queuetruth.QtError`.
 
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 
 use pyo3::create_exception;
 use pyo3::exceptions::{PyException, PyKeyError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::PyDict;
+use pyo3::types::{PyBytes, PyDict};
 use qt_cli::ops;
+use qt_ingest::iex::split::{SplitError, Splitter};
 use qt_schema::specs::{
     CalibrationSpec, ExportSpec, FeatureSpec, IngestSpec, MirrorSpec, ReplaySpec, ShadowSampleSpec, WhySpec, ZooSpec,
 };
@@ -34,8 +35,12 @@ create_exception!(
 );
 
 fn core_err(e: &QtError) -> PyErr {
-    let code = e.code().to_owned();
-    let message = e.message();
+    coded_err(e.code(), e.message())
+}
+
+/// `QtCoreError(code, message)` with `.code` and `.message` set.
+fn coded_err(code: &str, message: String) -> PyErr {
+    let code = code.to_owned();
     let err = QtCoreError::new_err((code.clone(), message.clone()));
     Python::attach(|py| {
         let v = err.value(py);
@@ -480,6 +485,150 @@ impl Session {
     }
 }
 
+/// Incremental IEX DEEP+ symbol splitter, the fast engine of `scripts/scale/iex_split.py` (`qt_ingest::iex::split`,
+/// a port of its Python engine): `IexSplit(k, midnight_utc_ns, symbols=None, patterns=None)`; `feed(bytes)` routes
+/// the complete blocks received so far with the GIL released and returns `[(bucket, pcap records)]` to append after
+/// the pcap file header; `stats()` returns the counters and maps of the Python `IexSplitter`. An input the Python
+/// engine refuses raises `QtCoreError` `QT-INPUT-002` with its message, and so does every later `feed`.
+#[pyclass(module = "queuetruth._core", frozen)]
+struct IexSplit {
+    inner: Mutex<Splitter>,
+}
+
+fn split_err(e: &SplitError) -> PyErr {
+    coded_err("QT-INPUT-002", e.to_string())
+}
+
+impl IexSplit {
+    fn lock(&self) -> Result<MutexGuard<'_, Splitter>, SplitError> {
+        self.inner
+            .lock()
+            .map_err(|_| SplitError::Unsupported("IexSplit: poisoned lock".into()))
+    }
+}
+
+/// (name, bucket, instrument id, messages, executions, test issue).
+type SplitSymbol = (String, u32, u32, u64, u64, bool);
+/// (name, [(ns since midnight, status, reason)]).
+type TradingStatus = (String, Vec<(i128, String, String)>);
+
+#[pymethods]
+impl IexSplit {
+    #[new]
+    #[pyo3(signature = (k, midnight_utc_ns, symbols = None, patterns = None))]
+    fn new(
+        k: usize,
+        midnight_utc_ns: i128,
+        symbols: Option<Vec<String>>,
+        patterns: Option<Vec<Vec<u8>>>,
+    ) -> PyResult<Self> {
+        let s =
+            Splitter::new(k, midnight_utc_ns, symbols, patterns).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        Ok(Self { inner: Mutex::new(s) })
+    }
+
+    /// Routes the next bytes of the capture; returns `[(bucket, bytes)]`, buckets ascending, for the buckets with
+    /// new records.
+    fn feed<'py>(&self, py: Python<'py>, data: &[u8]) -> PyResult<Vec<(usize, Bound<'py, PyBytes>)>> {
+        py.detach(|| self.lock()?.feed(data)).map_err(|e| split_err(&e))?;
+        let mut g = self.lock().map_err(|e| split_err(&e))?;
+        let mut parts = Vec::new();
+        for (b, out) in g.outputs_mut().iter_mut().enumerate() {
+            if !out.is_empty() {
+                parts.push((b, PyBytes::new(py, out)));
+                out.clear();
+            }
+        }
+        Ok(parts)
+    }
+
+    /// `{"counters": {name: n}, "skipped_packets": [(reason, n)], "other_protocol": [(protocol id, n)],
+    /// "unknown_types": [(type byte, n)], "sessions": [(channel, session, first_seq)], "first_send_ns",
+    /// "last_send_ns", "system_events": [(code, ns since midnight)], "symbols": [(name, bucket, id, messages,
+    /// executions, test_issue)], "trading_status": [(name, [(ns since midnight, status, reason)])],
+    /// "bucket_messages", "bucket_segments", "capture_format", "pending", "blocks": [(block type, n)]}`, every list
+    /// in order of first appearance.
+    fn stats<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let g = self.lock().map_err(|e| split_err(&e))?;
+        let st = g.state();
+        let c = &st.counters;
+        let counters = PyDict::new(py);
+        for (name, v) in [
+            ("packets", c.packets),
+            ("bad_segments", c.bad_segments),
+            ("segments", c.segments),
+            ("heartbeats", c.heartbeats),
+            ("messages", c.messages),
+            ("sequence_gaps", c.sequence_gaps),
+            ("duplicate_messages", c.duplicate_messages),
+            ("prefiltered", c.prefiltered),
+            ("parsed", c.parsed),
+            ("malformed", c.malformed),
+            ("system", c.system),
+            ("routed", c.routed),
+            ("dropped", c.dropped),
+            ("unknown_type", c.unknown_type),
+        ] {
+            counters.set_item(name, v)?;
+        }
+        counters.set_item("sequence_gap_messages", c.sequence_gap_messages)?;
+        let symbols: Vec<SplitSymbol> = st
+            .symbols
+            .iter()
+            .map(|s| (s.name.clone(), s.bucket, s.id, s.messages, s.executions, s.test_issue))
+            .collect();
+        let trading: Vec<TradingStatus> = st
+            .trading_status_order
+            .iter()
+            .map(|&i| {
+                let s = &st.symbols[i as usize];
+                let acts = s
+                    .trading_status
+                    .iter()
+                    .map(|(ts, status, reason)| (*ts, char::from(*status).to_string(), reason.clone()))
+                    .collect();
+                (s.name.clone(), acts)
+            })
+            .collect();
+        let sessions: Vec<(u32, u32, i64)> = st
+            .sessions
+            .iter()
+            .map(|s| (s.channel, s.session, s.first_seq))
+            .collect();
+        let events: Vec<(String, i128)> = st
+            .system_events
+            .iter()
+            .map(|(k, v)| (char::from(*k).to_string(), *v))
+            .collect();
+        let d = PyDict::new(py);
+        d.set_item("counters", counters)?;
+        d.set_item(
+            "skipped_packets",
+            st.skipped_packets.iter().map(|(k, v)| (*k, *v)).collect::<Vec<_>>(),
+        )?;
+        d.set_item(
+            "other_protocol",
+            st.other_protocol.iter().map(|(k, v)| (*k, *v)).collect::<Vec<_>>(),
+        )?;
+        d.set_item(
+            "unknown_types",
+            st.unknown_types.iter().map(|(k, v)| (*k, *v)).collect::<Vec<_>>(),
+        )?;
+        d.set_item("sessions", sessions)?;
+        d.set_item("first_send_ns", st.first_send_ns)?;
+        d.set_item("last_send_ns", st.last_send_ns)?;
+        d.set_item("system_events", events)?;
+        d.set_item("symbols", symbols)?;
+        d.set_item("trading_status", trading)?;
+        d.set_item("bucket_messages", &st.bucket_messages)?;
+        d.set_item("bucket_segments", &st.bucket_segments)?;
+        d.set_item("capture_format", g.capture_kind().map(|k| k.name()))?;
+        d.set_item("pending", g.pending())?;
+        d.set_item("blocks", g.blocks().iter().map(|(k, v)| (*k, *v)).collect::<Vec<_>>())?;
+        Ok(d)
+    }
+}
+
 /// The `queuetruth._core` module.
 #[pymodule(name = "_core")]
 fn qt_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -510,5 +659,6 @@ fn qt_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(fill_liquidity, m)?)?;
     m.add_function(wrap_pyfunction!(write_table, m)?)?;
     m.add_class::<Session>()?;
+    m.add_class::<IexSplit>()?;
     Ok(())
 }
