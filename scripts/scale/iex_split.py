@@ -31,8 +31,9 @@ Two engines write the same files and the same manifest (only `timings` differ);
   `crates/ingest/src/iex/split.rs`; `make develop` builds it) with the GIL released. A reader thread downloads,
   hashes and inflates the input, and `--threads` writer threads hash and gzip each bucket's records with Python's
   `gzip`, so the bucket bytes cannot drift from the Python engine's. On real 2026-10-09 bucket files it ran 10 to 14
-  times as fast as the Python engine on a 4-core machine (1.0M to 1.7M messages/s against 79k to 167k), so an
-  898M-message day should split in about 15 minutes instead of 185, if the download keeps up.
+  times as fast as the Python engine on a 4-core machine (1.0M to 1.7M messages/s against 79k to 167k), and the
+  whole 2026-10-09 day (331M messages, streamed from IEX) split in 5.6 minutes, every bucket file byte-identical to
+  the Python engine's split of it on a runner (61 minutes there).
 - `--engine python` is the reference: `IexSplitter` below, in pure Python (about 81k messages/s on a 4-vCPU GitHub
   runner, where an 898M-message day took 185 minutes to split).
 

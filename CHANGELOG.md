@@ -25,7 +25,9 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   for byte those of the Python engine (only `timings` differ), which stays as the reference behind `--engine python`;
   `python/tests/scale/test_iex_split_engines.py` compares the two on generated pcap and pcapng captures cut at random.
   Re-splitting real 2026-10-09 bucket files on a 4-core machine ran at 1.0M to 1.7M messages/s against 79k to 167k,
-  so an 898M-message day, which took 185 minutes to split on a 4-vCPU runner, should take about 15. On the few
+  and the whole 2026-10-09 day (331M messages, streamed from IEX) split in 5.6 minutes with every one of its 32 bucket
+  files byte-identical to the split a runner made of it with the Python engine, which took 61 minutes there (an
+  898M-message day took 185 and timed its job out). On the few
   malformed inputs where the Python engine stops with an uncaught exception, the fast engine exits 2 (input error).
 - `scripts/scale/local_day.py --no-combine` stops after the reduce. `atlas.yml` and the backfill use it, since their
   site step combines the kept days anyway; it saves about 11 minutes per IEX day.
@@ -51,7 +53,8 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   of one Python call per column (`np.nanquantile` on a 2-D array), and `blocks.cluster_bootstrap` groups its rows
   and cluster cells through one integer per row (`_unique_rows`) instead of sorting rows, and reads its count column
   once instead of once per group. Every output file is byte-identical to before (two real days, under both flag
-  policies): 4.6 GB at peak and 13 minutes against 12.7 GB and 19 minutes.
+  policies): 4.6 GB at peak and 13 minutes against 12.7 GB and 19 minutes. The 20 kept days combine in 42 minutes
+  at 9.3 GB.
 
 ## [0.3.0] - 2026-11-07
 

@@ -42,7 +42,8 @@ uv run --frozen --no-sync python scripts/scale/local_day.py --source iex --date 
 
 The split runs in Rust (`iex_split.py --engine fast`, built by `make develop`): on real 2026-10-09 bucket files it
 was 10 to 14 times as fast as the pure-Python engine (`--engine python`, the reference, about 81k messages/s, which
-took 185 minutes for an 898M-message day), with byte-identical buckets and manifest.
+took 185 minutes for an 898M-message day), with byte-identical buckets and manifest; the whole 2026-10-09 day
+(331M messages, streamed from IEX) split in 5.6 minutes on a 4-core machine against 61 minutes on a runner.
 
 The planner reads an `iex_split.py` manifest like an ITCH one: the units ingest with `format: iex_deep_plus`, the
 regular session comes from the `R` and `M` System Events, test securities are excluded, and the Trading Status
@@ -65,7 +66,8 @@ GitHub Actions. `local_day.py --no-combine` stops each day after its reduce, sin
 session: `iex_latest.py --count N --kept FILE` lists the N newest published sessions the `atlas-days` release does not
 hold yet as a job matrix, each day runs on its own runner (up to `max_parallel` at a time) with the same steps, and
 `atlas.yml` is then dispatched with `site_only` to rebuild the site over the newest 20 kept days. The first
-backfill's 20 days (290 to 570 million messages) took 2.3 to 4.7 hours each with two units at a time: the split 55 to
+backfill's 20 days (290 to 570 million messages) took 2.3 to 4.7 hours each with two units at a time and the split in
+Python (now in Rust, above): the split 55 to
 142 minutes and the units 81 to 140, the same size of day running up to twice as long on a slower runner. Both
 workflows now run IEX units of at most 100 predicted core-seconds, four at a time (`--unit-core-s 100
 --unit-mem-gib 3.5`): on 2026-10-09 all 359 such units peaked below 2.9 GB, against about 6.2 GB for units of 300,

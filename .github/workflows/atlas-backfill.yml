@@ -5,11 +5,12 @@
 # session after that, so this is for filling the window at once (a new atlas, or after a gap), not for daily use.
 # It runs only from the default branch, since it writes the production atlas-days release.
 #
-# The first backfill's days (290 to 570 million messages, two units at a time) took 2.3 to 4.7 hours on a hosted runner: the
-# split 55 to 142 minutes, the units 81 to 140, the same day size running up to twice as long on a slower runner. Four
-# smaller units at a time (IEX_UNIT_CORE_S, as atlas.yml) shorten the units; a very large file can still come near the
-# 6 hour job limit (a 22.7 GB day split for 185 minutes), and a day that fails or times out is simply not kept: run
-# the backfill again (kept days are skipped) or the day alone with atlas.yml. The days run from the same
+# The first backfill's days (290 to 570 million messages, two units at a time, the split in Python) took 2.3 to 4.7
+# hours on a hosted runner: the split 55 to 142 minutes, the units 81 to 140, the same day size running up to twice as
+# long on a slower runner, and a 22.7 GB day timed out after a 185-minute split. The split now runs in Rust (about ten
+# times as fast: 2026-10-09 split in 5.6 minutes on a 4-core machine against 61 on a runner) and four smaller units
+# run at a time (IEX_UNIT_CORE_S, as atlas.yml). A day that fails or times out is simply not kept: run the backfill
+# again (kept days are skipped) or the day alone with atlas.yml. The days run from the same
 # commit, which every kept day records (day_manifest.json builds), so verify_unit.py re-runs any unit at that commit.
 # Manual only; actions are pinned by commit SHA (tag in the trailing comment), as in atlas.yml.
 #
