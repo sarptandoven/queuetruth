@@ -50,7 +50,8 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   row. It is also faster, with the same numbers: the day bootstrap's quantiles are taken on blocks of columns instead
   of one Python call per column (`np.nanquantile` on a 2-D array), and `blocks.cluster_bootstrap` groups its rows
   and cluster cells through one integer per row (`_unique_rows`) instead of sorting rows, and reads its count column
-  once instead of once per group.
+  once instead of once per group. Every output file is byte-identical to before (two real days, under both flag
+  policies): 4.6 GB at peak and 13 minutes against 12.7 GB and 19 minutes.
 
 ## [0.3.0] - 2026-11-07
 
