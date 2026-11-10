@@ -47,7 +47,10 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   one table: about 1.2 GB per IEX day, so 20 days needed about 25 GB, and the first site rebuild after the backfill
   stopped the 16 GB runner two minutes in. It now reads the days one (mode, shadow population) slice at a time, with
   one light pass for what spans the slices; the per-symbol table is grouped with numpy instead of a Python object per
-  row.
+  row. It is also faster, with the same numbers: the day bootstrap's quantiles are taken on blocks of columns instead
+  of one Python call per column (`np.nanquantile` on a 2-D array), and `blocks.cluster_bootstrap` groups its rows
+  and cluster cells through one integer per row (`_unique_rows`) instead of sorting rows, and reads its count column
+  once instead of once per group.
 
 ## [0.3.0] - 2026-11-07
 

@@ -450,12 +450,33 @@ def _day_bootstrap(num: Any, den: Any, b: int, seed: int, tag: str) -> tuple[Any
     rn, rd = w @ num.T, w @ den.T  # (b, rows)
     with np.errstate(invalid="ignore", divide="ignore"):
         reps = np.where(rd > 0, rn / rd, np.nan)
-    lo = np.nanquantile(reps, 0.025, axis=0)
-    hi = np.nanquantile(reps, 0.975, axis=0)
+    lo = _nanquantile0(reps, 0.025)
+    hi = _nanquantile0(reps, 0.975)
     se = np.nanstd(reps, axis=0, ddof=1)
     one = (den > 0).sum(axis=1) < 2  # a single day: no between-day variation to resample
     lo[one] = hi[one] = se[one] = np.nan
     return value, lo, hi, se
+
+
+def _nanquantile0(reps: Any, q: float) -> Any:
+    """`np.nanquantile(reps, q, axis=0)`, the same numbers: numpy takes that column by column in Python, so the
+    columns are taken in blocks instead, those without NaN at once and the others by their count of values, each
+    through `np.quantile` on its values in sorted order (NaN sort last). An all-NaN column is NaN."""
+    import numpy as np
+
+    out = np.full(reps.shape[1], np.nan)
+    n = (~np.isnan(reps)).sum(axis=0)
+    full = n == reps.shape[0]
+    if full.any():
+        out[full] = np.quantile(reps[:, full], q, axis=0)
+    part = np.flatnonzero((n > 0) & ~full)
+    if part.size:
+        s = np.sort(reps[:, part], axis=0)
+        npart = n[part]
+        for k in np.unique(npart):
+            cols = npart == k
+            out[part[cols]] = np.quantile(s[:k][:, cols], q, axis=0)
+    return out
 
 
 def _legacy_flagged(dm: dict[str, Any]) -> list[dict[str, Any]]:

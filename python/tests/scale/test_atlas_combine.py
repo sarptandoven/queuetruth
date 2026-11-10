@@ -201,3 +201,29 @@ def test_combine_reads_a_slice_at_a_time_and_pools_the_whole_window(days, tmp_pa
     flagged_rows = len(POPS) * len(MODES) * len(MODELS) * len(HORIZONS)
     assert man["flagged_cell_rows"] == flagged_rows and man["flag_policy"] == policy
     assert pq.read_table(out / "maps_by_tier.parquet").num_rows > 0
+
+
+@pytest.mark.parametrize("seed", range(8))
+def test_day_bootstrap_quantiles_are_nanquantile(seed: int) -> None:
+    """`atlas._nanquantile0` takes the columns in blocks instead of one Python call each, with the same numbers as
+    `np.nanquantile(axis=0)`: NaN-free columns, columns with NaN of every count, all-NaN and one-value columns, ties."""
+    import warnings
+
+    import atlas
+
+    rng = np.random.default_rng(seed)
+    b, c = int(rng.integers(1, 1200)), int(rng.integers(1, 300))
+    x = rng.normal(size=(b, c)) * 10 ** rng.uniform(-3, 3)
+    if seed % 2:
+        x = np.round(x, 1)
+    if seed % 4:
+        x[rng.random((b, c)) < rng.uniform(0, 0.9)] = np.nan
+    x[:, 0] = np.nan
+    if c > 1:
+        x[:, 1] = np.where(np.arange(b) == 0, 1.5, np.nan)
+    for q in (0.025, 0.5, 0.975):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)  # the all-NaN column
+            want = np.nanquantile(x, q, axis=0)
+        got = atlas._nanquantile0(x, q)
+        assert np.array_equal(got, want, equal_nan=True)
