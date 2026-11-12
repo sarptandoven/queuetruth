@@ -47,6 +47,7 @@ nav:
   - Read the atlas: concepts/fill-realism-atlas.md
   - Check my backtester:
       - Check my backtest: how-to/check-my-backtest.md
+      - Fit my backtester's fill model: how-to/fit-my-backtester.md
       - hftbacktest: how-to/calibrate-hftbacktest.md
       - NautilusTrader: how-to/nautilustrader.md
       - Freqtrade and Hummingbot: how-to/reconcile-freqtrade-hummingbot.md

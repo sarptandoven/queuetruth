@@ -12,8 +12,8 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   (`docs/how-to/calibrate-hftbacktest.md`) merges the plugin page and the calibration recipe and starts with the
   `queuetruth-hftbacktest` plugin; the old plugin page points to its sections, and the plugin README keeps a short
   example and links the guide. "Check and calibrate my NautilusTrader backtest" (`docs/how-to/nautilustrader.md`)
-  picks a setting from the atlas, fits `prob_fill_on_limit` with `calibrate nt-touch` (runnable on the synthetic
-  dataset), passes it to `add_venue` with `**qtn.venue_options(cal)` from the `queuetruth-nautilus` plugin, and
+  picks a setting from the atlas, fits `prob_fill_on_limit` with `queuetruth fit --backtester nautilus` (runnable on
+  the synthetic dataset), passes it to `add_venue` with `**qtn.venue_options(cal)` from the `queuetruth-nautilus` plugin, and
   scores the backtest against live fills. The docs menu lists one page for each.
 
 - **Touch tables for bar-based backtests** (docs/concepts/touch-tables.md). For the atlas's shadow orders resting
@@ -63,6 +63,21 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   row per order in symbols, decimal prices and venue-local times), the imported log and the full scorecard. Without
   `--data` it says what it needs and exits 2; the estimate from the atlas comes later. Guide:
   docs/how-to/check-my-backtest.md.
+
+- **`queuetruth fit --backtester hftbacktest|nautilus|databento --data DATASET`** (and `qt.fit(backtester,
+  data=...)`): the setting that fixes a backtester's fill model, with its verdict. It runs the calibration that
+  already exists for the backtester and the input (order-level data: `calibrate alloc` or `calibrate nt-touch`;
+  `--live LOG --data DATASET`: `calibrate-live`), compares the fit with the library default on held-out data and
+  prints the answer first, for example "Use p = 0.5221 (95% CI 0.4839 to 0.5715) for NautilusTrader
+  prob_fill_on_limit: on held-out data (2026-06-16, 500 shadows) it beats the default p = 1; at 60s the fill rate
+  is off by +2.8 pp with the fit against +9.2 pp with the default". The paste-ready snippet (`queuetruth export`;
+  for NautilusTrader also the `qtn.venue_options` line of the plugin) is written only when the verdict passes. A
+  refused fit writes nothing and says why and what would make it pass, with how much more data it needs where that
+  is the reason (orders for 30 informative events, minutes of data for an interval, held-out orders). The held-out
+  window is `--split 70%` (the first 70% of the data in time; the default) or `--test-after HH:MM` (venue-local
+  time), cut where the data are: `--train blocks:0-3/5 --test blocks:4/5` are fifths of the trading session, so on
+  a short capture the test window held no order. `--train` / `--test` stay for experts. Exit code 0 when the fit
+  passes, 1 when it is refused. Guide: docs/how-to/fit-my-backtester.md.
 
 - **Atlas backfill** (`.github/workflows/atlas-backfill.yml`, ROADMAP W1): a manual run fills the atlas window at once.
   `scripts/scale/iex_latest.py --count N --kept FILE` lists the N newest published IEX sessions the `atlas-days`

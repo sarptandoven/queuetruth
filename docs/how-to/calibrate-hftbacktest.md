@@ -18,6 +18,10 @@ exact queue on free IEX DEEP+ data, by liquidity tier, and names the closest Pro
 fills fewer orders than the exact queue because of hftbacktest's own rules, not a modelling error: see
 [the L2 model zoo](../concepts/l2-model-zoo.md#c-hbt_l3_fifo-order-level-input).
 
+For the fitted setting alone, in one command and without the plugin, use
+`queuetruth fit --backtester hftbacktest` ([Fit my backtester's fill model](fit-my-backtester.md)). This page goes
+further: it scores hftbacktest itself, compares the power families, and checks the fit by queue position.
+
 The page has three parts. The plugin, `queuetruth-hftbacktest`, does the work in a few calls: it scores hftbacktest
 itself against the exact queue and calibrates its queue model. Then the same calibration step by step with
 queuetruth's own commands, on the synthetic dataset, so you can see every file. Then that recipe on your own data,

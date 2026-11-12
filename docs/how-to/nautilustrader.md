@@ -3,7 +3,7 @@
 **Goal:** choose a NautilusTrader fill setting that fills about as often as the real queue, fit it on your own
 data when you can, put it in your backtest with one line, and check it against your live fills.
 
-**You need:** for step 1, nothing. For step 2, `pip install queuetruth` and order-level (L3 or MBO) data for the
+**You need:** for step 1, nothing. For step 2, `pip install queuetruth` and order-level (MBO) data for the
 venue you backtest, as a queuetruth dataset (`queuetruth ingest`; [a free IEX DEEP+ day](iex-public-demo.md) works).
 For step 3, the `queuetruth-nautilus` plugin
 ([`integrations/nautilus`](https://github.com/sarptandoven/queuetruth/tree/main/integrations/nautilus)) next to
@@ -30,45 +30,30 @@ changing how it fills.
 
 ## 2. Fit `prob_fill_on_limit` on your data
 
-`queuetruth calibrate nt-touch` fits NautilusTrader's `prob_fill_on_limit` against the exact queue on one window
-and scores it against the default `p = 1` on another. This block runs on the synthetic dataset that ships with
-queuetruth (CME rules, two instruments, two days); its numbers say nothing about a real venue.
+`queuetruth fit --backtester nautilus` fits NautilusTrader's `prob_fill_on_limit` against the exact queue on part
+of your data (it runs `queuetruth calibrate nt-touch`) and compares it with the default `p = 1` on the part it did
+not see. It writes the setting only when the fit wins there. This block runs on the synthetic dataset that ships
+with queuetruth (CME rules, two instruments, two days); its numbers say nothing about a real venue.
 
 <!-- check-docs: run -->
 ```sh
 queuetruth fixtures synth --out synth > /dev/null
-queuetruth shadows sample --data synth --n 2000 --out shadows.parquet \
-    --placements 0:0.7,-1:0.3 --qty lots:1:0.5,lots:5:0.5
-queuetruth calibrate nt-touch --data synth --shadows shadows.parquet \
-    --train 2026-06-15 --test 2026-06-16 --out cal-nt
+queuetruth fit --backtester nautilus --data synth
 ```
 
-The answer comes first: the fitted `p` with its bootstrap interval, then per horizon the held-out log loss and
-fill-rate bias of the fitted `p` and of `p = 1`, and the verdict. Only a fit that beats the default out of sample
-is `exportable`:
-
-<!-- check-docs: run -->
-```python
-import json
-
-c = json.load(open("cal-nt/calibration.json"))
-print(c["family"], c["param_name"], "=", round(c["estimate"], 4), "bootstrap 95%:", c["ci_bootstrap"])
-print("verdict:", c["trust"]["verdict"], c["trust"]["reasons"])
-```
-
-On your data, place the shadows where your strategy places orders (or use your own orders:
-`queuetruth shadows from-live`, see [Import fills from my venue or broker](import-live-logs.md)), and fit on some
-days and test on others:
+The first line is the answer: the fitted `p` with its 95% interval, whether it beats `p = 1` on the held-out data,
+and by how much. Then come the held-out table per horizon, the verdict and what to paste. On your data:
 
 <!-- check-docs: skip (needs user data) -->
 ```sh
-queuetruth calibrate nt-touch --data my-dataset --shadows my-orders.parquet \
-    --train 2026-10-12,2026-10-13 --test 2026-10-14 --out cal-nt
+queuetruth fit --backtester nautilus --data my-dataset --shadows my-orders.parquet
 ```
 
-`--queue-gated` fits `p` for `queue_position=True` instead. With one day, split it into blocks:
-`--train blocks:0-3/5 --test blocks:4-4/5`. The method and its limits are in
-[Calibration](../concepts/calibration.md).
+`--shadows` takes orders placed like yours (or your own: `queuetruth shadows from-live`, see
+[Import fills from my venue or broker](import-live-logs.md)); without it `fit` samples 1,000.
+`--family nt-queue-l2-prob-touch` fits `p` for `queue_position=True` instead, and `--live` fits to your own live
+fills. The split, the verdict and every option are in [Fit my backtester's fill model](fit-my-backtester.md); the
+method is in [Calibration](../concepts/calibration.md).
 
 **What `p` does not fix.** `prob_fill_on_limit` thins touch fills at random, one draw per print at the order's
 price. It corrects the aggregate fill rate, not which orders fill, so per-order results and markouts stay closer
@@ -94,7 +79,7 @@ from nautilus_trader.execution import FixedFeeModel  # 1.x: leave out
 from nautilus_trader.model import AccountType, Currency, Money, OmsType
 
 USD = Currency.from_str("USD")
-cal = qtn.load_calibration("cal-nt/calibration.json")
+cal = qtn.load_calibration("qt-fit/calibration/calibration.json")
 engine.add_venue(
     venue=venue,
     oms_type=OmsType.NETTING,
@@ -110,18 +95,16 @@ engine.add_venue(
 `trade_execution=True`, `queue_position` (True only for a queue-gated fit) and, when the calibration has one, the
 latency model. A refused calibration raises `CalibrationRefused` (`QT-CALIB-001`) and gives no settings. On 1.x,
 import `AccountType` and `OmsType` from `nautilus_trader.model.enums` and `Currency` and `Money` from
-`nautilus_trader.model.objects`. `queuetruth-nautilus snippet cal-nt/calibration.json` prints the same code for the
+`nautilus_trader.model.objects`. `queuetruth-nautilus snippet qt-fit/calibration/calibration.json` prints the same code for the
 installed release line, and `queuetruth-nautilus inspect` shows what it sets and the trust verdict. The plugin's
 [README](https://github.com/sarptandoven/queuetruth/blob/main/integrations/nautilus/README.md) has the held-out
 results inside NautilusTrader, the high-level `venue_config` and the mapping per release line.
 
-Without the plugin, `queuetruth export nautilus --calibration cal-nt/calibration.json --out nt_snippet.py` writes a
-`FillModel(prob_fill_on_limit=...)` line to paste, with the fit in its header:
+Without the plugin, paste the `FillModel(prob_fill_on_limit=...)` line `fit` wrote, with the fit in its header:
 
 <!-- check-docs: run -->
 ```sh
-queuetruth export nautilus --calibration cal-nt/calibration.json --out nt_snippet.py 2> /dev/null
-grep -E "^# fit|FillModel\(" nt_snippet.py
+grep -E "^# fit|FillModel\(" qt-fit/nautilus.py
 ```
 
 ## 4. Score it against your live fills

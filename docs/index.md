@@ -29,6 +29,7 @@ venue with its own rules: [how the atlas is made](concepts/fill-realism-atlas.md
 
 | You use | Start here |
 |---|---|
+| hftbacktest, NautilusTrader or Databento's queue estimator, to fix the fill model | [Fit my backtester's fill model](how-to/fit-my-backtester.md) |
 | hftbacktest | [Score and calibrate my hftbacktest backtest](how-to/calibrate-hftbacktest.md) |
 | NautilusTrader | [Check and calibrate my NautilusTrader backtest](how-to/nautilustrader.md) |
 | Freqtrade or Hummingbot | [Reconcile Freqtrade and Hummingbot runs](how-to/reconcile-freqtrade-hummingbot.md) |
