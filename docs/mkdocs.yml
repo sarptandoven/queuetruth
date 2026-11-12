@@ -101,7 +101,7 @@ nav:
       - Changelog: https://github.com/sarptandoven/queuetruth/blob/main/CHANGELOG.md
       - Contributing: https://github.com/sarptandoven/queuetruth/blob/main/CONTRIBUTING.md
       - Nightly cross-checks: how-to/nightly-checks.md
-      - Run the atlas: how-to/run-the-atlas.md
+      - Run the atlas (maintainers): how-to/run-the-atlas.md
       - Design specification: design/spec.md
       - Design extensions: design/extensions/index.md
       - How it was built and verified: design/build-plan.md
