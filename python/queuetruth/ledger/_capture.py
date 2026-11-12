@@ -27,10 +27,11 @@ from pydantic import BaseModel, ValidationError
 
 from queuetruth.dataset import MANIFEST_FILE, read_manifest_doc
 from queuetruth.errors import QtError
+from queuetruth.integrity import canonical_json
 from queuetruth.ledger import _series
 from queuetruth.ledger._store import GENESIS_PREV, Draft, Ledger, now_ns
 from queuetruth.ledger.models import LABEL, RUN_KINDS, CodeVersion, ErrorInfo, LedgerRecord, Series
-from queuetruth.schemas.runid import EXECUTION_ONLY, canonical_json, drop_v1_1_defaults, is_ref
+from queuetruth.schemas.runid import EXECUTION_ONLY, drop_v1_1_defaults, is_ref
 from queuetruth.schemas.runid import run_id as _run_id
 
 log = logging.getLogger("queuetruth.ledger")

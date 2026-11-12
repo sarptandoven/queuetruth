@@ -157,7 +157,21 @@ internal.
 Spec and summary models live in `queuetruth.schemas` and are documented field by field in [Schemas](schemas.md).
 """
 
-PY_MODULES = ["units", "data", "dataset", "stats", "eval", "model", "live", "score", "export", "report", "frames", "client"]
+PY_MODULES = [
+    "integrity",
+    "units",
+    "data",
+    "dataset",
+    "stats",
+    "eval",
+    "model",
+    "live",
+    "score",
+    "export",
+    "report",
+    "frames",
+    "client",
+]
 
 
 def spec43_names() -> set[str]:
@@ -587,8 +601,7 @@ def gen_importers() -> str:
     out = [GENERATED, "", IMPORTERS_INTRO, "", "| `--venue` | Kind | What it reads | Guide |", "|---|---|---|---|"]
     for d in defs:
         out.append(
-            f"| [`{d.cli_venue}`](#{d.cli_venue}) | {d.kind} | {md_escape(d.description)} | "
-            f"[guide](../{d.docs}) |"
+            f"| [`{d.cli_venue}`](#{d.cli_venue}) | {d.kind} | {md_escape(d.description)} | [guide](../{d.docs}) |"
         )
     out.append("")
     for d in defs:

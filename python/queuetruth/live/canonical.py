@@ -30,6 +30,7 @@ import pyarrow.parquet as pq
 from queuetruth._version import __version__
 from queuetruth.dataset import DatasetWriter
 from queuetruth.errors import QtError
+from queuetruth.integrity import canonical_json
 from queuetruth.live._common import input_error, read_text
 from queuetruth.schemas.arrow import DICT_VALUES, FULL_SCHEMAS, SCHEMAS, conform, upgrade
 from queuetruth.schemas.io import sha256_file
@@ -267,7 +268,7 @@ def write_log(
     p = Path(out)
     w = DatasetWriter(p)
     orders, events = upgrade(orders, ORDERS), upgrade(events, EVENTS)
-    scales = json.dumps(scales_from_rows(table_rows(orders)), separators=(",", ":"), sort_keys=True)
+    scales = canonical_json(scales_from_rows(table_rows(orders)), "compact-ascii")
     order_schema = FULL_SCHEMAS[ORDERS].with_metadata({**(FULL_SCHEMAS[ORDERS].metadata or {}), SCALES_KEY: scales})
     files = [
         w.write_table(ORDERS_FILE, orders, order_schema),

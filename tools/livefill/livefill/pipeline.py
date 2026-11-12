@@ -62,7 +62,7 @@ def _sha(path: Path) -> str:
 def run_id(captures: list[Path], logs: list[Path], options: dict[str, Any]) -> str:
     """First 16 hex digits of sha256(canonical_json({engine_version, spec})) (design section 7.3)."""
     import queuetruth
-    from queuetruth.schemas.runid import canonical_json
+    from queuetruth.integrity import canonical_json
 
     spec = {
         "captures": [

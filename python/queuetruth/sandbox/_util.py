@@ -4,7 +4,6 @@ rendering, dates, and canonical hashing (SPEC 7.3 canonical JSON)."""
 from __future__ import annotations
 
 import datetime as _dt
-import hashlib
 import math
 import numbers
 import re
@@ -14,7 +13,7 @@ from typing import Any
 
 from queuetruth import units
 from queuetruth.errors import QtError
-from queuetruth.schemas.runid import canonical_json
+from queuetruth.integrity import canonical_sha256, sha256_text
 
 NS = 1
 US = 1_000
@@ -223,14 +222,9 @@ def dec(x: float) -> Decimal:
     return Decimal(repr(float(x)))
 
 
-def sha256_text(text: str) -> str:
-    """Lower-case hex sha256 of UTF-8 text."""
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
-
-
 def digest(value: Any) -> str:
     """sha256 of the canonical JSON (RFC 8785) of a JSON value."""
-    return sha256_text(canonical_json(value))
+    return canonical_sha256(value)
 
 
 __all__ = [

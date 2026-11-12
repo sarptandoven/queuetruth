@@ -3,7 +3,7 @@
 Status: implemented in `tools/livefill/` (Python, standard library plus pyarrow, numpy and queuetruth; `websockets`
 for live captures only). It sits outside the `queuetruth` package and talks to it only through public APIs:
 `queuetruth.api.ingest`, `queuetruth.api.score`, `queuetruth.live.write_canonical_log`, `queuetruth.live.check`,
-`queuetruth.stats.clustered_mcnemar`, `queuetruth.schemas.runid.canonical_json` and the `queuetruth` CLI
+`queuetruth.stats.clustered_mcnemar`, `queuetruth.integrity.canonical_json` and the `queuetruth` CLI
 (`zoo --list-models`). User guide: `docs/how-to/own-account-live-fills.md`.
 
 ## Scope

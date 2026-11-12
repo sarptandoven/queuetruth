@@ -265,6 +265,32 @@ Interactive replay session: `.advance_to(ts)`, `.bbo(inst)`, `.depth(inst, n)`, 
 | `take_results` | `(self) -> pa.Table` | Results of the shadows that ended since the last call (`qt.shadow_results`). |
 | `with_orders` | `(spec: s.ReplaySpec \| dict[str, Any]) -> Session` | A session that also takes shadow orders while it runs. Every partition replays as `replay` would replay it with this spec (latency model and seed, fill rule, hidden-print policy, exclusions, the dataset's feed gaps and trading halts); `shadows` and `amends` stay unset, orders come from `submit`, `cancel` and `amend`, each at or after `position`. The session reads the data once however many orders it takes, and its fills and results equal those of one `replay` with every order in its input. |
 
+## `queuetruth.integrity`
+
+Integrity primitives, one implementation each (contracts layer): canonical JSON in its published byte forms, sha256 of bytes, text, files and streams, the hash-chain digests and the atlas Merkle tree.
+
+| Name | Kind | Binding | Signature | Description |
+|---|---|---|---|---|
+| `canonical_bytes` | function |  | `(value: Any, form: Form = jcs) -> bytes` | `canonical_json(value, form)` as UTF-8. |
+| `canonical_json` | function |  | `(value: Any, form: Form = jcs) -> str` | The canonical JSON text of `value` in `form` (module docstring). |
+| `canonical_sha256` | function |  | `(value: Any, form: Form = jcs) -> str` | Hex sha256 of the canonical JSON of `value` in `form` (`queuetruth.integrity.canonical`). |
+| `entry_digest` | function |  | `(entry: dict[str, Any], without: str) -> str` | Hex sha256 of the `jcs` canonical JSON of `entry` without its own hash field `without`. |
+| `escape_string` | function |  | `(s: str) -> str` | A JSON string literal escaped as RFC 8785 says (the reference rule; `jcs` uses the equal C encoder). |
+| `format_float` | function |  | `(x: float) -> str` | ECMAScript Number::toString of a finite float (shortest round-trip digits), as RFC 8785 writes numbers. |
+| `leaf_hash` | function |  | `(leaf_doc: dict[str, Any]) -> str` | Hex leaf hash of one unit's leaf document. |
+| `ledger_line` | function |  | `(record: dict[str, Any]) -> tuple[bytes, str]` | (line with newline, hash) of a run ledger record: the canonical JSON of `{"hash": H, "record": R}` where `H` is the sha256 of the exact bytes of `R` in the line. |
+| `merkle_proof` | function |  | `(leaves: Sequence[str], index: int) -> list[list[str]]` | Sibling path of leaf `index`: `[["L" or "R", sibling hex], ...]` from the leaf up (carried nodes skipped). |
+| `merkle_root` | function |  | `(leaves: Sequence[str]) -> str` | Hex root over hex leaves, in the order given. |
+| `sha256_bytes` | function |  | `(data: bytes) -> str` | Hex sha256 of `data`. |
+| `sha256_file` | function |  | `(path: str \| Path, chunk: int = 1048576) -> str` | Hex sha256 of a file's bytes. |
+| `sha256_stream` | function |  | `(stream: BinaryIO, chunk: int = 1048576) -> str` | Hex sha256 of everything left in a binary stream. |
+| `sha256_text` | function |  | `(text: str) -> str` | Hex sha256 of the UTF-8 bytes of `text`. |
+| `utf16_key` | function |  | `(s: str) -> bytes` | Sort key of an object member name under RFC 8785 (UTF-16 code units). |
+| `value_text` | function |  | `(value: Any) -> str` | A value as text inside a rendered claim: strings verbatim, everything else `jcs` canonical JSON. |
+| `verify_proof` | function |  | `(leaf: str, proof: Sequence[Sequence[str]], root: str) -> bool` | True when `proof` takes `leaf` to `root`. |
+
+Constants: `CHUNK`, `FORMS`, `GENESIS_ZERO`.
+
 ## `queuetruth.units`
 
 Human units at every boundary (plan section 3, principle 7): durations, horizons, prices, times and sides.
@@ -352,6 +378,7 @@ Statistics used by evaluation and the scorer (SPEC 4.3 `queuetruth.stats`, 5.5.7
 | `binom_exact_two_sided` | function | SPEC 4.3 | `(k: int, n: int, p: float = 0.5) -> float` | Exact two-sided binomial p-value; for `p = 0.5`: `min(1, 2 * P(X <= min(k, n - k)))`, else scipy's binomtest. |
 | `bins` | function |  | `(p: np.ndarray, n_bins: int = 10) -> np.ndarray` | Bin label per forecast (equal-count by stable rank; ties share the lowest bin of their group). |
 | `block_counts` | function |  | `(n_blocks: int, b: int, seed: int) -> np.ndarray` | `(b, n_blocks)` multiplicity of each block in each replicate (same draws as `day_block_bootstrap`). |
+| `block_counts_chunks` | function |  | `(n_blocks: int, b: int, seed: int, max_cells: int = 4000000) -> Iterator[np.ndarray]` | `(rows, n_blocks)` float multiplicity blocks whose concatenation equals `queuetruth.stats.block_counts(n_blocks, b, seed)`, each at most `max_cells` cells. |
 | `block_labels` | function | SPEC 4.3 | `(session_date: np.ndarray, ts_ns: np.ndarray, min_dates: int = 5) -> tuple[np.ndarray, str]` | Block label per row and the block kind: `("day", days since epoch)` with >= `min_dates` distinct dates, else `("30min", floor(ts / 30 min))` (UTC half-hours; equal to local half-hours for whole/half-hour UTC offsets). |
 | `block_replicates` | function |  | `(blocks: np.ndarray, stat: Callable[[np.ndarray], float], b: int, seed: int) -> tuple[float, np.ndarray]` | `(stat(all rows), replicates)`; `stat` receives row indices (with repetition) into the caller's data. |
 | `bootstrap_indices` | function |  | `(n: int, b: int, *, block_size: int \| None = None, kind: Bootstrap = stationary, seed: int = 0, test_id: str = selection) -> np.ndarray` | `b x n` row indices of a stationary, circular or moving block bootstrap (module docstring), drawn from `bootstrap_rng(seed, test_id)` in chunks of at most `CHUNK_ELEMENTS` indices (the tests use the same draws internally without materialising all `b x n` of them). |
@@ -364,6 +391,7 @@ Statistics used by evaluation and the scorer (SPEC 4.3 `queuetruth.stats`, 5.5.7
 | `CI` | class |  | | Point estimate with a percentile confidence interval. |
 | `ci_blocks` | function |  | `(session_date: np.ndarray, ts_ns: np.ndarray, instrument_id: np.ndarray, block: str = auto, *, labeler: Callable[[np.ndarray, np.ndarray], tuple[np.ndarray, str]] \| None = None, min_blocks: int = 5) -> CiBlocks` | Bootstrap blocks for one row per shadow (or order). `auto` keeps `block_labels` (day blocks with >= 5 dates, else 30-minute buckets) whenever that gives at least `MIN_CI_BLOCKS` blocks, so long runs are unchanged; on shorter data it uses (instrument, minute of `ts_ns`) clusters, the demo's choice, and when those are still fewer than `MIN_CI_BLOCKS` the result is not `available`. A forced kind is used as it is (minutes and half-hours are UTC buckets of `ts_ns`). `labeler` replaces `block_labels` for `auto` and `min_blocks` the threshold (tests). |
 | `CiBlocks` | class |  | | Bootstrap blocks of a run: `labels` = dense block index per row (0..n-1), `kind` = `day`, `30min`, `1min` or `instrument_minute`, `n` = number of blocks, `requested` = the choice asked for. `available` is false with fewer than `MIN_CI_BLOCKS` blocks: callers then report no interval and no significance. |
+| `clopper_pearson` | function |  | `(k: int, n: int, level: float = 0.95) -> tuple[float \| None, float \| None]` | Exact binomial interval for `k` successes in `n` (rows treated as independent). |
 | `clustered_mcnemar` | function | SPEC 4.3 | `(live_filled: np.ndarray, sim_filled: np.ndarray, clusters: np.ndarray, *, b: int = 1000, seed: int = 0, alpha: float = 0.05) -> ClusteredDiscordance` | Primary cluster-robust discordance test of paired fill outcomes (see module docstring). |
 | `ClusteredDiscordance` | class |  | | Cluster-robust discordance test result (primary) with plain McNemar as secondary. |
 | `day_block_bootstrap` | function | SPEC 4.3 | `(blocks: np.ndarray, stat: Callable[[np.ndarray], float], b: int, seed: int, alpha: float = 0.05) -> CI` | Block bootstrap percentile CI over resampled blocks. |
@@ -389,6 +417,7 @@ Statistics used by evaluation and the scorer (SPEC 4.3 `queuetruth.stats`, 5.5.7
 | `probabilistic_sharpe_ratio` | function |  | `(sr: float, n: int, *, skew: float = 0.0, kurtosis: float = 3.0, sr_benchmark: float = 0.0) -> float` | `Phi((SR - SR*) / sigma(SR))` (Bailey and Lopez de Prado 2012); an infinite `SR` (a constant non-zero series) reads 1 above the benchmark and 0 below. |
 | `probability_of_backtest_overfitting` | function |  | `(performance: np.ndarray, *, n_splits: int = 16, metric: "Literal[sharpe, mean] \| Callable[[np.ndarray], np.ndarray]" = sharpe) -> PboResult` | PBO by combinatorially symmetric cross-validation (module docstring). `performance` is `T x N` (periods x trials); `metric` maps a `t x N` row subset to `N` performances (callables get the rows in time order). |
 | `psr_from_returns` | function |  | `(returns: np.ndarray, sr_benchmark: float = 0.0) -> float` | PSR of a return series with its own sample moments. |
+| `ratio_replicates` | function |  | `(counts: np.ndarray, num: np.ndarray, den: np.ndarray, *, summation: "Literal[matmul, elementwise]" = matmul) -> np.ndarray` | Bootstrap replicates of `sum num / sum den` from per-block sums and block multiplicities `counts` (`(b, n_blocks)`); NaN where a replicate's denominator is not positive. |
 | `reliability_table` | function | SPEC 4.3 | `(p: np.ndarray, y: np.ndarray, n_bins: int = 10) -> dict[str, np.ndarray]` | Reliability table with Wilson CIs: columns bin, count, mean_p, observed_rate, p_min, p_max, rate_lo, rate_hi. |
 | `sharpe_moments` | function |  | `(returns: np.ndarray) -> tuple[float, int, float, float]` | `(SR, n, skewness, kurtosis)`: biased sample moments, Pearson (non-excess) kurtosis (3 for constant series). |
 | `sharpe_ratio` | function |  | `(returns: np.ndarray) -> float` | Per-period Sharpe ratio `mean / std (ddof = 1)`; 0 for a constant zero series, `+-inf` for a constant non-zero one. |
@@ -408,8 +437,10 @@ Statistics used by evaluation and the scorer (SPEC 4.3 `queuetruth.stats`, 5.5.7
 | `uno_c_index` | function | SPEC 4.3 | `(time: np.ndarray, event: np.ndarray, risk: np.ndarray, tau: float \| None = None, censor: np.ndarray \| None = None) -> float` | Uno's concordance index (improper; discrimination only). |
 | `wilcoxon_signed_rank` | function | SPEC 4.3 | `(d: np.ndarray, zero_method: str = wilcox) -> WilcoxonResult` | Two-sided Wilcoxon signed-rank test, `scipy.stats.wilcoxon(d, zero_method, method="auto")`; NaN if no data. |
 | `WilcoxonResult` | class |  | | Wilcoxon signed-rank result (matches `scipy.stats.wilcoxon`). |
+| `wilson` | function |  | `(k: float, n: float, *, z: float = 1.959963984540054, edges: "Literal[exact, clip, none]" = exact) -> tuple[float, float] \| None` | Wilson score interval for `k` successes in `n` trials (module docstring for `edges`). |
+| `wilson_arrays` | function |  | `(rate: np.ndarray, n: np.ndarray, *, z: float = 1.959963984540054) -> tuple[np.ndarray, np.ndarray]` | Wilson bounds per element of observed rates `rate` over counts `n` (float arrays, no edge handling). |
 
-Constants: `CI_BLOCK_CHOICES`, `MIN_CI_BLOCKS`.
+Constants: `CI_BLOCK_CHOICES`, `MIN_CI_BLOCKS`, `Z95`.
 
 ## `queuetruth.eval`
 

@@ -70,7 +70,7 @@ from queuetruth.cert.util import environment, now_ns
 from queuetruth.dataset import MANIFEST_FILE, read_manifest_doc
 from queuetruth.dataset import dataset_id as _dataset_id
 from queuetruth.errors import QtError
-from queuetruth.schemas.runid import canonical_json
+from queuetruth.integrity import canonical_json
 
 LABEL_RE = re.compile(LABEL_PATTERN)
 #: `{RUN#/pointer}` or `{RUN:FILE#/pointer}` inside claim text; `{{` and `}}` are literal braces.

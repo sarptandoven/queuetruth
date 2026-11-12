@@ -11,7 +11,6 @@ by its newline: bytes after the last newline are an append that was cut off and 
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import os
@@ -25,17 +24,17 @@ from typing import Any, NamedTuple
 from pydantic import ValidationError
 
 from queuetruth.errors import QtError
+from queuetruth.integrity import GENESIS_ZERO, canonical_json, ledger_line, sha256_bytes
 from queuetruth.ledger import _series
 from queuetruth.ledger._lock import exclusive
 from queuetruth.ledger.models import Head, LedgerRecord, LedgerVerification, Problem
-from queuetruth.schemas.runid import canonical_json
 
 log = logging.getLogger("queuetruth.ledger")
 
 LEDGER_FILE = "ledger.jsonl"
 LOCK_SUFFIX = ".lock"
 TORN_DIR = "torn"
-GENESIS_PREV = "0" * 64
+GENESIS_PREV = GENESIS_ZERO
 _PREFIX = b'{"hash":"'
 _MID = b'","record":'
 _BODY_AT = len(_PREFIX) + 64 + len(_MID)
@@ -60,9 +59,7 @@ def now_ns() -> int:
 
 def encode_line(record: dict[str, Any]) -> tuple[bytes, str]:
     """(line with newline, hash) of a record dict (JSON types only)."""
-    body = canonical_json(record).encode("utf-8")
-    h = hashlib.sha256(body).hexdigest()
-    return _PREFIX + h.encode("ascii") + _MID + body + b"}\n", h
+    return ledger_line(record)
 
 
 @dataclass
@@ -141,7 +138,7 @@ def scan_bytes(data: bytes, *, full: bool, stop_at_first: bool) -> Scan:
         assert ln.record is not None and ln.hash is not None
         seq = ln.record.get("seq") if isinstance(ln.record.get("seq"), int) else None
         n_before = out.n_problems
-        if hashlib.sha256(ln.body).hexdigest() != ln.hash:
+        if sha256_bytes(ln.body) != ln.hash:
             out.add(i, seq, "hash_mismatch", "the record's bytes do not hash to the line's hash (record altered)")
         if full:
             try:
@@ -324,7 +321,7 @@ class Ledger:
                 )
             before = self._parse_last(fd, nl + 1) if nl >= 0 else None
             ln = _split(tail)
-            whole = ln.error is None and ln.hash == hashlib.sha256(ln.body).hexdigest()
+            whole = ln.error is None and ln.hash == sha256_bytes(ln.body)
             rec = ln.record or {}
             extends = whole and (
                 (before is None and rec.get("seq") == 0 and rec.get("prev") == GENESIS_PREV)
@@ -360,7 +357,7 @@ class Ledger:
     def _set_aside(self, tail: bytes, offset: int) -> None:
         d = self.directory / TORN_DIR
         d.mkdir(exist_ok=True)
-        name = f"{offset}-{hashlib.sha256(tail).hexdigest()[:12]}.bin"
+        name = f"{offset}-{sha256_bytes(tail)[:12]}.bin"
         (d / name).write_bytes(tail)
         log.warning(
             "ledger: %d byte(s) of an append that was cut off at offset %d moved to %s", len(tail), offset, d / name

@@ -11,8 +11,9 @@ Hashing rules (the manifest contract, `docs/scale.md`):
 - Merkle tree: leaves `sha256(b"\\x00" + canonical_json(leaf_doc))` in unit-id order; inner nodes
   `sha256(b"\\x01" + left + right)`; an odd node is carried up unchanged; the root of no leaves is sha256(b"").
 
-`canonical_json`, `sha256_hex`, `leaf_hash` and the Merkle functions live in `queuetruth.atlas.verify` (so
-`queuetruth verify atlas` checks with the same code) and are re-exported here.
+`canonical_json`, `sha256_hex`, `leaf_hash` and the Merkle functions are re-exported from `queuetruth.atlas.verify`
+(so `queuetruth verify atlas` checks with the same code), which takes them from `queuetruth.integrity`
+(`python/tests/integrity` pins their bytes).
 """
 
 from __future__ import annotations
@@ -32,7 +33,7 @@ for _p in (REPO / "scripts" / "realdata", REPO / "scripts" / "repro", HERE):
 
 from breadth import HORIZONS, POPULATIONS, STD_PLACEMENTS, STD_QTY, TIERS  # noqa: E402
 from reproduce import build_info as _build_info  # noqa: E402
-from reproduce import free_gib, sha256_file  # noqa: E402
+from reproduce import free_gib  # noqa: E402
 
 # the hashing and the Merkle tree live in the package, so `queuetruth verify atlas` checks with the same code
 from queuetruth.atlas.verify import (  # noqa: E402
@@ -43,6 +44,7 @@ from queuetruth.atlas.verify import (  # noqa: E402
     sha256_hex,
     verify_proof,
 )
+from queuetruth.integrity import sha256_file  # noqa: E402
 
 S1 = 1_000_000_000
 H_MAX_NS = 300 * S1

@@ -31,7 +31,7 @@ from queuetruth.dataset._manifest import (
     read_manifest_doc,
 )
 from queuetruth.errors import QtError
-from queuetruth.schemas.io import sha256_file
+from queuetruth.integrity import sha256_file
 
 DATA_QUALITY_FILE = "data_quality.json"
 ORDERS_FILE = "orders.parquet"

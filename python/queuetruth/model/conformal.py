@@ -80,7 +80,6 @@ from typing import Any, Literal
 import numpy as np
 import pyarrow as pa
 from pydantic import ValidationError
-from scipy.stats import beta as beta_dist
 
 from queuetruth.model._common import (
     CENSOR,
@@ -107,6 +106,7 @@ from queuetruth.schemas.conformal import (
 from queuetruth.schemas.io import sha256_file, write_table
 from queuetruth.schemas.runid import run_id, spec_echo
 from queuetruth.stats._seed import stable_seed
+from queuetruth.stats.intervals import clopper_pearson as _clopper_pearson
 
 SETS_SCHEMA_NAME = "qt.conformal_sets"
 REPORT_NAME = "conformal.json"
@@ -1041,16 +1041,6 @@ def _ratio(num: float, den: float) -> float | None:
     return float(num / den) if den > 0 else None
 
 
-def clopper_pearson(k: int, n: int, level: float = 0.95) -> tuple[float | None, float | None]:
-    """Exact binomial interval for `k` successes in `n` (rows treated as independent)."""
-    if n <= 0:
-        return None, None
-    a = (1.0 - level) / 2.0
-    lo = 0.0 if k == 0 else float(beta_dist.ppf(a, k, n - k + 1))
-    hi = 1.0 if k == n else float(beta_dist.ppf(1.0 - a, k + 1, n - k))
-    return lo, hi
-
-
 def _iso(days: int) -> str:
     import datetime as dt
 
@@ -1424,7 +1414,7 @@ def evaluate(
         hit = inset[np.arange(n_t), yt] if n_t else np.zeros(0, dtype=bool)
         covered = int(hit.sum())
         size = inset.sum(axis=1) if n_t else np.zeros(0)
-        lo, hi = clopper_pearson(covered, n_t)
+        lo, hi = _clopper_pearson(covered, n_t)
         filled = yt == 1
         return CoverageCell(
             horizon_ns=h,
@@ -1863,7 +1853,7 @@ def summary_warnings(report: ConformalReport) -> list[str]:
     for c in pooled:
         if c.coverage_fill is None or c.n_test_fill == 0:
             continue
-        hi = clopper_pearson(round(c.coverage_fill * c.n_test_fill), c.n_test_fill)[1]
+        hi = _clopper_pearson(round(c.coverage_fill * c.n_test_fill), c.n_test_fill)[1]
         if hi is not None and hi < nominal:
             low_fill.append(f"{_fmt_ns(c.horizon_ns)} {c.coverage_fill:.3f}")
     if low_fill:
@@ -1920,7 +1910,6 @@ __all__ = [
     "MartingaleResult",
     "StratumName",
     "VennAbers",
-    "clopper_pearson",
     "conformal_after_fit",
     "conformal_spec",
     "conformal_step",
@@ -1947,3 +1936,17 @@ __all__ = [
     "venn_abers_merge",
     "write_report",
 ]
+
+
+def __getattr__(name: str) -> Any:
+    if name == "clopper_pearson":  # moved to queuetruth.stats; the old name keeps working with a warning
+        import warnings
+
+        warnings.warn(
+            "queuetruth.model.conformal.clopper_pearson moved to queuetruth.stats.clopper_pearson; the old name "
+            "will be removed in a future release",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return _clopper_pearson
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

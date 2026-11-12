@@ -29,6 +29,7 @@ import httpx
 from pydantic import ValidationError
 
 from queuetruth.client._client import RUN_KINDS, Client
+from queuetruth.integrity import canonical_json
 from queuetruth.schemas import specs as sp
 
 FAKE_API_KEY = "qt_test_FAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKE_ABCDEF"
@@ -62,7 +63,7 @@ class _Stored:
 
 
 def _canonical(obj: Any) -> str:
-    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return canonical_json(obj, "compact")
 
 
 class _Problem(Exception):

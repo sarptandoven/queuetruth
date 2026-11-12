@@ -7,7 +7,6 @@ from queuetruth.schemas.models import *  # noqa: F403
 from queuetruth.schemas.models import DOC_MODELS, parse_document
 from queuetruth.schemas.runid import (
     V1_1_DEFAULTS,
-    canonical_json,
     drop_v1_1_defaults,
     identity_document,
     is_ref,
@@ -38,7 +37,6 @@ __all__ = [
     "SPEC_MODELS",
     "V1_1_DEFAULTS",
     "arrow",
-    "canonical_json",
     "drop_v1_1_defaults",
     "features_schema",
     "identity_document",
@@ -47,3 +45,19 @@ __all__ = [
     "run_id",
     "spec_echo",
 ]
+
+
+def __getattr__(name: str) -> object:
+    if name == "canonical_json":  # moved to queuetruth.integrity; the old name keeps working with a warning
+        import warnings
+
+        from queuetruth.integrity import canonical_json
+
+        warnings.warn(
+            "queuetruth.schemas.canonical_json moved to queuetruth.integrity.canonical_json; the old name will be "
+            "removed in a future release",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return canonical_json
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

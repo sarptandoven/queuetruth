@@ -12,7 +12,8 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from queuetruth.dataset._manifest import MANIFEST_FILE, dataset_id
-from queuetruth.schemas.io import sha256_file, write_table
+from queuetruth.integrity import sha256_file
+from queuetruth.schemas.io import write_table
 
 TMP_SUFFIX = ".tmp"
 

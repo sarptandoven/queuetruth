@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import copy
 import datetime
-import hashlib
 import json
 from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
@@ -17,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from queuetruth.errors import QtError
+from queuetruth.integrity import sha256_text
 
 MANIFEST_FILE = "manifest.json"
 DATASET_SCHEMA = "qt.dataset_manifest"
@@ -48,7 +48,7 @@ def day_number(value: Any) -> int:
 def dataset_id(partition_shas: list[str], source_format: str) -> str:
     """SPEC 3.10 `dataset_id`: sha256 of the sorted partition-file sha256 list, newline-joined, then a newline and
     `source_format` (the rule of `qt_schema::json::dataset_id`)."""
-    return hashlib.sha256(("\n".join(sorted(partition_shas)) + "\n" + source_format).encode()).hexdigest()
+    return sha256_text("\n".join(sorted(partition_shas)) + "\n" + source_format)
 
 
 def bad(where: str | Path, msg: str, hint: str | None = None) -> QtError:
