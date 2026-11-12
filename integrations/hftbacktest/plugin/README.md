@@ -48,6 +48,21 @@ print(cal.text())
 print(cal.code)
 ```
 
+One line in your hftbacktest code sets the queue model and exchange of a fit, or of the atlas's closest setting
+when you have no data, on your `BacktestAsset` (your data, tick, lot, latency and fee settings stay):
+
+```python
+import queuetruth as qt
+
+asset = qthbt.configure(asset, qt.fit("hftbacktest", data="my-dataset"))  # a fit on your data
+asset = qthbt.configure(asset, qt.atlas.calibration("hftbacktest", tier="T1", yes=True))  # no data: the atlas
+asset = qthbt.configure(asset, cal)  # the result of qthbt.calibrate above
+```
+
+`configure` is standard library only: in the hftbacktest venv, `pip install --no-deps queuetruth-hftbacktest` and
+pass a saved result (`qt.atlas.calibration(...).save("fit.json")`, or `queuetruth fit`'s `qt-fit/fit.json`).
+A refused fit raises `CalibrationRefused` unless `force=True`.
+
 The same from the command line: `queuetruth-hftbacktest prepare | run | score | calibrate`.
 
 How to use it, what each call runs and writes, how to read the result, the options, hftbacktest #312 and the

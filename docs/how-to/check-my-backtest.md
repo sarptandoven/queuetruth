@@ -242,6 +242,16 @@ EOF
 queuetruth check trades.csv --data synth --option instrument=QTAU6 --window 10s --out qt-check-btpy
 ```
 
+Without order-level data, the same file gets the atlas estimate
+([without order-level data](#without-order-level-data)): how many of its fills the real queue would give, and the
+P&L they add. Say the bar length, and the tier when the symbol is not one the atlas holds:
+
+<!-- check-docs: skip (downloads the public atlas, after asking) -->
+```bash
+queuetruth check trades.csv --bar 5m --option instrument=AAPL
+queuetruth check trades.csv --bar 1h --tier T2
+```
+
 Naive times are read as UTC; `--option data_tz=America/New_York` reads them in another zone. A backtest on data
 without a `DatetimeIndex` has bar numbers instead of times, which `check` cannot place on the tape: give the data a
 time index. `queuetruth live import --venue sim-backtesting-py` imports the same files as a simulator log.

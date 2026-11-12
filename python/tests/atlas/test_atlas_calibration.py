@@ -111,9 +111,14 @@ def test_touch_tables_from_the_atlas() -> None:
 
 
 def test_an_atlas_without_touch_tables(tmp_path: Path) -> None:
-    from atlas.test_atlas_lookup import _write_api
+    import shutil
 
-    site = _write_api(tmp_path / "site")
+    site = tmp_path / "site"
+    shutil.copytree(ATLAS, site)
+    man = site / "atlas" / "v1" / "manifest.json"
+    doc = json.loads(man.read_text())
+    doc["files"] = [f for f in doc["files"] if f["path"] != "touch.json"]
+    man.write_text(json.dumps(doc))
     with pytest.raises(QtError, match="has no touch tables yet") as e:
         qt.atlas.touch_tables(site)
     assert e.value.code == "QT-INPUT-001"
