@@ -18,6 +18,21 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   menu). The README links the Fill-Realism Atlas from its first screen. `docs/RESULTS.md` has one canonical block
   for the headline Nasdaq number that other pages link. `docs/check_docs.py` flags stale version wording ("v0.1",
   "after release", "next release", "new after 0.1") outside the changelog, design notes and launch drafts.
+
+- **`queuetruth check BACKTEST --data DATASET`** (and `qt.check(backtest, data=...)`): how wrong a backtest is, in
+  one command. It replays the backtest's own resting limit orders, at their own entry times and prices, in the exact
+  queue of an order-level dataset and compares them order by order. The first line is the answer, for example "Your
+  backtest filled 6 of 12 limit orders within 10s; in the real queue 3 would have filled (backtest minus real: +3
+  orders, 95% CI -3 to +8). 5 fills are phantom; ...", then the 2x2 table, the time to fill, the most overfilled
+  symbols and `queuetruth why` commands for a few phantom fills. It reads hftbacktest snapshots, NautilusTrader
+  reports and events, Backtrader `QtOrderLog` lines, VectorBT records, LEAN results and Freqtrade backtest results,
+  tells which from the file (`--backtester` overrides), and maps the backtest's instrument names to the dataset's
+  symbols, asking for `--instrument-map` only when a name matches none (and saying which and why). `--json` prints
+  the `qt.check` summary, `--html` writes a self-contained report, and the output directory holds `orders.csv` (one
+  row per order in symbols, decimal prices and venue-local times), the imported log and the full scorecard. Without
+  `--data` it says what it needs and exits 2; the estimate from the atlas comes later. Guide:
+  docs/how-to/check-my-backtest.md.
+
 - **Atlas backfill** (`.github/workflows/atlas-backfill.yml`, ROADMAP W1): a manual run fills the atlas window at once.
   `scripts/scale/iex_latest.py --count N --kept FILE` lists the N newest published IEX sessions the `atlas-days`
   release does not hold yet (`--rebuild` keeps them in) as a job matrix; each day runs on its own runner, up to
@@ -72,6 +87,9 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 - `rustix` 1.1.5 to 1.1.6 in `Cargo.lock` (RUSTSEC-2026-0486: its xattr functions marked unwritten bytes as
   initialized when given a zero-length buffer). Reached only through `tempfile`; 1.1.6 was released on 2026-10-27.
+- `queuetruth why --live` refused every live log written by Python (`live import`, `reconcile`) with `QT-INPUT-002:
+  ... column "client_order_id_chain": expected List(Utf8) ..., found ... List(Utf8, field: 'element')`. pyarrow names
+  a Parquet list's child `element`, the Rust reader expected `item`; the reader now takes either name.
 - `atlas.py combine` no longer runs out of memory on a full window. It read every day's cells and P&L cells into
   one table: about 1.2 GB per IEX day, so 20 days needed about 25 GB, and the first site rebuild after the backfill
   stopped the 16 GB runner two minutes in. It now reads the days one (mode, shadow population) slice at a time, with

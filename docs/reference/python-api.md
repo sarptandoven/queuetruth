@@ -35,6 +35,14 @@ calibrate_live(spec: Any, **kwargs: Any) -> m.CalibrationResult
 
 `calibrate-live`: fit a zoo parameter to the user's own live fills (`queuetruth.score.calibrate_live`).
 
+### `check`
+
+```python
+check(*args: Any, **kwargs: Any) -> Any
+```
+
+`queuetruth check`: how wrong is a backtest, in one command.
+
 ### `export` **SPEC 4.3**
 
 ```python

@@ -4962,5 +4962,61 @@
       },
       "implementation": "python"
     }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "check",
+      "backtest.jsonl",
+      "orders.csv",
+      "--data",
+      "synth",
+      "--backtester",
+      "hftbacktest",
+      "--instrument-map",
+      "map.csv",
+      "--out",
+      "qt-check",
+      "--window",
+      "10min",
+      "--markout",
+      "1min",
+      "--option",
+      "timeframe=5m",
+      "--json",
+      "--html"
+    ],
+    "command": {
+      "path": [
+        "check"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "data": "synth",
+          "backtester": "hftbacktest",
+          "instrument_map": "map.csv",
+          "out": "qt-check",
+          "window": "10min",
+          "markout": "1min",
+          "option": [
+            "timeframe=5m"
+          ],
+          "json": true,
+          "html": true
+        },
+        "backtest": [
+          "backtest.jsonl",
+          "orders.csv"
+        ]
+      },
+      "implementation": "python"
+    }
   }
 ]
