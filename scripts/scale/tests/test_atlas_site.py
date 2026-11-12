@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -109,7 +110,7 @@ def test_nasdaq_site_reads_answer_first_and_is_deterministic(atlas: Path, tmp_pa
     )
     assert "[" not in answers and "nt_prob_touch" not in answers
     # then the chart, then what to do, before the scope, the lookup and the checks
-    order = ["<ul class=\"answers\">", '<svg class="bias"', "<h2>What to do</h2>", "<h2>Your symbol</h2>",
+    order = ["<ul class=\"answers\">", '<svg class="bias wide"', "<h2>What to do</h2>", "<h2>Your symbol</h2>",
              "<h2>What this covers</h2>", "<h2>Check your own backtester</h2>", '<h2 id="verify">']  # fmt: skip
     assert [page.index(x) for x in order] == sorted(page.index(x) for x in order)
     assert "Nasdaq TotalView-ITCH sample days" in page and "4 to 5%" not in page  # the scope of this venue
@@ -445,7 +446,7 @@ def test_one_page_per_library_answers_the_search_question(zoo_atlas: Path, tmp_p
         "hftbacktest Power2 queue model (n=2), -0.88 pp, still clearly too pessimistic."
     )
     assert f'<p class="lead">{lead}</p>' in hbt
-    order = [f'<p class="lead">{lead}</p>', '<svg class="bias"', "<h2>What to do</h2>", "<h2>Details</h2>",
+    order = [f'<p class="lead">{lead}</p>', '<svg class="bias wide"', "<h2>What to do</h2>", "<h2>Details</h2>",
              "<h2>Best hftbacktest setting by tier</h2>", "<h2>Tier ALL</h2>"]  # fmt: skip
     assert [hbt.index(x) for x in order] == sorted(hbt.index(x) for x in order)
     box = hbt.split("<h2>What to do</h2>")[1].split("<h2>")[0]
@@ -486,6 +487,16 @@ def test_one_page_per_library_answers_the_search_question(zoo_atlas: Path, tmp_p
         "+0.04 pp, no clear difference from the real queue.</p>" in nt
     )
     assert "integrations/nautilus/README.md" in nt
+    # why hftbacktest's order-level model fills fewer: one plain sentence under its chart and a note on its rows,
+    # linking the findings; only where that model is shown
+    findings = "https://github.com/sarptandoven/queuetruth/blob/main/scripts/scale/findings/l3-fifo-gap.md"
+    assert S.L3_FINDINGS == findings
+    note = hbt.split('<svg class="bias wide"')[1].split("<h2>What to do</h2>")[0]
+    assert "that is hftbacktest&#x27;s own behaviour" not in note  # an HTML constant, written as is
+    assert "that is hftbacktest's own behaviour. The released hftbacktest 2.4.4 gives the same first fills" in note
+    assert "displayed interest fills before hidden at the same price" in note and f'href="{findings}"' in note
+    assert hbt.count(f'(<a href="{findings}">why</a>)') == 2  # its row in each tier's table
+    assert findings not in nt and findings not in (out / "index.html").read_text()
     db = (out / "databento.html").read_text()
     assert "How accurate is Databento&#x27;s queue position estimate?" in db and DBN in db and PB2 not in db
     # no setting clear at all
@@ -505,40 +516,60 @@ def test_charts_are_accessible_static_svg_with_the_table_values(zoo_atlas: Path,
     out = tmp_path / "site"
     S.build(zoo_atlas, out)
     page = (out / "tables.html").read_text()
-    assert page.count("<svg ") == 2 and "<script" not in page  # one chart per tier
+    # one chart per tier, each in two layouts (wide and narrow) of which the page's CSS shows one
+    assert page.count('<svg class="bias wide"') == 2 and page.count('<svg class="bias narrow"') == 2
+    assert "<script" not in page
     t_all = page.split("<h2>Tier ALL</h2>")[1].split("<h2>")[0]
-    svg = t_all.split("<svg ")[1].split("</svg>")[0]
+    svg = t_all.split('<svg class="bias wide"')[1].split("</svg>")[0]
+    narrow = t_all.split('<svg class="bias narrow"')[1].split("</svg>")[0]
     assert t_all.index("<svg ") < t_all.index("<table>")
     assert 'role="img" aria-labelledby="bias-ALL-t" aria-describedby="bias-ALL-d"' in svg
+    assert 'aria-labelledby="bias-ALL-n-t" aria-describedby="bias-ALL-n-d"' in narrow  # ids stay unique
     assert '<title id="bias-ALL-t">Fill-rate bias by model within 1 min, tier ALL</title>' in svg
     assert '<desc id="bias-ALL-d">Fill-rate bias of 7 models at 1 min' in svg  # the bound is not drawn
     assert FRONT in t_all and "front of the queue" not in svg
     # each value drawn is the value in the table, coloured only when its interval excludes 0; the label is the plain
     # one, the tooltip adds the model id
-    assert (
-        '<g class="over"><title>NautilusTrader default (touch fill) (nt_prob_touch[mode=faithful;p=1]): +1.90 pp '
-        "[+1.50, +2.30]</title>" in svg
-    )
-    assert f'<g class="plain"><title>NautilusTrader queue position (queue_position=True) ({QPOS}): +0.04 pp' in svg
-    assert f'<g class="under"><title>hftbacktest Power2 queue model (n=2) ({PB2}): -0.88 pp [-1.20, -0.56]' in svg
-    assert ">hftbacktest Power2 queue model (n=2)</text>" in svg
+    for drawn in (svg, narrow):
+        assert (
+            '<g class="over"><title>NautilusTrader default (touch fill) (nt_prob_touch[mode=faithful;p=1]): +1.90 pp '
+            "[+1.50, +2.30]</title>" in drawn
+        )
+        assert f'<g class="plain"><title>NautilusTrader queue position (queue_position=True) ({QPOS}): +0.04 pp' in drawn
+        assert f'<g class="under"><title>hftbacktest Power2 queue model (n=2) ({PB2}): -0.88 pp [-1.20, -0.56]' in drawn
+        assert '<line class="zero"' in drawn and ">0</text>" in drawn and "-2</text>" in drawn and "+2</text>" in drawn
+    # wide: the label right-aligned in its own column, left of every gridline, with its dot, whisker and value on
+    # the same baseline; narrow: the label above, the dot on the line below
+    row = svg.split(f"({PB2}): -0.88 pp")[1].split("</g>")[0]
+    label_y = re.search(r'<text x="430" y="([0-9.]+)" text-anchor="end">hftbacktest Power2 queue model', row)
+    dot_y = re.search(r'<circle class="dot" cx="[0-9.]+" cy="([0-9.]+)"', row)
+    value_y = re.search(r'<text x="996" y="([0-9.]+)" text-anchor="end">-0.88</text>', row)
+    assert label_y and dot_y and value_y
+    assert float(label_y[1]) == float(value_y[1]) == float(dot_y[1]) + 5
+    grid_x = [float(x) for x in re.findall(r'<line class="(?:grid|zero)" x1="([0-9.]+)"', svg)]
+    assert min(grid_x) > 430 and max(grid_x) <= 920
+    nrow = narrow.split(f"({PB2}): -0.88 pp")[1].split("</g>")[0]
+    n_label = float(re.search(r'<text x="4" y="([0-9.]+)">', nrow)[1])
+    n_dot = float(re.search(r'<circle class="dot" cx="[0-9.]+" cy="([0-9.]+)"', nrow)[1])
+    assert n_dot - n_label == 15
     assert '<td class="over">+1.90<br><span class="ci">[+1.50, +2.30]</span></td>' in t_all
-    assert '<line class="zero"' in svg and ">0</text>" in svg and "-2</text>" in svg and "+2</text>" in svg
-    # themed only through the page's colour variables, and as wide as a phone allows (no fixed minimum width)
+    # themed only through the page's colour variables; the narrow layout below 760 px
     assert "svg.bias .over .dot { fill: var(--over); }" in page and 'fill="#' not in svg and 'stroke="#' not in svg
-    assert "min-width: 560px" not in page and "svg.bias { width: 100%; max-width: 640px;" in page
+    assert "min-width: 560px" not in page and "svg.bias.narrow { display: none; max-width: 640px; }" in page
+    assert "@media (max-width: 760px) { svg.bias.wide { display: none; } svg.bias.narrow { display: block; } }" in page
     # the front page draws every library's settings at the headline horizon in one chart, grouped by library
     front = (out / "index.html").read_text()
-    assert front.count("<svg ") == 1 and 'aria-labelledby="bias-front-t"' in front
-    fsvg = front.split("<svg ")[1].split("</svg>")[0]
-    groups = [fsvg.index(f'<text class="group" x="4" y="{y}">') for y in ("52.0", "238.0", "344.0")]
-    assert groups == sorted(groups) and ">hftbacktest</text>" in fsvg and ">Databento</text>" in fsvg
+    assert front.count('<svg class="bias wide"') == 1 and 'aria-labelledby="bias-front-t"' in front
+    fsvg = front.split('<svg class="bias wide"')[1].split("</svg>")[0]
+    groups = [fsvg.index(f'text-anchor="end">{lib}</text>') for lib in ("hftbacktest", "NautilusTrader", "Databento")]
+    assert groups == sorted(groups) and '<text class="group" x="430"' in fsvg
     assert FRONT not in fsvg and L3 in fsvg  # bounds left out; hftbacktest's order-level model shown
     hbt = (out / "hftbacktest.html").read_text()
-    assert hbt.count("<svg ") == 3 and "NautilusTrader" not in hbt.split("<svg ")[1].split("</svg>")[0]
+    assert hbt.count('<svg class="bias wide"') == 3
+    assert "NautilusTrader" not in hbt.split('<svg class="bias wide"')[1].split("</svg>")[0]
     assert S.chart([], "x", "t", S60) == ""
     flat = S.chart([_row("ALL", PB2, S60, 0.0, 0.0, 0.0)], "f", "t", S60)  # a zero-width domain still draws
-    assert 'cx="213.0"' in flat
+    assert 'cx="213.0"' in flat and 'cx="686.0"' in flat
 
 
 def test_words_follow_the_interval_and_labels_fit(zoo_atlas: Path, tmp_path: Path) -> None:

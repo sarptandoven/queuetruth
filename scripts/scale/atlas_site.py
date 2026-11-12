@@ -573,8 +573,10 @@ a { color: var(--fg); text-decoration-color: var(--muted); text-underline-offset
 a:hover { text-decoration-color: var(--fg); } nav.libs { margin: 8px 0; } p { overflow-wrap: anywhere; }
 table.best th, table.best td { text-align: left; white-space: normal; vertical-align: top; }
 table.best td.cfg { min-width: 18em; } table.best td code { overflow-wrap: anywhere; }
-figure.chart { margin: 8px 0 12px; } svg.bias { width: 100%; max-width: 640px; height: auto; display: block;
+figure.chart { margin: 8px 0 12px; } svg.bias { width: 100%; height: auto; display: block;
   font: 15px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+svg.bias.narrow { display: none; max-width: 640px; }
+@media (max-width: 760px) { svg.bias.wide { display: none; } svg.bias.narrow { display: block; } }
 svg.bias text { fill: var(--fg); } svg.bias .tick { fill: var(--muted); } svg.bias .group { font-weight: 600; }
 svg.bias .grid { stroke: var(--line); stroke-width: 1; } svg.bias .zero { stroke: var(--muted); stroke-width: 1.5; }
 svg.bias .ci { stroke: var(--muted); stroke-width: 2; stroke-linecap: round; }
@@ -629,21 +631,25 @@ def _f(x: float) -> str:
     return f"{x:.1f}"
 
 
-#: chart geometry in viewBox units: each model takes two lines (its label, then its dot and whisker across nearly the
-#: whole width), so the chart reads on a 390 px phone without scrolling sideways
+#: chart geometry in viewBox units, two layouts of the same chart (CSS shows one): `wide` puts each model on one
+#: row (its label right-aligned in a column of its own, then its dot, whisker and value on the same baseline);
+#: `narrow`, below 760 px, gives each model two lines (its label, then its dot and whisker across nearly the whole
+#: width), so the chart reads on a 390 px phone without scrolling sideways
 CHART_W, CHART_X0, CHART_X1, CHART_TOP, CHART_ROW, CHART_GROUP = 480, 22, 404, 34, 40, 26
-#: where the labels start (the plot leaves room for its first tick label)
+#: where the narrow labels start (the plot leaves room for its first tick label)
 CHART_LABEL_X = 4
+#: the wide layout: width, right edge of the label column, plot, row and group heights
+WIDE_W, WIDE_LABEL_END, WIDE_X0, WIDE_X1, WIDE_ROW, WIDE_GROUP = 1000, 430, 452, 920, 30, 30
 #: longest label drawn (about 8 units a character at 15 px); the row's tooltip and the table keep the whole label
 CHART_LABEL_CHARS = 58
 
 
 def chart(rows: list[dict[str, Any]], chart_id: str, title: str, horizon: int, groups: bool = False) -> str:
-    """An inline SVG of the fill-rate bias of `rows` (one per model, in the order given) at `horizon`: per model its
-    plain label, then a dot with its 95% interval as a whisker, a line at 0, coloured `--over` / `--under` only
-    when the interval excludes 0. `groups` puts the library's name above each run of its models. No script; every
-    value is also in a table of the site, and each row's tooltip has the model id. Empty without rows."""
-    C = _C()
+    """Inline SVG of the fill-rate bias of `rows` (one per model, in the order given) at `horizon`: per model its
+    plain label, a dot with its 95% interval as a whisker and its value, a line at 0, coloured `--over` / `--under`
+    only when the interval excludes 0. Two layouts (`wide` and `narrow`, see CHART_W); CSS shows the one that fits.
+    `groups` puts the library's name above each run of its models. No script; every value is also in a table of the
+    site, and each row's tooltip has the model id. Empty without rows."""
     pts = []
     for r in rows:
         v = _bias(r)
@@ -661,9 +667,39 @@ def chart(rows: list[dict[str, Any]], chart_id: str, title: str, horizon: int, g
     step = _tick_step(dmax - dmin)
     a, b = math.floor(dmin / step - 1e-9) * step, math.ceil(dmax / step + 1e-9) * step
     ticks = [a + i * step for i in range(round((b - a) / step) + 1)]
+    svgs = [
+        _chart_svg(pts, ticks, step, (a, b), chart_id, title, horizon, groups, wide=True),
+        _chart_svg(pts, ticks, step, (a, b), f"{chart_id}-n", title, horizon, groups, wide=False),
+    ]
+    return (
+        '<figure class="chart">'
+        + "".join(svgs)
+        + (
+            '<figcaption class="muted">Dot: the bias; whisker: its 95% interval. Coloured only when the interval '
+            "excludes 0 (red: fills too many orders, blue: too few); grey: no clear difference. Bounds are in the "
+            "tables, not drawn.</figcaption></figure>"
+        )
+    )
+
+
+def _chart_svg(
+    pts: list[tuple[dict[str, Any], float, float | None, float | None]],
+    ticks: list[float],
+    step: float,
+    domain: tuple[float, float],
+    chart_id: str,
+    title: str,
+    horizon: int,
+    groups: bool,
+    wide: bool,
+) -> str:
+    """One layout of `chart`."""
+    C = _C()
+    a, b = domain
+    width, x0, x1 = (WIDE_W, WIDE_X0, WIDE_X1) if wide else (CHART_W, CHART_X0, CHART_X1)
 
     def x(v: float) -> float:
-        return CHART_X0 + (v - a) / (b - a) * (CHART_X1 - CHART_X0)
+        return x0 + (v - a) / (b - a) * (x1 - x0)
 
     body: list[str] = []
     y = CHART_TOP
@@ -671,10 +707,12 @@ def chart(rows: list[dict[str, Any]], chart_id: str, title: str, horizon: int, g
     for r, v, lo, hi in pts:
         lib = C.library_of(r["model_id"])
         if groups and lib != last:
+            gx, anchor = (WIDE_LABEL_END, ' text-anchor="end"') if wide else (CHART_LABEL_X, "")
             body.append(
-                f'<text class="group" x="{CHART_LABEL_X}" y="{_f(y + 18)}">{html.escape(C.LIBRARY_NAMES[lib])}</text>'
+                f'<text class="group" x="{gx}" y="{_f(y + 20 if wide else y + 18)}"{anchor}>'
+                f"{html.escape(C.LIBRARY_NAMES[lib])}</text>"
             )
-            y += CHART_GROUP
+            y += WIDE_GROUP if wide else CHART_GROUP
         last = lib
         cls = {1: "over", -1: "under"}.get(side(r), "plain")
         ci = f" [{lo:+.2f}, {hi:+.2f}]" if lo is not None else ""
@@ -682,18 +720,22 @@ def chart(rows: list[dict[str, Any]], chart_id: str, title: str, horizon: int, g
         tip = f"{label} ({r['model_id']}): {v:+.2f} pp{ci}"
         body.append(f'<g class="{cls}"><title>{html.escape(tip)}</title>')
         shown = label if len(label) <= CHART_LABEL_CHARS else label[: CHART_LABEL_CHARS - 1].rstrip() + "\u2026"
-        body.append(f'<text x="{CHART_LABEL_X}" y="{_f(y + 13)}">{html.escape(shown)}</text>')
-        cy = y + 28
+        if wide:
+            cy = y + WIDE_ROW / 2
+            body.append(f'<text x="{WIDE_LABEL_END}" y="{_f(cy + 5)}" text-anchor="end">{html.escape(shown)}</text>')
+        else:
+            body.append(f'<text x="{CHART_LABEL_X}" y="{_f(y + 13)}">{html.escape(shown)}</text>')
+            cy = y + 28
         if lo is not None:
             body.append(f'<line class="ci" x1="{_f(x(lo))}" x2="{_f(x(hi))}" y1="{_f(cy)}" y2="{_f(cy)}"/>')
         body.append(f'<circle class="dot" cx="{_f(x(v))}" cy="{_f(cy)}" r="5"/>')
-        body.append(f'<text x="{CHART_W - 4}" y="{_f(cy + 4)}" text-anchor="end">{v:+.2f}</text></g>')
-        y += CHART_ROW
+        body.append(f'<text x="{width - 4}" y="{_f(cy + 5)}" text-anchor="end">{v:+.2f}</text></g>')
+        y += WIDE_ROW if wide else CHART_ROW
     bottom = y
     height = bottom + 30
     out = [
-        f'<svg class="bias" viewBox="0 0 {CHART_W} {_f(height)}" role="img" aria-labelledby="{chart_id}-t" '
-        f'aria-describedby="{chart_id}-d">',
+        f'<svg class="bias {"wide" if wide else "narrow"}" viewBox="0 0 {width} {_f(height)}" role="img" '
+        f'aria-labelledby="{chart_id}-t" aria-describedby="{chart_id}-d">',
         f'<title id="{chart_id}-t">{html.escape(title)}</title>',
         f'<desc id="{chart_id}-d">Fill-rate bias of {len(pts)} models at {html.escape(duration(horizon))} in '
         "percentage points, with 95% intervals; the same values are in the tables of the site.</desc>",
@@ -706,19 +748,30 @@ def chart(rows: list[dict[str, Any]], chart_id: str, title: str, horizon: int, g
         out.append(f'<text class="tick" x="{tx}" y="{CHART_TOP - 14}" text-anchor="middle">{label}</text>')
     out += body
     out.append(
-        f'<text class="tick" x="{_f((CHART_X0 + CHART_X1) / 2)}" y="{_f(height - 8)}" text-anchor="middle">'
+        f'<text class="tick" x="{_f((x0 + x1) / 2)}" y="{_f(height - 8)}" text-anchor="middle">'
         f"bias within {html.escape(duration(horizon))}, percentage points (model minus real queue)</text>"
     )
     out.append("</svg>")
-    return (
-        '<figure class="chart">'
-        + "".join(out)
-        + (
-            '<figcaption class="muted">Dot: the bias; whisker: its 95% interval. Coloured only when the interval '
-            "excludes 0 (red: fills too many orders, blue: too few); grey: no clear difference. Bounds are in the "
-            "tables, not drawn.</figcaption></figure>"
-        )
-    )
+    return "".join(out)
+
+
+#: Where the hftbacktest L3 FIFO gap is explained (PR #26).
+L3_FINDINGS = f"{REPO}/scripts/scale/findings/l3-fifo-gap.md"
+#: One plain sentence on why hftbacktest's order-level model fills fewer orders (HTML), next to its chart and rows.
+L3_NOTE = (
+    "hftbacktest's L3 FIFO model reads the same order-level data and still fills fewer orders: that is hftbacktest's "
+    "own behaviour. The released hftbacktest 2.4.4 gives the same first fills as the model here, and it misses fills "
+    "of orders alone ahead of the displayed book: hidden executions it skips, which are frequent on IEX, and fills "
+    "its trade-through rule refuses. The hidden-print share rests on queuetruth's ruling that displayed interest "
+    f'fills before hidden at the same price (<a href="{L3_FINDINGS}">the findings</a>).'
+)
+
+
+def _row_note(model_id: str) -> str:
+    """A short note under a model's name in the tables (hftbacktest's L3 FIFO model: why it fills fewer)."""
+    if parse_id(model_id)[0] != "hbt_l3_fifo":
+        return ""
+    return f'<br><span class="ci">fills fewer by hftbacktest\'s own rules (<a href="{L3_FINDINGS}">why</a>)</span>'
 
 
 def _chart_id(page_tier: str) -> str:
@@ -779,7 +832,7 @@ def _tier_section(
                 shown_pnl.append({k: pr.get(k) for k in sorted(pr)})
         share = (at.get((m, h)) or {}).get("flagged_share")
         body_rows.append(
-            f"<tr><td>{html.escape(lib)}</td><td>{html.escape(name)}<br><code>{html.escape(m)}</code></td>"
+            f"<tr><td>{html.escape(lib)}</td><td>{html.escape(name)}<br><code>{html.escape(m)}</code>{_row_note(m)}</td>"
             + "".join(cells)
             + f"<td>{'' if share is None else f'{100 * share:.1f}%'}</td></tr>"
         )
@@ -1613,6 +1666,11 @@ def _library_page(
         *([f'<p class="lead">{html.escape(answer)}</p>'] if answer else []),
         f"<h2>{html.escape(title)}</h2>",
         chart(drawn, "bias-lib", title, h),
+        *(
+            [f'<p class="muted">{L3_NOTE}</p>']
+            if any(parse_id(r["model_id"])[0] == "hbt_l3_fifo" for r in drawn)
+            else []
+        ),
         *(["<h2>What to do</h2>", *boxes] if boxes else []),
         "<h2>Details</h2>",
         f'<p class="muted">{html.escape(lib)}\'s fill models against the exact replay of the real queue: {about}</p>',
