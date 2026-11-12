@@ -1,5 +1,5 @@
 """The terminal answer of `score` and `calibrate-live` carries the hftbacktest #332 checks in plain lines: the
-Kaplan-Meier time-to-fill line, the markout line at 100 ms, 1 s and 10 s, and the latency-first line."""
+Kaplan-Meier time-to-fill line, the markout line at 100ms, 1s and 10s, and the latency-first line."""
 
 from __future__ import annotations
 
@@ -59,7 +59,7 @@ def test_latency_first_line_in_calibrate_live():
     }
     text = cli._render_calibration(doc, {}, ["calibrate-live"]) or ""
     assert (
-        "latency (fitted first, on the live log): median entry latency 2 ms (p10 1.5 ms, p90 3 ms, 24 orders); "
+        "latency (fitted first, on the live log): median entry latency 2ms (p10 1.5ms, p90 3ms, 24 orders); "
         "the queue below was fitted with it"
     ) in text
     assert text.index("latency (fitted first") < text.index("fitted: n =")

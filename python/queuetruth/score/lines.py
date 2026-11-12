@@ -10,6 +10,8 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from queuetruth import units
+
 #: Markout horizons of the terminal answer (hftbacktest discussion #332): 100 ms, 1 s, 10 s.
 PRACTITIONER_HORIZONS_NS = (100_000_000, 1_000_000_000, 10_000_000_000)
 
@@ -27,14 +29,8 @@ def pvalue(x: float | None) -> str:
 
 
 def horizon(ns: int | str | None) -> str:
-    """Horizon label: `100ms`, `1s`, `60s`, `5min`."""
-    if ns is None:
-        return "-"
-    n = int(ns)
-    for unit, size in (("min", 60_000_000_000), ("s", 1_000_000_000), ("ms", 1_000_000), ("us", 1_000)):
-        if n >= size and n % size == 0 and (unit != "min" or n >= 120_000_000_000):
-            return f"{n // size}{unit}"
-    return f"{n}ns"
+    """Horizon label: `100ms`, `1s`, `1min` (`queuetruth.units.format_duration`)."""
+    return "-" if ns is None else units.format_duration(int(ns))
 
 
 def pct(x: float | None) -> str:

@@ -75,7 +75,7 @@ def _twin_live(tmp_path: Path, t_ack: int, t_fill: int) -> Path:
 
 @pytest.fixture
 def late_fill(tmp_path):
-    """o4: buy 3 entered at T0+3 s, never filled live; the sim fills it 6 s after entry (review F12 repro)."""
+    """o4: buy 3 entered at T0+3s, never filled live; the sim fills it 6s after entry (review F12 repro)."""
     live = log_from([order_events("o4", "buy", PX, 3, T0 + 3 * S)], tmp_path / "live")
     ds = make_dataset(tmp_path / "ds", _end_mbo())
     fr = FakeRunner(sim_fills={"o4": [(T0 + 9 * S, 3, "queue_depleted")]}, bbo=BBO)
@@ -86,13 +86,13 @@ def late_fill(tmp_path):
 
 
 def test_window_ns_from_spec_is_the_evaluation_window(late_fill, tmp_path):
-    """Review F12 (`exp_window_spec_ignored.py`): spec window_ns = 5 s, sim fill 6 s after entry -> not counted."""
+    """Review F12 (`exp_window_spec_ignored.py`): spec window_ns = 5s, sim fill 6s after entry -> not counted."""
     live, ds, fr = late_fill
     s = build_scorecard(_spec(live, ds, tmp_path / "out", window_ns=5 * S), runner=fr)
     o = rows(read_parquet(tmp_path / "out" / "score_orders.parquet"))[0]
     assert s.spec["window_ns"] == 5 * S
     assert o["sim_filled"] is False and o["class"] == "neither"
-    assert "within 5 s" in s.verdict.headline
+    assert "within 5s" in s.verdict.headline
     d = build_scorecard(_spec(live, ds), runner=fr)
     assert d.two_by_two.sim_only == 1 and d.spec["window_ns"] == 60 * S
 
@@ -125,7 +125,7 @@ def test_effective_spec_revalidates_overrides(late_fill):
 
 
 def _heuristic_case(tmp_path):
-    """Live sell 7 acked 0.5 ms after an anonymous MBO add of the same side, price and size (heuristic twin)."""
+    """Live sell 7 acked 0.5ms after an anonymous MBO add of the same side, price and size (heuristic twin)."""
     live = log_from([order_events("o1", "sell", PX, 7, T0 + 500_000)], tmp_path / "live")
     mbo = [_rec(T0, A, A, 7, 42, 1), *_end_mbo()]
     for i, r in enumerate(mbo):
@@ -172,7 +172,7 @@ def test_self_exclude_false_disables_twin_matching(tmp_path):
 
 def _past_end_case(tmp_path):
     live = log_from([order_events("o1", "buy", PX, 2, T0, fills=[(T0 + 2 * S, 2)])], tmp_path / "live")
-    ds = make_dataset(tmp_path / "ds", _end_mbo(T0 + 10 * S))  # end of data 10 s after entry
+    ds = make_dataset(tmp_path / "ds", _end_mbo(T0 + 10 * S))  # end of data 10s after entry
     bbo = [*BBO, {"ts_event": T0 + 5 * S, "bid_px": PX + TICK, "bid_sz": 5, "ask_px": PX + 2 * TICK, "ask_sz": 5}]
     fr = FakeRunner(sim_fills={"o1": [(T0 + 3 * S, 2, "queue_depleted")]}, bbo=bbo)
     return live, ds, fr

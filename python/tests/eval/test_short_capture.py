@@ -37,7 +37,7 @@ Builder = Callable[[list[dict[str, Any]]], pa.Table]
 
 def _short_zoo(predictions: Builder, *, minutes: int, instruments: int, n: int = 600, seed: int = 3) -> tuple:
     """`n` shadows placed over `minutes` minutes after 09:35 on `instruments` instruments (all in one 30-minute
-    bucket); exact first fill ~ Exp(4 s); `optimist` fills at entry, `close` near the exact time, `pessimist` never."""
+    bucket); exact first fill ~ Exp(4s); `optimist` fills at entry, `close` near the exact time, `pessimist` never."""
     rng = np.random.default_rng(seed)
     t_fill = rng.exponential(4.0, n) * S
     err = np.exp(rng.normal(0.0, 0.3, n))
@@ -148,7 +148,7 @@ def test_too_few_clusters_give_no_interval_and_no_significance(predictions: Buil
     assert {"mcnemar_p_exact", "n_clusters", "fill_rate_bias_aj"} <= metrics
     # the MCS: one note for every horizon, not one per horizon
     got, notes = annotate_mcs(board, table, life, h_max_ns=H10, bootstrap_b=50)
-    assert len(notes) == 1 and notes[0].startswith("mcs: at 1 s, 10 s, ")
+    assert len(notes) == 1 and notes[0].startswith("mcs: at 1s, 10s, ")
     # the CLI: no star, and the legend says why
     doc = {
         "n_shadows": 200,
@@ -214,15 +214,15 @@ def test_old_zero_width_summaries_lose_their_intervals_in_the_report() -> None:
 
 def test_diagnostics_collapse_into_one_note() -> None:
     ws = [
-        "mcs: at 1 s, 10 s, 1 bootstrap block(s) (30min) < 5: no model confidence set (MCS fields null)",
+        "mcs: at 1s, 10s, 1 bootstrap block(s) (30min) < 5: no model confidence set (MCS fields null)",
         "impact: 924 of 2909 shadows (31.8%) may not be independent of the book",
         "clusters: 26 (30min blocks), with discordance 15, design effect 0.8841",
         "race: 0 of 200 order(s) race-flagged",
         "self_exclusion: 199 leg(s) activated in their twin's queue place",
-        "data end: 12 of 300 never-cancel shadows end with the data before 5 min",
+        "data end: 12 of 300 never-cancel shadows end with the data before 5min",
     ]
     lines = cli.stderr_lines({"warnings": ws}, verbose=False)
-    assert lines[0] == "warning: data end: 12 of 300 never-cancel shadows end with the data before 5 min"
+    assert lines[0] == "warning: data end: 12 of 300 never-cancel shadows end with the data before 5min"
     assert len(lines) == 2 and lines[1].startswith("note: 5 diagnostic(s) (model confidence set, shadow impact")
     assert "--verbose" in lines[1]
     assert cli.stderr_lines({"warnings": ws}, verbose=True) == [f"warning: {w}" for w in ws]

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from queuetruth import units
+
 _ROWS = ("filled in the real queue", "not filled in the real queue")
 
 
@@ -16,13 +18,13 @@ def _orders(n: int) -> str:
 
 
 def _secs(x: float | None) -> str:
-    if x is None:
-        return "n/a"
-    if x >= 120:
-        return f"{x / 60:.1f} min"
-    if x >= 1:
-        return f"{x:.1f} s"
-    return f"{x * 1000:.0f} ms"
+    """Seconds as a duration for people (`7s`, `2.5min`, `480ms`; `queuetruth.units`)."""
+    return "n/a" if x is None else units.format_duration(round(x * 1e9), sig=3)
+
+
+def _entry(o: dict[str, Any]) -> str:
+    """Entry time in the venue's zone, named (`entry_local`; `entry`, ISO 8601 with its offset, in older files)."""
+    return str(o.get("entry_local") or o.get("entry") or "")
 
 
 def _money(x: float | None, cur: str | None) -> str:
@@ -89,7 +91,7 @@ def text(doc: dict[str, Any], *, max_symbols: int = 5, max_examples: int = 3) ->
     ex = [e for e in doc["examples"][:max_examples] if e.get("why")]
     if ex:
         out += ["", "Why did the real queue not fill these? Trace one:"]
-        out += [f"  {e['symbol']} {e['side']} {e['price']} at {e['entry']}: {e['why']}" for e in ex]
+        out += [f"  {e['symbol']} {e['side']} {e['price']} at {_entry(e)}: {e['why']}" for e in ex]
     out += ["", f"Details: {doc['files']['check']} (full summary), {doc['files']['orders']} (one row per order)"]
     return "\n".join(out)
 
@@ -138,7 +140,7 @@ def html(doc: dict[str, Any], orders: list[dict[str, Any]]) -> str:
             o["side"],
             o["price"] or "",
             o["qty"] or "",
-            o["entry"] or "",
+            _entry(o),
             _secs(o["backtest_fill_after_s"]) if o["backtest_filled"] else "no fill",
             _secs(o["real_fill_after_s"]) if o["real_filled"] else "no fill",
             _money(o["pnl_gap"], None),

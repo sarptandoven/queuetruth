@@ -222,7 +222,7 @@ def test_e5_mcnemar_not_computable_and_sort_horizon_keyword(tmp_path: Path) -> N
     h = 10 * S
     _, html = _render(tmp_path / "b", [tmp_path / "zoo"], leaderboard_sort_horizon_ns=h)
     s = _section(html, "leaderboard")
-    assert "sorted by absolute fill-rate bias at 10 s" in s
+    assert "sorted by absolute fill-rate bias at 10s" in s
     want = min(
         doc["leaderboard"],
         key=lambda e: (abs(e["fill_rate_bias"][str(h)]["value"]), e["brier"][str(h)], e["model_id"]),
