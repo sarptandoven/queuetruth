@@ -2980,7 +2980,7 @@ Options:
       --backtester <backtester>
           the backtester (default: read from the backtest file)
           
-          [possible values: hftbacktest, nautilus, backtrader, vectorbt, lean, freqtrade, hummingbot]
+          [possible values: hftbacktest, nautilus, backtrader, vectorbt, lean, freqtrade, hummingbot, backtesting_py]
 
       --venue <venue>
           the live run's venue or bot (default: read from the files)
