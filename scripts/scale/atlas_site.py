@@ -3,21 +3,27 @@
 
     uv run --frozen --no-sync python scripts/scale/atlas_site.py --atlas ATLAS_DIR --out SITE_DIR \
         [--source nasdaq|iex] [--mode faithful] [--population standard] [--horizon 60s] [--per-symbol] \
-        [--pnl-horizon 60s]
+        [--pnl-horizon 60s] [--built-at DATE]
 
-Reads `atlas_manifest.json` and `leaderboard_by_tier.parquet` (`pnl_by_tier.parquet` when the atlas has it,
-`per_symbol.parquet` with `--per-symbol`) and writes:
+Reads `atlas_manifest.json`, `leaderboard_by_tier.parquet`, `pnl_by_tier.parquet` (when the atlas has it) and
+`per_symbol.parquet` (when it has it), and writes:
 
-- `index.html`: for each liquidity tier (`ALL` first), every simulator fill model's fill-rate bias against the exact
-  replay at every horizon, with its 95% interval from the two-way dates x symbols bootstrap, sorted by the size of
-  the bias at `--horizon` (default 60 s); in plain words first: the exact fill rate, the most optimistic and the most
-  pessimistic model among those whose interval excludes 0, with the relative size, and the closest model; with
-  `pnl_by_tier`, each model's P&L error (simulated minus exact P&L per order, in ticks, marked to the mid
-  `--pnl-horizon` after the first fill) with its interval, and a second sentence on the largest clear one among the
-  100 most traded symbols (ticks pool there; else all symbols); the flagged share of each row; how to verify every
-  number. Nothing is stated as a finding unless its 95% interval excludes 0;
-- `data/leaderboard.json`: the rows shown (and `pnl_rows`), for programs; `data/atlas_manifest.json`: the manifest
-  as combined (day roots, atlas root, flag policy, flagged symbol-days);
+- `index.html`, the answer first: the exact fill rate and one plain sentence per library (human labels such as
+  "NautilusTrader default (touch fill)"; model ids only in tooltips and details), one chart of every library's
+  settings at `--horizon` (default 60 s) with 95% intervals, a "what to do" box per library (closest setting,
+  verdict, config to paste), the symbol lookup, the venue's scope, and the last-built date with the atlas root and
+  how to verify it. Nothing is stated as a finding unless its 95% interval excludes 0;
+- `tables.html`, all numbers: for each liquidity tier (`ALL` first), every simulator fill model's fill-rate bias
+  against the exact replay at every horizon with its 95% interval from the two-way dates x symbols bootstrap,
+  sorted by the size of the bias at `--horizon`; the headline sentences (the most optimistic and pessimistic clear
+  models, the closest, and with `pnl_by_tier` the largest clear P&L error among the 100 most traded symbols, ticks
+  marked to the mid `--pnl-horizon` after the first fill); the best setting by tier; the flagged share of each row;
+- `hftbacktest.html`, `nautilustrader.html`, `databento.html`: one library's answer, chart and box, then its models
+  across tiers and horizons; `about.html`: how to read it, how it is made, its limits; `symbol.html`: the symbol
+  lookup (the only page with a script: it reads `atlas/v1/symbols/<letter>.json` next to it);
+- `atlas/v1/`: the versioned data API (`atlas_api.py`: `manifest.json`, `summary.json`, `configs.json`,
+  `symbols/<letter>.json`; models in `queuetruth.atlas`), which `queuetruth atlas` reads;
+- `data/leaderboard.json` and `data/atlas_manifest.json` as before, for programs;
 - `symbols.html` with `--per-symbol`: per-symbol cross-day bias with empirical-Bayes shrinkage.
 
 Two venues in one site: `--venue iex=ATLAS_DIR --venue nasdaq=ATLAS_DIR` (instead of `--atlas` and `--source`)
@@ -30,8 +36,10 @@ named on its venue's pages with the symbols it kept per tier.
 With `--compat-link` the index links `compat.html`, the upstream compatibility page that
 `scripts/nightly/compat_site.py` writes into the same directory (`.github/workflows/atlas.yml` does both).
 
-The page loads nothing from the network and runs no script. Output is byte-identical for the same inputs (no
-wall-clock values; the build information comes from the manifest). With `--source iex` every page carries IEX's
+The pages load nothing from another site; only `symbol.html` runs a script, which reads the data API next to it.
+Output is byte-identical for the same inputs (no wall-clock values: the build information comes from the manifest,
+and the "last built" date is `--built-at`, else SOURCE_DATE_EPOCH, else the newest day of the window). Every page is
+readable on a 390 px phone and follows the system's dark mode. With `--source iex` every page carries IEX's
 required attribution line and link (docs/data-and-licensing.md); publish Nasdaq-derived pages only as aggregates and
 after checking the terms that apply to you.
 """
@@ -179,8 +187,17 @@ def _clear(r: dict[str, Any], metric: str) -> bool:
 
 
 def _named(model_id: str) -> str:
-    lib, name = describe(model_id)
-    return f"{lib}'s {name} ({model_id})"
+    """The plain label of a model in a sentence (`queuetruth.atlas._common.label`); the id stays in the tables and
+    tooltips."""
+    return _C().label(model_id)
+
+
+def _C() -> Any:
+    """`queuetruth.atlas._common`, imported on first use: this module stays stdlib-only at import time
+    (`scripts/nightly/compat_site.py` imports it for its CSS and page frame)."""
+    from queuetruth.atlas import _common
+
+    return _common
 
 
 def pnl_tier(rows: list[dict[str, Any]]) -> str | None:
@@ -296,7 +313,7 @@ def parse_id(model_id: str) -> tuple[str, dict[str, str]]:
 
 
 def short_label(model_id: str) -> str:
-    """`hftbacktest Power3 n=2`: the chart label of a zoo model id; unknown families keep their id."""
+    """`hftbacktest Power3 n=2`: the compact label of a zoo model id; unknown families keep their id."""
     fam, params = parse_id(model_id)
     if fam not in SHORT:
         return model_id
@@ -322,11 +339,12 @@ def snippet(model_id: str) -> tuple[str, str] | None:
     (corrected mode, L3 input, Databento k outside (-1, 0], an unknown family, exchange or parameter).
 
     hftbacktest lines take the builder, exchange and number format from `queuetruth.export.hftbacktest`, so the site
-    and `queuetruth export hftbacktest` cannot drift apart; the exchange follows the id's `exch` (the canonical
-    `partial` / `no_partial`; Databento's estimator runs with the partial-fill exchange, as the zoo does). The
+    and `queuetruth export hftbacktest` cannot drift apart. The exchange is the export's default
+    (`no_partial_fill_exchange`, which runs on the released hftbacktest 2.4.4: 2.4.4 stops on `partial_fill_exchange`,
+    hftbacktest #312); an id whose `exch` is neither `partial` nor `no_partial` gets no snippet. The
     NautilusTrader line is the `add_venue` keywords the NautilusTrader integration sets."""
     from queuetruth.export._text import g6
-    from queuetruth.export.hftbacktest import EXCHANGES, FIXED_BUILDERS, POWER_BUILDERS
+    from queuetruth.export.hftbacktest import DEFAULT_EXCHANGE, EXCHANGES, FIXED_BUILDERS, POWER_BUILDERS
 
     fam, p = parse_id(model_id)
     if p.get("mode", "faithful") != "faithful":
@@ -340,9 +358,9 @@ def snippet(model_id: str) -> tuple[str, str] | None:
             f"fill_model=FillModel(prob_fill_on_limit={g6(prob)}), book_type=BookType.L2_MBP, trade_execution=True, "
             f"queue_position={NT_QUEUE[fam]}",
         )
-    exchange = EXCHANGES.get(p.get("exch", "partial").replace("-", "_"))
-    if exchange is None:
-        return None
+    if p.get("exch", "partial").replace("-", "_") not in EXCHANGES:
+        return None  # an exchange the libraries do not have
+    exchange = EXCHANGES[DEFAULT_EXCHANGE]  # the one that runs on the released hftbacktest (#312, `hbt_note`)
     key = fam.removeprefix("hbt_")
     kind = "hftbacktest BacktestAsset chain"
     if fam.startswith("hbt_") and key in POWER_BUILDERS:
@@ -484,7 +502,7 @@ def library_headline(rows: list[dict[str, Any]], lib: str, horizon: int) -> str 
         k = len(b["overlapping"])
         rank = (
             f" Its interval overlaps {'that' if k == 1 else 'those'} of {_count(k, 'other setting', 'other settings')}"
-            f" ({', '.join(short_label(m) for m in b['overlapping'])}), so the atlas cannot rank them by closeness."
+            f" ({', '.join(_named(m) for m in b['overlapping'])}), so the atlas cannot rank them by closeness."
         )
     return (
         f"{lead}. The closest point estimate is {_named(b['model_id'])}, {pp(b['fill_rate_bias_value'])} pp (95% "
@@ -556,9 +574,11 @@ a { color: var(--fg); text-decoration-color: var(--muted); text-underline-offset
 a:hover { text-decoration-color: var(--fg); } nav.libs { margin: 8px 0; } p { overflow-wrap: anywhere; }
 table.best th, table.best td { text-align: left; white-space: normal; vertical-align: top; }
 table.best td.cfg { min-width: 18em; } table.best td code { overflow-wrap: anywhere; }
-figure.chart { margin: 8px 0 12px; } svg.bias { width: 100%; min-width: 560px; height: auto; display: block;
-  font: 12px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-svg.bias text { fill: var(--fg); } svg.bias .tick { fill: var(--muted); }
+figure.chart { margin: 8px 0 12px; } svg.bias { width: 100%; height: auto; display: block;
+  font: 15px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+svg.bias.narrow { display: none; max-width: 640px; }
+@media (max-width: 760px) { svg.bias.wide { display: none; } svg.bias.narrow { display: block; } }
+svg.bias text { fill: var(--fg); } svg.bias .tick { fill: var(--muted); } svg.bias .group { font-weight: 600; }
 svg.bias .grid { stroke: var(--line); stroke-width: 1; } svg.bias .zero { stroke: var(--muted); stroke-width: 1.5; }
 svg.bias .ci { stroke: var(--muted); stroke-width: 2; stroke-linecap: round; }
 svg.bias .dot { fill: var(--muted); stroke: var(--bg); stroke-width: 2; }
@@ -612,17 +632,25 @@ def _f(x: float) -> str:
     return f"{x:.1f}"
 
 
-#: chart geometry in viewBox units
-CHART_W, CHART_LABEL, CHART_X0, CHART_X1, CHART_TOP, CHART_ROW = 720, 290, 300, 650, 30, 24
-#: longest label drawn (about 7 units a character at 12 px fits the 290 units left of the plot); the row's tooltip
-#: and the table keep the whole id
-CHART_LABEL_CHARS = 40
+#: chart geometry in viewBox units, two layouts of the same chart (CSS shows one): `wide` puts each model on one
+#: row (its label right-aligned in a column of its own, then its dot, whisker and value on the same baseline);
+#: `narrow`, below 760 px, gives each model two lines (its label, then its dot and whisker across nearly the whole
+#: width), so the chart reads on a 390 px phone without scrolling sideways
+CHART_W, CHART_X0, CHART_X1, CHART_TOP, CHART_ROW, CHART_GROUP = 480, 22, 404, 34, 40, 26
+#: where the narrow labels start (the plot leaves room for its first tick label)
+CHART_LABEL_X = 4
+#: the wide layout: width, right edge of the label column, plot, row and group heights
+WIDE_W, WIDE_LABEL_END, WIDE_X0, WIDE_X1, WIDE_ROW, WIDE_GROUP = 1000, 430, 452, 920, 30, 30
+#: longest label drawn (about 8 units a character at 15 px); the row's tooltip and the table keep the whole label
+CHART_LABEL_CHARS = 58
 
 
-def chart(rows: list[dict[str, Any]], chart_id: str, title: str, horizon: int) -> str:
-    """An inline SVG of the fill-rate bias of `rows` (one per model, in the order given) at `horizon`: a dot per
-    model with its 95% interval as a whisker, a line at 0, coloured `--over` / `--under` only when the interval
-    excludes 0. No script; every value is also in the table next to it. Empty without rows."""
+def chart(rows: list[dict[str, Any]], chart_id: str, title: str, horizon: int, groups: bool = False) -> str:
+    """Inline SVG of the fill-rate bias of `rows` (one per model, in the order given) at `horizon`: per model its
+    plain label, a dot with its 95% interval as a whisker and its value, a line at 0, coloured `--over` / `--under`
+    only when the interval excludes 0. Two layouts (`wide` and `narrow`, see CHART_W); CSS shows the one that fits.
+    `groups` puts the library's name above each run of its models. No script; every value is also in a table of the
+    site, and each row's tooltip has the model id. Empty without rows."""
     pts = []
     for r in rows:
         v = _bias(r)
@@ -640,52 +668,111 @@ def chart(rows: list[dict[str, Any]], chart_id: str, title: str, horizon: int) -
     step = _tick_step(dmax - dmin)
     a, b = math.floor(dmin / step - 1e-9) * step, math.ceil(dmax / step + 1e-9) * step
     ticks = [a + i * step for i in range(round((b - a) / step) + 1)]
+    svgs = [
+        _chart_svg(pts, ticks, step, (a, b), chart_id, title, horizon, groups, wide=True),
+        _chart_svg(pts, ticks, step, (a, b), f"{chart_id}-n", title, horizon, groups, wide=False),
+    ]
+    return (
+        '<figure class="chart">'
+        + "".join(svgs)
+        + (
+            '<figcaption class="muted">Dot: the bias; whisker: its 95% interval. Coloured only when the interval '
+            "excludes 0 (red: fills too many orders, blue: too few); grey: no clear difference. Bounds are in the "
+            "tables, not drawn.</figcaption></figure>"
+        )
+    )
+
+
+def _chart_svg(
+    pts: list[tuple[dict[str, Any], float, float | None, float | None]],
+    ticks: list[float],
+    step: float,
+    domain: tuple[float, float],
+    chart_id: str,
+    title: str,
+    horizon: int,
+    groups: bool,
+    wide: bool,
+) -> str:
+    """One layout of `chart`."""
+    C = _C()
+    a, b = domain
+    width, x0, x1 = (WIDE_W, WIDE_X0, WIDE_X1) if wide else (CHART_W, CHART_X0, CHART_X1)
 
     def x(v: float) -> float:
-        return CHART_X0 + (v - a) / (b - a) * (CHART_X1 - CHART_X0)
+        return x0 + (v - a) / (b - a) * (x1 - x0)
 
-    height = CHART_TOP + len(pts) * CHART_ROW + 30
-    bottom = CHART_TOP + len(pts) * CHART_ROW
+    body: list[str] = []
+    y = CHART_TOP
+    last = None
+    for r, v, lo, hi in pts:
+        lib = C.library_of(r["model_id"])
+        if groups and lib != last:
+            gx, anchor = (WIDE_LABEL_END, ' text-anchor="end"') if wide else (CHART_LABEL_X, "")
+            body.append(
+                f'<text class="group" x="{gx}" y="{_f(y + 20 if wide else y + 18)}"{anchor}>'
+                f"{html.escape(C.LIBRARY_NAMES[lib])}</text>"
+            )
+            y += WIDE_GROUP if wide else CHART_GROUP
+        last = lib
+        cls = {1: "over", -1: "under"}.get(side(r), "plain")
+        ci = f" [{lo:+.2f}, {hi:+.2f}]" if lo is not None else ""
+        label = C.label(r["model_id"])
+        tip = f"{label} ({r['model_id']}): {v:+.2f} pp{ci}"
+        body.append(f'<g class="{cls}"><title>{html.escape(tip)}</title>')
+        shown = label if len(label) <= CHART_LABEL_CHARS else label[: CHART_LABEL_CHARS - 1].rstrip() + "\u2026"
+        if wide:
+            cy = y + WIDE_ROW / 2
+            body.append(f'<text x="{WIDE_LABEL_END}" y="{_f(cy + 5)}" text-anchor="end">{html.escape(shown)}</text>')
+        else:
+            body.append(f'<text x="{CHART_LABEL_X}" y="{_f(y + 13)}">{html.escape(shown)}</text>')
+            cy = y + 28
+        if lo is not None:
+            body.append(f'<line class="ci" x1="{_f(x(lo))}" x2="{_f(x(hi))}" y1="{_f(cy)}" y2="{_f(cy)}"/>')
+        body.append(f'<circle class="dot" cx="{_f(x(v))}" cy="{_f(cy)}" r="5"/>')
+        body.append(f'<text x="{width - 4}" y="{_f(cy + 5)}" text-anchor="end">{v:+.2f}</text></g>')
+        y += WIDE_ROW if wide else CHART_ROW
+    bottom = y
+    height = bottom + 30
     out = [
-        f'<svg class="bias" viewBox="0 0 {CHART_W} {height}" role="img" aria-labelledby="{chart_id}-t" '
-        f'aria-describedby="{chart_id}-d">',
+        f'<svg class="bias {"wide" if wide else "narrow"}" viewBox="0 0 {width} {_f(height)}" role="img" '
+        f'aria-labelledby="{chart_id}-t" aria-describedby="{chart_id}-d">',
         f'<title id="{chart_id}-t">{html.escape(title)}</title>',
         f'<desc id="{chart_id}-d">Fill-rate bias of {len(pts)} models at {html.escape(duration(horizon))} in '
-        "percentage points, with 95% intervals; the same values are in the table below.</desc>",
+        "percentage points, with 95% intervals; the same values are in the tables of the site.</desc>",
     ]
     for t in ticks:
         tx = _f(x(t))
         label = "0" if abs(t) < step / 1e6 else f"{round(t, 6):+g}"
         cls = "zero" if label == "0" else "grid"
-        out.append(f'<line class="{cls}" x1="{tx}" x2="{tx}" y1="{CHART_TOP - 6}" y2="{bottom}"/>')
-        out.append(f'<text class="tick" x="{tx}" y="{CHART_TOP - 12}" text-anchor="middle">{label}</text>')
-    for i, (r, v, lo, hi) in enumerate(pts):
-        cy = CHART_TOP + i * CHART_ROW + CHART_ROW / 2
-        cls = {1: "over", -1: "under"}.get(side(r), "plain")
-        ci = f" [{lo:+.2f}, {hi:+.2f}]" if lo is not None else ""
-        label = short_label(r["model_id"])
-        out.append(f'<g class="{cls}"><title>{html.escape(label)}: {v:+.2f} pp{ci}</title>')
-        shown = label if len(label) <= CHART_LABEL_CHARS else label[: CHART_LABEL_CHARS - 1].rstrip() + "\u2026"
-        out.append(f'<text x="{CHART_LABEL}" y="{_f(cy + 4)}" text-anchor="end">{html.escape(shown)}</text>')
-        if lo is not None:
-            out.append(f'<line class="ci" x1="{_f(x(lo))}" x2="{_f(x(hi))}" y1="{_f(cy)}" y2="{_f(cy)}"/>')
-        out.append(f'<circle class="dot" cx="{_f(x(v))}" cy="{_f(cy)}" r="5"/>')
-        out.append(f'<text x="{CHART_W - 4}" y="{_f(cy + 4)}" text-anchor="end">{v:+.2f}</text></g>')
+        out.append(f'<line class="{cls}" x1="{tx}" x2="{tx}" y1="{CHART_TOP - 8}" y2="{_f(bottom)}"/>')
+        out.append(f'<text class="tick" x="{tx}" y="{CHART_TOP - 14}" text-anchor="middle">{label}</text>')
+    out += body
     out.append(
-        f'<text class="tick" x="{_f((CHART_X0 + CHART_X1) / 2)}" y="{height - 8}" text-anchor="middle">'
-        f"fill-rate bias within {html.escape(duration(horizon))}, percentage points (model minus exact)</text>"
+        f'<text class="tick" x="{_f((x0 + x1) / 2)}" y="{_f(height - 8)}" text-anchor="middle">'
+        f"bias within {html.escape(duration(horizon))}, percentage points (model minus real queue)</text>"
     )
     out.append("</svg>")
-    return (
-        '<figure class="chart"><div class="wrap">'
-        + "".join(out)
-        + "</div>"
-        + (
-            '<figcaption class="muted">Dot: the bias; whisker: its 95% interval. Coloured only when the interval '
-            "excludes 0 (red: fills too many orders, blue: too few); grey: no clear difference. Bounds are in the "
-            "table, not drawn.</figcaption></figure>"
-        )
-    )
+    return "".join(out)
+
+
+#: Where the hftbacktest L3 FIFO gap is explained (PR #26).
+L3_FINDINGS = f"{REPO}/scripts/scale/findings/l3-fifo-gap.md"
+#: One plain sentence on why hftbacktest's order-level model fills fewer orders (HTML), next to its chart and rows.
+L3_NOTE = (
+    "hftbacktest's L3 FIFO model reads the same order-level data and still fills fewer orders: that is hftbacktest's "
+    "own behaviour. The released hftbacktest 2.4.4 gives the same first fills as the model here, and it misses fills "
+    "of orders alone ahead of the displayed book: hidden executions it skips, which are frequent on IEX, and fills "
+    "its trade-through rule refuses. The hidden-print share rests on queuetruth's ruling that displayed interest "
+    f'fills before hidden at the same price (<a href="{L3_FINDINGS}">the findings</a>).'
+)
+
+
+def _row_note(model_id: str) -> str:
+    """A short note under a model's name in the tables (hftbacktest's L3 FIFO model: why it fills fewer)."""
+    if parse_id(model_id)[0] != "hbt_l3_fifo":
+        return ""
+    return f'<br><span class="ci">fills fewer by hftbacktest\'s own rules (<a href="{L3_FINDINGS}">why</a>)</span>'
 
 
 def _chart_id(page_tier: str) -> str:
@@ -721,7 +808,7 @@ def _tier_section(
     head = "".join(f"<th>{html.escape(duration(x))}</th>" for x in horizons)
     shown, shown_pnl, body_rows = [], [], []
     for m in order:
-        lib, name = describe(m)
+        lib, name = describe(m)[0], _named(m)
         cells = []
         for x in horizons:
             r = at.get((m, x))
@@ -746,7 +833,7 @@ def _tier_section(
                 shown_pnl.append({k: pr.get(k) for k in sorted(pr)})
         share = (at.get((m, h)) or {}).get("flagged_share")
         body_rows.append(
-            f"<tr><td>{html.escape(lib)}</td><td>{html.escape(name)}<br><code>{html.escape(m)}</code></td>"
+            f"<tr><td>{html.escape(lib)}</td><td>{html.escape(name)}<br><code>{html.escape(m)}</code>{_row_note(m)}</td>"
             + "".join(cells)
             + f"<td>{'' if share is None else f'{100 * share:.1f}%'}</td></tr>"
         )
@@ -760,6 +847,34 @@ def _tier_section(
         f"</tr></thead><tbody>{''.join(body_rows)}</tbody></table></div>"
     )
     return page, shown, shown_pnl
+
+
+#: What goes with every NautilusTrader config (HTML).
+NT_NOTE = (
+    "<code>FillModel</code> is <code>nautilus_trader.backtest.models.FillModel</code> in 1.x and "
+    "<code>nautilus_trader.execution.DefaultFillModel</code> in 2.x; the keywords go to "
+    "<code>BacktestEngine.add_venue</code> (2.x also needs a <code>fee_model</code>). The faithful models follow "
+    "nautilus_trader 1.231.0 on a delta-fed L2 book; from 2.0, a book update that shrinks the order's level also "
+    "caps the queue ahead with <code>queue_position=True</code>, so a few orders fill differently. With "
+    "<code>prob_fill_on_limit</code> below 1, every at-price print is a random draw: set <code>random_seed</code> "
+    "on the fill model to compare runs."
+)
+
+
+#: What goes with every hftbacktest (and Databento-equivalent) config (HTML).
+def hbt_note() -> str:
+    """What goes with every hftbacktest (and Databento-equivalent) config (HTML): where the line goes, and the
+    one-line #312 note on its exchange (`queuetruth.export.hftbacktest`, imported on first use)."""
+    from queuetruth.export.hftbacktest import DEFAULT_EXCHANGE, EXCHANGES, HBT_312_URL
+
+    return (
+        "The hftbacktest line goes on your <code>BacktestAsset()</code> chain in place of its queue model and "
+        "exchange (hftbacktest 2.4.4, which faithful mode reproduces). It uses "
+        f"<code>{EXCHANGES[DEFAULT_EXCHANGE]}</code>, which runs on the released hftbacktest: 2.4.4 stops on "
+        f"<code>{EXCHANGES['partial']}</code> with error 14 "
+        f'(<a href="{HBT_312_URL}">hftbacktest #312</a>); the atlas ran these models with partial fills, and the '
+        "two differ only when a fill is smaller than the order."
+    )
 
 
 def _best_section(
@@ -789,7 +904,7 @@ def _best_section(
         rows.append(
             f"<tr><td>{html.escape(b['tier'])}</td>"
             + ("" if lib else f'<td><a href="{guide}">{html.escape(b["library"])}</a></td>')
-            + f"<td>{html.escape(short_label(b['model_id']))}<br><code>{html.escape(b['model_id'])}</code></td>"
+            + f"<td>{html.escape(_named(b['model_id']))}<br><code>{html.escape(b['model_id'])}</code></td>"
             + _cell(pp(b["fill_rate_bias_value"]), pp(b["fill_rate_bias_ci_lo"]), pp(b["fill_rate_bias_ci_hi"]),
                     _cls(b, "fill_rate_bias"))
             + f"<td>{html.escape(verdict(b))}{_overlap_note(b)}</td>{pcell}"
@@ -798,23 +913,8 @@ def _best_section(
     pnl_head = f"<th>P&amp;L, ticks ({html.escape(duration(ph))})</th>" if pnl_at is not None else ""
     libs = sorted({b["library"] for b in best})
     guides = ", ".join(f'<a href="{REPO}/{LIBRARY_PAGES[x][2]}">{html.escape(LIBRARY_PAGES[x][3])}</a>' for x in libs)
-    nt = (
-        " <code>FillModel</code> is <code>nautilus_trader.backtest.models.FillModel</code> in 1.x and "
-        "<code>nautilus_trader.execution.DefaultFillModel</code> in 2.x; the keywords go to "
-        "<code>BacktestEngine.add_venue</code> (2.x also needs a <code>fee_model</code>). The faithful models follow "
-        "nautilus_trader 1.231.0 on a delta-fed L2 book; from 2.0, a book update that shrinks the order's level also "
-        "caps the queue ahead with <code>queue_position=True</code>, so a few orders fill differently. With "
-        "<code>prob_fill_on_limit</code> below 1, every at-price print is a random draw: set <code>random_seed</code> "
-        "on the fill model to compare runs."
-        if "NautilusTrader" in libs
-        else ""
-    )
-    hbt = (
-        " The hftbacktest line goes on your <code>BacktestAsset()</code> chain in place of its queue model and "
-        "exchange (hftbacktest 2.4.4, which faithful mode reproduces)."
-        if "hftbacktest" in libs or "Databento" in libs
-        else ""
-    )
+    nt = f" {NT_NOTE}" if "NautilusTrader" in libs else ""
+    hbt = f" {hbt_note()}" if "hftbacktest" in libs or "Databento" in libs else ""
     return (
         f"<h2>{'Best setting by tier' if lib is None else f'Best {html.escape(lib)} setting by tier'}</h2>"
         f"<p>Which setting fixes it: for each tier{'' if lib else ' and library'}, the setting whose fill-rate bias "
@@ -835,7 +935,7 @@ def _best_section(
 def _overlap_note(b: dict[str, Any]) -> str:
     if not b["overlapping"]:
         return ""
-    names = ", ".join(short_label(m) for m in b["overlapping"])
+    names = ", ".join(_named(m) for m in b["overlapping"])
     return f'<br><span class="ci">interval overlaps: {html.escape(names)}</span>'
 
 
@@ -868,7 +968,7 @@ def sample_note(days: list[dict[str, Any]]) -> str:
         + "; ".join(said)
         + ". Tiers are ranked on the whole day. The ALL rows pool the sampled symbols, so each tier counts with its "
         "sample, not with its share of the market "
-        f'(<a href="{DOCS}/concepts/fill-realism-atlas.md#a-nasdaq-day-on-one-runner">how the sample is made</a>).</p>'
+        f'(<a href="{DOCS}/how-to/run-the-atlas.md#a-nasdaq-day-on-one-runner">how the sample is made</a>).</p>'
     )
 
 
@@ -903,6 +1003,176 @@ def _library_nav(present: list[str], here: str | None) -> str:
     return f'<nav class="libs">{back}By library: {", ".join(links)}</nav>'
 
 
+#: Site library names -> data API library keys (`queuetruth.atlas._common.LIBRARIES`).
+LIBRARY_KEYS = {"hftbacktest": "hftbacktest", "NautilusTrader": "nautilus", "Databento": "databento"}
+#: The atlas's public address (`.github/workflows/atlas.yml` deploys it with GitHub Pages).
+SITE_URL = "https://sarptandoven.github.io/queuetruth/"
+
+#: What a reader should know about each venue before trusting its numbers elsewhere (HTML).
+SCOPE = {
+    "iex": (
+        "IEX carries about 4 to 5% of US equity volume. It delays every incoming order by a 350 microsecond speed "
+        "bump and has order types that reprice themselves (discretionary and primary pegs), so its queues are "
+        "thinner and behave differently from those of Nasdaq or NYSE. The size of a model's error may not transfer "
+        "to other exchanges; the method does."
+    ),
+    "nasdaq": (
+        "These are a few free Nasdaq TotalView-ITCH sample days, not a daily series, often on a fixed sample of "
+        "symbols per liquidity tier. Read them next to the IEX pages, not instead of them."
+    ),
+}
+#: Extra styles of the front page, the about page and the symbol lookup.
+V2_CSS = """
+p.sub { font-size: 1.05rem; margin: 0 0 12px; }
+ul.answers { padding-left: 1.1em; } ul.answers li { margin: 6px 0; }
+.boxes { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+section.box { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+section.box h3 { margin: 0 0 6px; font-size: 1.05rem; } section.box pre { white-space: pre-wrap;
+  overflow-wrap: anywhere; } .scope { border-left: 3px solid var(--over); padding-left: 12px; }
+details { margin: 8px 0; } summary { cursor: pointer; }
+form.lookup { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+form.lookup input { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--bg); color: var(--fg); text-transform: uppercase; width: 9em; }
+form.lookup button { font: inherit; padding: 6px 12px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--chip); color: var(--fg); cursor: pointer; }
+footer.built { margin-top: 32px; }
+"""
+
+
+def _days_span(days: list[dict[str, Any]]) -> tuple[list[str], str]:
+    dates = [iso_date(d["date"]) for d in days]
+    if not dates:
+        return dates, "no day"
+    return dates, (dates[0] if len(dates) == 1 else f"{len(dates)} days from {dates[0]} to {dates[-1]}")
+
+
+def _all_rows(atlas: Path, name: str) -> list[dict[str, Any]]:
+    import pyarrow.parquet as pq
+
+    path = atlas / name
+    return pq.read_table(path).to_pylist() if path.exists() else []
+
+
+def _per_symbol_rows(atlas: Path, mode: str, population: str) -> list[dict[str, Any]]:
+    """`per_symbol.parquet` rows of (mode, population) at the symbol shards' horizons, read with a filter (a
+    20-day file holds millions of rows)."""
+    import atlas_api as A
+    import pyarrow.parquet as pq
+
+    path = atlas / "per_symbol.parquet"
+    if not path.exists():
+        return []
+    cols = ["mode", "shadow_pop", "model_id", "horizon_ns", "symbol", "tier", "n", "n_days", "bias", "ci_lo",
+            "ci_hi", "bias_shrunk"]  # fmt: skip
+    have = set(pq.read_schema(path).names)
+    filters = [("mode", "=", mode), ("shadow_pop", "=", population), ("horizon_ns", "in", list(A.SYMBOL_HORIZONS))]
+    return pq.read_table(path, columns=[c for c in cols if c in have], filters=filters).to_pylist()
+
+
+def _plain(text: str) -> str:
+    """A note without its markup, for the data API: links keep their address in brackets."""
+    text = re.sub(r'<a href="([^"]+)">([^<]+)</a>', r"\2 (\1)", text)
+    return html.unescape(re.sub(r"<[^>]+>", "", text))
+
+
+def _box(b: dict[str, Any], page: str | None, pnl_at: dict[tuple[str, str], dict[str, Any]] | None) -> str:
+    """The "what to do" box of one library: its closest setting, the verdict and the config to paste."""
+    C = _C()
+    lib = b["library"]
+    iv = {"value": 100 * b["fill_rate_bias_value"], "lo": None, "hi": None}
+    if b["fill_rate_bias_ci_lo"] is not None and b["fill_rate_bias_ci_hi"] is not None:
+        iv.update(lo=100 * b["fill_rate_bias_ci_lo"], hi=100 * b["fill_rate_bias_ci_hi"])
+    v = C.verdict_key(iv)
+    cfg = (
+        f'<p class="muted">{html.escape(b["snippet_kind"])}:</p><pre><code>{html.escape(b["snippet"])}</code></pre>'
+        if b["snippet"]
+        else "<p>No released library setting reproduces it; see the guide.</p>"
+    )
+    note = NT_NOTE if lib == "NautilusTrader" else hbt_note() if b["snippet"] else ""
+    pr = (pnl_at or {}).get((b["tier"], b["model_id"]))
+    pnl = (
+        f" Its P&amp;L error: {html.escape(C.interval_text(_ticks_iv(pr), 'ticks'))} per order."
+        if pr and pr.get("pnl_bias_ticks_value") is not None
+        else ""
+    )
+    overlap = (
+        f" The atlas cannot rank it against {html.escape(', '.join(C.label(m) for m in b['overlapping']))} "
+        "(overlapping intervals)."
+        if b["overlapping"]
+        else ""
+    )
+    more = f' <a href="{page}">Every tier and horizon</a>.' if page else ""
+    return (
+        f'<section class="box"><h3>{html.escape(lib)}</h3>'
+        f"<p>Closest setting: <strong>{html.escape(C.label(b['model_id']))}</strong>, "
+        f"{html.escape(C.interval_text(iv))}. Verdict: <strong>{html.escape(C.VERDICT_TEXT[v])}</strong>."
+        f"{overlap}{pnl}</p>{cfg}"
+        f"<details><summary>Model id and notes</summary><p><code>{html.escape(b['model_id'])}</code></p>"
+        f'<p class="muted">{note} Refit on your own data before relying on it '
+        f'(<a href="{REPO}/{LIBRARY_PAGES[lib][2]}">{html.escape(LIBRARY_PAGES[lib][3])}</a>).{more}</p></details>'
+        "</section>"
+    )
+
+
+def _ticks_iv(pr: dict[str, Any] | None) -> dict[str, Any]:
+    pr = pr or {}
+    return {
+        "value": pr.get("pnl_bias_ticks_value"),
+        "lo": pr.get("pnl_bias_ticks_ci_lo"),
+        "hi": pr.get("pnl_bias_ticks_ci_hi"),
+    }
+
+
+def _verify_section(
+    source: str, manifest: dict[str, Any], days: list[dict[str, Any]], built_at: str, span: str, extra: str
+) -> str:
+    """Last built, the atlas root and how to verify it, every day root (folded), and where the data is."""
+    release, prefix, anchor = VENUE_DAYS[source]
+    root = manifest.get("atlas_root", "")
+    day_rows = "".join(
+        f"<tr><td>{html.escape(iso_date(d['date']))}</td><td><code>{html.escape(str(d['merkle_root']))}</code></td>"
+        f"<td>{d.get('units_valid', '')} / {d.get('units_planned', '')}</td><td>{commits(d.get('git_heads'))}</td></tr>"
+        for d in days
+    )
+    build = manifest.get("build") or {}
+    return (
+        '<footer class="built"><h2 id="verify">Last built and how to verify</h2>'
+        f"<p>Last built <strong>{html.escape(built_at)}</strong>, from {html.escape(span)}, by "
+        f'<a href="{REPO_HOME}">queuetruth</a> {html.escape(str(build.get("queuetruth_version") or ""))} '
+        f"({commits([build.get('git_head')])}).</p>"
+        f"<p>Atlas root <code>{html.escape(root)}</code>: a Merkle root over the day roots in date order (flag policy "
+        f"<code>{html.escape(str(manifest.get('flag_policy')))}</code>). Each day root covers that day's shard leaves. "
+        f"To check one, download the day (<code>{prefix}&lt;date&gt;.tar.gz</code> on the repository's "
+        f'<a href="{REPO_HOME}/releases/tag/{release}">{release}</a> release: its tables, plan and manifest), check '
+        "out the commit the day was built at, re-create the unit's bucket from the public day file and re-run the "
+        f'unit (<a href="{DOCS}/concepts/fill-realism-atlas.md#{anchor}">the steps</a>):</p>'
+        "<pre>uv run --frozen --no-sync python scripts/scale/verify_unit.py --day DAY_DIR "
+        "--atlas-manifest atlas_manifest.json --unit-id UNIT_ID --split SPLIT_DIR</pre>"
+        f"<details><summary>Every day root ({len(days)})</summary>"
+        '<div class="wrap"><table><thead><tr><th>date</th><th>day root</th><th>units</th><th>built at</th></tr>'
+        f"</thead><tbody>{day_rows}</tbody></table></div></details>"
+        f"{extra}</footer>"
+    )
+
+
+def _check_list() -> str:
+    return (
+        "<h2>Check your own backtester</h2><ul>"
+        "<li>This answer in your terminal, for your library, tier and symbol: <code>queuetruth atlas --library "
+        "nautilus --symbol AAPL</code> (it asks before it downloads anything).</li>"
+        f"<li>See it in a minute: <code>pipx run queuetruth demo --yes</code> places small orders in the real queue "
+        f'of a public day and prints the same comparison (<a href="{DOCS}/getting-started.md">getting started</a>).'
+        "</li>"
+        "<li>Your simulator against your live fills, order by order: "
+        f'<a href="{DOCS}/how-to/import-live-logs.md">import the live log</a>, then <code>queuetruth score</code> '
+        f'(<a href="{DOCS}/how-to/decompose-the-sim-live-gap.md">where the gap comes from</a>).</li>'
+        "<li>Your simulator in CI: the <code>referee</code> GitHub Action runs it on 16 known fill-bug fixtures "
+        f'(<a href="{DOCS}/how-to/referee-your-simulator.md">guide</a>).</li>'
+        "<li>A fitted fill model to paste back into hftbacktest or NautilusTrader: "
+        f'<a href="{DOCS}/how-to/calibrate-hftbacktest.md">calibrate</a>.</li></ul>'
+    )
+
+
 def build(
     atlas: Path,
     out: Path,
@@ -915,12 +1185,17 @@ def build(
     pnl_horizon: str = "60s",
     compat_link: bool = False,
     venues: list[tuple[str, str]] | None = None,
+    built_at: str | None = None,
 ) -> dict[str, Any]:
-    """Writes the site; returns {pages, rows, pnl_rows, atlas_root}. `compat_link` links `compat.html`, the upstream
-    compatibility page `scripts/nightly/compat_site.py` writes next to it. `venues` ([(source, href of its index)],
-    `build_site`) adds the venue switch to every page and names the venue in the titles of all but the first."""
+    """Writes the site; returns {pages, rows, pnl_rows, atlas_root, api}. `compat_link` links `compat.html`, the
+    upstream compatibility page `scripts/nightly/compat_site.py` writes next to it. `venues` ([(source, href of its
+    index)], `build_site`) adds the venue switch to every page and names the venue in the titles of all but the
+    first. `built_at` is the "last built" date (default SOURCE_DATE_EPOCH, else the newest day)."""
+    import atlas_api as A
+
     if source not in ("nasdaq", "iex"):
         raise SystemExit(f"site: source must be nasdaq or iex, got {source!r}")
+    C = _C()
     manifest = json.loads((atlas / "atlas_manifest.json").read_text(encoding="utf-8"))
     venues_seen = {d["venue"] for d in manifest.get("days") or [] if d.get("venue")}
     if venues_seen - {source}:
@@ -941,22 +1216,22 @@ def build(
         raise SystemExit(f"site: P&L horizon {pnl_horizon} not in the atlas ({have})")
     pnl_at = {(r["tier"], r["model_id"]): r for r in pnl if r["horizon_ns"] == ph} if pnl else None
     days = manifest.get("days") or []
-    first, last = (iso_date(days[0]["date"]), iso_date(days[-1]["date"])) if days else ("?", "?")
-    span = first if len(days) == 1 else f"{len(days)} days from {first} to {last}"
+    dates, span = _days_span(days)
+    built = A.built_at(dates, built_at)
     attribution = _attribution(source)
     venue = VENUES[source]
     switch = venue_nav(venues, source) if venues else ""
-    css = VENUE_CSS if switch else ""
-    release, prefix, anchor = VENUE_DAYS[source]
+    css = (VENUE_CSS if switch else "") + V2_CSS
     titled = f" ({venue})" if venues and venues[0][0] != source else ""
     present = [lib for lib in LIBRARY_PAGES if any(describe(r["model_id"])[0] == lib for r in rows)]
     best = best_settings(rows, h)
+    hl = C.horizon_label(h)
 
     about = (
         f"{html.escape(venue)}, {html.escape(span)}, "
         f"{manifest.get('symbol_days', 0):,} symbol-days, {manifest.get('distinct_symbols', 0):,} symbols; "
         f"{html.escape(mode)} mode, shadow population {html.escape(population)} "
-        f'(<a href="{DOCS}/concepts/fill-realism-atlas.md">how to read it, how it is made, its limits</a>).'
+        '(<a href="about.html">how to read it, how it is made, its limits</a>).'
     )
     pnl_days = manifest.get("pnl_days") or []
     some = ""
@@ -974,24 +1249,46 @@ def build(
         f"the size of the bias at {html.escape(duration(h))}.{pnl_note} <em>flagged</em> is the share of a row's "
         "orders on symbol-days whose replay checks raised a flag or that were not in continuous trading.</p>"
     )
-    parts = [
-        "<h1>Fill-Realism Atlas</h1>",
+    note = sample_note(days)
+    data_links = (
+        ' Data: <a href="atlas/v1/manifest.json">data API</a> (<code>atlas/v1/</code>), '
+        '<a href="data/leaderboard.json">leaderboard.json</a>, '
+        '<a href="data/atlas_manifest.json">atlas_manifest.json</a>.'
+    )
+    more = (
+        '<p class="muted">More: <a href="tables.html">all numbers</a> (every model, tier and horizon), '
+        '<a href="about.html">how to read it, how it is made, its limits</a>, '
+        '<a href="symbol.html">your symbol</a>'
+        + (', <a href="symbols.html">every symbol</a>' if per_symbol else "")
+        + "."
+        + (
+            ' Upstream compatibility: <a href="compat.html">the newest hftbacktest and NautilusTrader releases '
+            "against the exact queue</a>, checked daily."
+            if compat_link
+            else ""
+        )
+        + data_links
+        + "</p>"
+    )
+    recreate = recreate_command(source, days[-1] if days else None) if (switch or source != "iex") else ""
+
+    # ---- tables.html: every model, tier and horizon (the atlas's first page until v2) ----------------------------
+    tparts = [*([switch] if switch else []), '<p><a href="index.html">Fill-Realism Atlas</a></p>']
+    tparts += [
+        "<h1>All numbers</h1>",
         '<p class="muted">How far each backtester\'s fill model is from the exact replay of the real queue: '
         + about
         + "</p>",
     ]
-    if switch:
-        parts.insert(0, switch)
-    note = sample_note(days)
     if note:
-        parts.append(note)
+        tparts.append(note)
     if present:
-        parts.append(_library_nav(present, None))
+        tparts.append(_library_nav(present, None))
     leads = [x for x in (headline(rows, h), pnl_headline(pnl, ph)) if x]
     for line in leads:
-        parts.append(f'<p class="lead">{html.escape(line, quote=False)}</p>')
-    parts.append(explain)
-    parts.append(_best_section(best, h, pnl_at, ph, None))
+        tparts.append(f'<p class="lead">{html.escape(line, quote=False)}</p>')
+    tparts.append(explain)
+    tparts.append(_best_section(best, h, pnl_at, ph, None))
     shown_pnl: list[dict[str, Any]] = []
     shown: list[dict[str, Any]] = []
     for tier in tiers:
@@ -1004,74 +1301,138 @@ def build(
             ph,
             f"Fill-rate bias by model within {duration(h)}, tier {tier}",
         )
-        parts.append(page)
+        tparts.append(page)
         shown += s
         shown_pnl += sp
-    import atlas_touch  # touch tables for bar backtests: a section and atlas/v1/touch.json when the atlas has them
+    tparts.append(_verify_section(source, manifest, days, built, span, more + recreate))
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "data").mkdir(exist_ok=True)
+    (out / "tables.html").write_text(
+        _page(f"All numbers: Fill-Realism Atlas{titled}", "\n".join(tparts), attribution,
+              leads[0] if leads else SUMMARY, extra_css=css),
+        encoding="utf-8",
+    )  # fmt: skip
+
+    # ---- the data API --------------------------------------------------------------------------------------------
+    summary = A.summary_rows(_all_rows(atlas, "leaderboard_by_tier.parquet"), _all_rows(atlas, "pnl_by_tier.parquet"))
+    configs = A.config_rows(best, pnl_at, LIBRARY_KEYS)
+    notes = {
+        "nautilus": _plain(NT_NOTE),
+        "hftbacktest": _plain(hbt_note()),
+        "databento": "Databento's estimator has no library of its own: the config is hftbacktest's expected-value "
+        "equivalent. " + _plain(hbt_note()),
+    }
+    shards = A.symbol_shards(_per_symbol_rows(atlas, mode, population), mode, population)
+    api = A.write_api(
+        out,
+        source=source,
+        venue_name=venue,
+        manifest=manifest,
+        days=dates,
+        summary=summary,
+        configs=configs,
+        notes=notes,
+        shards=shards,
+        mode=mode,
+        population=population,
+        horizon=hl,
+        attribution=IEX_ATTRIBUTION if source == "iex" else None,
+        verify=f"{DOCS}/concepts/fill-realism-atlas.md#{VENUE_DAYS[source][2]}",
+        built=built,
+    )
+
+    # touch tables for bar backtests (scripts/scale/atlas_touch.py): a section and atlas/v1/touch.json when the atlas
+    # has them, listed in the manifest with its sha256 like every other file of the API
+    import atlas_touch
 
     touch = atlas_touch.section(atlas, out, population=population, source=source, docs=DOCS,
                                 attribution=IEX_ATTRIBUTION if source == "iex" else None)  # fmt: skip
-    parts += [touch] if touch else []
-    parts.append(
-        "<h2>Check your own backtester</h2><ul>"
-        f"<li>See it in a minute: <code>pipx run queuetruth demo --yes</code> places small orders in the real queue "
-        f'of a public day and prints the same comparison (<a href="{DOCS}/getting-started.md">getting started</a>).'
-        "</li>"
-        "<li>Your simulator against your live fills, order by order: "
-        f'<a href="{DOCS}/how-to/import-live-logs.md">import the live log</a>, then <code>queuetruth score</code> '
-        f'(<a href="{DOCS}/how-to/decompose-the-sim-live-gap.md">where the gap comes from</a>).</li>'
-        "<li>Your simulator in CI: the <code>referee</code> GitHub Action runs it on 16 known fill-bug fixtures "
-        f'(<a href="{DOCS}/how-to/referee-your-simulator.md">guide</a>).</li>'
-        "<li>A fitted fill model to paste back into hftbacktest or NautilusTrader: "
-        f'<a href="{DOCS}/how-to/calibrate-hftbacktest.md">calibrate</a>.</li></ul>'
+    if touch:
+        api = A.add_file(out, "touch.json")
+
+    # ---- index.html: the answer first ----------------------------------------------------------------------------
+    first = tiers[0] if tiers else "ALL"
+    here = [x for x in summary if x["mode"] == mode and x["shadow_population"] == population]
+    at_h = [x for x in here if x["tier"] == first and x["horizon"] == hl]
+    where = C.TIER_WORDS.get(first, first)
+    parts = [*([switch] if switch else [])]
+    parts += [
+        "<h1>Fill-Realism Atlas</h1>",
+        '<p class="sub">How far your backtester\'s fills are from the real order queue, measured by replaying '
+        f"every order of {html.escape(venue)} exactly ({html.escape(span)}).</p>",
+    ]
+    if present:
+        parts.append(_library_nav(present, None))
+    ex = C.exact_answer(at_h, hl, where, venue)
+    if ex:
+        parts.append(f'<p class="lead">{html.escape(ex)}</p>')
+    answers = []
+    for lib in present:
+        line = C.library_answer(at_h, LIBRARY_KEYS[lib])
+        if line:
+            answers.append(
+                f'<li>{html.escape(line)} <a href="{LIBRARY_PAGES[lib][0]}">More on {html.escape(lib)}</a>.</li>'
+            )
+    if answers:
+        parts.append(f'<ul class="answers">{"".join(answers)}</ul>')
+    order = {lib: i for i, lib in enumerate(LIBRARY_PAGES)}
+    drawn = sorted(
+        (r for r in rows if r["tier"] == first and r["horizon_ns"] == h and describe(r["model_id"])[0] in order),
+        key=lambda r: (order[describe(r["model_id"])[0]], -(_bias(r) or 0.0), r["model_id"]),
     )
-    root = manifest.get("atlas_root", "")
-    day_rows = "".join(
-        f"<tr><td>{html.escape(iso_date(d['date']))}</td><td><code>{html.escape(str(d['merkle_root']))}</code></td>"
-        f"<td>{d.get('units_valid', '')} / {d.get('units_planned', '')}</td><td>{commits(d.get('git_heads'))}</td></tr>"
-        for d in days
-    )
-    build = manifest.get("build") or {}
-    built = (
-        f'<p class="muted">Built by <a href="{REPO_HOME}">queuetruth</a> '
-        f"{html.escape(str(build.get('queuetruth_version') or ''))} ({commits([build.get('git_head')])}) from "
-        '<code>scripts/scale/atlas.py</code> outputs. Data: <a href="data/leaderboard.json">leaderboard.json</a>, '
-        '<a href="data/atlas_manifest.json">atlas_manifest.json</a>.'
-    )
-    parts.append(
-        "<h2>Verify any number</h2>"
-        f"<p>Atlas root <code>{html.escape(root)}</code> (Merkle root over the day roots in date order; flag policy "
-        f"<code>{html.escape(str(manifest.get('flag_policy')))}</code>). Each day root covers that day's shard leaves. "
-        f"To check one, download the day (<code>{prefix}&lt;date&gt;.tar.gz</code> on the repository's "
-        f'<a href="{REPO_HOME}/releases/tag/{release}">{release}</a> release: its tables, plan and manifest), check '
-        "out the commit the day was built at, re-create the unit's bucket from the public day file and re-run the "
-        f'unit (<a href="{DOCS}/concepts/fill-realism-atlas.md#{anchor}">the steps</a>):</p>'
-        "<pre>uv run --frozen --no-sync python scripts/scale/verify_unit.py --day DAY_DIR "
-        "--atlas-manifest atlas_manifest.json --unit-id UNIT_ID --split SPLIT_DIR</pre>"
-        '<div class="wrap"><table><thead><tr><th>date</th><th>day root</th><th>units</th><th>built at</th></tr>'
-        f"</thead><tbody>{day_rows}</tbody></table></div>"
-        + built
-        + (' Per symbol: <a href="symbols.html">symbols</a>.' if per_symbol else "")
-        + (
-            ' Upstream compatibility: <a href="compat.html">the newest hftbacktest and NautilusTrader releases '
-            "against the exact queue</a>, checked daily."
-            if compat_link
-            else ""
+    if drawn:
+        title = f"Fill-rate bias within {C.horizon_words(hl)}, {where}"
+        parts.append(f"<h2>{html.escape(title)}</h2>")
+        parts.append(chart(drawn, "bias-front", title, h, groups=True))
+    boxes = [_box(b, LIBRARY_PAGES[b["library"]][0], pnl_at) for b in best if b["tier"] == first]
+    if boxes:
+        parts.append(
+            "<h2>What to do</h2><p>For each library, the setting closest to the real queue within "
+            f"{html.escape(C.horizon_words(hl))} ({html.escape(where)}), the verdict and the config to paste. "
+            '"No clear difference" means the atlas cannot tell it from the real queue at this sample size, not that '
+            "it is exact.</p>"
+            f'<div class="boxes">{"".join(boxes)}</div>'
         )
-        + "</p>"
+    if touch:  # the answer for bar-based backtests, after the libraries'
+        parts.append(touch)
+    parts.append(
+        "<h2>Your symbol</h2>"
+        '<form class="lookup" action="symbol.html" method="get" role="search">'
+        '<label for="s">Symbol</label> <input id="s" name="s" autocomplete="off" spellcheck="false" '
+        'maxlength="12" placeholder="AAPL"> <button type="submit">Look up</button></form>'
+        '<p class="muted">Each library setting on one symbol at 1 s, 10 s and 1 min, with intervals and counts, from '
+        '<a href="atlas/v1/manifest.json">the data API</a>.</p>'
     )
-    if switch or source != "iex":  # an IEX-only site keeps its pages as they were
-        parts.append(recreate_command(source, days[-1] if days else None))
-    out.mkdir(parents=True, exist_ok=True)
-    (out / "data").mkdir(exist_ok=True)
-    page = _page(
-        f"Fill-Realism Atlas{titled}", "\n".join(parts), attribution, leads[0] if leads else SUMMARY, extra_css=css
+    parts.append(
+        f'<h2>What this covers</h2><p class="scope">{SCOPE[source]} Small resting orders only: they do not move '
+        'the market (<a href="about.html#limits">limits</a>).</p>'
     )
-    (out / "index.html").write_text(page, encoding="utf-8")
+    if note:
+        parts.append(note)
+    parts.append(_check_list())
+    parts.append(_verify_section(source, manifest, days, built, span, more + recreate))
+    description = ex or SUMMARY
+    (out / "index.html").write_text(
+        _page(f"Fill-Realism Atlas{titled}", "\n".join(parts), attribution, description, extra_css=css),
+        encoding="utf-8",
+    )
+
+    # ---- about.html and symbol.html ------------------------------------------------------------------------------
+    (out / "about.html").write_text(
+        _page(f"How to read the Fill-Realism Atlas{titled}", _about_body(switch, source, explain, h, ph, pnl),
+              attribution, extra_css=css),
+        encoding="utf-8",
+    )  # fmt: skip
+    (out / "symbol.html").write_text(
+        _page(f"Your symbol: Fill-Realism Atlas{titled}", _symbol_body(switch, venue, span), attribution,
+              "The Fill-Realism Atlas for one symbol.", extra_css=css + SYMBOL_CSS),
+        encoding="utf-8",
+    )  # fmt: skip
+
     data = {
         "schema": "qt.atlas_site_leaderboard",
         "schema_version": 1,
-        "atlas_root": root,
+        "atlas_root": manifest.get("atlas_root", ""),
         "source": source,
         "mode": mode,
         "population": population,
@@ -1087,32 +1448,203 @@ def build(
     (out / "data" / "atlas_manifest.json").write_text(
         json.dumps(manifest, indent=1, sort_keys=True) + "\n", encoding="utf-8"
     )
-    pages = ["index.html"]
+    pages = ["index.html", "tables.html", "about.html", "symbol.html"]
+    built_line = (
+        f'<p class="muted">Last built {html.escape(built)} by <a href="{REPO_HOME}">queuetruth</a> '
+        f"{html.escape(str((manifest.get('build') or {}).get('queuetruth_version') or ''))} "
+        f"({commits([(manifest.get('build') or {}).get('git_head')])}). Atlas root "
+        f'<code>{html.escape(manifest.get("atlas_root", ""))}</code> (<a href="index.html#verify">how to verify '
+        f"it</a>).{data_links}"
+    )
     for lib in present:
         pages.append(
             _library_page(
-                out,
-                lib,
-                rows,
-                pnl,
-                pnl_at,
-                horizons,
-                tiers,
-                h,
-                ph,
-                best,
-                present,
-                about,
-                explain + note,
-                built,
-                attribution,
-                switch,
-                titled,
+                out, lib, rows, pnl, pnl_at, horizons, tiers, h, ph, best, present, about, explain + note,
+                built_line, attribution, switch, titled, css,
             )
-        )
+        )  # fmt: skip
     if per_symbol:
         pages.append(_symbols(atlas, out, mode, population, h, attribution))
-    return {"pages": pages, "rows": len(shown), "pnl_rows": len(shown_pnl), "atlas_root": root}
+    return {
+        "pages": pages,
+        "rows": len(shown),
+        "pnl_rows": len(shown_pnl),
+        "atlas_root": manifest.get("atlas_root", ""),
+        "api": {"files": len(api["files"]) + 1, "symbol_shards": len(shards)},
+    }
+
+
+def _about_body(switch: str, source: str, explain: str, h: int, ph: int, pnl: list[dict[str, Any]]) -> str:
+    """How to read the atlas, how it is made and its limits: the explanations the front page leaves out."""
+    hw = html.escape(duration(h))
+    pnl_item = (
+        f"<li><strong>P&amp;L error</strong>, in ticks: the backtest's P&amp;L minus the exact replay's, per order "
+        f"placed, each first fill marked to the mid {html.escape(duration(ph))} later. Positive: the backtest's "
+        "P&amp;L is too high. It splits into fills the model grants that never happen, fills it misses, and fills "
+        "it times differently.</li>"
+        if pnl
+        else ""
+    )
+    return "\n".join(
+        [
+            *([switch] if switch else []),
+            '<p><a href="index.html">Fill-Realism Atlas</a></p>',
+            "<h1>How to read the atlas</h1>",
+            "<p>The atlas places small resting limit orders in the real order queue of every symbol of a public "
+            "exchange day, replays every order of the day exactly to see which of them would have filled, and runs "
+            "the fill models of popular backtesters on the same orders. It then says how far each model is from the "
+            "real queue.</p>",
+            "<h2>The numbers</h2><ul>"
+            f"<li><strong>Fill-rate bias</strong>, in percentage points (pp): the share of orders the model fills "
+            f"within a horizon (1 s to 5 min; the front page uses {hw}) minus the share the real queue fills. "
+            "Positive: the backtest fills orders the real queue would not have filled, so it is too optimistic. "
+            "+1.50 pp on a real fill rate of 12% means about 13% more fills than really happen.</li>"
+            "<li><strong>95% interval</strong>: from a bootstrap that resamples trading days and symbols together. "
+            "A difference is stated as a finding only when its interval excludes 0 on the side of its estimate; the "
+            "colours follow the same rule (red: too many fills, blue: too few, grey: no clear difference).</li>"
+            "<li><strong>Verdict</strong>: <em>still clearly off</em> when the interval of the closest setting "
+            "excludes 0; <em>no clear difference</em> when it does not. That means the atlas cannot tell the setting "
+            "from the real queue at this sample size, not that it is exact.</li>"
+            f"{pnl_item}"
+            "<li><strong>Tiers</strong>: symbols ranked by how much they trade (T1 the 100 most traded, then 101 to "
+            "500, 501 to 1,500, 1,501 to 4,000, the rest). ALL pools them.</li>"
+            "<li><strong>Bounds</strong>: two rules that bracket every honest model (always at the front of the "
+            "queue; fill only when the price trades through). They are in the tables, not in the charts.</li></ul>",
+            f"<h2>The tables</h2>{explain}",
+            "<h2>How it is made</h2><ol>"
+            "<li><strong>Data.</strong> One full public order-level day of the exchange, split by symbol (IEX DEEP+ "
+            "is free to republish with its attribution).</li>"
+            "<li><strong>Orders.</strong> On each symbol, shadow orders are placed at random times of the regular "
+            "session, at the best price or one or two ticks from it, for one lot or the median order size.</li>"
+            "<li><strong>Truth.</strong> The exact first-in, first-out replay of the order-level feed says when each "
+            "order would have filled. Each symbol's replay is checked against the exchange's own trade prints.</li>"
+            "<li><strong>Models.</strong> Every fill model runs on the same orders from the price-level (L2) view of "
+            "the same book, as the libraries are released (faithful mode).</li>"
+            "<li><strong>Statistics.</strong> Results are summed per symbol and day, and days are combined with the "
+            "bootstrap above. Every day is kept with a Merkle root, so any number can be re-run and checked.</li></ol>",
+            '<h2 id="limits">Its limits</h2><ul>'
+            f"<li><strong>One venue.</strong> {SCOPE[source]}</li>"
+            "<li><strong>Your orders do not move the market.</strong> A shadow order rests in the real queue without "
+            "changing it: no market impact, no reaction by other traders.</li>"
+            "<li><strong>Hidden liquidity, auctions and halts.</strong> Orders are placed during continuous trading; "
+            "auction crosses are not modelled, and an order resting through a halt is not scored.</li>"
+            "<li><strong>hftbacktest's order-level model sees the same queue but fills less.</strong> It never fills "
+            "an order priced better than the feed's best by a trade-through when the executed order is at that best, "
+            "which is how IEX publishes every execution, and it ignores hidden prints.</li>"
+            + (
+                "<li><strong>Markouts are not a strategy.</strong> The P&amp;L is the mid move after a fill, before "
+                "fees and rebates.</li>"
+                if pnl
+                else ""
+            )
+            + "</ul>",
+            "<h2>The data API</h2><p>The numbers of this site are also static JSON files under "
+            '<a href="atlas/v1/manifest.json"><code>atlas/v1/</code></a>: <code>manifest.json</code> (window, days, '
+            "atlas root, the sha256 of every other file), <code>summary.json</code> (every model, tier and horizon), "
+            "<code>configs.json</code> (the closest setting per library and tier, with the config to paste) and "
+            "<code>symbols/&lt;letter&gt;.json</code> (per symbol). <code>queuetruth atlas</code> reads them. "
+            f'Details: <a href="{DOCS}/concepts/fill-realism-atlas.md">the Fill-Realism Atlas guide</a>.</p>',
+        ]
+    )
+
+
+SYMBOL_CSS = """
+#result table td:first-child { white-space: normal; min-width: 12em; }
+#result .lib { font-weight: 600; text-align: left; padding-top: 14px; }
+"""
+
+#: The symbol lookup: reads `atlas/v1/symbols/<letter>.json` next to the page and fills a table with textContent
+#: (never markup from the data). Vanilla JavaScript, nothing loaded from elsewhere.
+SYMBOL_JS = r"""
+(function () {
+  var form = document.getElementById("lookup"), input = document.getElementById("s");
+  var out = document.getElementById("result"), msg = document.getElementById("msg");
+  var names = {hftbacktest: "hftbacktest", nautilus: "NautilusTrader", databento: "Databento"};
+  function pp(x) { return x === null || x === undefined ? "n/a" : (x >= 0 ? "+" : "") + x.toFixed(2); }
+  function cell(tr, text, cls) {
+    var td = document.createElement("td"); td.textContent = text; if (cls) { td.className = cls; }
+    tr.appendChild(td); return td;
+  }
+  function show(sym) {
+    sym = (sym || "").trim().toUpperCase();
+    out.textContent = ""; msg.textContent = "";
+    if (!sym) { return; }
+    input.value = sym;
+    var c = sym.charAt(0), key = (c >= "A" && c <= "Z") ? c : "_";
+    fetch("atlas/v1/symbols/" + key + ".json").then(function (r) {
+      if (!r.ok) { throw new Error("no shard"); } return r.json();
+    }).then(function (doc) {
+      var e = null;
+      for (var i = 0; i < doc.symbols.length; i++) { if (doc.symbols[i].symbol === sym) { e = doc.symbols[i]; } }
+      if (!e) { msg.textContent = sym + " is not in the atlas (it may not trade on this venue)."; return; }
+      msg.textContent = sym + ": tier " + e.tier + ", seen on " + e.days + " day" + (e.days === 1 ? "" : "s") +
+        ". Bias in percentage points (model minus real queue) with its 95% interval and the orders behind it.";
+      var t = document.createElement("table"), head = document.createElement("tr"), col = {};
+      doc.columns.forEach(function (c, k) { col[c] = k; });
+      ["setting"].concat(doc.horizons).forEach(function (h) {
+        var th = document.createElement("th"); th.textContent = h; head.appendChild(th);
+      });
+      var thead = document.createElement("thead"); thead.appendChild(head); t.appendChild(thead);
+      var body = document.createElement("tbody"), last = null;
+      doc.settings.forEach(function (s, i) {
+        var row = e.cells[i];
+        if (!row) { return; }
+        if (s.library !== last) {
+          var g = document.createElement("tr"), td = cell(g, names[s.library] || s.library, "lib");
+          td.colSpan = 1 + doc.horizons.length; body.appendChild(g); last = s.library;
+        }
+        var tr = document.createElement("tr"), name = cell(tr, s.label);
+        name.title = s.model_id;
+        doc.horizons.forEach(function (h, j) {
+          var v = row[j];
+          if (!v) { cell(tr, "n/a"); return; }
+          var b = v[col.bias_pp], lo = v[col.lo_pp], hi = v[col.hi_pp];
+          var cls = (lo !== null && lo > 0 && b > 0) ? "over" : ((hi !== null && hi < 0 && b < 0) ? "under" : "");
+          var td = cell(tr, pp(b), cls), ci = document.createElement("span");
+          ci.className = "ci";
+          ci.textContent = (lo === null ? "one day: no interval" : "[" + pp(lo) + ", " + pp(hi) + "]") +
+            " n=" + v[col.n].toLocaleString("en-US");
+          td.appendChild(document.createElement("br")); td.appendChild(ci);
+        });
+        body.appendChild(tr);
+      });
+      t.appendChild(body);
+      var wrap = document.createElement("div"); wrap.className = "wrap"; wrap.appendChild(t); out.appendChild(wrap);
+    }).catch(function () {
+      msg.textContent = "Could not read the data for " + sym + " (open the page from the site, not from a file).";
+    });
+  }
+  form.addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    history.replaceState(null, "", "?s=" + encodeURIComponent(input.value.trim().toUpperCase()));
+    show(input.value);
+  });
+  var q = new URLSearchParams(window.location.search).get("s");
+  if (q) { show(q); }
+})();
+"""
+
+
+def _symbol_body(switch: str, venue: str, span: str) -> str:
+    return "\n".join(
+        [
+            *([switch] if switch else []),
+            '<p><a href="index.html">Fill-Realism Atlas</a></p>',
+            "<h1>Your symbol</h1>",
+            f'<p class="sub">Every library setting on one symbol of {html.escape(venue)} ({html.escape(span)}), '
+            "within 1 s, 10 s and 1 min.</p>",
+            '<form class="lookup" id="lookup" role="search"><label for="s">Symbol</label> '
+            '<input id="s" name="s" autocomplete="off" spellcheck="false" maxlength="12" placeholder="AAPL"> '
+            '<button type="submit">Look up</button></form>',
+            '<p id="msg" class="muted" aria-live="polite"></p><div id="result"></div>',
+            "<noscript><p>The lookup needs JavaScript. The same numbers are in "
+            "<code>atlas/v1/symbols/&lt;first letter&gt;.json</code>, and <code>queuetruth atlas --symbol "
+            "SYMBOL</code> prints them.</p></noscript>",
+            '<p class="muted">A symbol seen on one day has no interval. Fewer orders on a symbol mean wider intervals: '
+            'read the tier on <a href="tables.html">all numbers</a> for a steadier picture.</p>',
+            f"<script>{SYMBOL_JS}</script>",
+        ]
+    )
 
 
 def _library_page(
@@ -1133,19 +1665,45 @@ def _library_page(
     attribution: str,
     switch: str = "",
     titled: str = "",
+    css: str = "",
 ) -> str:
-    """`hftbacktest.html` and the like: one library's models across tiers and horizons (fill rate and P&L), its
-    best setting by tier and a plain-words summary; titled with the question people search for."""
+    """`hftbacktest.html` and the like: one library's answer in plain words, its chart, what to do, then its models
+    across tiers and horizons (fill rate and P&L) and its best setting by tier; titled with the question people
+    search for."""
+    import atlas_api as A
+
+    C = _C()
     name, question, guide, guide_name = LIBRARY_PAGES[lib]
     mine = [r for r in rows if describe(r["model_id"])[0] == lib]
     my_pnl = [r for r in pnl if describe(r["model_id"])[0] == lib]
-    leads = [x for x in (library_headline(mine, lib, h), pnl_headline(my_pnl, ph, f"{lib}'s models")) if x]
+    first = tiers[0] if tiers else "ALL"
+    hl = C.horizon_label(h)
+    api_rows = [x for x in A.summary_rows([r for r in mine if r["tier"] == first and r["horizon_ns"] == h], [])]
+    answer = C.library_answer(api_rows, LIBRARY_KEYS[lib])
+    where = C.TIER_WORDS.get(first, first)
+    detail = [x for x in (library_headline(mine, lib, h), pnl_headline(my_pnl, ph, f"{lib}'s models")) if x]
+    drawn = sorted(
+        (r for r in mine if r["tier"] == first and r["horizon_ns"] == h),
+        key=lambda r: (-(_bias(r) or 0.0), r["model_id"]),
+    )
+    title = f"{lib}: fill-rate bias within {C.horizon_words(hl)}, {where}"
+    boxes = [_box(b, None, pnl_at) for b in best if b["library"] == lib and b["tier"] == first]
     parts = [
         *([switch] if switch else []),
         _library_nav(present, lib),
         f"<h1>{html.escape(question)}</h1>",
+        *([f'<p class="lead">{html.escape(answer)}</p>'] if answer else []),
+        f"<h2>{html.escape(title)}</h2>",
+        chart(drawn, "bias-lib", title, h),
+        *(
+            [f'<p class="muted">{L3_NOTE}</p>']
+            if any(parse_id(r["model_id"])[0] == "hbt_l3_fifo" for r in drawn)
+            else []
+        ),
+        *(["<h2>What to do</h2>", *boxes] if boxes else []),
+        "<h2>Details</h2>",
         f'<p class="muted">{html.escape(lib)}\'s fill models against the exact replay of the real queue: {about}</p>',
-        *(f'<p class="lead">{html.escape(line, quote=False)}</p>' for line in leads),
+        *(f"<p>{html.escape(line, quote=False)}</p>" for line in detail),
         explain,
         _best_section([b for b in best if b["library"] == lib], h, pnl_at, ph, lib),
     ]
@@ -1159,12 +1717,12 @@ def _library_page(
     parts.append(
         f"<h2>Use it in {html.escape(lib)}</h2><ul>"
         f'<li>Fit the setting on your own venue and data: <a href="{REPO}/{guide}">{html.escape(guide_name)}</a>.</li>'
+        f"<li>In your terminal: <code>queuetruth atlas --library {LIBRARY_KEYS[lib]}</code>.</li>"
         f'<li>What each model does: <a href="{DOCS}/concepts/l2-model-zoo.md">the L2 model zoo</a>.</li>'
         f'<li>Every library side by side: <a href="index.html">the Fill-Realism Atlas</a>.</li></ul>' + built + "</p>"
     )
-    title = f"{question} Fill-Realism Atlas{titled}"
-    css = VENUE_CSS if switch else ""
-    page = _page(title, "\n".join(parts), attribution, leads[0] if leads else SUMMARY, extra_css=css)
+    page_title = f"{question} Fill-Realism Atlas{titled}"
+    page = _page(page_title, "\n".join(parts), attribution, answer or SUMMARY, extra_css=css)
     (out / name).write_text(page, encoding="utf-8")
     return name
 
@@ -1172,11 +1730,8 @@ def _library_page(
 def _symbols(atlas: Path, out: Path, mode: str, population: str, h: int, attribution: str) -> str:
     import pyarrow.parquet as pq
 
-    per = [
-        r
-        for r in pq.read_table(atlas / "per_symbol.parquet").to_pylist()
-        if r.get("mode") == mode and r.get("shadow_pop") == population and r.get("horizon_ns") == h
-    ]
+    filters = [("mode", "=", mode), ("shadow_pop", "=", population), ("horizon_ns", "=", h)]
+    per = pq.read_table(atlas / "per_symbol.parquet", filters=filters).to_pylist()
     per.sort(key=lambda r: (r["symbol"], r["model_id"]))
     keys = [k for k in ("bias", "ci_lo", "ci_hi", "bias_shrunk") if per and k in per[0]]
     head = "".join(f"<th>{html.escape(k)}</th>" for k in keys)
@@ -1235,6 +1790,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--compat-link", action="store_true", help="link compat.html (scripts/nightly/compat_site.py) from the index"
     )
+    ap.add_argument(
+        "--built-at",
+        help="the 'last built' date or time on every page and in the data API (default "
+        "SOURCE_DATE_EPOCH, else the newest day of the window)",
+    )
     a = ap.parse_args(argv)
     if bool(a.atlas) == bool(a.venue):
         ap.error("give --atlas (one venue) or --venue SOURCE=ATLAS_DIR (one or more), not both")
@@ -1245,6 +1805,7 @@ def main(argv: list[str] | None = None) -> int:
         per_symbol=a.per_symbol,
         pnl_horizon=a.pnl_horizon,
         compat_link=a.compat_link,
+        built_at=a.built_at,
     )
     if a.venue:
         pairs = []

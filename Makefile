@@ -208,8 +208,12 @@ check-docs: ## docs link and runnable-block check
 check-placeholders: ## fail on unfilled {{PLACEHOLDERS}} in README.md and docs/ (docs/launch/ templates excepted)
 	@! grep -rnE --include="*.md" "\{\{[A-Z0-9_]+\}\}" README.md docs --exclude-dir=launch
 
-docs-build: ## build the docs site with mkdocs-material (strict) into .scratch/site
-	$(RUN) mkdocs build --strict --site-dir .scratch/site
+DOCS_SITE_DIR ?= .scratch/site
+# The published URL of the docs (.github/workflows/atlas.yml sets it); empty leaves site_url unset, as before.
+DOCS_SITE_URL ?=
+
+docs-build: ## build the docs site with mkdocs-material (strict) into .scratch/site (DOCS_SITE_DIR)
+	$(if $(DOCS_SITE_URL),QT_DOCS_SITE_URL=$(DOCS_SITE_URL) )$(RUN) mkdocs build --strict --site-dir $(DOCS_SITE_DIR)
 
 RELEASE_DIR := .scratch/release
 

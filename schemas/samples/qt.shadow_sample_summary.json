@@ -19,6 +19,9 @@
         "bytes": 1,
         "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
       }
+    ],
+    "warnings": [
+      "x"
     ]
   }
 }

@@ -1,0 +1,32 @@
+{
+  "sample": {
+    "schema": "qt.atlas_api_manifest",
+    "schema_version": 1,
+    "api_version": 1,
+    "built_at": "x",
+    "atlas_root": "x",
+    "venue": "x",
+    "venue_name": "x",
+    "window": {
+      "from": "x",
+      "to": "x"
+    },
+    "days": [
+      "x"
+    ],
+    "symbol_days": 1,
+    "symbols": 1,
+    "mode": "x",
+    "shadow_population": "x",
+    "headline_horizon": "x",
+    "attribution": "x",
+    "verify": "x",
+    "files": [
+      {
+        "path": "x",
+        "bytes": 1,
+        "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      }
+    ]
+  }
+}

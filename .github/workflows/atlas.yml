@@ -26,6 +26,9 @@
 # One-time setup by a maintainer: Settings > Pages > Build and deployment > Source: GitHub Actions. Using IEX's data
 # means accepting IEX's Historical Data Terms of Use; every page carries IEX's attribution
 # (docs/data-and-licensing.md). Pages show aggregates only; no IEX or Nasdaq file or message is republished.
+#
+# The same Pages site carries the docs (mkdocs, `make docs-build`) under docs/. The site step builds them on every
+# path that deploys, site_only included, and a docs build error fails the run: a deploy never drops the docs.
 name: atlas
 
 on:
@@ -254,6 +257,9 @@ jobs:
         if: steps.have.outputs.run_site == 'true'
         run: |
           mkdir -p .atlas/site .atlas/compat
+          # the docs site goes under docs/ of the same Pages site (https://sarptandoven.github.io/queuetruth/docs/),
+          # built like `make docs-build` (mkdocs --strict): a docs error fails the step, so nothing deploys without it
+          make docs-build DOCS_SITE_DIR=.atlas/site/docs DOCS_SITE_URL=https://sarptandoven.github.io/queuetruth/docs/
           # the upstream compatibility page is best effort: when it cannot be built the atlas still deploys,
           # without the link
           compat=false

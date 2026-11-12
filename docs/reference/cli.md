@@ -110,6 +110,7 @@ section below is the command's own `--help` text.
 | [`queuetruth cert render`](#queuetruth-cert-render) | render a certificate as HTML |
 | [`queuetruth cert partial-opening`](#queuetruth-cert-partial-opening) | write an opening that opens only some committed items |
 | [`queuetruth reconcile`](#queuetruth-reconcile) | a bot's or backtester's simulated orders against the live run, order by order |
+| [`queuetruth atlas`](#queuetruth-atlas) | how far your backtester's fill model is from the real queue, from the public atlas |
 | [`queuetruth check`](#queuetruth-check) | how wrong a backtest is: its own limit orders replayed in the real queue |
 | [`queuetruth fit`](#queuetruth-fit) | the parameter that fixes your backtester's fill model, with its verdict |
 
@@ -258,6 +259,7 @@ Options:
       --latency-ns <DURATION>       shadow latency [default: 0]
       --window-open-s <N>           seconds after the open excluded [default: 300]
       --window-close-s <N>          seconds before the close excluded [default: 600]
+      --allow-past-end              do not shorten the placement window so that every life fits in the data
       --allocation <allocation>     allocation across instrument-days [default: equal] [possible values: equal, proportional, per-partition]
       --sides <A,...>               sides to sample (B,A) [default: B,A]
   -h, --help                        Print help
@@ -336,6 +338,7 @@ Options:
       --latency <F,D,G>             shadow latency FEED,DECISION,GATEWAY (durations) [default: 0,0,0]
       --jitter-ns <DURATION>        maximum uniform latency jitter [default: 0]
       --bootstrap-b <N>             bootstrap resamples [default: 1000]
+      --bootstrap-block <BLOCK>     bootstrap blocks of the CIs [default: auto] [possible values: auto, day, 30min, 1min, instrument-minute]
       --amends <PATH>               qt.shadow_amend file of the shadows (priority-keeping size reductions)
       --exclude-order-ids <PATH>    real orders removed from the tape and the L2 view (A1): .json list, or one id / instrument_id,order_id per line
       --sort-horizon <DURATION>     leaderboard sort horizon in the terminal output (default 60s)
@@ -366,6 +369,7 @@ Options:
       --window <DURATION>           fill window from ts_live, a zoo prediction horizon (default: the zoo's h_max)
       --rank-horizon <DURATION>     markout horizon of the rankings (default 60s)
       --bootstrap-b <N>             bootstrap resamples (default 1000)
+      --bootstrap-block <BLOCK>     bootstrap blocks of the CIs [default: auto] [possible values: auto, day, 30min, 1min, instrument-minute]
       --allow-truth-mismatch        evaluate the shadows whose replay reproduces the zoo's exact arm when some do not
   -h, --help                        Print help
       --log-level <log_level>       stderr log level (default warn) [possible values: error, warn, info, debug]
@@ -905,7 +909,7 @@ Options:
       --checks <A,...>
           run only these check ids
       --fail-on <fail-on>
-          exit 1 when a check reaches this status (default warn) [possible values: warn, fail, never]
+          exit 1 when a check reaches this status (default never: no gate unless asked) [possible values: warn, fail, never]
       --max-evidence <N>
           evidence rows kept per table (default 20)
       --stale-ns <DURATION>
@@ -2461,6 +2465,66 @@ Options:
 
       --max-rows <N>
           order lines printed (default 50)
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+      --log-level <log_level>
+          stderr log level (default warn)
+          
+          [possible values: error, warn, info, debug]
+
+      --output-format <human|json>
+          output format (also --format human|json)
+          
+          [possible values: human, json]
+
+      --quiet
+          no progress or warnings on stderr
+
+      --seed <seed>
+          random seed (default 0)
+
+      --threads <threads>
+          worker threads (outputs do not depend on it; default 1)
+
+      --verbose
+          human output: every summary field after the answer; every warning and note on stderr
+```
+
+## queuetruth atlas
+
+```text
+The Fill-Realism Atlas answer for your library, liquidity tier or symbol: how far each setting fills from the exact replay of the real queue, with its 95% interval, and the closest setting's config to paste. Reads the atlas data API from a local directory or the public site (asks before it downloads).
+
+Usage: queuetruth atlas [OPTIONS]
+
+Options:
+      --library <library>
+          your backtester (default: all three)
+          
+          [possible values: hftbacktest, nautilus, databento]
+
+      --symbol <SYMBOL>
+          one symbol, e.g. AAPL (its own numbers, at 1s, 10s and 1min)
+
+      --tier <TIER>
+          liquidity tier, e.g. T1_top100 (default ALL, or the symbol's)
+
+      --horizon <DURATION>
+          fill horizon, e.g. 1s, 10s, 1min (default 1min)
+
+      --from <DIR_OR_URL>
+          a site or atlas/v1 directory, or the URL of a data API (default: the public atlas, cached)
+
+  -y, --yes
+          download from the public atlas without asking
+
+      --refresh
+          download the newest manifest even when a copy is cached
+
+      --json
+          print the qt.atlas_answer document (same as --format json)
 
   -h, --help
           Print help (see a summary with '-h')

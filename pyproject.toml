@@ -44,7 +44,7 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/sarptandoven/queuetruth"
 Repository = "https://github.com/sarptandoven/queuetruth"
-Documentation = "https://github.com/sarptandoven/queuetruth/tree/main/docs"
+Documentation = "https://sarptandoven.github.io/queuetruth/docs/"
 Issues = "https://github.com/sarptandoven/queuetruth/issues"
 Changelog = "https://github.com/sarptandoven/queuetruth/blob/main/CHANGELOG.md"
 

@@ -81,6 +81,47 @@ def _finite(x: Any) -> float | None:
     return v if math.isfinite(v) else None
 
 
+#: Warning added to a zoo summary whose 95% CIs are dropped as degenerate (`without_degenerate_cis`).
+DEGENERATE_CI_NOTE = (
+    "ci: this zoo run's 95% CIs rest on fewer than 5 bootstrap blocks (zero-width intervals); they are not shown and "
+    "no model is called significant (rerun the zoo with this version for instrument x minute intervals)"
+)
+
+
+def without_degenerate_cis(summary: Any) -> Any:
+    """A `ZooSummary` whose leaderboard CIs are null when they rest on fewer than 5 bootstrap blocks: `n_ci_blocks`
+    below 5, or, for runs made before that field, when every interval of the leaderboard has zero width (a bootstrap
+    over one block, where every replicate equals the estimate). Other summaries come back unchanged."""
+    from queuetruth.stats import MIN_CI_BLOCKS
+
+    n = getattr(summary, "n_ci_blocks", None)
+    board = list(getattr(summary, "leaderboard", None) or [])
+    cis = [
+        (cv.ci_lo, cv.ci_hi)
+        for e in board
+        for cv in [*(e.fill_rate_bias or {}).values(), e.overfill_bias]
+        if cv is not None and cv.ci_lo is not None and cv.ci_hi is not None
+    ]
+    if not cis:
+        return summary
+    if n is not None:
+        degenerate = n < MIN_CI_BLOCKS
+    else:
+        degenerate = all(lo == hi for lo, hi in cis)
+    if not degenerate:
+        return summary
+    fixed = []
+    for e in board:
+        frb = {k: (cv.model_copy(update={"ci_lo": None, "ci_hi": None}) if cv is not None else None)
+               for k, cv in (e.fill_rate_bias or {}).items()}  # fmt: skip
+        ob = e.overfill_bias.model_copy(update={"ci_lo": None, "ci_hi": None}) if e.overfill_bias else None
+        fixed.append(e.model_copy(update={"fill_rate_bias": frb, "overfill_bias": ob}))
+    warnings = list(summary.warnings)
+    if DEGENERATE_CI_NOTE not in warnings:
+        warnings.append(DEGENERATE_CI_NOTE)
+    return summary.model_copy(update={"leaderboard": fixed, "warnings": warnings})
+
+
 def bias_at(entry: Any, horizon_ns: int | None) -> tuple[float | None, float | None, float | None]:
     """(value, ci_lo, ci_hi) of the entry's `fill_rate_bias` at the horizon (Nones when absent)."""
     if horizon_ns is None:
@@ -253,7 +294,7 @@ MCS_ALPHA = 0.10
 MCS_METHOD = "R"
 #: Studentization of the leaderboard MCS: the wild cluster bootstrap-t (`model_confidence_set(studentize="wild")`).
 MCS_STUDENTIZE = "wild"
-#: Fewest bootstrap blocks (session dates or 30-minute buckets) at a horizon for its MCS; as `MIN_DAY_BLOCKS`.
+#: Fewest bootstrap blocks (`queuetruth.stats.ci_blocks`) at a horizon for its MCS; as `MIN_DAY_BLOCKS`.
 MCS_MIN_BLOCKS = 5
 MCS_TEST_ID = "zoo_mcs"
 MCS_WARNING_PREFIX = "mcs: "
@@ -277,8 +318,9 @@ _LOSS_COLS = [
 @dataclass(frozen=True)
 class HorizonLosses:
     """Balanced per-shadow losses at one horizon: rows = `shadow_ids` (ascending), columns = `model_ids` (first
-    appearance order); `blocks` = the bootstrap block label of each row, `block_kind` = `"day"` or `"30min"`;
-    `n_dropped` = shadows left out because a model of the horizon has no row for them."""
+    appearance order); `blocks` = the bootstrap block label of each row, `block_kind` = its kind
+    (`queuetruth.stats.ci_blocks`); `n_dropped` = shadows left out because a model of the horizon has no row for
+    them."""
 
     horizon_ns: int
     model_ids: tuple[str, ...]
@@ -300,12 +342,13 @@ def horizon_losses(
     *,
     h_max_ns: int,
     exclude_families: Sequence[str] = (),
+    block: str = "auto",
 ) -> list[HorizonLosses]:
     """Per horizon `<= h_max_ns` (ascending) the leaderboard's per-shadow loss matrices (module docstring), without
     the models of `exclude_families`. `QT-INPUT-001` without `planned_life`, `QT-INPUT-002` for missing columns or
     shadows, `QT-INPUT-003` for a duplicate (model, shadow, horizon) row."""
     from queuetruth.eval.zoo import _first_order, _planned_life, common_population, family
-    from queuetruth.stats import block_labels
+    from queuetruth.stats import ci_blocks
 
     C.require(predictions, _LOSS_COLS, "horizon_losses")
     if planned_life is None:
@@ -328,7 +371,9 @@ def horizon_losses(
     date, _ = C.ints(t, "session_date")
     ids, first, inv = np.unique(sid, return_index=True, return_inverse=True)
     inv = np.asarray(inv).reshape(-1)
-    labels, kind = block_labels(date[first], live[first])
+    inst = C.ints(t, "instrument_id")[0] if C.has(t, "instrument_id") else np.zeros(sid.size, dtype=np.int64)
+    cb = ci_blocks(date[first], live[first], inst[first], block)
+    labels, kind = cb.labels, cb.kind
     cancel_rel, admin_rel = _planned_life(planned_life, ids, live[first])
     never_cancel = cancel_rel >= float(h_max_ns)
     hf = h.astype(float)
@@ -394,6 +439,7 @@ def leaderboard_mcs(
     alpha: float = MCS_ALPHA,
     method: str = MCS_METHOD,
     exclude_families: Sequence[str] = ORDER_LEVEL_FAMILIES,
+    block: str = "auto",
 ) -> tuple[dict[str, dict[str, dict[str, Any]]], list[str]]:
     """(model id -> {field -> {horizon key -> value}} for the MCS fields of `annotate_mcs`, `mcs: ` warnings)
     (module docstring)."""
@@ -401,7 +447,10 @@ def leaderboard_mcs(
 
     out: dict[str, dict[str, dict[str, Any]]] = {}
     notes: list[str] = []
-    for hl in horizon_losses(predictions, planned_life, h_max_ns=h_max_ns, exclude_families=exclude_families):
+    few: list[HorizonLosses] = []
+    for hl in horizon_losses(
+        predictions, planned_life, h_max_ns=h_max_ns, exclude_families=exclude_families, block=block
+    ):
         key = str(hl.horizon_ns)
         when = duration_text(hl.horizon_ns)
         if hl.n_dropped:
@@ -410,10 +459,7 @@ def leaderboard_mcs(
                 f"out of the model confidence set (its Brier means then differ from brier)"
             )
         if hl.n_blocks < MCS_MIN_BLOCKS:
-            notes.append(
-                f"{MCS_WARNING_PREFIX}at {when}, {hl.n_blocks} bootstrap block(s) ({hl.block_kind}) < "
-                f"{MCS_MIN_BLOCKS}: no model confidence set (MCS fields null)"
-            )
+            few.append(hl)
             continue
         for loss, member_f, p_f in (
             (hl.first_fill, "mcs_member", "mcs_p"),
@@ -435,6 +481,14 @@ def leaderboard_mcs(
                 f.setdefault(p_f, {})[key] = float(res.p_values[j])
                 if loss is hl.first_fill:
                     f.setdefault("first_fill_error", {})[key] = float(res.mean_loss[j])
+    if few:  # one line for every horizon without a model confidence set
+        counts = sorted({hl.n_blocks for hl in few})
+        n_txt = str(counts[0]) if len(counts) == 1 else f"{counts[0]} to {counts[-1]}"
+        when = ", ".join(duration_text(hl.horizon_ns) for hl in few)
+        notes.append(
+            f"{MCS_WARNING_PREFIX}at {when}, {n_txt} bootstrap block(s) ({few[0].block_kind}) < {MCS_MIN_BLOCKS}: "
+            "no model confidence set (MCS fields null)"
+        )
     return out, notes
 
 
@@ -452,6 +506,7 @@ def annotate_mcs(
     alpha: float = MCS_ALPHA,
     method: str = MCS_METHOD,
     exclude_families: Sequence[str] = ORDER_LEVEL_FAMILIES,
+    block: str = "auto",
 ) -> tuple[list[Any], list[str]]:
     """(the entries with the MCS fields set for every horizon of the entry, null where undefined; the `mcs: `
     warnings). Dict entries come back as new dicts, `LeaderboardEntry` models as updated copies; the input is not
@@ -465,6 +520,7 @@ def annotate_mcs(
         alpha=alpha,
         method=method,
         exclude_families=exclude_families,
+        block=block,
     )
     out = []
     for e in entries:

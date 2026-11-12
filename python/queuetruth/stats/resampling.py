@@ -14,6 +14,7 @@ bootstrapped as `counts @ num_by_block / counts @ den_by_block` with replicates 
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -59,6 +60,89 @@ def block_labels(
     if np.unique(days).size >= min_dates:
         return days, "day"
     return np.floor_divide(_ns(ts_ns), HALF_HOUR_NS), "30min"
+
+
+#: Fewest bootstrap blocks behind any interval the zoo, its leaderboard and zoo-toxicity report: with fewer, the
+#: percentile interval of a block bootstrap is degenerate (one block: every replicate equals the estimate).
+MIN_CI_BLOCKS = 5
+MINUTE_NS = 60_000_000_000
+#: `ci_blocks` choices: `auto` (day blocks with >= 5 dates, else 30-minute buckets; with fewer than
+#: `MIN_CI_BLOCKS` of those, instrument x minute clusters), or one kind forced.
+CI_BLOCK_CHOICES = ("auto", "day", "30min", "1min", "instrument_minute")
+
+
+@dataclass(frozen=True)
+class CiBlocks:
+    """Bootstrap blocks of a run: `labels` = dense block index per row (0..n-1), `kind` = `day`, `30min`, `1min` or
+    `instrument_minute`, `n` = number of blocks, `requested` = the choice asked for. `available` is false with fewer
+    than `MIN_CI_BLOCKS` blocks: callers then report no interval and no significance."""
+
+    labels: np.ndarray
+    kind: str
+    n: int
+    requested: str
+    min_blocks: int = MIN_CI_BLOCKS
+
+    @property
+    def available(self) -> bool:
+        return self.n >= self.min_blocks
+
+    def describe(self) -> str:
+        """`13 30min blocks` or `fewer than 5 blocks (1 30min block): no interval`."""
+        unit = "block" if self.n == 1 else "blocks"
+        if self.available:
+            return f"{self.n} {self.kind} {unit}"
+        return f"fewer than {self.min_blocks} blocks ({self.n} {self.kind} {unit}): no interval"
+
+
+def _dense(labels: np.ndarray) -> tuple[np.ndarray, int]:
+    if labels.size == 0:
+        return np.zeros(0, dtype=np.int64), 0
+    _, inv = np.unique(labels, axis=0, return_inverse=True)
+    inv = np.asarray(inv, dtype=np.int64).reshape(-1)
+    return inv, int(inv.max()) + 1
+
+
+def ci_blocks(
+    session_date: np.ndarray,
+    ts_ns: np.ndarray,
+    instrument_id: np.ndarray,
+    block: str = "auto",
+    *,
+    labeler: Callable[[np.ndarray, np.ndarray], tuple[np.ndarray, str]] | None = None,
+    min_blocks: int = MIN_CI_BLOCKS,
+) -> CiBlocks:
+    """Bootstrap blocks for one row per shadow (or order). `auto` keeps `block_labels` (day blocks with >= 5 dates,
+    else 30-minute buckets) whenever that gives at least `MIN_CI_BLOCKS` blocks, so long runs are unchanged; on
+    shorter data it uses (instrument, minute of `ts_ns`) clusters, the demo's choice, and when those are still fewer
+    than `MIN_CI_BLOCKS` the result is not `available`. A forced kind is used as it is (minutes and half-hours are
+    UTC buckets of `ts_ns`). `labeler` replaces `block_labels` for `auto` and `min_blocks` the threshold (tests)."""
+    if block not in CI_BLOCK_CHOICES:
+        raise ValueError(f"block must be one of {CI_BLOCK_CHOICES}, got {block!r}")
+    ts = _ns(ts_ns)
+    minute = np.floor_divide(ts, MINUTE_NS)
+
+    def inst_minute() -> np.ndarray:
+        return np.stack([np.asarray(instrument_id).astype(np.int64).reshape(-1), minute], axis=1)
+
+    if block == "auto":
+        labels, kind = (labeler or block_labels)(session_date, ts_ns)
+        dense, n = _dense(labels)
+        if n < min_blocks:
+            im, n_im = _dense(inst_minute())
+            if n_im > n:
+                dense, n, kind = im, n_im, "instrument_minute"
+        return CiBlocks(dense, kind, n, block, min_blocks)
+    if block == "day":
+        raw: np.ndarray = _days(session_date)
+    elif block == "30min":
+        raw = np.floor_divide(ts, HALF_HOUR_NS)
+    elif block == "1min":
+        raw = minute
+    else:
+        raw = inst_minute()
+    dense, n = _dense(raw)
+    return CiBlocks(dense, block, n, block, min_blocks)
 
 
 def _draws(n_blocks: int, b: int, seed: int) -> np.ndarray:

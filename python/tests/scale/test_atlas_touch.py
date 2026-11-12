@@ -212,7 +212,10 @@ def test_site_section_and_touch_json(tmp_path: Path) -> None:
     atlas_site.build(
         tmp_path / "plain", tmp_path / "site-plain", source="iex", population="standard", pnl_horizon="10s"
     )
-    assert not (tmp_path / "site-plain" / "atlas").exists()
+    # the data API is always written; without touch tables it has no touch.json and its manifest lists none
+    plain_api = tmp_path / "site-plain" / "atlas" / "v1"
+    assert not (plain_api / "touch.json").exists()
+    assert "touch.json" not in [f["path"] for f in json.loads((plain_api / "manifest.json").read_text())["files"]]
     assert "bar-backtests" not in (tmp_path / "site-plain" / "index.html").read_text()
 
     for k in range(3):
@@ -222,6 +225,13 @@ def test_site_section_and_touch_json(tmp_path: Path) -> None:
     page = (tmp_path / "site" / "index.html").read_text()
     assert 'id="bar-backtests"' in page and 'href="atlas/v1/touch.json"' in page
     doc = TouchTables.model_validate_json((tmp_path / "site" / "atlas" / "v1" / "touch.json").read_text())
+    # touch.json is listed in the API manifest with its size and sha256, like every other file
+    api = tmp_path / "site" / "atlas" / "v1"
+    entry = {f["path"]: f for f in json.loads((api / "manifest.json").read_text())["files"]}["touch.json"]
+    data = (api / "touch.json").read_bytes()
+    assert entry["bytes"] == len(data) and entry["sha256"] == hashlib.sha256(data).hexdigest()
+    # on the front page after the libraries' answers (none in this synthetic atlas), before the symbol lookup
+    assert page.index("<h1>") < page.index('id="bar-backtests"') < page.index("<h2>Your symbol</h2>")
     assert doc.population == "standard" and doc.source == "iex" and doc.attribution
     assert doc.days == ["2026-10-05", "2026-10-06", "2026-10-07"]
     row = doc.row(tier="ALL", side="all", bar="1m", rule="touch")

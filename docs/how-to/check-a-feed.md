@@ -32,9 +32,10 @@ data quality: PASS (12 pass, 0 warn, 0 fail, 2 skipped) over synth (198,456 reco
 numbers and its evidence rows. `dq/dq_report.json` is the same content as a `qt.dq_report` document;
 `--format json` prints it to stdout as well.
 
-Exit codes: `0` when no check reached the `--fail-on` status, `1` when one did (`QT-GATE-001` on stderr), `2` for
-an error (missing dataset, unknown check id). `--fail-on warn` is the default; `--fail-on fail` exits 1 only on a
-failed check; `--fail-on never` always exits 0.
+Exit codes: `0` when no gate is set or no check reached the `--fail-on` status, `1` when one did (`QT-GATE-001` on
+stderr), `2` for an error (missing dataset, unknown check id). There is no gate unless you ask for one: the default
+`--fail-on never` exits 0 whatever the verdict. `--fail-on warn` exits 1 on a warning or a failed check;
+`--fail-on fail` exits 1 only on a failed check.
 
 ## The checks
 

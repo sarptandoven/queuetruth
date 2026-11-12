@@ -169,6 +169,30 @@ def test_extension_documents_are_registered() -> None:
     assert freqtrade.CATEGORIES == sch_reconcile.Category.__args__  # type: ignore[attr-defined]
 
 
+def test_atlas_api_documents_are_registered_one_module_per_file() -> None:
+    """Every public module of `queuetruth.atlas` that defines `DOC_MODELS` is registered, so a new file of the data
+    API is one new module; private modules hold no document."""
+    import importlib
+    import pkgutil
+
+    import queuetruth.atlas as atlas
+    from queuetruth.atlas import answer, configs, manifest, summary, symbols, touch
+
+    for mod, name, model in (
+        (manifest, "qt.atlas_api_manifest", manifest.AtlasApiManifest),
+        (summary, "qt.atlas_summary", summary.AtlasSummary),
+        (configs, "qt.atlas_configs", configs.AtlasConfigs),
+        (symbols, "qt.atlas_symbols", symbols.AtlasSymbols),
+        (answer, "qt.atlas_answer", answer.AtlasAnswer),
+        (touch, "qt.atlas.touch", touch.TouchTables),
+    ):
+        assert DOC_MODELS[name] is model and mod.DOC_MODELS == {name: model}
+    for info in pkgutil.iter_modules(atlas.__path__):
+        mod = importlib.import_module(f"queuetruth.atlas.{info.name}")
+        for name, model in (getattr(mod, "DOC_MODELS", None) or {}).items():
+            assert not info.name.startswith("_") and DOC_MODELS[name] is model, info.name
+
+
 def test_features_schema_dynamic_columns() -> None:
     sch = features_schema(["dist_ticks", "imb_l1"])
     assert sch.names[6:10] == ["side_sign", "dist_ticks", "imb_l1", "event_ns"]
@@ -464,7 +488,8 @@ def _id(spec: dict) -> str:
 
 V1_1_SPEC_FIELDS = {
     s.ReplaySpec: {"fill_rule": "exact", "hidden_print_policy": None, "exclude_order_ids": []},
-    s.ZooSpec: {"amends": None, "exclude_order_ids": []},
+    s.ZooSpec: {"amends": None, "exclude_order_ids": [], "bootstrap_block": "auto"},
+    s.ShadowSampleSpec: {"partition_quotas": {}, "clamp_to_data_end": True},
     s.ScorecardSpec: {
         "window_ns": 60_000_000_000,
         "match_window_ns": 1_000_000,
@@ -483,6 +508,7 @@ V1_1_SPEC_FIELDS = {
 MINIMAL = {
     s.ReplaySpec: {"dataset": {"path": "d"}},
     s.ZooSpec: {"dataset": {"path": "d"}, "shadows": {"path": "s"}},
+    s.ShadowSampleSpec: {"dataset": {"path": "d"}, "n": 10},
     s.ScorecardSpec: {"live": {"path": "l"}, "sim": {"kind": "exact"}},
     s.LiveImportSpec: {"venue": "fix44", "inputs": [{"path": "x"}]},
     s.IngestSpec: {"format": "itch", "inputs": [{"path": "x"}], "venue": "nasdaq"},

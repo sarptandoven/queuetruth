@@ -1,0 +1,234 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.atlas_configs",
+  "$defs": {
+    "Config": {
+      "additionalProperties": false,
+      "description": "The closest setting of one library in one tier, at the document's horizon, mode and population.",
+      "properties": {
+        "library": {
+          "enum": [
+            "hftbacktest",
+            "nautilus",
+            "databento",
+            "bound",
+            "other"
+          ],
+          "title": "Library",
+          "type": "string"
+        },
+        "library_name": {
+          "title": "Library Name",
+          "type": "string"
+        },
+        "tier": {
+          "title": "Tier",
+          "type": "string"
+        },
+        "tier_name": {
+          "title": "Tier Name",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "model_id": {
+          "title": "Model Id",
+          "type": "string"
+        },
+        "n_settings": {
+          "title": "N Settings",
+          "type": "integer"
+        },
+        "fill_rate_bias_pp": {
+          "$ref": "#/$defs/Interval"
+        },
+        "verdict": {
+          "enum": [
+            "too_optimistic",
+            "too_pessimistic",
+            "no_clear_difference"
+          ],
+          "title": "Verdict",
+          "type": "string"
+        },
+        "verdict_text": {
+          "title": "Verdict Text",
+          "type": "string"
+        },
+        "overlapping": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Overlapping",
+          "type": "array"
+        },
+        "overlapping_labels": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Overlapping Labels",
+          "type": "array"
+        },
+        "pnl_bias_ticks": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Interval"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "config": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Config"
+        },
+        "config_kind": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Config Kind"
+        }
+      },
+      "required": [
+        "library",
+        "library_name",
+        "tier",
+        "tier_name",
+        "label",
+        "model_id",
+        "n_settings",
+        "fill_rate_bias_pp",
+        "verdict",
+        "verdict_text",
+        "overlapping",
+        "overlapping_labels",
+        "pnl_bias_ticks",
+        "config",
+        "config_kind"
+      ],
+      "title": "Config",
+      "type": "object"
+    },
+    "Interval": {
+      "additionalProperties": false,
+      "description": "A point estimate with its 95% interval (from the atlas's bootstrap); `lo` and `hi` are null when the atlas\nhas no interval (a symbol seen on one day).",
+      "properties": {
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        },
+        "lo": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Lo"
+        },
+        "hi": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Hi"
+        }
+      },
+      "required": [
+        "value",
+        "lo",
+        "hi"
+      ],
+      "title": "Interval",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`configs.json`: one closest setting per (tier, library), `ALL` first.",
+  "properties": {
+    "schema": {
+      "const": "qt.atlas_configs",
+      "default": "qt.atlas_configs",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "venue": {
+      "title": "Venue",
+      "type": "string"
+    },
+    "atlas_root": {
+      "title": "Atlas Root",
+      "type": "string"
+    },
+    "mode": {
+      "title": "Mode",
+      "type": "string"
+    },
+    "shadow_population": {
+      "title": "Shadow Population",
+      "type": "string"
+    },
+    "horizon": {
+      "title": "Horizon",
+      "type": "string"
+    },
+    "notes": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Notes",
+      "type": "object"
+    },
+    "configs": {
+      "items": {
+        "$ref": "#/$defs/Config"
+      },
+      "title": "Configs",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "venue",
+    "atlas_root",
+    "mode",
+    "shadow_population",
+    "horizon"
+  ],
+  "type": "object"
+}

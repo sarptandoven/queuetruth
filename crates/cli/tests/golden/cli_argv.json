@@ -206,6 +206,7 @@
     "300",
     "--window-close-s",
     "600",
+    "--allow-past-end",
     "--allocation",
     "proportional",
     "--sides",
@@ -273,6 +274,8 @@
     "0",
     "--bootstrap-b",
     "200",
+    "--bootstrap-block",
+    "instrument-minute",
     "--threads",
     "2"
   ],
@@ -311,6 +314,8 @@
     "10s",
     "--bootstrap-b",
     "200",
+    "--bootstrap-block",
+    "1min",
     "--amends",
     "amends.parquet",
     "--allow-truth-mismatch",
@@ -1934,5 +1939,28 @@
     "2026-06-15",
     "--test",
     "blocks:4/5"
+  ],
+  [
+    "queuetruth",
+    "atlas",
+    "--library",
+    "nautilus",
+    "--symbol",
+    "AAPL",
+    "--tier",
+    "T1_top100",
+    "--horizon",
+    "1min",
+    "--from",
+    "site",
+    "--yes",
+    "--refresh",
+    "--json"
+  ],
+  [
+    "queuetruth",
+    "atlas",
+    "--library",
+    "hftbacktest"
   ]
 ]

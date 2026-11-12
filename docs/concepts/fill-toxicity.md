@@ -144,7 +144,8 @@ in its favour.
 The rankings at `--rank-horizon` order the models by the size of each term: `grant`, `deny` and `bias`, each by its
 absolute value, largest first, with the signed value kept. Rank 1 of `deny` is the model whose wrongly denied fills
 distort PnL the most, whichever way. Every statistic carries a 95% block-bootstrap interval: blocks are session dates
-with 5 or more dates, else 30-minute buckets of `ts_live`. One draw matrix is shared by every model and statistic,
+with 5 or more dates, else 30-minute buckets of `ts_live`, else (on a short capture) instrument x minute clusters;
+`--bootstrap-block` forces one kind. With fewer than 5 blocks there is no interval, no `*` and no rank interval. One draw matrix is shared by every model and statistic,
 which keeps the intervals comparable and allows paired comparisons, and the rankings use it: each place carries its
 rank interval over the replicates (`rank_lo` to `rank_hi`) and the paired gap to the next place with its interval
 (`gap_to_next`); `separated_from_next` is true when that interval lies above 0. Places that are not separated are a

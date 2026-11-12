@@ -5,7 +5,7 @@ each simulated order with the live order it stands for, and get a per-order acco
 the backtest filled that the market did not, which fills came at another price or another time, and which orders
 exist on one side only. Then score the backtest, against your live fills or against exact-queue shadows.
 
-**You need:** one export of the backtest (a few lines added to your Backtrader script, or one line after your
+**You need:** one export of the backtest (one line added to your Backtrader script, or one line after your
 VectorBT portfolio), and your live orders and fills as a canonical live log, written by `queuetruth live import`
 from your venue's or broker's records ([Import fills from my venue or broker](import-live-logs.md)). queuetruth
 never imports Backtrader or VectorBT: it reads the exported JSON or CSV. The formats below were read from the
@@ -40,85 +40,27 @@ orders within two bars.
 
 ### Backtrader: add an analyzer
 
-Copy this analyzer into your script and add it to Cerebro. It writes one JSON line per `notify_order` and
-`notify_trade` call: the order's reference, data feed, status, type, size, prices, times and the execution bits that
-are new in that notification (`order.executed.iterpending()`, the same source as Backtrader's own `Transactions`
-analyzer).
+Add queuetruth's analyzer to Cerebro. It writes one JSON line per `notify_order` and `notify_trade` call: the
+order's reference, data feed, status, type, size, prices, times and the execution bits that are new in that
+notification (`order.executed.iterpending()`, the same source as Backtrader's own `Transactions` analyzer).
 
 <!-- check-docs: skip (needs Backtrader, which queuetruth does not install) -->
 ```python
-import json
-import math
-
 import backtrader as bt
-
-
-class QtOrderLog(bt.Analyzer):
-    """Every order and trade notification as one JSON line, for queuetruth live import --venue sim-backtrader."""
-
-    params = (("path", "bt_orders.jsonl"),)
-
-    def start(self):
-        self._f = open(self.p.path, "w", encoding="utf-8")
-
-    def stop(self):
-        self._f.close()
-
-    @staticmethod
-    def _t(num):
-        return bt.num2date(num).isoformat() if num else None
-
-    @staticmethod
-    def _n(v):
-        return v if v is not None and math.isfinite(v) else None
-
-    def _data(self, data):
-        return data._name or "data%d" % next(i for i, d in enumerate(self.strategy.datas) if d is data)
-
-    def notify_order(self, order):
-        bits = [
-            {"dt": self._t(b.dt), "size": b.size, "price": b.price, "comm": b.comm}
-            for b in order.executed.iterpending()
-        ]
-        row = {
-            "event": "order",
-            "ref": order.ref,
-            "data": self._data(order.data),
-            "status": order.getstatusname(),
-            "ordtype": order.ordtypename(),
-            "exectype": order.getordername(),
-            "size": order.created.size,
-            "price": self._n(order.created.price),
-            "pricelimit": self._n(order.created.pricelimit),
-            "created": self._t(order.created.dt),
-            "dt": self._t(order.data.datetime[0]),
-            "valid": self._t(order.valid) if order.valid else None,
-            "exbits": bits,
-            "order_key": order.info.get("order_key"),
-        }
-        self._f.write(json.dumps(row) + "\n")
-
-    def notify_trade(self, trade):
-        row = {
-            "event": "trade",
-            "ref": trade.ref,
-            "data": self._data(trade.data),
-            "status": trade.status_names[trade.status],
-            "dtopen": self._t(trade.dtopen),
-            "dtclose": self._t(trade.dtclose),
-            "size": trade.size,
-            "price": trade.price,
-            "pnl": trade.pnl,
-            "pnlcomm": trade.pnlcomm,
-        }
-        self._f.write(json.dumps(row) + "\n")
-
+import queuetruth as qt
 
 cerebro = bt.Cerebro()
 # ... your data feeds and strategy ...
-cerebro.addanalyzer(QtOrderLog, path="bt_orders.jsonl")
+cerebro.addanalyzer(qt.backtrader.OrderLog)  # writes bt_orders.jsonl; path="run1.jsonl" names another file
 cerebro.run()
 ```
+
+`qt.backtrader.OrderLog` needs a queuetruth release after 0.3.0 and imports Backtrader only when you use it. On
+an older release, copy the analyzer from
+[python/queuetruth/backtrader.py](https://github.com/sarptandoven/queuetruth/blob/main/python/queuetruth/backtrader.py)
+(`_order_log_class`): it is the `QtOrderLog` class earlier versions of this page printed, and writes the same lines.
+To make the backtest's limit fills realistic as well, see
+[Realistic fills in Backtrader and LEAN](realistic-fills-backtrader-lean.md).
 
 How the lines are read:
 
@@ -145,7 +87,7 @@ How the lines are read:
 
 Already running the standard `Transactions` analyzer? Its result works too, with less information: it nets every
 execution of a data feed in one bar, so each entry becomes one order known from its fill only (no unfilled orders,
-no limit prices; the import says `coverage=fills_only`). Give it instead of the `QtOrderLog` lines, never with
+no limit prices; the import says `coverage=fills_only`). Give it instead of the `OrderLog` lines, never with
 them: both record the same executions, so the import refuses the pair (`QT-CONFIG-001`). Its keys come from
 `strategy.datetime.datetime()`, which is in the data feed's own zone (its `tz` when it has one), not UTC: pass that
 zone as `--option data_tz=...`.

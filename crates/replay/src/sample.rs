@@ -9,6 +9,10 @@
 //! intersected with the partition's `[ts_min, ts_max]` (the whole partition when that is empty), the side, the
 //! placement and the quantity rule (weights). Placements are touch-relative (`price_mode touch`); `lots` = `k x
 //! lot_size`, `median_order_size` = the median `A` size of the partition rounded down to lots (at least one lot).
+//! With `clamp_to_data_end` (the default) the window also ends at `data_end - latency_ns - lifetime_ns`, where
+//! `data_end` is the last record of the session date over all partitions, so every life fits in the data; a warning
+//! names each partition whose window this shortens. When no time is left (data shorter than one life) the window
+//! is kept and a warning says the lives run past the end. `false` restores the unclamped window.
 //! `ts_cancel = ts_submit + lifetime_ns`. Ids `s<instrument_id>_<YYYYMMDD>_<k>` with `k` in `ts_submit` order.
 //!
 //! `mirror_real_orders` (SPEC 5.2.10): real lives from the partitions (not `in_snapshot`, not ended `replaced` or
@@ -187,6 +191,17 @@ pub fn sample_shadows(spec: &ShadowSampleSpec) -> QtResult<ShadowSampleSummary> 
     }
     let parts = ds.partitions();
     let quotas = quotas(spec, parts)?;
+    // last record of each session date over every partition: the end of the data
+    let mut data_end: IndexMap<i32, Ts> = IndexMap::new();
+    for p in parts {
+        if p.ts_max >= p.ts_min {
+            let e = data_end.entry(p.session_date).or_insert(p.ts_max);
+            *e = (*e).max(p.ts_max);
+        }
+    }
+    let life = spec.lifetime_ns.saturating_add(spec.latency_ns);
+    let mut warnings: Vec<String> = Vec::new();
+    let (mut n_clamped, mut n_short) = (0_u64, 0_u64);
     let mut rows = Vec::new();
     let mut by_instrument: IndexMap<String, u64> = IndexMap::new();
     let mut by_placement: IndexMap<String, u64> = IndexMap::new();
@@ -210,6 +225,22 @@ pub fn sample_shadows(spec: &ShadowSampleSpec) -> QtResult<ShadowSampleSummary> 
             let (wa, wb) = (a.max(part.ts_min), b.min(part.ts_max.saturating_add(1)));
             if wa < wb {
                 (lo, hi) = (wa, wb - 1);
+            }
+        }
+        if spec.clamp_to_data_end
+            && let Some(&end) = data_end.get(&part.session_date)
+        {
+            let last = end.saturating_sub(life);
+            if hi > last {
+                if last >= lo {
+                    hi = last;
+                    n_clamped += 1;
+                } else if last >= part.ts_min {
+                    (lo, hi) = (part.ts_min, last);
+                    n_clamped += 1;
+                } else {
+                    n_short += 1;
+                }
             }
         }
         let median = if spec
@@ -268,6 +299,22 @@ pub fn sample_shadows(spec: &ShadowSampleSpec) -> QtResult<ShadowSampleSummary> 
             });
         }
     }
+    let secs = |ns: i64| ns as f64 / SEC_NS as f64;
+    if n_clamped > 0 {
+        warnings.push(format!(
+            "placement window shortened on {n_clamped} instrument-day(s): shadows are placed no later than \
+             {} s before the end of the data so that every life (latency + lifetime) fits in it \
+             (clamp_to_data_end)",
+            secs(life)
+        ));
+    }
+    if n_short > 0 {
+        warnings.push(format!(
+            "{n_short} instrument-day(s) hold less data than one life ({} s): their shadows' lives run past the \
+             end of the data, so long horizons have no label for them",
+            secs(life)
+        ));
+    }
     let files = write_specs(&spec.out, &rows)?;
     Ok(ShadowSampleSummary {
         spec: echo(spec)?,
@@ -275,6 +322,7 @@ pub fn sample_shadows(spec: &ShadowSampleSpec) -> QtResult<ShadowSampleSummary> 
         by_instrument,
         by_placement,
         files,
+        warnings,
         ..ShadowSampleSummary::default()
     })
 }

@@ -157,6 +157,14 @@ Three of hftbacktest's rules give fewer fills:
    liquidity. This needs a locked or crossed book when the order goes live, because the zoo rejects a `+1`
    placement that would cross.
 
+**It is hftbacktest's own behaviour.** The released hftbacktest 2.4.4, run on the same orders and the same IEX
+DEEP+ and Nasdaq ITCH records, gives the same first fill as this replica on all 117,356 orders, so the gap is not a
+replica error. Every missed fill is of an order alone ahead of the displayed book: it improved the touch, or the
+orders at its level left. On IEX, rule 2 is about 3 in 4 of the misses, because hidden executions there outnumber
+displayed ones about 5 to 1; on a Nasdaq window rule 1 is 40% of a smaller gap. Rule 2's share rests on queuetruth's
+ruling that displayed interest fills before hidden interest at the same price. The run, its cause table and how to
+reproduce it: [why hftbacktest's L3 FIFO model fills fewer orders](https://github.com/sarptandoven/queuetruth/blob/main/scripts/scale/findings/l3-fifo-gap.md).
+
 Whole-order fills do not count here: they change how much fills, not whether or when an order first fills. Neither
 do hftbacktest #312 aborts: those come from the L2 probability models, never this one, and `common_population`
 drops those shadows for every model and for the exact arm alike. In the other direction, faithful counts an
@@ -316,6 +324,11 @@ The scoring rules follow the audit's outcome-independent censoring rule
 - The **leaderboard** uses never-cancel shadows: no planned cancel within `h_max` (300 s by default). Sample them
   with a lifetime of at least `h_max` (`shadows sample` defaults to 300 s); shadows with shorter planned lives leave
   the leaderboard empty and appear only in the cancel-bearing metrics.
+- `shadows sample` places every shadow no later than the end of the data minus its latency and lifetime, so every
+  life fits in the data and every horizon up to the lifetime scores the same orders (a warning says when this
+  shortens the placement window; `--allow-past-end` keeps the old window). Shadows whose lives run past the end of
+  the data, from older schedules or other tools, lose their labels at the longer horizons, and the zoo warns
+  `data end: N of M never-cancel shadows end with the data before h_max`.
 - **Cancel-bearing** shadows, such as mirror shadows with real cancel times, are evaluated separately under metric
   names prefixed `cancel_bearing/` in `zoo_errors.parquet`, with their own cancel as a competing risk.
 
@@ -338,7 +351,11 @@ probability (0 or 1 for deterministic models) and `y` the exact first fill by `m
 Strata: **queue decile** (deciles of exact queue ahead at activation within instrument and day), **liquidity
 bucket** (terciles of displayed volume traded in the 60 s before activation) and **instrument**. CIs resample session
 days (30-minute blocks when there are fewer than 5 days), 1,000 resamples by default (`--bootstrap-b`), one draw
-matrix shared by every model so differences between models are not resampling noise.
+matrix shared by every model so differences between models are not resampling noise. A short capture has fewer than
+5 half-hours: the zoo then resamples instrument x minute clusters, as the demo does. With fewer than 5 blocks of any
+kind it reports no interval and marks nothing significant, because a bootstrap over one block gives an interval of
+zero width. `--bootstrap-block day|30min|1min|instrument-minute` picks the blocks yourself; the summary's `ci_block`
+and `n_ci_blocks` and the line above the leaderboard say which were used.
 
 Read the strata before the overall number. A model can be unbiased overall because it is too optimistic at the back
 of the queue and too pessimistic at the front.
