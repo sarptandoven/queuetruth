@@ -153,6 +153,7 @@
         "warnings",
         "snippet",
         "queuetruth",
+        "atlas",
         "none"
        ]
       }
@@ -294,12 +295,20 @@
     "source_format": {
      "enum": [
       "calibration_result",
-      "nautilus_snippet"
+      "nautilus_snippet",
+      "atlas"
      ]
     },
     "queuetruth_version": {
      "type": [
       "string",
+      "null"
+     ]
+    },
+    "atlas": {
+     "description": "For a setting read from the Fill-Realism Atlas: atlas root, venue, window, tier, horizon, model id, bias and verdict; null otherwise.",
+     "type": [
+      "object",
       "null"
      ]
     }

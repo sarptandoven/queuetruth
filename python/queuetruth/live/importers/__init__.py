@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from queuetruth.live.builder import ImportResult
 from queuetruth.live.importers._base import Importer, ImportOptions
+from queuetruth.live.importers.backtesting_py import import_backtesting_py_sim
 from queuetruth.live.importers.backtrader import import_backtrader_sim
 from queuetruth.live.importers.binance import import_binance
 from queuetruth.live.importers.bybit import import_bybit
@@ -42,6 +43,7 @@ SIM_IMPORTERS: dict[str, Importer] = {
     "backtrader": import_backtrader_sim,
     "vectorbt": import_vectorbt_sim,
     "lean": import_lean_sim,
+    "backtesting_py": import_backtesting_py_sim,
 }
 #: Trading-bot importers of the live arm (Freqtrade trades database + bot log, Hummingbot database / trades CSV);
 #: not `LiveImportSpec` venues: `import_freqtrade_live` / `import_hummingbot_live` write their logs.

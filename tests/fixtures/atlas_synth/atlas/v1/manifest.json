@@ -1,0 +1,42 @@
+{
+ "api_version": 1,
+ "atlas_root": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+ "attribution": "Synthetic numbers for tests and docs.",
+ "built_at": "2026-11-10",
+ "days": [
+  "2026-11-06",
+  "2026-11-09",
+  "2026-11-10"
+ ],
+ "files": [
+  {
+   "bytes": 3651,
+   "path": "configs.json",
+   "sha256": "6c3cb810059982464444899d9f7e8577a8567d5ff2eb33cfa5074c88ad339f95"
+  },
+  {
+   "bytes": 464,
+   "path": "symbols/Z.json",
+   "sha256": "a55e0b2d16ba1361633f8d6bd4c1d3babe775c9cf418e02729f2725c69df3cb7"
+  },
+  {
+   "bytes": 14486,
+   "path": "touch.json",
+   "sha256": "cd72cda7fd4c2837e4a6f1a0381bc6208a2c970c7751697b8e1a69f16b201229"
+  }
+ ],
+ "headline_horizon": "1min",
+ "mode": "faithful",
+ "schema": "qt.atlas_api_manifest",
+ "schema_version": 1,
+ "shadow_population": "standard",
+ "symbol_days": 3,
+ "symbols": 1,
+ "venue": "synthetic",
+ "venue_name": "Synthetic venue",
+ "verify": "https://example.org",
+ "window": {
+  "from": "2026-11-06",
+  "to": "2026-11-10"
+ }
+}

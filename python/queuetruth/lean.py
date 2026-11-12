@@ -3,7 +3,7 @@
     # in a LEAN Python algorithm
     import queuetruth as qt
 
-    security.set_fill_model(qt.lean.QueueFillModel(table="touch.json", tier="T1"))
+    security.set_fill_model(qt.lean.QueueFillModel(tier="T1"))   # the atlas's touch tables (or table="touch.json")
 
 LEAN's default fill model fills a limit order as soon as a bar trades at or through its price. `QueueFillModel`
 returns an instance of a `FillModel` subclass that keeps LEAN's own limit-fill logic and accepts each limit fill
@@ -26,6 +26,15 @@ from queuetruth.backtesters.touchfill import FillDecision, TouchFill, bar_name
 from queuetruth.errors import QtError
 
 _CLASS: list[type] = []
+
+
+def _tables(table: Any, atlas: Any, yes: bool) -> Any:
+    """`table`, or the atlas's touch tables when none is given (`queuetruth.atlas.touch_tables`)."""
+    if table is not None:
+        return table
+    from queuetruth.atlas import touch_tables
+
+    return touch_tables(atlas, yes=yes)
 
 
 def _lean() -> Any:
@@ -109,16 +118,20 @@ def QueueFillModel(
     seed: int = 0,
     tick: float | None = None,
     bar: str | None = None,
+    atlas: Any = None,
+    yes: bool = False,
 ) -> Any:
     """A LEAN `FillModel` whose limit fills happen with the touch tables' `P(real | rule)` for the order's tier, side
     and bar length.
 
-    `table`: a `touch.json` file (atlas/v1/touch.json), a `queuetruth.atlas.touch.TouchTables` or its dict. `tier`:
-    the liquidity tier of the security (`ALL` pools the tiers). `rule`: `touch` (default) or `penetrate_<k>`, which
-    also needs `tick`. `seed`: the draws' seed (default 0). `bar`: `1m`, `5m` or `1h`; by default read from the
-    security's data resolution (minute or hour). Anything the table lacks raises `QT-CONFIG-001`; no probability is
-    assumed. Draws are keyed by LEAN's order id and the bar time, so a rerun with the same seed fills the same."""
-    touch = TouchFill(table, tier=tier, rule=rule, seed=seed, tick=tick)
+    `table`: a `touch.json` file (atlas/v1/touch.json), a `queuetruth.atlas.touch.TouchTables` or its dict; without it
+    the atlas's own tables (`atlas`: a directory or URL of the data API, default the public atlas, read after consent:
+    `yes=True`, or a cached copy). `tier`: the liquidity tier of the security (`ALL` pools the tiers). `rule`: `touch`
+    (default) or `penetrate_<k>`, which also needs `tick`. `seed`: the draws' seed (default 0). `bar`: `1m`, `5m` or
+    `1h`; by default read from the security's data resolution (minute or hour). Anything the table lacks raises
+    `QT-CONFIG-001`; no probability is assumed. Draws are keyed by LEAN's order id and the bar time, so a rerun with the
+    same seed fills the same."""
+    touch = TouchFill(_tables(table, atlas, yes), tier=tier, rule=rule, seed=seed, tick=tick)
     if bar is not None:
         touch.probability(bar, "buy")
         touch.probability(bar, "sell")

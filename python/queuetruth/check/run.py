@@ -51,6 +51,8 @@ DEFAULT_WINDOW = "1h"
 DEFAULT_MARKOUT = "1min"
 #: Resting time-in-force values (`queuetruth.live.canonical.RESTING_TIF`) for the limit-order count.
 _RESTING = ("gtc", "day", "post_only", "gtx", "gtd")
+#: Backtesters whose output records fills only (no order that rested): each fill is checked as a resting limit order.
+_FILLS_ONLY = {"vectorbt": "VectorBT", "backtesting_py": "backtesting.py trade"}
 _NO_DATA = (
     "check: without --data there is nothing exact to compare the backtest against yet. Pass order-level (MBO) data "
     "that covers the backtest's days with --data DIR (a dataset written by `queuetruth ingest` or `queuetruth "
@@ -238,13 +240,13 @@ def check(
 ) -> CheckResult:
     """How wrong is a backtest: its own resting limit orders replayed in the exact queue of `data`.
 
-    `backtest`: the backtester's output (one path or several of one run): hftbacktest order snapshots,
-    NautilusTrader reports or order events, Backtrader `QtOrderLog` lines, VectorBT order records, LEAN result and
-    order events, or a Freqtrade backtest result. `backtester` names it when the files do not say. `data`: an
-    order-level dataset covering the backtest's days; without it `QT-USAGE-001` (the atlas estimate comes later).
-    Symbols map from the dataset's symbology; `instrument_map` (CSV, venue = the dataset's venue) overrides that.
-    `window` (default 1h) is how long after entry a fill counts; `markout` (default 1 min) the P&L horizon.
-    `options` go to the importer (e.g. `timeframe`, `data_tz`, `column`). `out` (default: a new temporary
+    `backtest`: the backtester's output (one path or several of one run): hftbacktest order snapshots, NautilusTrader
+    reports or order events, Backtrader `QtOrderLog` lines, VectorBT order records, LEAN result and order events, a
+    Freqtrade backtest result, or backtesting.py trades (`stats._trades` as CSV or JSON). `backtester` names it when the
+    files do not say. `data`: an order-level dataset covering the backtest's days; without it `QT-USAGE-001` (the atlas
+    estimate comes later). Symbols map from the dataset's symbology; `instrument_map` (CSV, venue = the dataset's venue)
+    overrides that. `window` (default 1h) is how long after entry a fill counts; `markout` (default 1 min) the P&L
+    horizon. `options` go to the importer (e.g. `timeframe`, `data_tz`, `column`). `out` (default: a new temporary
     directory) receives `backtest/` (the imported log), `instrument_map.csv`, `score/`, `check.json` and
     `orders.csv`."""
     paths = _paths(backtest)
@@ -260,10 +262,10 @@ def check(
     outp.mkdir(parents=True, exist_ok=True)
     notes: list[str] = []
     extra: dict[str, Any] = dict(options or {})
-    if kind == "vectorbt" and "order_type" not in extra:
+    if kind in _FILLS_ONLY and "order_type" not in extra:
         extra["order_type"] = "limit"
         notes.append(
-            "VectorBT records are fills only: each is checked as a limit order resting at its fill price "
+            f"{_FILLS_ONLY[kind]} records are fills only: each is checked as a limit order resting at its fill price "
             "(option order_type=market leaves them out)"
         )
     extra.setdefault("map_venue", venue)

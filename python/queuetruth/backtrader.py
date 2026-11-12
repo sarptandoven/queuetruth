@@ -4,7 +4,7 @@
     import queuetruth as qt
 
     cerebro.addanalyzer(qt.backtrader.OrderLog)                       # writes bt_orders.jsonl
-    cerebro.broker.set_filler(qt.backtrader.QueueFiller(table="touch.json", tier="T1"))
+    cerebro.broker.set_filler(qt.backtrader.QueueFiller(tier="T1"))   # the atlas's touch tables (or table="touch.json")
 
 `OrderLog` writes one JSON line per `notify_order` and `notify_trade` call, the format of `queuetruth live import
 --venue sim-backtrader`, `reconcile --kind backtrader` and `check` (docs/how-to/reconcile-backtrader-vectorbt.md).
@@ -56,6 +56,15 @@ def _bar_seconds(data: Any) -> float | None:
     return None if unit is None else unit * float(getattr(data, "_compression", 1) or 1)
 
 
+def _tables(table: Any, atlas: Any, yes: bool) -> Any:
+    """`table`, or the atlas's touch tables when none is given (`queuetruth.atlas.touch_tables`)."""
+    if table is not None:
+        return table
+    from queuetruth.atlas import touch_tables
+
+    return touch_tables(atlas, yes=yes)
+
+
 def _num2date(num: float) -> dt.datetime:
     """Backtrader's `num2date` (days since 0001-01-01, as its own `date2num` writes them), without importing it."""
     day = int(num)
@@ -67,10 +76,12 @@ class QueueFiller:
     """A Backtrader filler (`cerebro.broker.set_filler`) that fills a resting limit order on a bar that reaches it
     with the probability the atlas touch tables give, `P(real | rule)` for its tier, side and bar length.
 
-    `table`: a `touch.json` file (atlas/v1/touch.json), a `queuetruth.atlas.touch.TouchTables` or its dict. `tier`:
-    the liquidity tier of the instruments (`ALL` pools the tiers). `rule`: `touch` (default) or `penetrate_<k>`,
-    which also needs `tick` (the tick size): with it the bar must go k ticks through the limit. `seed`: the draws'
-    seed (default 0). `bar`: the bar length (`1m`, `5m`, `1h`); by default read from each order's data feed.
+    `table`: a `touch.json` file (atlas/v1/touch.json), a `queuetruth.atlas.touch.TouchTables` or its dict; without it
+    the atlas's own tables (`atlas`: a directory or URL of the data API, default the public atlas, read after consent:
+    `yes=True`, or a cached copy). `tier`: the liquidity tier of the instruments (`ALL` pools the tiers). `rule`:
+    `touch` (default) or `penetrate_<k>`, which also needs `tick` (the tick size): with it the bar must go k ticks
+    through the limit. `seed`: the draws' seed (default 0). `bar`: the bar length (`1m`, `5m`, `1h`); by default read
+    from each order's data feed.
 
     The table, tier and rule are checked when the filler is made, the bar length and side on the first order of
     each; anything the table lacks raises `QT-CONFIG-001`. A draw happens on every bar the rule fires on while the
@@ -87,8 +98,10 @@ class QueueFiller:
         seed: int = 0,
         tick: float | None = None,
         bar: str | None = None,
+        atlas: Any = None,
+        yes: bool = False,
     ) -> None:
-        self.touch = TouchFill(table, tier=tier, rule=rule, seed=seed, tick=tick)
+        self.touch = TouchFill(_tables(table, atlas, yes), tier=tier, rule=rule, seed=seed, tick=tick)
         self.bar = bar
         if bar is not None:
             self.touch.probability(bar, "buy")

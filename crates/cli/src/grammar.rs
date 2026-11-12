@@ -835,8 +835,8 @@ pub(crate) const COMMANDS: &[Cmd] = &[
                 Kind::KeyValue,
                 "_cli.options",
                 "importer option KEY=VALUE (sim-* venues: venue, size_exp, key_from_client_id; freqtrade, hummingbot: \
-                 dry_run, log_tz, timeframe, pair_with, ...; sim-backtrader, sim-vectorbt, sim-lean: pair_with, \
-                 timeframe, instrument, ...)",
+                 dry_run, log_tz, timeframe, pair_with, ...; sim-backtrader, sim-vectorbt, sim-lean, \
+                 sim-backtesting-py: pair_with, timeframe, instrument, ...)",
             ),
         ],
         positional: &[],
