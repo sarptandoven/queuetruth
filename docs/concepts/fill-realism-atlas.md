@@ -23,9 +23,9 @@ fills within 1 minute, over all symbols. Then comes one sentence per library:
 A difference is stated only when its 95% interval excludes 0 on the side of its estimate. Otherwise the sentence says
 the setting is not clearly different from the real queue.
 
-Over 20 trading days (2026-10-09 to 2026-11-06; 265,402 symbol-days, 12,440 symbols), the exact queue fills 11.97% of
-small resting orders within 1 minute. NautilusTrader's touch fill model fills 1.50 pp more (13% more orders; 95%
-interval +1.45 to +1.55 pp), and NautilusTrader's `queue_position` model is closest at +0.06 pp. The site always
+Over 20 trading days (2026-10-15 to 2026-11-11; 265,351 symbol-days, 12,456 symbols), the exact queue fills 12.20% of
+small resting orders within 1 minute. NautilusTrader's touch fill model fills 1.48 pp more (12% more orders; 95%
+interval +1.42 to +1.53 pp), and NautilusTrader's `queue_position` model is closest at +0.06 pp. The site always
 shows the newest 20 days, so its numbers move a little from day to day.
 
 ## How to read the page

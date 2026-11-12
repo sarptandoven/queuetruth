@@ -115,7 +115,7 @@ a Trade between non-displayed orders becomes a side-`N` hidden print; Clear Book
 IEX-TP message sequence number, so gaps are real feed gaps, and A/B duplicates are dropped per channel. DEEP+ does not
 show non-displayed orders or the hidden parts of reserve orders, and routed executions are not reported.
 
-- **Validation: real data.** 22 public days in the Fill-Realism Atlas, every symbol-day checked for the book
+- **Validation: real data.** 24 public days in the Fill-Realism Atlas, every symbol-day checked for the book
   invariants, price priority and trade parity; on one day (2026-10-09; SPY, AAPL, NVDA, TSLA; 4,435,281 records)
   also all 21,301 displayed executions at FIFO rank 0 of their price level ([What is validated](validated.md)).
   Steps and the one-day result table: [A real day from free IEX data](how-to/iex-public-demo.md).
