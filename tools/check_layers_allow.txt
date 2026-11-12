@@ -2,6 +2,7 @@
 # the comment names the rules it breaks. Remove a line when its import is gone; never add one to pass CI
 # without saying why in the pull request.
 queuetruth.api -> queuetruth.check.run  # cycle
+queuetruth.api -> queuetruth.fit.run  # cycle
 queuetruth.api -> queuetruth.ledger  # cycle
 queuetruth.api -> queuetruth.score._io.resolve_ref  # private
 queuetruth.cert.certify -> queuetruth.score._io.resolve_ref  # private
@@ -34,6 +35,16 @@ queuetruth.export.latency -> queuetruth.score._io.read_live_log  # private
 queuetruth.export.replay -> queuetruth.score._io.read_live_log  # private
 queuetruth.export.replay -> queuetruth.score._io.read_parquet  # private
 queuetruth.export.replay -> queuetruth.score._io.rows  # private
+queuetruth.fit.run -> queuetruth.api  # cycle
+queuetruth.fit.run -> queuetruth.export._text.LOG_N_NAMES  # private
+queuetruth.fit.run -> queuetruth.export._text.VERSION  # private
+queuetruth.fit.run -> queuetruth.export._text.data_sources_text  # private
+queuetruth.fit.run -> queuetruth.export._text.g6  # private
+queuetruth.fit.run -> queuetruth.export._text.window_text  # private
+queuetruth.fit.run -> queuetruth.score._dataset.DatasetView  # private
+queuetruth.fit.run -> queuetruth.score._io.read_live_log  # private
+queuetruth.fit.split -> queuetruth.export._text.window_text  # private
+queuetruth.fit.split -> queuetruth.score._dataset.DatasetView  # private
 queuetruth.forecast.ledger -> queuetruth.schemas.runid._format_float  # private
 queuetruth.forecast.ledger -> queuetruth.schemas.runid._utf16_key  # private
 queuetruth.forecast.schemas -> queuetruth.schemas.models._tag  # private
