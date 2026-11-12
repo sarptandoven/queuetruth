@@ -45,6 +45,7 @@ nav:
       - Trial ledger: concepts/trial-ledger.md
       - Glossary: concepts/glossary.md
   - How-to guides:
+      - Check my backtest against the real queue: how-to/check-my-backtest.md
       - Calibrate my hftbacktest model: how-to/calibrate-hftbacktest.md
       - Score and calibrate hftbacktest with the plugin: how-to/score-and-calibrate-hftbacktest.md
       - Calibrate on an L2-only venue against my fills: how-to/calibrate-live-l2-venue.md
