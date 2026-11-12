@@ -89,6 +89,48 @@ fn zoo_families() -> String {
     qt_zoo::families_json().to_string()
 }
 
+/// `f64` values from native-endian bytes (`numpy.ndarray.tobytes()` of a float64 array).
+fn f64s(b: &[u8], what: &str) -> PyResult<Vec<f64>> {
+    if !b.len().is_multiple_of(8) {
+        return Err(core_err(&QtError::Config(format!(
+            "{what}: {} bytes is not a whole number of f64",
+            b.len()
+        ))));
+    }
+    Ok(b.chunks_exact(8)
+        .map(|c| f64::from_ne_bytes(c.try_into().expect("8 bytes")))
+        .collect())
+}
+
+/// C2 log-likelihood of one order under a model's fill curve (`qt_calib::live::interval_loglik`): `p_by_h` the
+/// float64 bytes of `P(fill by tau_j)`, `k` the 1-based truth interval, `delta` whether it filled in it.
+#[pyfunction]
+fn calib_interval_loglik(p_by_h: &[u8], k: usize, delta: bool, n_smooth: u64) -> PyResult<f64> {
+    let p = f64s(p_by_h, "calib_interval_loglik")?;
+    to_py(qt_calib::live::interval_loglik(&p, k, delta, n_smooth))
+}
+
+/// The order-by-grid log-likelihood matrix of `calibrate-live` (`qt_calib::live::loglik_matrix`): `p` the float64
+/// bytes of an `orders x grid x J` array, `present` one flag per (order, grid value); returns the float64 bytes of
+/// the `orders x grid` matrix.
+#[pyfunction]
+#[allow(clippy::too_many_arguments)]
+fn calib_live_loglik_matrix<'py>(
+    py: Python<'py>,
+    p: &[u8],
+    present: Vec<bool>,
+    n_orders: usize,
+    n_grid: usize,
+    k: Vec<usize>,
+    delta: Vec<bool>,
+    n_smooth: u64,
+) -> PyResult<Bound<'py, PyBytes>> {
+    let p = f64s(p, "calib_live_loglik_matrix")?;
+    let m = to_py(py.detach(|| qt_calib::live::loglik_matrix(&p, &present, n_orders, n_grid, &k, &delta, n_smooth)))?;
+    let bytes: Vec<u8> = m.iter().flat_map(|x| x.to_ne_bytes()).collect();
+    Ok(PyBytes::new(py, &bytes))
+}
+
 /// Parses argv with the shared clap grammar; returns the `CliCommand` JSON or raises `CliExit`.
 #[pyfunction]
 fn cli_parse(py: Python<'_>, argv: Vec<String>) -> PyResult<String> {
@@ -757,6 +799,8 @@ fn qt_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(formats, m)?)?;
     m.add_function(wrap_pyfunction!(table_schema, m)?)?;
     m.add_function(wrap_pyfunction!(zoo_families, m)?)?;
+    m.add_function(wrap_pyfunction!(calib_interval_loglik, m)?)?;
+    m.add_function(wrap_pyfunction!(calib_live_loglik_matrix, m)?)?;
     m.add_function(wrap_pyfunction!(cli_parse, m)?)?;
     m.add_function(wrap_pyfunction!(cli_route, m)?)?;
     m.add_function(wrap_pyfunction!(cli_run_native, m)?)?;

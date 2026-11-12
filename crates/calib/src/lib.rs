@@ -16,6 +16,7 @@
 pub mod alloc;
 pub mod bootstrap;
 pub mod collect;
+pub mod live;
 mod model;
 pub mod optim;
 pub mod refs;
