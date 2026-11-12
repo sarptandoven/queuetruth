@@ -13,13 +13,15 @@ from queuetruth.schemas.specs import PathRef, SpecModel
 
 class CheckSpec(SpecModel):
     """`check`: the backtest's files, and the order-level dataset to replay them in (without it, the atlas
-    estimate for a bar backtest). Durations are written as `1h`, `30s`, `250ms`."""
+    estimate for a bar backtest). `window` is how long after entry a fill counts, `horizon` the P&L horizon;
+    durations are written as `1h`, `30s`, `250ms`."""
 
     backtest: Annotated[list[PathRef], Field(min_length=1)]
     data: PathRef | None = None
     backtester: str | None = None
     instrument_map: PathRef | None = None
     window: str = "1h"
+    horizon: str = "1min"
     tier: str | None = None
     bar: str | None = None
     atlas: PathRef | None = None
@@ -38,6 +40,7 @@ def run_check(spec: CheckSpec) -> Any:
         instrument_map=ref_path(spec.instrument_map),
         out=spec.out,
         window=spec.window,
+        horizon=spec.horizon,
         tier=spec.tier,
         bar=spec.bar,
         atlas=ref_path(spec.atlas),

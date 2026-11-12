@@ -196,9 +196,14 @@ def document_of(result: Any, name: str) -> dict[str, Any]:
 
 
 def summary_of(result: Any) -> str | None:
-    """The answer line of a result (`.summary` of the shared result shape), if it has one."""
-    s = getattr(result, "summary", None)
-    return s if isinstance(s, str) and s else None
+    """The answer line of a result: `.summary` of the shared result shape (`queuetruth.results.Result`, what every
+    verb returns), else None."""
+    from queuetruth.results import Result
+
+    if isinstance(result, Result):
+        s = result.summary
+        return s if isinstance(s, str) and s else None
+    return None
 
 
 def produced_files(out: Path | None) -> list[Path]:

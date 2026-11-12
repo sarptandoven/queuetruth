@@ -30,7 +30,6 @@ from queuetruth.schemas.export import DRAFT, json_schema
 REPO = Path(__file__).resolve().parents[3]
 GOLDEN = Path(__file__).parent / "golden" / "tools_before.json"
 DATA = REPO / "tests" / "fixtures" / "synth_small"
-ATLAS = REPO / "tests" / "fixtures" / "atlas_synth"
 VERB_TOOLS = ["qt_check", "qt_fit", "qt_compare", "qt_data", "qt_atlas", "qt_demo"]
 MODES: dict[str, dict[str, Any]] = {
     "local": {"local": True},
@@ -40,6 +39,20 @@ MODES: dict[str, dict[str, Any]] = {
     "remote+submit": {"client": object(), "allow_submit": True},
     "remote+submit+run": {"client": object(), "allow_submit": True, "allow_run": True},
 }
+
+
+def synthetic_atlas(where: Path) -> Path:
+    """A synthetic atlas data API (the helper of python/tests/atlas/test_atlas_lookup.py), written under `where`."""
+    import importlib.util
+    import sys
+
+    path = Path(__file__).resolve().parents[1] / "atlas" / "test_atlas_lookup.py"
+    spec = importlib.util.spec_from_file_location("qt_optable_atlas_lookup", path)
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod
+    spec.loader.exec_module(mod)
+    return mod._write_api(where)
 
 
 def digest(x: Any) -> str:
@@ -136,18 +149,18 @@ async def test_network_is_refused_unless_allowed(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_atlas_tool_answers_first_from_a_local_copy(tmp_path: Path) -> None:
-    if not (ATLAS / "manifest.json").exists():
-        pytest.skip("tests/fixtures/atlas_synth is missing")
+    atlas = synthetic_atlas(tmp_path / "atlas")
     app = build_server(
-        local=True, allow_run=True, root=tmp_path, data_roots=[str(ATLAS)], run_limits=RunLimits(min_free_bytes=0)
+        local=True, allow_run=True, root=tmp_path, data_roots=[str(atlas)], run_limits=RunLimits(min_free_bytes=0)
     )
-    spec = {"library": "nautilus", "source": {"path": str(ATLAS)}}
+    spec = {"library": "nautilus", "source": {"path": str(atlas)}}
     async with McpClient(app.server) as c:
         res = await c.call_tool("qt_atlas", {"spec": spec})
     assert not res.is_error, res.content
-    direct = run("atlas", spec, context=RunContext(roots=[ATLAS]))
+    direct = run("atlas", spec, context=RunContext(roots=[atlas]))
     assert res.structured_content == direct.document
-    assert answer_line(res) == direct.summary
+    first = res.content[0]
+    assert isinstance(first, types.TextContent) and first.text.startswith(direct.summary + "\n")
     assert res.meta is not None and res.meta["queuetruth/answer"] == direct.summary
 
 

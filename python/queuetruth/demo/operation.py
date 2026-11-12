@@ -32,9 +32,11 @@ class DemoSpec(SpecModel):
 
 
 def run_demo(spec: DemoSpec) -> Any:
-    """`queuetruth.demo.run_demo` with the spec's fields (unset ones keep the demo's defaults)."""
+    """`queuetruth.demo.run_demo` with the spec's fields (unset ones keep the demo's defaults), as the `DemoResult`
+    `qt.demo` returns."""
     from queuetruth.demo import DemoOptions
     from queuetruth.demo import run_demo as _run
+    from queuetruth.demo.result import DemoResult
 
     fields: dict[str, Any] = {
         k: v
@@ -53,7 +55,7 @@ def run_demo(spec: DemoSpec) -> Any:
         }.items()
         if v is not None
     }
-    return _run(DemoOptions(seed=spec.seed, yes=NETWORK_ALLOWED.get(), **fields))
+    return DemoResult(_run(DemoOptions(seed=spec.seed, yes=NETWORK_ALLOWED.get(), **fields)))
 
 
 def _demo_needs_network(spec: DemoSpec) -> bool:

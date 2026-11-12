@@ -18,10 +18,23 @@ from queuetruth.runner import Roots, RunContext, run
 
 REPO = Path(__file__).resolve().parents[2]
 DATA = REPO / "tests" / "fixtures" / "synth_small"
-ATLAS = REPO / "tests" / "fixtures" / "atlas_synth"
 VERBS = ("check", "fit", "compare", "data", "atlas", "demo")
 #: Fields that name where a run wrote or how long it took (they differ between two runs of one spec).
 RUN_LOCAL = ("spec", "files", "timings")
+
+
+def synthetic_atlas(where: Path) -> Path:
+    """A synthetic atlas data API (the helper of python/tests/atlas/test_atlas_lookup.py), written under `where`."""
+    import importlib.util
+    import sys
+
+    path = Path(__file__).resolve().parents[0] / "atlas" / "test_atlas_lookup.py"
+    spec = importlib.util.spec_from_file_location("qt_optable_atlas_lookup", path)
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod
+    spec.loader.exec_module(mod)
+    return mod._write_api(where)
 
 
 def same_answer(a: dict, b: dict) -> bool:
@@ -105,17 +118,16 @@ def test_network_is_refused_unless_allowed() -> None:
     assert not optable.get("replay").network
 
 
-def test_atlas_from_a_local_copy_matches_the_python_api() -> None:
-    if not (ATLAS / "manifest.json").exists():
-        pytest.skip("tests/fixtures/atlas_synth is missing")
+def test_atlas_from_a_local_copy_matches_the_python_api(tmp_path: Path) -> None:
+    atlas = synthetic_atlas(tmp_path / "atlas")
     import queuetruth as qt
 
-    res = run("atlas", {"library": "nautilus", "source": {"path": str(ATLAS)}}, context=RunContext(roots=[ATLAS]))
-    direct = qt.atlas.lookup(library="nautilus", source=str(ATLAS))
+    res = run("atlas", {"library": "nautilus", "source": {"path": str(atlas)}}, context=RunContext(roots=[atlas]))
+    direct = qt.atlas.lookup(library="nautilus", source=str(atlas))
     assert res.document == direct.doc
     assert res.summary == direct.summary and res.files == [] and res.out is None
     with pytest.raises(QtError) as e:
-        run("atlas", {"source": {"path": str(ATLAS)}}, out="x")
+        run("atlas", {"source": {"path": str(atlas)}}, out="x")
     assert e.value.code == "QT-USAGE-001"
 
 
