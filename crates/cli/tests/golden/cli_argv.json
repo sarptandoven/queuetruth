@@ -1999,5 +1999,48 @@
     "atlas",
     "--library",
     "hftbacktest"
+  ],
+  [
+    "queuetruth",
+    "data",
+    "add",
+    "12302019.NASDAQ_ITCH50.gz",
+    "01302020.NASDAQ_ITCH50.gz",
+    "--out",
+    "nasdaq",
+    "--input-format",
+    "itch",
+    "--venue",
+    "nasdaq",
+    "--date",
+    "2019-12-30",
+    "--symbols",
+    "AAPL,MSFT",
+    "--json"
+  ],
+  [
+    "queuetruth",
+    "data",
+    "fetch",
+    "iex",
+    "--date",
+    "2026-10-09",
+    "--symbols",
+    "AAPL,MSFT",
+    "--out",
+    "iex-aapl",
+    "--yes",
+    "--dry-run",
+    "--url",
+    "http://127.0.0.1:8000/day.pcap.gz",
+    "--json"
+  ],
+  [
+    "queuetruth",
+    "demo",
+    "--backtester",
+    "hftbacktest",
+    "--minutes",
+    "1"
   ]
 ]

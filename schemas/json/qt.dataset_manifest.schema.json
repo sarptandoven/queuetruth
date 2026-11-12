@@ -2,6 +2,43 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "qt.dataset_manifest",
   "$defs": {
+    "Attribution": {
+      "additionalProperties": false,
+      "description": "1.2: the provider of a dataset's data, its required citation and its terms.",
+      "properties": {
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "terms_url": {
+          "title": "Terms Url",
+          "type": "string"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        }
+      },
+      "required": [
+        "source",
+        "text",
+        "terms_url"
+      ],
+      "title": "Attribution",
+      "type": "object"
+    },
     "InputFile": {
       "additionalProperties": false,
       "description": "Provenance of one ingest input.",
@@ -304,6 +341,21 @@
       ],
       "default": null,
       "title": "Source Vintage"
+    },
+    "attribution": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/Attribution"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Attribution"
     }
   },
   "required": [

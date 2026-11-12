@@ -58,6 +58,14 @@
           "end_ns": 1,
           "publisher_id": 1
         }
+      ],
+      "attribution": [
+        {
+          "source": "x",
+          "text": "x",
+          "terms_url": "x",
+          "url": "x"
+        }
       ]
     },
     "data_quality": {

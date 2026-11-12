@@ -148,6 +148,15 @@ or about 2 to 6 s of fetch at the rates measured here.
   `manifest.json` next to it, and gives the same numbers and `run_id` as the run that cut it (the `run_id` depends
   on the content, not on where it came from). Content that matches a pinned default subset is reported as that
   source, with its note and published reference.
+- `--backtester hftbacktest` or `--backtester databento` (since 0.4.0) makes the answer about that library's default
+  instead of NautilusTrader's: hftbacktest's `BacktestAsset()` with no queue model or exchange set
+  (`log_prob_queue_model2()` with `no_partial_fill_exchange()`, the zoo's `hbt_log2[exch=no_partial]`, added to the
+  run), or the queue estimator of Databento's tutorial (`databento_mc[k=-0.8;particles=100]`). The orders and the
+  exact replay are the same; the published reference under the table is NautilusTrader's, so it is shown only for
+  the default. `--models` must include the chosen library's setting.
+- To keep working on the demo's data, add its cached subset to a dataset: `queuetruth data add
+  ~/.cache/queuetruth/demo/<entry>/subset.itch50.gz --out demo-day` reads the format, venue and date from the
+  `manifest.json` next to it ([Add order-level data](../how-to/add-data.md)).
 - `--symbols`, `--minutes`, `--n` and `--seed` change the sample; `--out` (default `qt-demo`), `--cache-dir` and
   `--refresh` change where files go. `--out` must be new, empty, or an earlier demo output (it holds a `.qt-demo`
   marker). `queuetruth demo --help` or `queuetruth help demo` lists every flag.
@@ -160,5 +169,6 @@ statistics only, and `demo.html` holds no order-level rows. The full report of t
 ## Next
 
 - [Your first leaderboard](../getting-started.md): the same steps by hand, on synthetic data.
-- [A real day from free IEX data](../how-to/iex-public-demo.md): a whole day you download yourself.
+- [A real day from free IEX data](../how-to/iex-public-demo.md): a whole day, fetched with
+  `queuetruth data fetch iex`.
 - [The Fill-Realism Atlas](../concepts/fill-realism-atlas.md): the same comparison over every trading day.

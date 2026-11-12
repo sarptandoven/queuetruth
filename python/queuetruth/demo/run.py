@@ -86,6 +86,60 @@ DEMO_MODELS = (
 )
 
 
+@dataclass(frozen=True)
+class Library:
+    """The setting a library uses when the user changes nothing, as the zoo model the demo's answer is about."""
+
+    #: the zoo model id of the library's default setting
+    model: str
+    #: who fills the orders, in the answer sentence
+    subject: str
+    #: the long label (`qt.demo_summary` headline)
+    label: str
+    #: the table column
+    column: str
+    #: what the replica was checked against
+    verified_against: str
+
+
+#: `demo --backtester`: the library whose default setting the answer is about. NautilusTrader stays the default.
+#: hftbacktest's `BacktestAsset()` without a queue model or exchange call uses `LogProbQueueModel2` and
+#: `NoPartialFillExchange` (`py-hftbacktest/src/lib.rs`, release py-v2.4.4); Databento ships no fill model, so its
+#: setting is the queue estimator of its tutorial as the zoo runs it by default.
+LIBRARIES: dict[str, Library] = {
+    "nautilus": Library(
+        model="nt_prob_touch[p=1]",
+        subject="NautilusTrader's default fill model",
+        label=HEADLINE_LABEL,
+        column="NautilusTrader default",
+        verified_against=VERIFIED_AGAINST,
+    ),
+    "hftbacktest": Library(
+        model="hbt_log2[exch=no_partial]",
+        subject="hftbacktest's default queue model",
+        label="hftbacktest's default BacktestAsset() queue model and exchange: log_prob_queue_model2() with "
+        "no_partial_fill_exchange()",
+        column="hftbacktest default",
+        verified_against=(
+            "queuetruth's faithful replica hbt_log2[exch=no_partial]; faithful models equal a line-by-line "
+            "transliteration of hftbacktest's queue.rs and exchange fill rules (O-ZOO-2), and hftbacktest 2.4.4 "
+            "itself gives the same first-fill times on the zoo's L2 export (O-ZOO-3, docs/testing.md)"
+        ),
+    ),
+    "databento": Library(
+        model="databento_mc[k=-0.8;particles=100]",
+        subject="Databento's queue estimator",
+        label="the queue-position estimator of Databento's tutorial, k = -0.8 with 100 particles (the zoo's default)",
+        column="Databento estimator",
+        verified_against=(
+            "queuetruth's implementation databento_mc[k=-0.8;particles=100] of the estimator in Databento's "
+            "queue-position tutorial; Databento ships no fill model, so there is no engine to check it against"
+        ),
+    ),
+}
+DEFAULT_BACKTESTER = "nautilus"
+
+
 @dataclass
 class DemoOptions:
     """Inputs of `run_demo` (the CLI flags of the same names)."""
@@ -108,6 +162,8 @@ class DemoOptions:
     max_download_mb: float | None = DEFAULT_MAX_DOWNLOAD_MB
     bootstrap_b: int = 2000
     models: list[str] = field(default_factory=lambda: list(DEMO_MODELS))
+    #: the library the answer is about (`LIBRARIES`); its default setting joins the default models
+    backtester: str = DEFAULT_BACKTESTER
 
 
 @dataclass
@@ -134,6 +190,30 @@ def _symbols(raw: list[str] | None, default: tuple[str, ...]) -> list[str]:
     return syms
 
 
+def library(opts: DemoOptions) -> Library:
+    """The `LIBRARIES` entry of `opts.backtester`; `QT-USAGE-001` for an unknown name."""
+    lib = LIBRARIES.get(opts.backtester)
+    if lib is None:
+        raise QtError(
+            "QT-USAGE-001",
+            f"demo: unknown --backtester {opts.backtester!r}",
+            f"choose one of: {', '.join(LIBRARIES)}",
+        )
+    return lib
+
+
+def models_of(opts: DemoOptions) -> list[str]:
+    """The zoo models of the run: `opts.models`, plus the backtester's default setting when the models are the
+    demo's defaults and do not hold it (so `--backtester hftbacktest` needs no `--models`)."""
+    lib = library(opts)
+    models = list(opts.models)
+    if models == ["all"] and opts.backtester != DEFAULT_BACKTESTER:
+        return [*models, lib.model]  # `all` runs hbt_log2 only with the run's partial-fill exchange
+    if models == list(DEMO_MODELS) and not any(A.find_model([{"model_id": m}], lib.model) for m in models):
+        models.append(lib.model)
+    return models
+
+
 def resolve(opts: DemoOptions) -> Resolved:
     """Source, symbols, window and cache entry of the options (no I/O besides a `stat` of `--from-file`)."""
     if opts.url and opts.from_file:
@@ -142,10 +222,15 @@ def resolve(opts: DemoOptions) -> Resolved:
         raise QtError("QT-USAGE-001", "demo: --n must be at least 1")
     if not opts.models:
         raise QtError("QT-USAGE-001", "demo: --models needs at least one model id (or all)")
-    if opts.models != ["all"] and not any(A.find_model([{"model_id": m}], A.NT_DEFAULT) for m in opts.models):
+    lib = library(opts)
+    models = models_of(opts)
+    if models != ["all"] and not any(A.find_model([{"model_id": m}], lib.model) for m in models):
+        which = "" if opts.backtester == DEFAULT_BACKTESTER else f" (--backtester {opts.backtester})"
         raise QtError(
             "QT-USAGE-001",
-            f"demo: --models must include {A.NT_DEFAULT}, the model the demo's answer is about",
+            f"demo: --models must include {lib.model}, the model the demo's answer is about{which}",
+            "add it to --models, or pick the library your --models are about with --backtester "
+            f"({', '.join(LIBRARIES)})",
         )
     location = opts.url or opts.from_file
     if location:
@@ -332,7 +417,9 @@ def _cell(c: dict[str, Any]) -> Cell:
     )
 
 
-def headline_sentence(cells: dict[str, Cell], horizon_ns: int = 1_000_000_000) -> str:
+def headline_sentence(
+    cells: dict[str, Cell], horizon_ns: int = 1_000_000_000, subject: str = LIBRARIES[DEFAULT_BACKTESTER].subject
+) -> str:
     """'Within 1 s, NautilusTrader's default fill model fills 33.1% of these orders; the exact replay of the real
     queue fills 29.4%: 3.6 pp (1.12x) too many (95% CI +2.6 to +4.8 pp).'"""
     from queuetruth.eval.leaderboard import NEGLIGIBLE_BIAS, pct
@@ -346,7 +433,7 @@ def headline_sentence(cells: dict[str, Cell], horizon_ns: int = 1_000_000_000) -
     if c.ci_lo is not None and c.ci_hi is not None:
         ci = f" (95% CI {c.ci_lo * 100:+.1f} to {c.ci_hi * 100:+.1f} pp)"
     head = (
-        f"Within {when}, NautilusTrader's default fill model fills {pct(c.model_fill_rate)}% of these orders; the "
+        f"Within {when}, {subject} fills {pct(c.model_fill_rate)}% of these orders; the "
         f"exact replay of the real queue fills {pct(c.exact_fill_rate)}%"
     )
     if abs(c.bias) < NEGLIGIBLE_BIAS:
@@ -453,14 +540,16 @@ def run_demo(
     # 4. zoo
     t0 = time.perf_counter()
     zoo_dir = out / "zoo"
-    what = "every default L2 model" if opts.models == ["all"] else f"{len(opts.models)} L2 models"
+    lib = library(opts)
+    models = models_of(opts)
+    what = "every default L2 model" if models == ["all"] else f"{len(models)} L2 models"
     note(f"zoo: {what} against the exact queue ({opts.threads} thread(s))")
     zoo = qt.run_zoo(
         {
             "dataset": {"path": str(ds)},
             "shadows": {"path": str(shadows)},
             "out": str(zoo_dir),
-            "models": list(opts.models),
+            "models": models,
             "mode": "faithful",
             "h_max_ns": w.h_max_s * S.SEC_NS,
             "threads": opts.threads,
@@ -472,9 +561,9 @@ def run_demo(
     # 5. answer
     t0 = time.perf_counter()
     board = [e.model_dump(mode="json") for e in zoo.leaderboard]
-    nt = A.find_model(board, A.NT_DEFAULT)
+    nt = A.find_model(board, lib.model)
     if nt is None:
-        raise QtError("QT-ENGINE-001", f"zoo leaderboard has no {A.NT_DEFAULT} row")
+        raise QtError("QT-ENGINE-001", f"zoo leaderboard has no {lib.model} row")
     cells, notes = A.cluster_intervals(
         zoo_dir, board, h_max_ns=w.h_max_s * S.SEC_NS, seed=opts.seed, b=opts.bootstrap_b
     )
@@ -496,12 +585,14 @@ def run_demo(
     nt_cells = {k: _cell(c) for k, c in cells[str(nt["model_id"])].items()}
     head = Headline(
         model_id=str(nt["model_id"]),
-        label=HEADLINE_LABEL,
-        verified_against=VERIFIED_AGAINST,
-        sentence=headline_sentence(nt_cells),
+        label=lib.label,
+        verified_against=lib.verified_against,
+        sentence=headline_sentence(nt_cells, subject=lib.subject),
         cells=nt_cells,
+        backtester=opts.backtester,  # type: ignore[arg-type]
     )
-    ref_doc = S.REFERENCES.get(src.id)
+    # the published numbers are NautilusTrader's default fill model's
+    ref_doc = S.REFERENCES.get(src.id) if opts.backtester == DEFAULT_BACKTESTER else None
     # identity (SPEC 7.3): what was computed and on which content; where the subset came from is provenance
     spec = {
         "demo": 1,
@@ -512,6 +603,8 @@ def run_demo(
         "models": sorted(zoo.models),
         "mode": "faithful",
         "interval": {"cluster_ns": A.CLUSTER_NS, "bootstrap_b": opts.bootstrap_b},
+        # absent for the default, so the default run keeps its run id
+        **({} if opts.backtester == DEFAULT_BACKTESTER else {"backtester": opts.backtester}),
         "subset": {"path": str(sub.path)},
         "out": str(out),
         "threads": opts.threads,
@@ -588,11 +681,16 @@ def run_demo(
 
 
 __all__ = [
+    "DEFAULT_BACKTESTER",
     "DEFAULT_MINUTES",
     "DEFAULT_N",
     "DEMO_MODELS",
+    "LIBRARIES",
     "DemoOptions",
+    "Library",
     "headline_sentence",
+    "library",
+    "models_of",
     "plan",
     "resolve",
     "run_demo",

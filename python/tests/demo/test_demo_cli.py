@@ -300,6 +300,34 @@ def test_models_option_accepts_all_and_requires_the_headline_model() -> None:
         R.resolve(R.DemoOptions(models=["nt_prob_touch[p=0.5]"]))
 
 
+def test_backtester_picks_the_headline_model_and_keeps_the_default() -> None:
+    assert R.models_of(R.DemoOptions()) == list(R.DEMO_MODELS)  # the default run is unchanged
+    hbt = R.DemoOptions(backtester="hftbacktest")
+    assert R.models_of(hbt) == [*R.DEMO_MODELS, "hbt_log2[exch=no_partial]"]
+    assert R.models_of(R.DemoOptions(backtester="hftbacktest", models=["all"])) == ["all", "hbt_log2[exch=no_partial]"]
+    db = R.DemoOptions(backtester="databento")
+    assert R.models_of(db) == list(R.DEMO_MODELS)  # Databento's estimator is already a demo model
+    R.resolve(hbt)
+    R.resolve(R.DemoOptions(backtester="hftbacktest", models=["hbt_log2[exch=no_partial]"]))
+    # the hftbacktest headline is the default exchange's model, not the zoo's partial-fill run of the same queue
+    with pytest.raises(QtError) as e:
+        R.resolve(R.DemoOptions(backtester="hftbacktest", models=["hbt_power3[n=2]"]))
+    assert "hbt_log2[exch=no_partial]" in e.value.message and "--backtester hftbacktest" in e.value.message
+    with pytest.raises(QtError) as e:
+        R.resolve(R.DemoOptions(models=["hbt_power3[n=2]"]))
+    assert "--backtester" in (e.value.hint or "")
+    with pytest.raises(QtError):
+        R.resolve(R.DemoOptions(backtester="zipline"))
+    assert R.headline_sentence({}) == "No fill-rate bias within 1 s: no order has an exact label at that horizon."
+
+
+def test_backtester_flag(capsys: pytest.CaptureFixture[str]) -> None:
+    assert cli.main(["demo", "--backtester", "zipline", "--dry-run"]) == 2
+    assert "invalid choice" in capsys.readouterr().err
+    assert cli.main(["demo", "--help"]) == 0
+    assert "--backtester {nautilus,hftbacktest,databento}" in capsys.readouterr().out
+
+
 def test_custom_url_needs_consent_too(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     url = "https://example.invalid/12302019.NASDAQ_ITCH50.gz"
     args = ["demo", "--url", url, "--cache-dir", str(tmp_path), "--out", str(tmp_path / "o")]

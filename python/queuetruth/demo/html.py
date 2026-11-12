@@ -1,10 +1,11 @@
 """`<out>/demo.html`: one self-contained page (no script, no external request) with the demo's answer.
 
-Two charts share the horizons on their x axis: the fill rate of the exact replay next to NautilusTrader's default
-fill model (grouped bars, two series, legend), and the model's bias in percentage points with its 95% interval
-(dot and whisker; the published full-session value as a hollow marker where the source has one). A table repeats
-every number, then the other zoo models' biases, the run's warnings, then provenance (source, attribution, subset
-sha256, run id). A local input file appears by its name only, so the page can be shared without the local path.
+Two charts share the horizons on their x axis: the fill rate of the exact replay next to the backtester's default
+fill model (NautilusTrader's unless `demo --backtester` names another; grouped bars, two series, legend), and the
+model's bias in percentage points with its 95% interval (dot and whisker; the published full-session value as a
+hollow marker where the source has one). A table repeats every number, then the other zoo models' biases, the run's
+warnings, then provenance (source, attribution, subset sha256, run id). A local input file appears by its name only,
+so the page can be shared without the local path.
 Light and dark themes follow the viewer's setting. Every mark has a `<title>` tooltip.
 """
 
@@ -95,7 +96,7 @@ def _ticks(lo: float, hi: float, n: int = 4) -> list[float]:
     return out
 
 
-def _bars(keys: list[str], cells: dict[str, Cell]) -> str:
+def _bars(keys: list[str], cells: dict[str, Cell], column: str = "NautilusTrader default") -> str:
     iw, ih = W - PAD_L - PAD_R, H - PAD_T - PAD_B
     vals = [v for k in keys for v in (cells[k].exact_fill_rate, cells[k].model_fill_rate) if v is not None]
     top = _nice_max(max(vals) if vals else 1.0)
@@ -113,7 +114,7 @@ def _bars(keys: list[str], cells: dict[str, Cell]) -> str:
         for j, (v, color, name) in enumerate(
             (
                 (c.exact_fill_rate, "var(--exact)", "exact replay"),
-                (c.model_fill_rate, "var(--model)", "NautilusTrader default"),
+                (c.model_fill_rate, "var(--model)", column),
             )
         ):
             if v is None:
@@ -197,6 +198,9 @@ def render_html(s: DemoSummary) -> str:
         for k, v in s.reference.bias.items():
             ref[k] = (v, s.reference.ci_lo[k], s.reference.ci_hi[k])
     src, win, data = s.source, s.window, s.data
+    from queuetruth.demo.run import LIBRARIES
+
+    column = LIBRARIES[s.headline.backtester].column
     rows = "".join(
         f"<tr><td>{_e(duration_text(int(k)))}</td><td>{_pct(cells[k].exact_fill_rate)}</td>"
         f"<td>{_pct(cells[k].model_fill_rate)}</td><td>{_pp(cells[k].bias)}</td><td>{_ci(cells[k])}</td>"
@@ -263,14 +267,14 @@ limit orders placed {_e(win.placement_start)} to {_e(win.placement_end)} ET, eac
 <h2>Fill rate by horizon</h2>
 <div class="legend"><span><span class="key" style="background:var(--exact)"></span>exact replay (real queue)</span>
 <span><span class="key" style="background:var(--model)"></span>{_e(s.headline.label)}</span></div>
-<figure style="margin:0">{_bars(keys, cells)}</figure>
+<figure style="margin:0">{_bars(keys, cells, column)}</figure>
 <h2>Overfill: model minus exact, percentage points</h2>
 <figure style="margin:0">{_bias(keys, cells, ref)}
 <figcaption>Dots: this run. Whiskers: 95% intervals from a cluster bootstrap over instrument x minute of placement
 ({s.interval.clusters} clusters).</figcaption></figure>
 {ref_note}
 <div class="scroll"><table>
-<thead><tr><th>horizon</th><th>exact</th><th>NautilusTrader default</th><th>bias, pp</th><th>95% CI, pp</th>
+<thead><tr><th>horizon</th><th>exact</th><th>{_e(column)}</th><th>bias, pp</th><th>95% CI, pp</th>
 <th>orders</th></tr></thead>
 <tbody>{rows}</tbody></table></div>
 <h2>Every model in this run (bias, pp)</h2>

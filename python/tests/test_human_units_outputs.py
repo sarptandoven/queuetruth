@@ -146,6 +146,15 @@ def corpus(tmp_path_factory: pytest.TempPathFactory) -> dict[str, str]:
     run("check without data", "check", str(bt), "--atlas", touch_site, "--bar", "5min", "--tier", "ALL", "--out",
         str(est), "--html")  # fmt: skip
     capsys_out["check without data html"] = _html_text(est / "check.html")
+
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).parent / "demo"))
+    import demo_fixtures as df
+
+    raw = tmp / "12302019.NASDAQ_ITCH50.gz"
+    df.write_gz(raw, df.itch_day(["AAPL", "MSFT"], df.book_events(["AAPL", "MSFT"], df.hms(9, 30), df.hms(9, 35))))
+    run("data add", "data", "add", str(raw), "--out", str(tmp / "ds_added"), "--quiet")
     return capsys_out
 
 
