@@ -66,7 +66,7 @@ def test_fits_are_queuetruths_calibrations(cal, synth: Path) -> None:
         doc = json.loads(f.path.read_text())
         assert doc["family"] == f.family and doc["estimate"] == f.n and doc["trust"]["verdict"] == f.verdict
         assert doc["spec"]["train"] == {"dates": ["2026-06-15"], "blocks": None}
-        assert doc["spec"]["exchange"] == "partial"
+        assert doc["spec"]["exchange"] == "no_partial"
     assert [f.verdict for f in cal.fits] == ["exportable", "refused", "refused"]
 
 
@@ -74,7 +74,8 @@ def test_the_winner_and_its_code(cal) -> None:
     assert cal.best is cal.fits[0] and cal.best.builder == "power_prob_queue_model3" and not cal.forced
     code = cal.code
     assert f".power_prob_queue_model3({format(cal.best.n, '.6g')})" in code
-    assert ".partial_fill_exchange()" in code and "NOT VALIDATED" not in code
+    assert "    .no_partial_fill_exchange()\n" in code and "    .partial_fill_exchange()" not in code
+    assert "NOT VALIDATED" not in code
     assert "asset = (" in code
     compile(code, "hbt_queue_model.py", "exec")
     assert cal.code_path is not None and cal.code_path.read_text() == code
@@ -109,6 +110,23 @@ def test_given_orders_and_one_family(synth: Path, shadows: Path, tmp_path: Path)
     assert [f.family for f in r.fits] == ["power2"] and r.shadows == shadows
     assert json.loads(r.fits[0].path.read_text())["spec"]["exchange"] == "no_partial"
     assert not (tmp_path / "shadows.parquet").exists()
+
+
+def test_partial_exchange_is_an_explicit_choice(synth: Path, cal, tmp_path: Path) -> None:
+    """`exchange="partial"` fits and writes `.partial_fill_exchange()` (released hftbacktest 2.4.4 stops on it,
+    #312); the default is `no_partial`, which runs on 2.4.4."""
+    r = calibrate(synth, out=tmp_path, families=["power3"], exchange="partial", orders=cal.shadows, **EXPORTABLE)
+    assert json.loads(r.fits[0].path.read_text())["spec"]["exchange"] == "partial"
+    if r.best is None:
+        pytest.skip("the partial fit is refused on this sample: no code to check")
+    code = r.code
+    assert "    .partial_fill_exchange()\n" in code and "    .no_partial_fill_exchange()" not in code
+    assert (tmp_path / "hbt_queue_model.py").read_text() == code
+    compile(code, "hbt_queue_model.py", "exec")
+    from queuetruth.export import hftbacktest as qt_hbt
+
+    if hasattr(qt_hbt, "DEFAULT_EXCHANGE"):  # queuetruth 0.4 states #312 in the header
+        assert "# exchange: partial_fill_exchange, chosen explicitly." in code and "#312" in code
 
 
 def test_argument_errors(synth: Path, tmp_path: Path) -> None:
