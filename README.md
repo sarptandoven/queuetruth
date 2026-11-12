@@ -15,8 +15,7 @@ fills, order by order.
 **[The Fill-Realism Atlas](https://sarptandoven.github.io/queuetruth/)**, rebuilt from free IEX DEEP+ data: over 20
 trading days (2026-10-09 to 2026-11-06; 265,402 symbol-days, 12,440 symbols), the exact queue fills **11.97%** of
 small resting orders within 1 minute. NautilusTrader's touch fill model fills **1.50 pp more** (13% more orders; 95%
-interval +1.45 to +1.55 pp), hftbacktest's L3 FIFO model 1.82 pp fewer, and NautilusTrader's `queue_position` model is
-closest at +0.06 pp. IEX is one venue with its own rules; [how the atlas is made](https://github.com/sarptandoven/queuetruth/blob/main/docs/concepts/fill-realism-atlas.md).
+interval +1.45 to +1.55 pp), and NautilusTrader's `queue_position` model is closest at +0.06 pp. IEX is one venue with its own rules; [how the atlas is made](https://github.com/sarptandoven/queuetruth/blob/main/docs/concepts/fill-realism-atlas.md).
 
 ## See it in a minute
 
