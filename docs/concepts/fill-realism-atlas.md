@@ -1,49 +1,78 @@
 # The Fill-Realism Atlas
 
-The atlas is a public table that answers one question for every popular backtester fill model: on a real market
-day, how far are its fills and its P&L from what the real order queue would have given? It is rebuilt from public
-data each trading day by `.github/workflows/atlas.yml` (`.github/workflows/atlas-backfill.yml` fills the newest 20
-sessions at once, one runner per day), and every number on it can be re-run and checked against a published Merkle
-root. The daily venue is IEX. Nasdaq TotalView-ITCH sample days can sit next to it
-([two venues](#two-venues)).
+**The site: [sarptandoven.github.io/queuetruth](https://sarptandoven.github.io/queuetruth/).**
 
-## How to read it
+The atlas answers one question for every popular backtester fill model: on a real market day, how far are its fills
+and its P&L from what the real order queue would have given? It places small resting orders in the real queue of
+every symbol of a public exchange day, replays every order of the day exactly to see which of them fill, and runs the
+fill models of hftbacktest, NautilusTrader and a Databento estimator on the same orders. It is rebuilt from free IEX
+DEEP+ data each trading day over the newest 20 days, and every number can be re-run and checked against a published
+Merkle root. Keeping it running is in [Run the atlas](../how-to/run-the-atlas.md).
 
-Each liquidity tier (`ALL` first) has one table. A row is one fill model: hftbacktest's queue models,
-NautilusTrader's fill models, a Databento tutorial estimator, and two bounds (front of the queue, trade-through
-only) that bracket every honest model. The columns are:
+## The headline
 
-- **Fill-rate bias at each horizon**, in percentage points: the model's probability that an order has filled within
-  1 s, 10 s, 60 s or 5 min, minus the share that did fill in the exact replay. Positive means the backtest fills
-  orders the real queue would not have filled, so it is too optimistic. The interval under each value is a 95%
-  interval from a bootstrap over dates and symbols.
-- **P&L, ticks**: the backtest's P&L minus the exact replay's, per order placed, with each order's first fill
-  marked to the mid 60 s later (`--pnl-horizon`). Positive means the backtest's P&L is too high. This is
-  [`zoo-toxicity`](fill-toxicity.md)'s `bias_ticks`, and it splits into fills the model grants that never happen,
-  fills it misses, and fills it times differently.
-- **flagged**: the share of the row's orders on symbol-days whose replay checks raised a flag or that were not in
-  continuous trading. With the published flag policy (`exclude`) those symbol-days are left out and this is 0.
+The front page answers first, in plain words. Its first line is the share of small resting orders the real queue
+fills within 1 minute, over all symbols. Then comes one sentence per library:
 
-The two sentences at the top give the exact fill rate and name the most optimistic and the most pessimistic
-non-bound models (at the sort horizon, 60 s by default) and the largest P&L error, but only among models whose 95%
-interval excludes 0: a difference whose interval reaches 0 is never stated as a finding. The tables are sorted by
-the size of the fill-rate bias at that horizon. Above each table, a chart draws every model's bias at that horizon
-as a dot with its interval as a whisker; it is coloured only when the interval excludes 0, and the bounds are left
-out of it so they do not squash the scale. Every value in a chart is also in the table below it.
+- **NautilusTrader**: how many more orders its default fill rule (fill when the price touches the order) fills than
+  the real queue, in percentage points with a 95% interval and as a share of the real fills; then its closest
+  setting and whether it is still clearly off.
+- **hftbacktest** and **Databento**: the range of their settings against the real queue, then the closest setting and
+  its verdict.
+
+A difference is stated only when its 95% interval excludes 0 on the side of its estimate. Otherwise the sentence says
+the setting is not clearly different from the real queue.
+
+Over 20 trading days (2026-10-09 to 2026-11-06; 265,402 symbol-days, 12,440 symbols), the exact queue fills 11.97% of
+small resting orders within 1 minute. NautilusTrader's touch fill model fills 1.50 pp more (13% more orders; 95%
+interval +1.45 to +1.55 pp), and NautilusTrader's `queue_position` model is closest at +0.06 pp. The site always
+shows the newest 20 days, so its numbers move a little from day to day.
+
+## How to read the page
+
+The front page has, in this order:
+
+1. **The answer**: the sentences above.
+2. **One chart**: every library's settings at 1 minute (all symbols), grouped by library. A dot is the fill-rate bias
+   in percentage points (the model's fill rate minus the real queue's); the whisker is its 95% interval. A dot is red
+   when the model clearly fills too many orders, blue when it clearly fills too few, grey when the interval includes
+   0. Each row's tooltip has the model id (such as `nt_prob_touch[mode=faithful;p=1]`). The two bounds that bracket
+   every honest model (always at the front of the queue; fill only on a trade-through) are left out of the chart.
+3. **What to do**: one box per library with its closest setting, the verdict, and the config to paste (below).
+4. **Your symbol**: a lookup that shows every library setting on one symbol at 1 s, 10 s and 1 min, with intervals
+   and the number of orders behind each.
+5. **What this covers**: IEX carries about 4 to 5% of US equity volume, delays every incoming order by a 350
+   microsecond speed bump and has order types that reprice themselves, so its queues may not behave like those of
+   other exchanges.
+6. **Last built and how to verify**: the build date, the atlas root and the steps to check it ([verify a
+   number](#verify-a-number)).
+
+Every page carries IEX's attribution. The other pages:
+
+- `hftbacktest.html`, `nautilustrader.html`, `databento.html`: one library each, with the same answer, chart and
+  "what to do" box, then its models across every tier and horizon (fill rate and P&L) and its best setting by tier.
+- `tables.html` ("all numbers"): every model, tier and horizon. Each liquidity tier (`ALL` first) has a chart and a
+  table; a row is one fill model, with the fill-rate bias at 1 s, 10 s, 1 min and 5 min, the **P&L error** (the
+  backtest's P&L minus the exact replay's, per order placed, with each first fill marked to the mid 60 s later; this
+  is [`zoo-toxicity`](fill-toxicity.md)'s `bias_ticks`) and the **flagged** share (orders on symbol-days whose replay
+  checks raised a flag; 0 under the published flag policy `exclude`).
+- `about.html`: how to read it, how it is made and its limits, in short.
 
 ## Which setting fixes it
 
-The "Best setting by tier" table takes, for each tier and library, the setting whose fill-rate bias at the sort
+The "What to do" boxes on the front page and the "Best setting by tier" tables take, for each tier and library, the setting whose fill-rate bias at the sort
 horizon is closest to 0 as a point estimate (hftbacktest's L3 FIFO model is left out: it needs the order-level data
 the exact replay uses). It says whether that setting is **still clearly off** (its 95% interval excludes 0 on the
 side of its estimate; the colours follow the same rule) or shows **no clear difference**, which means the atlas cannot tell it from the exact
 replay at this sample size, not that it is exact. Settings whose intervals overlap the closest one's are listed
-under it: the atlas does not rank those by closeness. Next to it is the config to paste:
+with it: the atlas does not rank those by closeness. Next to it is the config to paste:
 
 - hftbacktest: the queue model and exchange calls of your `BacktestAsset()` chain, for example
-  `.power_prob_queue_model2(2).partial_fill_exchange()`, built from the same builder and exchange tables as
+  `.power_prob_queue_model2(2).no_partial_fill_exchange()`, built from the same builder and exchange tables as
   `queuetruth export hftbacktest` ([Score and calibrate my hftbacktest backtest](../how-to/calibrate-hftbacktest.md)). The
-  exchange follows the model id's `exch` (`partial` or `no_partial`).
+  exchange is `no_partial_fill_exchange`, the export's default, because the released hftbacktest 2.4.4 stops on
+  `partial_fill_exchange` with error 14 ([hftbacktest #312](https://github.com/nkaz001/hftbacktest/issues/312)). The
+  atlas ran the models with partial fills; the two differ only when a fill is smaller than the order.
 - NautilusTrader: the `BacktestEngine.add_venue` keywords, for example
   `fill_model=FillModel(prob_fill_on_limit=1), book_type=BookType.L2_MBP, trade_execution=True, queue_position=True`
   for the `queue_position` model, as the NautilusTrader integration sets them (`FillModel` is `DefaultFillModel`
@@ -51,99 +80,65 @@ under it: the atlas does not rank those by closeness. Next to it is the config t
   also caps the queue ahead, so a few orders fill differently. Below `prob_fill_on_limit=1`, set `random_seed` to
   compare runs.
 - Databento's tutorial estimator has no library of its own; for `-1 < k <= 0` the table gives hftbacktest's
-  expected-value equivalent `.power_prob_queue_model3(1 / (1 + k)).partial_fill_exchange()`, the exchange the zoo
-  runs it with.
+  expected-value equivalent `.power_prob_queue_model3(1 / (1 + k)).no_partial_fill_exchange()`, with the same
+  exchange note.
 
 Where no released library reproduces the model (corrected mode, Databento with `k > 0`), the table shows only the
 model id. The best setting is the closest one on this venue, horizon and population; refit it on your own data
 before relying on it. What each model does is in [the L2 model zoo](l2-model-zoo.md).
 
-## One page per library
+## The data API
 
-`hftbacktest.html`, `nautilustrader.html` and `databento.html` each show one library's models across every tier
-and horizon (fill rate and P&L), its best settings by tier with the configs, a chart per tier and a plain-words
-summary: the exact fill rate, how many of the library's settings fill clearly more or fewer orders, its closest point
-estimate with whether it is still clearly off, and the settings it cannot be ranked against. The index links to them.
+Next to the site, `atlas/v1/` holds the same numbers as static JSON files, for programs and for `queuetruth atlas`.
+Each is a document with a JSON Schema in [the schema reference](../reference/schemas.md):
+
+| File | Schema | What it holds |
+|---|---|---|
+| `manifest.json` | `qt.atlas_api_manifest` | API version 1, when the site was built, the atlas root, the venue, the window and its days, symbol-days and symbols, the mode, population and headline horizon, IEX's attribution, and the size and sha256 of every other file |
+| `summary.json` | `qt.atlas_summary` | One row per library, setting, mode, shadow population, tier and horizon: the human label and the model id, the fill-rate bias in percentage points with its interval, the exact and model fill rates in percent, the verdict, the orders, symbols and days, the P&L error in ticks with its interval where the atlas has it at that horizon, and the flagged share |
+| `configs.json` | `qt.atlas_configs` | Per library and tier: the closest setting, its bias and verdict, the settings it cannot be ranked against, and the config to paste with what kind of config it is |
+| `symbols/<letter>.json` | `qt.atlas_symbols` | The symbols whose first letter is `<letter>` (`_` for others): tier, days, and per library setting the bias at 1 s, 10 s and 1 min with its interval, the shrunk estimate, the orders and the days |
+
+Units are human: horizons are `1s`, `10s`, `1min`, fill rates percent, biases percentage points, P&L ticks. The
+manifest's hashes let a reader check every file it downloaded. A later version of the API gets a new directory
+(`atlas/v2/`); files may be added to `v1` without changing the existing ones.
+
+## In your terminal
+
+`queuetruth atlas` prints the answer for your library, tier or symbol, the table and the config to paste:
+
+<!-- check-docs: skip (asks before it downloads the public data API) -->
+```bash
+queuetruth atlas --library nautilus
+queuetruth atlas --library hftbacktest --tier T1_top100
+queuetruth atlas --symbol AAPL --horizon 10s
+queuetruth atlas --library nautilus --json
+```
+
+It reads the data API of the public site, or a local copy with `--from DIR` (a site directory or its `atlas/v1`).
+Like `queuetruth demo`, it downloads nothing until you agree: it asks on a terminal, or takes `--yes`. The files go to
+the user cache directory (`QT_CACHE_DIR` moves it), are checked against the sha256 in the manifest and are used
+offline afterwards; `--refresh` gets the newest build. `--json` (or `--format json`) prints the `qt.atlas_answer`
+document. From Python:
+
+<!-- check-docs: skip (asks before it downloads the public data API) -->
+```python
+import queuetruth as qt
+
+answer = qt.atlas.lookup(library="nautilus", symbol="AAPL", yes=True)
+print(answer.summary)       # the answer in plain words
+answer.table()              # a pandas DataFrame: setting, horizon, bias and interval in pp, verdict, orders
+answer.configs[0]["config"]  # the closest setting of the symbol's tier, to paste
+```
+
+A single symbol has few orders, so its intervals are wide; the config is always the one of its tier.
 
 ## Two venues
 
-The site can show two venues: IEX DEEP+ at its top address (the default) and Nasdaq TotalView-ITCH under
-`nasdaq/`. A line at the top of every page switches venue. Each venue has its own pages: its own tables,
-headlines, library pages, atlas and day roots, the command that re-creates a day's buckets from its public file,
-and its own attribution line. The two are never pooled: a model's error on IEX and on Nasdaq are separate rows on
-separate pages.
-
-The Nasdaq days are the free TotalView-ITCH 5.0 sample days Nasdaq publishes at
-[emi.nasdaq.com](https://emi.nasdaq.com/ITCH/Nasdaq%20ITCH/). Nothing derived from them is public until a
-maintainer decides, because [Data and licensing](../data-and-licensing.md) does not settle whether the atlas's
-tables of the sample files may be published:
-
-- The reduced days are kept on a draft release, which only people with write access see. A maintainer publishes it
-  with `gh release edit atlas-days-nasdaq --draft=false`.
-- The site shows them only when the repository variable `ATLAS_NASDAQ_SITE` is `true` and the release is
-  published, so the verify link on every Nasdaq page works for its readers. Publish the release first, then set the
-  variable. A manual run with `nasdaq_site` shows them until the next scheduled deploy, which follows the variable
-  again.
-- The Nasdaq part of the site is best effort: when its days cannot be combined or its pages cannot be built, the
-  IEX site is built alone and still deploys. Before the first IEX day the site is the compatibility page alone,
-  without Nasdaq.
-
-## A Nasdaq day on one runner
-
-A manual run of `.github/workflows/atlas.yml` with `venue: nasdaq` and a day such as `01302020` runs that sample day
-on one GitHub-hosted runner (4 cores, 16 GB, a 6 h job). It keeps the reduced day as
-`nasdaq-day-<date>.tar.gz` on the draft `atlas-days-nasdaq` release, apart from the IEX days.
-
-A Nasdaq day is far larger than an IEX day: 2020-01-30 has 423 million messages and about 8,900 symbols. The local
-pilot of that day (run `45c0dd05ddf70b67`, `scripts/scale/findings/README.md`) planned 130 units of at most 300
-predicted core-seconds, so its plan predicts at most about 10.8 core-hours; the pilot's plan file is not kept, so
-whether the day fits the budget below is decided by the first run and recorded in its `local_day.json`. When the
-plan predicts more than the workflow's budget (10 core-hours), the day runs a symbol sample:
-
-- Symbols are ranked into the liquidity tiers on the whole day first.
-- Every tier keeps the same number of symbols, the largest number that fits the budget. A tier with fewer symbols
-  keeps them all.
-- Within a tier, the kept symbols are the ones with the smallest `sha256("<seed>:<date>:<symbol>")`. The choice
-  depends on the symbol and the date only, never on a result.
-- The other symbols are excluded with the reason `outside the symbol sample`, so the kept symbols are part of the
-  run id. Only the rule, the seed and the per-tier count enter it besides: another budget or a refit cost model that
-  keeps the same symbols gives the same run id.
-- The plan, the day's `day_manifest.json` (`symbol_sample`), the atlas manifest and the venue's pages say how many
-  symbols each tier kept of how many.
-
-The buckets are still the whole day's, so a unit re-runs from buckets re-created from the public file as for any
-day. A day whose prediction fits the budget runs every symbol and has no `symbol_sample`. In a sampled day the
-`ALL` rows pool the sampled symbols, so each tier counts with its sample size, not with its share of the market.
-Read the tier tables for a market-wide picture.
-
-**How the budget was sized.** `scripts/scale/runner_budget.py` runs synthetic ITCH days
-(`python/tests/scale/scale_itch.py`, no market data) through the same split, plan and units on a given machine.
-On a 4-core, 15 GiB machine like the runner, four units at a time with one thread each:
-
-- Unit CPU time was 0.38 to 0.56 of the cost model's prediction (three runs). The prediction carries a x1.5
-  safety, so the slow end was used.
-- The units kept the cores about 82% busy.
-- Peak memory was about 0.42 GB plus 40 MB per 1,000 orders and 0.15 to 0.22 GB per million records.
-- With a margin of 2 for real order flow, which is busier than synthetic, 3.5 h of units hold
-  `3.5 x 4 x 0.82 / (0.56 x 2)`, about 10 predicted core-hours. That leaves more than 2 h of the job for the
-  build, the stream and split of the 5.6 GB file, and the reduce.
-- Units of at most 100 predicted core-seconds (`--unit-core-s 100`) held about 40,000 orders and peaked near 2 GB.
-  So four fit at 3 GiB each (`--unit-mem-gib 3`), with room on a runner whose available memory is below 14 GiB. A
-  single symbol gets a unit of its own and fits 3 GiB up to about 11 million records.
-- When memory holds fewer units than asked, `local_day.py` shrinks the budget in proportion before it plans the
-  day (three workers of four: 7.5 core-hours), so the units still fit their wall time.
-
-Two things the synthetic days do not measure: the runner's own speed (its 4 vCPUs may be 2 cores with two threads
-each) and the time each unit spends reading its whole bucket (about 13 million messages on a real day; smaller units
-mean about three times as many). Check both in the first run's `local_day.json` (unit wall times and CPU), and run
-`runner_budget.py` once on a hosted runner, before relying on the budget.
-
-Re-run the measurement on another machine before changing the budget:
-
-<!-- check-docs: skip (runs about two minutes of synthetic units) -->
-```bash
-uv run --frozen --no-sync python scripts/scale/runner_budget.py --workers 4 --unit-hours 3.5
-```
+The site can show Nasdaq TotalView-ITCH sample days next to IEX: IEX stays at the top address, Nasdaq is under
+`nasdaq/`, and a line at the top of every page switches venue. Each venue has its own pages, data API, atlas and day
+roots and attribution; the two are never pooled. How maintainers publish them is in
+[Run the atlas](../how-to/run-the-atlas.md#nasdaq-days-on-the-site).
 
 ## How a number is made
 
@@ -209,31 +204,6 @@ uv run --frozen --no-sync python scripts/scale/itch_split.py --date 01302020 --b
 uv run --frozen --no-sync python scripts/scale/verify_unit.py --day nasdaq-day-2020-01-30 \
     --atlas-manifest atlas_manifest.json --unit-id 01302020-b000-u0000 --split split/01302020
 ```
-
-## Run a day yourself
-
-One command takes an IEX day from the public file to the site (about 9 GB is streamed, never stored; plan on two
-to four hours on a 4-core, 16 GB machine). Units of at most 100 predicted core-seconds peak below 3 GB, so four run
-at a time there, as in the workflows; the day's numbers do not depend on the unit size:
-
-<!-- check-docs: skip (streams a 9 GB public file) -->
-```bash
-uv run --frozen --no-sync python scripts/scale/local_day.py --source iex --date 2026-10-09 \
-    --url https://storage.googleapis.com/iex/data/feeds/20261009/20261009_IEXTP1_DPLS1.0.pcap.gz \
-    --workers 4 --threads 1 --unit-core-s 100 --unit-mem-gib 3.5 --site
-```
-
-A Nasdaq sample day runs the same way, on a symbol sample when the whole day is above the budget (the 5.6 GB file is
-streamed, never stored; its buckets need about 7 GB of disk):
-
-<!-- check-docs: skip (streams a 5.6 GB public file) -->
-```bash
-uv run --frozen --no-sync python scripts/scale/local_day.py --source itch --date 01302020 \
-    --workers 4 --threads 1 --unit-core-s 100 --unit-mem-gib 3 --sample-budget-core-h 10 --site
-```
-
-To score your own simulator rather than the ones in the zoo, start from [getting started](../getting-started.md):
-`pipx run queuetruth demo --yes` places orders in the real queue of a public day in about a minute.
 
 ## Limits
 

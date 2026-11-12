@@ -1923,5 +1923,28 @@
     "2026-06-15",
     "--test",
     "blocks:4/5"
+  ],
+  [
+    "queuetruth",
+    "atlas",
+    "--library",
+    "nautilus",
+    "--symbol",
+    "AAPL",
+    "--tier",
+    "T1_top100",
+    "--horizon",
+    "1min",
+    "--from",
+    "site",
+    "--yes",
+    "--refresh",
+    "--json"
+  ],
+  [
+    "queuetruth",
+    "atlas",
+    "--library",
+    "hftbacktest"
   ]
 ]

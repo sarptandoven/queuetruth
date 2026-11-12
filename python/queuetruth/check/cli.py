@@ -53,7 +53,7 @@ def parser() -> argparse.ArgumentParser:
     )
     p.add_argument("backtest", nargs="+", metavar="BACKTEST", help="the backtester's output file(s) of one run")
     p.add_argument("--data", metavar="DIR", help="order-level (MBO) dataset covering the backtest's days")
-    p.add_argument("--backtester", choices=list(BACKTESTERS), help="the backtester (default: read from the file)")
+    p.add_argument("--backtester", choices=BACKTESTERS, help="the backtester (default: read from the file)")
     p.add_argument(
         "--instrument-map",
         metavar="FILE",

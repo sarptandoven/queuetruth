@@ -1,0 +1,160 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.atlas_api_manifest",
+  "$defs": {
+    "ApiFile": {
+      "additionalProperties": false,
+      "description": "One file of the API, relative to the directory of `manifest.json` (`summary.json`, `symbols/A.json`).",
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "bytes": {
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "bytes",
+        "sha256"
+      ],
+      "title": "ApiFile",
+      "type": "object"
+    },
+    "Window": {
+      "additionalProperties": false,
+      "description": "The trading days the atlas covers (ISO dates).",
+      "properties": {
+        "from": {
+          "title": "From",
+          "type": "string"
+        },
+        "to": {
+          "title": "To",
+          "type": "string"
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ],
+      "title": "Window",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "qt.atlas_api_manifest",
+      "default": "qt.atlas_api_manifest",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "api_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Api Version",
+      "type": "integer"
+    },
+    "built_at": {
+      "title": "Built At",
+      "type": "string"
+    },
+    "atlas_root": {
+      "title": "Atlas Root",
+      "type": "string"
+    },
+    "venue": {
+      "title": "Venue",
+      "type": "string"
+    },
+    "venue_name": {
+      "title": "Venue Name",
+      "type": "string"
+    },
+    "window": {
+      "$ref": "#/$defs/Window"
+    },
+    "days": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Days",
+      "type": "array"
+    },
+    "symbol_days": {
+      "title": "Symbol Days",
+      "type": "integer"
+    },
+    "symbols": {
+      "title": "Symbols",
+      "type": "integer"
+    },
+    "mode": {
+      "title": "Mode",
+      "type": "string"
+    },
+    "shadow_population": {
+      "title": "Shadow Population",
+      "type": "string"
+    },
+    "headline_horizon": {
+      "title": "Headline Horizon",
+      "type": "string"
+    },
+    "attribution": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Attribution"
+    },
+    "verify": {
+      "title": "Verify",
+      "type": "string"
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/ApiFile"
+      },
+      "title": "Files",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "built_at",
+    "atlas_root",
+    "venue",
+    "venue_name",
+    "window",
+    "days",
+    "symbol_days",
+    "symbols",
+    "mode",
+    "shadow_population",
+    "headline_horizon",
+    "attribution",
+    "verify",
+    "files"
+  ],
+  "type": "object"
+}

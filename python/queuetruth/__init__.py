@@ -4,7 +4,8 @@
 subpackages and API functions (`qt.score(spec)`, `qt.report(spec)`, `qt.export(spec)`, `qt.check(backtest,
 data=...)`, `qt.fit(backtester, data=...)`): the subpackage modules are callable and delegate to the
 `queuetruth.api` function of the same name, so `import queuetruth.score as s` and `qt.score(spec)` both work.
-`qt.HazardModel` is imported on first use (it needs scikit-learn).
+`qt.HazardModel` is imported on first use (it needs scikit-learn), and so are `qt.backtesters` (the backtester plugin
+registry), `qt.backtrader` and `qt.lean` (fill models and logs for those frameworks, which stay optional).
 """
 
 import importlib
@@ -39,9 +40,14 @@ from queuetruth.errors import QtApiError, QtError
 #: Attributes imported on first access (PEP 562): `HazardModel` pulls in scikit-learn (about 1 s), which no CLI
 #: command but `fit-hazard` needs.
 _LAZY = {"HazardModel": "queuetruth.model"}
+#: Submodules imported on first access, so `qt.backtrader.QueueFiller` works after `import queuetruth as qt`
+#: (the framework modules import their framework only when used).
+_LAZY_MODULES = ("backtesters", "backtrader", "lean")
 
 
 def __getattr__(name: str) -> Any:
+    if name in _LAZY_MODULES:
+        return importlib.import_module(f"queuetruth.{name}")
     target = _LAZY.get(name)
     if target is None:
         raise AttributeError(f"module 'queuetruth' has no attribute {name!r}")
@@ -51,7 +57,7 @@ def __getattr__(name: str) -> Any:
 
 
 def __dir__() -> list[str]:
-    return sorted({*globals(), *_LAZY})
+    return sorted({*globals(), *_LAZY, *_LAZY_MODULES})
 
 
 _CALLABLE_NAMES = ("score", "report", "export", "check", "fit")

@@ -15,7 +15,23 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   picks a setting from the atlas, fits `prob_fill_on_limit` with `queuetruth fit --backtester nautilus` (runnable on
   the synthetic dataset), passes it to `add_venue` with `**qtn.venue_options(cal)` from the `queuetruth-nautilus` plugin, and
   scores the backtest against live fills. The docs menu lists one page for each.
-
+- **Realistic fills in Backtrader and LEAN, one line each** (docs/how-to/realistic-fills-backtrader-lean.md).
+  `cerebro.broker.set_filler(qt.backtrader.QueueFiller(table="touch.json", tier="T1"))` and
+  `security.set_fill_model(qt.lean.QueueFillModel(table="touch.json", tier="T1"))` keep the framework's own limit
+  logic and accept each limit fill with the atlas touch tables' `P(real | touch)` for the order's tier, side and bar
+  length (or `penetrate_<k>` with `tick=`); a declined fill leaves the order resting. Draws are seeded, keyed by the
+  order and the bar (the same seed gives the same fills), and recorded in `.decisions`. A tier, rule, bar length or
+  side the table lacks, or a cell without a value, is refused with `QT-CONFIG-001`; no probability is assumed. The
+  probabilities come from IEX DEEP+ only and replace a fill rule, not a queue model. Backtrader and LEAN stay
+  optional and are imported only when used; the LEAN model is tested against a stand-in of LEAN's Python API.
+- **`qt.backtrader.OrderLog`**: the Backtrader analyzer the reconcile guide asked users to paste, shipped in the
+  package (`cerebro.addanalyzer(qt.backtrader.OrderLog)`); it writes the same lines as the old `QtOrderLog`.
+- **The `Backtester` plugin interface** (`queuetruth.backtesters`, docs/how-to/add-a-backtester.md). One registry
+  entry per backtester (name, label, simulator-log importer, and optional live importer, replay adapter, snippet
+  writer, zoo models, reconciler and file detection), with the built-ins as thin entries over the existing code and
+  third-party backtesters found through the `queuetruth.backtesters` entry-point group. `check` (kind detection and
+  `--backtester`), `queuetruth.live.import_sim`, the bot live importers and `reconcile --kind` resolve through it, so
+  a new backtester is one package and no queuetruth edit. Every existing name, flag and output is unchanged.
 - **Touch tables for bar-based backtests** (docs/concepts/touch-tables.md). For the atlas's shadow orders resting
   until the close, the atlas now measures what a candle backtester's fill rule says against the exact replay of the
   real queue: the `touch` rule (the bar's low reaches a buy's limit, or its high a sell's) and `penetrate_1`,
@@ -49,6 +65,22 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   menu). The README links the Fill-Realism Atlas from its first screen. `docs/RESULTS.md` has one canonical block
   for the headline Nasdaq number that other pages link. `docs/check_docs.py` flags stale version wording ("v0.1",
   "after release", "next release", "new after 0.1") outside the changelog, design notes and launch drafts.
+- **Atlas v2: the answer first, a data API and `queuetruth atlas`.** The atlas front page now opens with the exact
+  fill rate and one plain sentence per library, then one chart of every library's settings at 1 minute with 95%
+  intervals, a "what to do" box per library (closest setting, verdict, config to paste), a symbol lookup, the venue's
+  scope (IEX's share of volume, its speed bump and repricing order types) and the last-built date with the atlas
+  root and how to verify it. Models have human labels ("NautilusTrader default (touch fill)"); model ids move to
+  tooltips and details. The dense tables move to `tables.html`, the explanations to `about.html`, and every page
+  reads on a 390 px phone and in dark mode. Next to the site, `atlas/v1/` is a versioned data API: `manifest.json`
+  (with the sha256 of every other file), `summary.json`, `configs.json` and `symbols/<letter>.json`, defined in the
+  new `queuetruth.atlas` subpackage (schemas `qt.atlas_api_manifest`, `qt.atlas_summary`, `qt.atlas_configs`,
+  `qt.atlas_symbols`; the touch tables' `touch.json` is listed in the manifest too and its `qt.atlas.touch` schema is
+  registered). `queuetruth atlas [--library hftbacktest|nautilus|databento] [--symbol S] [--tier T]
+  [--horizon 1min] [--json]` and `qt.atlas.lookup(...)` print the answer, the table and the config to paste
+  (`qt.atlas_answer`), from `--from DIR` or the public site; like `demo`, nothing is downloaded until you agree
+  (`--yes` or the prompt), and the files are cached and checked against the manifest's hashes. The hftbacktest
+  config to paste uses `.no_partial_fill_exchange()`, the export's default, with a one-line note on hftbacktest #312.
+  The maintainer part of the atlas guide moves to [Run the atlas](docs/how-to/run-the-atlas.md).
 
 - **`queuetruth check BACKTEST --data DATASET`** (and `qt.check(backtest, data=...)`): how wrong a backtest is, in
   one command. It replays the backtest's own resting limit orders, at their own entry times and prices, in the exact

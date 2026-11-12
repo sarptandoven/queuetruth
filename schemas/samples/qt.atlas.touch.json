@@ -1,0 +1,63 @@
+{
+  "sample": {
+    "schema": "qt.atlas.touch",
+    "schema_version": 1,
+    "atlas_root": "x",
+    "source": "x",
+    "population": "x",
+    "days": [
+      "x"
+    ],
+    "flag_policy": "x",
+    "definition": "x",
+    "attribution": "x",
+    "rows": [
+      {
+        "tier": "x",
+        "side": "buy",
+        "bar": "x",
+        "bar_s": 1,
+        "rule": "x",
+        "orders": 1,
+        "dates": 1,
+        "symbols": 1,
+        "real_fill_rate": {
+          "value": 0.5,
+          "ci_lo": 0.5,
+          "ci_hi": 0.5
+        },
+        "rule_fill_rate": {
+          "value": 0.5,
+          "ci_lo": 0.5,
+          "ci_hi": 0.5
+        },
+        "p_real_given_rule": {
+          "value": 0.5,
+          "ci_lo": 0.5,
+          "ci_hi": 0.5
+        },
+        "p_rule_given_real": {
+          "value": 0.5,
+          "ci_lo": 0.5,
+          "ci_hi": 0.5
+        },
+        "real_markout_ticks": {
+          "value": 0.5,
+          "ci_lo": 0.5,
+          "ci_hi": 0.5
+        },
+        "rule_markout_ticks": {
+          "value": 0.5,
+          "ci_lo": 0.5,
+          "ci_hi": 0.5
+        },
+        "pnl_overstated_ticks": {
+          "value": 0.5,
+          "ci_lo": 0.5,
+          "ci_hi": 0.5
+        },
+        "flagged_share": 0.5
+      }
+    ]
+  }
+}
