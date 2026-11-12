@@ -75,7 +75,7 @@ def test_list(filled: Path, run: Any, run_json: Any) -> None:
     assert doc["n_matching"] == 2 and [r["params"] for r in doc["records"]] == [{"lb": 20}]
     code, doc, _ = run_json("ledger", "list", "--kind", "zoo", "--kind", "score")
     assert doc["n_matching"] == 0
-    code, out, err = run("ledger", "list")
+    code, out, err = run("advanced", "ledger", "list")
     assert code == 0 and err == ""
     assert out.splitlines()[0].startswith("3 of 3 matching record(s) in ")
     assert "returns n=2" in out and "mom" in out and out.splitlines()[-1].startswith("head: 3:")
