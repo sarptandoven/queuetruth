@@ -1,19 +1,23 @@
-"""Generates `crates/schema/src/specs_gen.rs`, the Rust serde structs of the spec objects, from the published JSON
-Schemas (`schemas/json/qt.*_spec.schema.json`) and the spec samples (`schemas/samples/qt.*_spec.json`).
+"""Generates the Rust serde structs of the contracts from the published JSON Schemas:
+
+- `crates/schema/src/specs_gen.rs`: the spec objects (`schemas/json/qt.*_spec.schema.json`, with the spec samples
+  `schemas/samples/qt.*_spec.json` for defaults);
+- `crates/schema/src/json_gen.rs`: the JSON documents (`schemas/json/qt.*.schema.json` of `DOCS`).
 
 The JSON Schema is the contract. This file only adds what a JSON Schema cannot say about Rust: type names of inline
-enums and unions, integer widths, map types and the few types defined elsewhere (`BINDING` below). Every binding is
+enums and unions, integer widths, the `#[default]` variant of document enums, fields left out when empty (so older
+files keep their bytes) and the few types defined elsewhere (one `Config` per generated file below). Every binding is
 checked against the schemas, so a stale entry or a new field without a Rust name fails the generator with the field
 it is about.
 
-Defaults come from the schema (`default`) or, for a Pydantic `default_factory` (which a JSON Schema does not
+Spec defaults come from the schema (`default`) or, for a Pydantic `default_factory` (which a JSON Schema does not
 record), from the `defaults` document of the spec's sample, which is the spec validated from its required fields
-only. Methods, validation and conversions stay in the hand-written `crates/schema/src/specs.rs`.
+only. Methods, validation and conversions stay in the hand-written `specs.rs` and `json.rs`.
 
-    uv run --frozen --no-sync python scripts/gen_rust_specs.py           # write the file
-    uv run --frozen --no-sync python scripts/gen_rust_specs.py --check   # exit 1 when the committed file differs
+    uv run --frozen --no-sync python scripts/gen_rust_specs.py           # write the files
+    uv run --frozen --no-sync python scripts/gen_rust_specs.py --check   # exit 1 when a committed file differs
 
-Standard library only. Step `rust-specs` of `make generate`, after `schemas`.
+Standard library only (plus `rustfmt` from the toolchain). Step `rust-specs` of `make generate`, after `schemas`.
 """
 
 from __future__ import annotations
@@ -79,7 +83,7 @@ ENUMS: dict[str, tuple[str, ...]] = {
     "LiveCalibrationFamily": ("LiveCalibrationSpec.family",),
 }
 #: Variant identifiers that are not the CamelCase of the value.
-VARIANTS = {"30min": "Min30", "1min": "Min1", "America/New_York": "AmericaNewYork", "UTC": "Utc"}
+VARIANTS = {"30min": "Min30", "1min": "Min1", "America/New_York": "AmericaNewYork", "UTC": "Utc", "n/a": "NotAvailable"}
 
 
 @dataclass(frozen=True)
@@ -132,6 +136,195 @@ INTS = {
 #: Derives beyond the computed ones (Clone, Debug, PartialEq, and Eq / Default when they apply).
 EXTRA_DERIVES = {"ExcludeOrderId": ("Default", "Hash", "PartialOrd", "Ord")}
 
+
+@dataclass
+class Config:
+    """One generated file: its roots and its Rust binding."""
+
+    label: str
+    out: str
+    #: (schema name, Rust name of the top-level struct)
+    roots: tuple[tuple[str, str], ...]
+    header: tuple[str, ...]
+    uses: tuple[str, ...]
+    enums: dict[str, tuple[str, ...]]
+    external_enums: dict[str, External]
+    external_structs: dict[str, str]
+    unions: dict[tuple[str, ...], str]
+    tagged: dict[str, str]
+    ints: dict[str, str]
+    extra_derives: dict[str, tuple[str, ...]]
+    #: take `default_factory` defaults from the samples' `defaults` documents (specs)
+    sample_defaults: bool = True
+    #: `#[serde(default)]` on the container when every field has a default (specs)
+    container_default: bool = True
+    #: Rust names of `$defs` whose Rust name differs
+    def_names: dict[str, str] = field(default_factory=dict)
+    #: `#[default]` variant of enums whose schema gives none
+    enum_defaults: dict[str, str] = field(default_factory=dict)
+    #: `skip_serializing_if` of fields that are left out when empty (keeps the bytes of older files)
+    omit: dict[str, str] = field(default_factory=dict)
+    #: derive `Default` on every struct whose field types all have one (documents)
+    derive_default_all: bool = False
+    #: Rust path of a free-form JSON object (`additionalProperties: true`)
+    free_object: str = "IndexMap<String, Value>"
+    #: Rust types of external paths that implement `Default`
+    ext_default: frozenset[str] = frozenset()
+    #: generated `impl QtDoc` per root (documents)
+    qt_doc: bool = False
+    #: integer rule: "spec" (see `INTS`) or "u64" (documents: counts are `u64`, `*_ns` and `ts*` fields `i64`)
+    int_default: str = "spec"
+    #: structs whose `Default` is written by hand next to the generated file
+    hand_default: frozenset[str] = frozenset()
+    #: `[T; n]` for an array with `minItems == maxItems` (documents)
+    fixed_arrays: bool = False
+    #: derives of enums beyond the usual ones
+    enum_derives: dict[str, tuple[str, ...]] = field(default_factory=dict)
+
+
+SPEC_CONFIG = Config(
+    label="spec",
+    out=OUT,
+    roots=tuple((s, "") for s in SPECS),
+    header=(
+        "// @generated by `make generate` (scripts/gen_rust_specs.py) from schemas/json/qt.*_spec.schema.json and",
+        "// schemas/samples/qt.*_spec.json. Do not edit: change the Pydantic model in",
+        "// python/queuetruth/schemas/specs.py, or the Rust binding in the generator, and run `make generate`.",
+        "// `make generate-check` and the `specs_gen_is_current` test fail when this file is edited by hand.",
+    ),
+    uses=(
+        "use indexmap::IndexMap;",
+        "use serde::{Deserialize, Serialize};",
+        "use serde_json::Value;",
+        "",
+        "use crate::specs::OneOrMany;",
+    ),
+    enums=ENUMS,
+    external_enums=EXTERNAL_ENUMS,
+    external_structs=EXTERNAL_STRUCTS,
+    unions=UNIONS,
+    tagged=TAGGED,
+    ints=INTS,
+    extra_derives=EXTRA_DERIVES,
+)
+
+DOC_OUT = "crates/schema/src/json_gen.rs"
+#: The documents mirrored in Rust (schema name, Rust name), in the order of the generated file.
+DOCS = (
+    ("qt.error", "ErrorDoc"),
+    ("qt.dataset_manifest", "DatasetManifest"),
+    ("qt.data_quality", "DataQuality"),
+    ("qt.ingest_summary", "IngestSummary"),
+    ("qt.replay_summary", "ReplaySummary"),
+    ("qt.shadow_sample_summary", "ShadowSampleSummary"),
+    ("qt.zoo_summary", "ZooSummary"),
+    ("qt.calibration_result", "CalibrationResult"),
+    ("qt.live_calibration_test", "LiveCalibrationTest"),
+    ("qt.feature_summary", "FeatureSummary"),
+    ("qt.hazard_model_card", "HazardModelCard"),
+    ("qt.live_import_summary", "LiveImportSummary"),
+    ("qt.live_manifest", "LiveManifest"),
+    ("qt.live_validation", "LiveValidation"),
+    ("qt.scorecard_summary", "ScorecardSummary"),
+    ("qt.referee_report", "RefereeReport"),
+    ("qt.why_trace", "WhyTrace"),
+    ("qt.report_summary", "ReportSummary"),
+    ("qt.export_summary", "ExportSummary"),
+    ("qt.fixtures_summary", "FixturesSummary"),
+    ("qt.doctor", "Doctor"),
+    ("qt.bench", "Bench"),
+    ("qt.problem", "Problem"),
+    ("qt.job", "Job"),
+    ("qt.file_manifest", "FileManifest"),
+    ("qt.estimate", "Estimate"),
+)
+DOC_ENUMS: dict[str, tuple[str, ...]] = {
+    "DatasetKindName": ("DatasetManifest.kind",),
+    "Verdict": ("DataQuality.verdict",),
+    "CalibrationKind": ("CalibrationResult.kind",),
+    "TrustVerdict": ("CalibrationTrust.verdict",),
+    "BeatsDefault": ("CalibrationTrust.beats_default{}",),
+    "HazardCause": ("HazardModelCard.causes[]",),
+    "Recalibration": ("HazardModelCard.recalibration",),
+    "LiveValidationStatus": ("LiveImportSummary.validation_status",),
+    "ScaleSource": ("InstrumentScale.scale_source",),
+    "SimKind": ("SimSource.kind",),
+    "Direction": ("Bias.direction",),
+    "MarkoutRef": ("MarkoutRow.ref", "MarkoutDiffRow.ref"),
+    "Arm": ("MarkoutRow.arm",),
+    "FdrMethod": ("Fdr.method",),
+    "PnlGapDirection": ("PnlGap.direction",),
+    "PnlGapPart": ("PnlGap.main_part",),
+    "ExportTarget": ("ExportSummary.target",),
+    "JobKind": ("Job.kind",),
+    "JobState": ("Job.state",),
+}
+#: The `#[default]` variant of the document enums (the schema gives none; `Default` fills documents in Rust).
+DOC_ENUM_DEFAULTS: dict[str, str] = {
+    "DatasetKindName": "mbo",
+    "Verdict": "clean",
+    "CalibrationKind": "alloc",
+    "TrustVerdict": "refused",
+    "Recalibration": "isotonic",
+    "LiveValidationStatus": "fixture_only",
+    "ScaleSource": "default",
+    "SimKind": "external",
+    "Direction": "no_significant_bias",
+    "Arm": "live",
+    "MarkoutRef": "mid",
+    "FdrMethod": "bh",
+    "PnlGapDirection": "no_significant_difference",
+    "PnlGapPart": "granted",
+    "ExportTarget": "hftbacktest",
+    "JobKind": "replay",
+    "JobState": "queued",
+}
+DOC_EXTERNAL_ENUMS: dict[str, External] = {
+    "DatasetManifest.venue": External("qt_types::Venue", default="generic"),
+    "DatasetManifest.rule_set": External("qt_types::RuleSet", default="generic"),
+    "DatasetManifest.validation_status": External("qt_types::ValidationStatus"),
+    "DataSource.validation_status": External("qt_types::ValidationStatus"),
+    # Kept as text in Rust (the side and action letters of the tape).
+    "WhyTrace.side": External("String", default=""),
+    "WhyEvent.action": External("String", default=""),
+    "WhyEvent.side": External("String", default=""),
+}
+DOC_EXTERNAL_STRUCTS: dict[str, str] = {
+    "FileEntry": "crate::io::FileEntry",
+    # The echo of a spec window is read into the spec type (`WindowEcho` requires `n_blocks`; the spec defaults it).
+    "WindowEcho": "crate::specs::WindowSpec",
+}
+#: Integer widths the document rule (`int_default="u64"`) does not give.
+DOC_INTS: dict[str, str] = {
+    "DatasetManifest.price_exp_by_instrument{}": "i8",
+    "DecileRow.decile": "u8",
+    "HazardModelCard.format_version": "u32",
+    "InstrumentScale.price_exp": "i8",
+    "InstrumentScale.size_exp": "i8",
+    "LiquidityRow.bucket": "u8",
+    "PartitionEntry.session_date": "i32",
+    "Problem.status": "u16",
+    "SourceVintage.dbn_version": "u8",
+    "SourceVintage.start_ns": "u64",
+    "SourceVintage.end_ns": "u64",
+    "SourceVintage.publisher_id": "u16",
+    "ToleranceEcho.max_abs_ttf_err_ns": "u64",
+    "WhyEvent.price": "i64",
+    "WhyEvent.rank_after": "u32",
+    "WhyTrace.price": "i64",
+}
+DOC_EXTRA_DERIVES: dict[str, tuple[str, ...]] = {}
+DOC_ENUM_DERIVES: dict[str, tuple[str, ...]] = {"Verdict": ("PartialOrd", "Ord")}
+DOC_DEF_NAMES: dict[str, str] = {"Verdict": "ScoreVerdict"}
+#: Fields left out when empty, so the files Rust wrote before they existed keep their bytes.
+DOC_OMIT: dict[str, str] = {
+    "DatasetManifest.attribution": "Option::is_none",
+    "DataQuality.trading_halts": "Vec::is_empty",
+    "ShadowSampleSummary.warnings": "Vec::is_empty",
+    "ZooSummary.ci_block": "Option::is_none",
+    "ZooSummary.n_ci_blocks": "Option::is_none",
+}
+
 # ---- type model -------------------------------------------------------------------------------------------------
 
 
@@ -142,6 +335,7 @@ class T:
     kind: str
     name: str = ""
     inner: T | None = None
+    items: tuple[T, ...] = ()
 
 
 @dataclass
@@ -153,6 +347,7 @@ class Field:
     default: Any = None
     has_default: bool = False
     deserialize_with: str | None = None
+    omit: str | None = None
 
 
 @dataclass
@@ -195,8 +390,9 @@ def _ref(node: dict[str, Any]) -> str | None:
 
 
 class Gen:
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, cfg: Config | None = None) -> None:
         self.root = root
+        self.cfg = cfg or SPEC_CONFIG
         self.defs: dict[str, dict[str, Any]] = {}
         self.structs: dict[str, Struct] = {}
         self.enums: dict[str, Enum] = {}
@@ -212,33 +408,39 @@ class Gen:
     # -- reading ----------------------------------------------------------------------------------------------------
 
     def load(self) -> None:
-        enum_of = {u: name for name, users in ENUMS.items() for u in users}
-        self.enum_of = enum_of
-        for spec in SPECS:
+        cfg = self.cfg
+        self.enum_of = {u: name for name, users in cfg.enums.items() for u in users}
+        names = []
+        for spec, rust in cfg.roots:
             sch = json.loads((self.root / f"schemas/json/{spec}.schema.json").read_text(encoding="utf-8"))
-            sam = json.loads((self.root / f"schemas/samples/{spec}.json").read_text(encoding="utf-8"))
             self.schemas[spec] = sch
-            self.samples[spec] = sam
+            if cfg.sample_defaults:
+                sam = json.loads((self.root / f"schemas/samples/{spec}.json").read_text(encoding="utf-8"))
+                self.samples[spec] = sam
             for k, v in sch.get("$defs", {}).items():
                 if k in self.defs and self.defs[k] != v:
-                    raise GenError(f"$defs.{k} differs between spec schemas ({spec})")
+                    raise GenError(f"$defs.{k} differs between {cfg.label} schemas ({spec})")
                 self.defs[k] = v
-        for spec in SPECS:
-            name = camel(spec.removeprefix("qt."))
+            names.append((spec, rust or camel(spec.removeprefix("qt."))))
+        self.root_names = names
+        for spec, name in names:
+            self.title = spec
             self._struct(name, self.schemas[spec])
-        for spec in SPECS:
-            name = camel(spec.removeprefix("qt."))
-            self._collect_candidates(name, self.samples[spec]["defaults"])
-        stale = (set(enum_of) | set(EXTERNAL_ENUMS) | set(INTS) | set(TAGGED)) - self.used_bindings
+        if cfg.sample_defaults:
+            for spec, name in names:
+                self._collect_candidates(name, self.samples[spec]["defaults"])
+        bound = set(self.enum_of) | set(cfg.external_enums) | set(cfg.ints) | set(cfg.tagged) | set(cfg.omit)
+        stale = bound - self.used_bindings
         if stale:
             raise GenError(f"bindings that match no schema field (remove them): {sorted(stale)}")
-        for spec in SPECS:
-            self._resolve_defaults(camel(spec.removeprefix("qt.")), self.samples[spec]["defaults"])
+        if cfg.sample_defaults:
+            for spec, name in names:
+                self._resolve_defaults(name, self.samples[spec]["defaults"])
+        self._enum_defaults()
         for s in self.structs.values():
             for f in s.fields:
                 if not f.required and not f.has_default:
                     self._resolve_field_default(s, f, None)
-        self._enum_defaults()
 
     def _struct(self, name: str, node: dict[str, Any]) -> None:
         if name in self.structs:
@@ -254,13 +456,26 @@ class Gen:
             f = Field(fname, self._type(key, p), fname in req, p)
             if "default" in p:
                 f.default, f.has_default = p["default"], True
-            ext = EXTERNAL_ENUMS.get(key)
+            ext = self.cfg.external_enums.get(key)
             if ext and ext.deserialize_with:
                 f.deserialize_with = ext.deserialize_with
+            if key in self.cfg.omit:
+                self.used_bindings.add(key)
+                f.omit = self.cfg.omit[key]
             s.fields.append(f)
 
+    def rname(self, defname: str) -> str:
+        """Rust name of a `$defs` entry."""
+        return self.cfg.def_names.get(defname, defname)
+
     def _type(self, key: str, p: dict[str, Any]) -> T:
-        if key in TAGGED:
+        if self.cfg.qt_doc and key.count(".") == 1:
+            owner, fname = key.split(".")
+            if fname == "schema" and p.get("const") == self.title:
+                return T("tag", owner)
+            if fname == "schema_version" and p.get("const") == 1:
+                return T("v1")
+        if key in self.cfg.tagged:
             self.used_bindings.add(key)
             return self._tagged(key, p)
         if "anyOf" in p:
@@ -277,15 +492,19 @@ class Gen:
                 return T("opt", inner=self._type(key, inner))
             refs = tuple(_ref(a) for a in alts)
             if all(refs):
-                name = UNIONS.get(refs)  # type: ignore[arg-type]
+                name = self.cfg.unions.get(refs)  # type: ignore[arg-type]
                 if name is None:
                     raise GenError(f"{key}: no Rust union for {refs} (add it to UNIONS)")
                 for r in refs:
-                    self._struct(r, self.defs[r])  # type: ignore[index]
+                    self._struct(self.rname(r), self.defs[r])  # type: ignore[arg-type,index]
                 if ("union", name) not in self.order:
                     self.order.append(("union", name))
                     self.unions[name] = refs  # type: ignore[assignment]
                 return T("union", name)
+            if all(a.get("type") in ("string", "integer", "number", "boolean") and len(a) == 1 for a in alts) and (
+                len({a["type"] for a in alts}) > 1
+            ):
+                return T("value")
             if [a.get("type") for a in alts] == ["string", "array"] and alts[1].get("items", {}).get("type") == (
                 "string"
             ):
@@ -293,15 +512,17 @@ class Gen:
             raise GenError(f"{key}: unsupported anyOf {alts}")
         r = _ref(p)
         if r:
-            if r in EXTERNAL_STRUCTS:
-                return T("ext", EXTERNAL_STRUCTS[r])
-            self._struct(r, self.defs[r])
-            return T("struct", r)
+            if r in self.cfg.external_structs:
+                return T("ext", self.cfg.external_structs[r])
+            self._struct(self.rname(r), self.defs[r])
+            return T("struct", self.rname(r))
+        if ("enum" in p or "const" in p) and p.get("type") == "integer":
+            p = {k: v for k, v in p.items() if k not in ("enum", "const")}
         if "enum" in p or "const" in p:
             values = p["enum"] if "enum" in p else [p["const"]]
-            if key in EXTERNAL_ENUMS:
+            if key in self.cfg.external_enums:
                 self.used_bindings.add(key)
-                ext = EXTERNAL_ENUMS[key]
+                ext = self.cfg.external_enums[key]
                 self.ext_enums[key] = (ext, values)
                 return T("ext", ext.path)
             name = self.enum_of.get(key)
@@ -324,10 +545,15 @@ class Gen:
         if t == "number":
             return T("prim", "f64")
         if t == "integer":
-            if key in INTS:
+            if key in self.cfg.ints:
                 self.used_bindings.add(key)
-                return T("prim", INTS[key])
+                return T("prim", self.cfg.ints[key])
             fname = key.rsplit(".", 1)[-1].rstrip("[]{}")
+            if self.cfg.int_default == "u64":
+                is_time = fname.endswith("_ns") or fname.startswith("ts_") or fname in ("ts", "ts_live")
+                if fname == "instrument_id":
+                    return T("prim", "u32")
+                return T("prim", "i64" if is_time else "u64")
             if fname.endswith("_ns"):
                 return T("prim", "i64")
             if fname == "seed":
@@ -337,18 +563,28 @@ class Gen:
             if p.get("minimum", -1) >= 0:
                 return T("prim", "u32")
             return T("prim", "i64")
+        if t == "array" and "prefixItems" in p:
+            items = tuple(self._type(f"{key}[{i}]", x) for i, x in enumerate(p["prefixItems"]))
+            return T("tuple", items=items)
+        if t == "array" and self.cfg.fixed_arrays and p.get("minItems") == p.get("maxItems") is not None:
+            return T("array", str(p["minItems"]), self._type(key + "[]", p["items"]))
         if t == "array":
             return T("vec", inner=self._type(key + "[]", p["items"]))
         if t == "object":
             ap = p.get("additionalProperties")
             if ap is True:
-                return T("map", "IndexMap", T("value"))
+                return T("object", self.cfg.free_object)
             if isinstance(ap, dict):
                 return T("map", "IndexMap", self._type(key + "{}", ap))
+            pp = p.get("patternProperties")
+            if isinstance(pp, dict) and len(pp) == 1 and "additionalProperties" not in p:
+                return T("map", "IndexMap", self._type(key + "{}", next(iter(pp.values()))))
+        if not ({"type", "$ref", "anyOf", "oneOf", "allOf", "enum", "const"} & set(p)):
+            return T("value")
         raise GenError(f"{key}: unsupported schema {p}")
 
     def _tagged(self, key: str, p: dict[str, Any]) -> T:
-        name = TAGGED[key]
+        name = self.cfg.tagged[key]
         disc = p["discriminator"]
         by_ref = {v.rsplit("/", 1)[-1]: k for k, v in disc["mapping"].items()}
         variants = []
@@ -399,10 +635,19 @@ class Gen:
                 raise GenError(f"{s.name}.{f.name}: the defaults documents disagree: {seen}")
             f.default, f.has_default = seen[0], True
             return
+        if not self.cfg.sample_defaults and self.has_default_impl(f.ty):
+            f.default, f.has_default = self.default_value(f.ty), True
+            return
         raise GenError(f"{s.name}.{f.name}: no default in the schema or the samples")
 
     def _enum_defaults(self) -> None:
+        for name, v in self.cfg.enum_defaults.items():
+            if name not in self.enums or v not in self.enums[name].values:
+                raise GenError(f"enum_defaults: {name} has no value {v!r}")
         for e in self.enums.values():
+            if e.name in self.cfg.enum_defaults:
+                e.default = self.cfg.enum_defaults[e.name]
+                continue
             ds = set()
             for s in self.structs.values():
                 for f in s.fields:
@@ -418,6 +663,12 @@ class Gen:
         """The JSON value of `T::default()`, or None when T has no `Default`."""
         if t.kind == "opt":
             return None
+        if t.kind == "object":
+            return {}
+        if t.kind == "tuple":
+            return [self.default_value(x) for x in t.items]
+        if t.kind == "array":
+            return [self.default_value(t.inner)] * int(t.name)  # type: ignore[arg-type]
         if t.kind == "prim":
             return {"String": "", "bool": False, "f64": 0.0}.get(t.name, 0)
         if t.kind == "vec":
@@ -430,9 +681,11 @@ class Gen:
             for ext, _ in self.ext_enums.values():
                 if ext.path == t.name:
                     return ext.default
-            for d, path in EXTERNAL_STRUCTS.items():
-                if path == t.name:
-                    return {k: p["default"] for k, p in self.defs[d]["properties"].items()}
+            for d, path in self.cfg.external_structs.items():
+                if path == t.name and d in self.defs:
+                    props = self.defs[d]["properties"].items()
+                    if all("default" in p for _, p in props):
+                        return {k: p["default"] for k, p in props}
             return None
         if t.kind == "struct":
             s = self.structs[t.name]
@@ -449,15 +702,46 @@ class Gen:
     def is_type_default(self, t: T, value: Any) -> bool:
         if t.kind == "opt":
             return value is None
-        if t.kind == "struct" and "Default" in EXTRA_DERIVES.get(t.name, ()):
+        if t.kind == "struct" and "Default" in self.cfg.extra_derives.get(t.name, ()):
             return False
         d = self.default_value(t)
         return d is not None and json.dumps(d) == json.dumps(value)
 
+    def has_default_impl(self, t: T, seen: frozenset[str] = frozenset()) -> bool:
+        """True when the Rust type implements `Default`."""
+        if t.kind in ("prim", "opt", "vec", "map", "object", "value", "tag", "v1"):
+            return True
+        if t.kind == "array":
+            return self.has_default_impl(t.inner, seen)  # type: ignore[arg-type]
+        if t.kind == "tuple":
+            return all(self.has_default_impl(x, seen) for x in t.items)
+        if t.kind == "enum":
+            return self.enums[t.name].default is not None
+        if t.kind == "ext":
+            return t.name in self.cfg.ext_default or self.default_value(t) is not None
+        if t.kind == "struct":
+            if t.name in seen or t.name in self.cfg.hand_default:
+                return True
+            return self._struct_derives_default(self.structs[t.name], seen | {t.name})
+        return False
+
+    def _struct_derives_default(self, s: Struct, seen: frozenset[str] = frozenset()) -> bool:
+        if "Default" in self.cfg.extra_derives.get(s.name, ()):
+            return True
+        if self.cfg.derive_default_all:
+            return all(self.has_default_impl(f.ty, seen | {s.name}) for f in s.fields) and all(
+                f.required or self.is_type_default(f.ty, f.default) for f in s.fields
+            )
+        return self.defaultable(s) and self._derive_default(s)
+
     def has_eq(self, t: T, seen: frozenset[str] = frozenset()) -> bool:
+        if t.kind in ("tag", "v1", "object"):
+            return True
+        if t.kind == "tuple":
+            return all(self.has_eq(x, seen) for x in t.items)
         if t.kind == "prim":
             return t.name != "f64"
-        if t.kind in ("opt", "vec", "map"):
+        if t.kind in ("opt", "vec", "map", "array"):
             return self.has_eq(t.inner, seen)  # type: ignore[arg-type]
         if t.kind == "struct":
             if t.name in seen:
@@ -484,6 +768,16 @@ class Gen:
             return f"{t.name}<String, {self.rust(t.inner)}>"  # type: ignore[arg-type]
         if t.kind == "value":
             return "Value"
+        if t.kind == "object":
+            return t.name
+        if t.kind == "tag":
+            return f"Tag<{t.name}>"
+        if t.kind == "v1":
+            return "V1"
+        if t.kind == "tuple":
+            return "(" + ", ".join(self.rust(x) for x in t.items) + ")"
+        if t.kind == "array":
+            return f"[{self.rust(t.inner)}; {t.name}]"  # type: ignore[arg-type]
         raise GenError(f"type {t}")
 
     def lit(self, t: T, v: Any, where: str) -> str:
@@ -501,10 +795,10 @@ class Gen:
             if not v:
                 return "Vec::new()"
             return "vec![" + ", ".join(self.lit(t.inner, x, where) for x in v) + "]"  # type: ignore[arg-type]
-        if t.kind == "map":
+        if t.kind in ("map", "object"):
             if v:
                 raise GenError(f"{where}: a non-empty map default is not supported")
-            return f"{t.name}::new()"
+            return f"{t.name.split('<')[0]}::new()"
         if t.kind == "enum":
             return f"{t.name}::{variant(v)}"
         if t.kind == "ext":
@@ -521,20 +815,7 @@ class Gen:
         raise GenError(f"{where}: no literal for {t}")
 
     def render(self) -> str:
-        out: list[str] = [
-            "// @generated by `make generate` (scripts/gen_rust_specs.py) from schemas/json/qt.*_spec.schema.json and",
-            "// schemas/samples/qt.*_spec.json. Do not edit: change the Pydantic model in",
-            "// python/queuetruth/schemas/specs.py, or the Rust binding in the generator, and run `make generate`.",
-            "// `make generate-check` and the `specs_gen_is_current` test fail when this file is edited by hand.",
-            "",
-            "#![allow(clippy::unreadable_literal)]",
-            "",
-            "use indexmap::IndexMap;",
-            "use serde::{Deserialize, Serialize};",
-            "use serde_json::Value;",
-            "",
-            "use crate::specs::OneOrMany;",
-        ]
+        out: list[str] = [*self.cfg.header, "", "#![allow(clippy::unreadable_literal)]", "", *self.cfg.uses]
         fns: list[str] = []
         for kind, name in self.order:
             out.append("")
@@ -546,15 +827,21 @@ class Gen:
                 out += self._render_union(name)
             elif kind == "tagged":
                 out += self._render_tagged(self.tagged[name], fns)
-        out += ["", "// ---- defaults that are not the type's own -----------------------------------------------"]
-        out += fns
-        out += ["", *self._render_tests()]
+        if self.cfg.qt_doc:
+            out += ["", "// ---- schema names ----------------------------------------------------------------------"]
+            for spec, name in self.root_names:
+                out += ["", f"impl QtDoc for {name} {{", f'    const SCHEMA: &\'static str = "{spec}";', "}"]
+        if fns:
+            out += ["", "// ---- defaults that are not the type's own -----------------------------------------------"]
+            out += fns
+        if self.ext_enums:
+            out += ["", *self._render_tests()]
         return "\n".join(out) + "\n"
 
     def _derives(self, s: Struct) -> list[str]:
         d = ["Clone", "Debug"]
-        extra = EXTRA_DERIVES.get(s.name, ())
-        if "Default" in extra or (self.defaultable(s) and self._derive_default(s)):
+        extra = self.cfg.extra_derives.get(s.name, ())
+        if self._struct_derives_default(s):
             d.append("Default")
         d.append("PartialEq")
         if all(self.has_eq(f.ty) for f in s.fields):
@@ -603,24 +890,30 @@ class Gen:
                         "}",
                     ]
                     attrs.append(f'default = "{fn}"')
+            if f.omit:
+                attrs.append(f'skip_serializing_if = "{f.omit}"')
             if attrs:
                 out.append(f"{indent}#[serde({', '.join(attrs)})]")
-            out.append(f"{indent}{vis}{f.name}: {self.rust(f.ty)},")
+            out.append(f"{indent}{vis}{ident(f.name)}: {self.rust(f.ty)},")
         return out
 
     def _render_struct(self, s: Struct, fns: list[str]) -> list[str]:
-        container_default = self.defaultable(s)
+        container_default = self.cfg.container_default and self.defaultable(s)
         out = self._doc(s.doc or f"`{s.name}`.")
         out.append(f"#[derive({', '.join(self._derives(s))})]")
         out.append(f"#[serde(deny_unknown_fields{', default' if container_default else ''})]")
         out.append(f"pub struct {s.name} {{")
         out += self._render_fields(s, fns, "    ", container_default, "pub ")
         out.append("}")
-        if container_default and not self._derive_default(s) and "Default" not in EXTRA_DERIVES.get(s.name, ()):
+        if (
+            container_default
+            and not self._derive_default(s)
+            and "Default" not in self.cfg.extra_derives.get(s.name, ())
+        ):
             out += ["", f"impl Default for {s.name} {{", "    fn default() -> Self {"]
             out.append("        Self {")
             for f in s.fields:
-                out.append(f"            {f.name}: {self.lit(f.ty, f.default, f'{s.name}.{f.name}')},")
+                out.append(f"            {ident(f.name)}: {self.lit(f.ty, f.default, f'{s.name}.{f.name}')},")
             out += ["        }", "    }", "}"]
         return out
 
@@ -628,7 +921,8 @@ class Gen:
         users = ", ".join(f"`{u}`" for u in e.users)
         out = self._doc(f"Values of {users}.")
         derives = ["Clone", "Copy", "Debug"] + (["Default"] if e.default is not None else [])
-        out.append(f"#[derive({', '.join([*derives, 'PartialEq', 'Eq', 'Hash', 'Serialize', 'Deserialize'])})]")
+        derives += ["PartialEq", "Eq", *self.cfg.enum_derives.get(e.name, ()), "Hash", "Serialize", "Deserialize"]
+        out.append(f"#[derive({', '.join(derives)})]")
         out.append(f"pub enum {e.name} {{")
         for v in e.values:
             out.append(f"    /// `{v}`.")
@@ -692,6 +986,14 @@ class Gen:
         return out
 
 
+#: Rust keywords that a field name is written with `r#` for.
+KEYWORDS = frozenset({"ref", "type", "match", "move", "fn", "impl", "loop", "mod", "self", "use", "where", "struct"})
+
+
+def ident(name: str) -> str:
+    return f"r#{name}" if name in KEYWORDS else name
+
+
 def variant(v: str) -> str:
     return VARIANTS.get(v) or camel(v)
 
@@ -728,8 +1030,50 @@ def rustfmt(text: str) -> str:
     return r.stdout
 
 
-def generate(root: Path = ROOT) -> str:
-    g = Gen(root)
+DOC_CONFIG = Config(
+    label="document",
+    out=DOC_OUT,
+    roots=DOCS,
+    header=(
+        "// @generated by `make generate` (scripts/gen_rust_specs.py) from schemas/json/qt.*.schema.json. Do not",
+        "// edit: change the Pydantic model in python/queuetruth/schemas/models.py, or the Rust binding in the",
+        "// generator, and run `make generate`. `make generate-check` and the `json_gen_is_current` test fail",
+        "// when this file is edited by hand.",
+    ),
+    uses=(
+        "use indexmap::IndexMap;",
+        "use serde::{Deserialize, Serialize};",
+        "use serde_json::{Map, Value};",
+        "",
+        "use crate::json::{QtDoc, Tag, V1};",
+    ),
+    enums=DOC_ENUMS,
+    external_enums=DOC_EXTERNAL_ENUMS,
+    external_structs=DOC_EXTERNAL_STRUCTS,
+    unions={},
+    tagged={},
+    ints=DOC_INTS,
+    extra_derives=DOC_EXTRA_DERIVES,
+    sample_defaults=False,
+    container_default=False,
+    def_names=DOC_DEF_NAMES,
+    enum_defaults=DOC_ENUM_DEFAULTS,
+    omit=DOC_OMIT,
+    derive_default_all=True,
+    free_object="Map<String, Value>",
+    qt_doc=True,
+    enum_derives=DOC_ENUM_DERIVES,
+    int_default="u64",
+    fixed_arrays=True,
+    # `impl Default for DatasetManifest` in json.rs (its validation status has no default).
+    hand_default=frozenset({"DatasetManifest"}),
+    ext_default=frozenset({"crate::io::FileEntry", "crate::specs::WindowSpec"}),
+)
+CONFIGS = (SPEC_CONFIG, DOC_CONFIG)
+
+
+def generate(root: Path = ROOT, cfg: Config = SPEC_CONFIG) -> str:
+    g = Gen(root, cfg)
     g.load()
     body = rustfmt(g.render())
     return HASH_LINE.format(hashlib.sha256(body.encode("utf-8")).hexdigest()) + "\n" + body
@@ -739,20 +1083,22 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--check", action="store_true", help="exit 1 when the committed file differs; write nothing")
     a = ap.parse_args(argv)
-    try:
-        text = generate()
-    except GenError as e:
-        print(f"gen_rust_specs: {e}", file=sys.stderr)
-        return 2
-    path = ROOT / OUT
-    if a.check:
-        if not path.exists() or path.read_text(encoding="utf-8") != text:
-            print(f"differs: {OUT} (run `make generate`)", file=sys.stderr)
-            return 1
-        return 0
-    path.write_text(text, encoding="utf-8")
-    print(f"wrote {OUT}")
-    return 0
+    stale = 0
+    for cfg in CONFIGS:
+        try:
+            text = generate(ROOT, cfg)
+        except GenError as e:
+            print(f"gen_rust_specs ({cfg.label}): {e}", file=sys.stderr)
+            return 2
+        path = ROOT / cfg.out
+        if a.check:
+            if not path.exists() or path.read_text(encoding="utf-8") != text:
+                print(f"differs: {cfg.out} (run `make generate`)", file=sys.stderr)
+                stale += 1
+            continue
+        path.write_text(text, encoding="utf-8")
+        print(f"wrote {cfg.out}")
+    return 1 if stale else 0
 
 
 if __name__ == "__main__":
