@@ -1,9 +1,9 @@
 """`check` without data: how many of a bar backtest's fills the real queue would give, from the atlas touch tables.
 
-A bar backtester (Freqtrade, Backtrader, VectorBT, LEAN, and hftbacktest or NautilusTrader when they run on bars)
-fills a resting limit order when a bar's low reaches a buy's limit or its high a sell's (the `touch` rule). The
-Fill-Realism Atlas measures, for its own shadow orders, how many such fills the exact FIFO replay of the real queue
-also gives (`atlas/v1/touch.json`, docs/concepts/touch-tables.md). This module applies those tables to a backtest:
+A bar backtester (Freqtrade, Backtrader, VectorBT, backtesting.py, LEAN, and hftbacktest or NautilusTrader when they run
+on bars) fills a resting limit order when a bar's low reaches a buy's limit or its high a sell's (the `touch` rule). The
+Fill-Realism Atlas measures, for its own shadow orders, how many such fills the exact FIFO replay of the real queue also
+gives (`atlas/v1/touch.json`, docs/concepts/touch-tables.md). This module applies those tables to a backtest:
 
 1. Import the backtest with its simulator importer (the same code as the exact mode) and keep its resting limit
    orders; an order with a fill is a fill the backtest's bar rule gave it.
@@ -222,7 +222,7 @@ def estimate(
     from queuetruth.atlas import open_source, tier_name
     from queuetruth.atlas.touch import TouchTables
     from queuetruth.check.detect import BACKTESTERS, detect_all
-    from queuetruth.check.run import CheckResult, _import, _paths, _vectorbt_labels
+    from queuetruth.check.run import _FILLS_ONLY, CheckResult, _import, _paths, _vectorbt_labels
 
     paths = _paths(backtest)
     if backtester is not None and backtester not in BACKTESTERS:
@@ -231,13 +231,15 @@ def estimate(
     fallback = tier_of(tier) if tier else None
     notes: list[str] = []
     extra: dict[str, Any] = dict(options or {})
-    if kind == "vectorbt":
+    if kind in _FILLS_ONLY:
         extra.setdefault("order_type", "limit")
-        if not any(extra.get(k) for k in ("column", "instrument", "instruments")):
+        if kind == "vectorbt" and not any(extra.get(k) for k in ("column", "instrument", "instruments")):
             labels = _vectorbt_labels(paths)
             if len(labels) > 1:
                 extra["instruments"] = {lab: lab for lab in labels}
-        notes.append("VectorBT records are fills only: each counts as a resting limit order the bar rule filled")
+        notes.append(
+            f"{_FILLS_ONLY[kind]} records are fills only: each counts as a resting limit order the bar rule filled"
+        )
     res = _import(kind, paths, None, extra)
     resting, filled, times, types = _orders(res)
     if not resting:

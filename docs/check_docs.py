@@ -7,7 +7,9 @@ Checks, over every Markdown file under docs/ (and examples/README.md):
 
 1. Relative links resolve to an existing file or directory; `#anchor` parts match a heading of the target page
    (GitHub slug rules). External links are not fetched.
-2. Fenced blocks preceded by `<!-- check-docs: run -->` (optionally `run exit=N`) are executed in order, one fresh
+2. Fenced blocks preceded by `<!-- check-docs: run -->` (optionally `run exit=N`, and `run needs=MOD[,MOD]` for a
+   block that runs only where those Python modules are importable, such as a framework queuetruth does not install;
+   elsewhere it is syntax-checked and skipped with the reason) are executed in order, one fresh
    temporary directory per page, each block in its own process: `sh`/`bash`/`console` blocks with
    `bash -euo pipefail`, `python` blocks with the current interpreter. The environment has the venv's `bin/` first on
    PATH, `QT_SRC` = repo root and `QT_FIXTURES` = `tests/fixtures`. Shell variables do not carry between blocks.
@@ -259,6 +261,15 @@ def run_env() -> dict[str, str]:
     return env
 
 
+def _importable(module: str) -> bool:
+    import importlib.util
+
+    try:
+        return importlib.util.find_spec(module) is not None
+    except (ImportError, ValueError):
+        return False
+
+
 def run_page(page: Path, blocks: list[Block], res: Result, keep: bool) -> None:
     runnable = [b for b in blocks if b.mode == "run"]
     if not runnable:
@@ -273,6 +284,15 @@ def run_page(page: Path, blocks: list[Block], res: Result, keep: bool) -> None:
             continue
         m = re.search(r"exit=(\d+)", b.arg)
         want = int(m.group(1)) if m else 0
+        needs = re.search(r"needs=([\w.,]+)", b.arg)
+        missing = [x for x in (needs.group(1).split(",") if needs else []) if not _importable(x)]
+        if missing:
+            err = syntax_ok(b)
+            if err:
+                res.fail(f"{where}: {err}")
+            else:
+                res.skip(f"{where}: needs {', '.join(missing)} (not installed)")
+            continue
         if b.lang in SHELL:
             cmd = ["bash", "-euo", "pipefail", "-c", b.code]
         elif b.lang == "python":

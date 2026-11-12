@@ -18,6 +18,7 @@ Without data, `check` estimates from the public atlas instead ([without order-le
 | VectorBT | `pf.orders.records_readable` as CSV or JSON |
 | LEAN | the backtest result JSON and its order events ([Reconcile a LEAN backtest](reconcile-lean.md)) |
 | Freqtrade | the backtest result (`.zip` or `.json`) |
+| backtesting.py | the trades of a `Backtest.run()` result, `stats._trades`, as CSV or JSON ([below](#backtestingpy)) |
 
 `check` reads which backtester wrote the file from its columns or keys; `--backtester NAME` says it when the file
 does not. It maps the backtest's instrument names to the dataset's symbols (`AAPL`, `AAPL.XNAS` and `aapl` all match
@@ -186,6 +187,74 @@ cme,asset0,1,,-9,0,0.25,1
 and pass it with `--instrument-map instrument_map.csv`. The generated `qt-check/instrument_map.csv` of an earlier run
 is a good start. Orders on instruments that do not map while others do are left out and counted in a note
 (`--verbose` prints the notes).
+
+## backtesting.py
+
+A [backtesting.py](https://kernc.github.io/backtesting.py/) run returns a pandas Series; its `_trades` member holds
+one row per closed trade (`Size`, `EntryPrice`, `ExitPrice`, `EntryTime`, `ExitTime`, `Commission`, ...). The
+result has no order records of its own, so save the trades, as CSV or as pickle-free JSON:
+
+<!-- check-docs: run needs=backtesting,pandas -->
+```python
+import numpy as np
+import pandas as pd
+from backtesting import Backtest, Strategy
+
+# a synthetic price series; use your own data and strategy
+idx = pd.date_range("2026-06-15 14:00", periods=300, freq="1min")
+close = 100 + np.cumsum(np.random.default_rng(0).normal(0, 0.05, len(idx)))
+ohlc = pd.DataFrame({"Open": close, "High": close + 0.02, "Low": close - 0.02, "Close": close}, index=idx)
+
+
+class EveryHalfHour(Strategy):
+    def init(self):
+        pass
+
+    def next(self):
+        if len(self.data) % 30 == 0:
+            self.position.close()
+            self.buy(size=1, limit=self.data.Close[-1] - 0.01)
+
+
+stats = Backtest(ohlc, EveryHalfHour, cash=10_000, commission=0.0002, finalize_trades=True).run()
+stats._trades.to_csv("trades.csv")
+stats._trades.to_json("trades.json", orient="records", date_format="iso")
+print(len(stats._trades), "trades")
+```
+
+`check` reads either file. Each trade becomes two orders: the entry (a buy for a long trade, a sell for a short
+one) and the exit, each filled in full at its price and time, with the trade's `Commission` split between the two in
+proportion to their notional. backtesting.py fills an order in full at one price with no queue, so `check` treats
+each of these fills as a limit order resting at its fill price (`--option order_type=market` leaves them out). A run
+trades one instrument and the file does not name it: `--option instrument=SYMBOL` names it (a dataset with a single
+symbol needs nothing). On the synthetic dataset, with a few trades written by hand in backtesting.py's layout:
+
+<!-- check-docs: run -->
+```bash
+queuetruth fixtures synth --out synth > /dev/null
+cat > trades.csv <<'EOF'
+,Size,EntryBar,ExitBar,EntryPrice,ExitPrice,SL,TP,PnL,Commission,ReturnPct,EntryTime,ExitTime,Duration,Tag
+0,-1,0,1,5001.5,5002.5,,,-1.02,0.02,-0.0002,2026-06-15 15:06:40,2026-06-15 15:39:26,0 days 00:32:46,
+1,-3,2,3,5002.75,5004.5,,,-5.27,0.02,-0.00035,2026-06-15 15:32:12,2026-06-15 17:59:24,0 days 02:27:12,
+2,-1,4,5,5003.25,5003.5,,,-0.27,0.02,-5e-05,2026-06-15 17:13:28,2026-06-15 18:39:00,0 days 01:25:32,
+3,-2,6,7,5005.0,5004.25,,,1.48,0.02,0.00015,2026-06-15 17:37:58,2026-06-15 18:58:54,0 days 01:20:56,
+EOF
+queuetruth check trades.csv --data synth --option instrument=QTAU6 --window 10s --out qt-check-btpy
+```
+
+Without order-level data, the same file gets the atlas estimate
+([without order-level data](#without-order-level-data)): how many of its fills the real queue would give, and the
+P&L they add. Say the bar length, and the tier when the symbol is not one the atlas holds:
+
+<!-- check-docs: skip (downloads the public atlas, after asking) -->
+```bash
+queuetruth check trades.csv --bar 5m --option instrument=AAPL
+queuetruth check trades.csv --bar 1h --tier T2
+```
+
+Naive times are read as UTC; `--option data_tz=America/New_York` reads them in another zone. A backtest on data
+without a `DatetimeIndex` has bar numbers instead of times, which `check` cannot place on the tape: give the data a
+time index. `queuetruth live import --venue sim-backtesting-py` imports the same files as a simulator log.
 
 ## Limits
 

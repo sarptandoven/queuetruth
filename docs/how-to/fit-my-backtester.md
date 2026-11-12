@@ -139,6 +139,39 @@ if res.passed:
 `res.summary` is the answer line, `res.doc` the whole `qt.fit` document (also in `qt-fit-py/fit.json`), `res.snippet`
 the paste-ready text (None when refused) and `res.calibration` the `qt.calibration_result` behind it.
 
+## 6. One line in your framework
+
+The result goes into your framework as it is, and so does the atlas's closest setting when you have no data:
+`qt.atlas.calibration(library, tier=None, symbol=None)` returns the same kind of result, with `source == "atlas"`,
+where it came from (atlas root, tier, horizon, days) and the atlas verdict, read through the same
+download-after-consent cache as `queuetruth atlas`. `res.settings` holds what to set, in the library's own names.
+
+| Framework | The one line | How it is fed |
+|---|---|---|
+| NautilusTrader | `engine.add_venue(..., **qtn.venue_options(qt.fit(...)))` or `qtn.venue_options(qt.atlas.calibration("nautilus", tier="T1"))` | a fit on your data, or the atlas when you have none ([guide](nautilustrader.md)) |
+| hftbacktest | `asset = qthbt.configure(asset, calibration)` | the same ([guide](calibrate-hftbacktest.md#3-one-line-in-your-hftbacktest-code)) |
+| Backtrader | `cerebro.broker.set_filler(qt.backtrader.QueueFiller(tier="T1"))` and `cerebro.addanalyzer(qt.backtrader.OrderLog)` | the atlas touch tables ([guide](realistic-fills-backtrader-lean.md)) |
+| LEAN | `security.set_fill_model(qt.lean.QueueFillModel(tier="T1"))` | the same |
+| Freqtrade, VectorBT, backtesting.py | `queuetruth check <their result file>` | the same; the result is a realistic fill count and P&L range ([guide](check-my-backtest.md)) |
+| Any simulator | `uses: sarptandoven/queuetruth/actions/referee@v1` | the referee fixtures ([guide](referee-your-simulator.md)) |
+
+Here `qtn` is `queuetruth_nautilus` and `qthbt` is `queuetruth_hftbacktest`, the two plugins. On the synthetic atlas
+the tests use (invented numbers; without `source=` it is the public atlas, which asks before it downloads):
+
+<!-- check-docs: run -->
+```python
+import os
+
+import queuetruth as qt
+
+atlas = os.path.join(os.environ["QT_FIXTURES"], "atlas_synth")
+cal = qt.atlas.calibration("nautilus", tier="T1", source=atlas)
+print(cal.summary)
+print(cal.source, cal.settings)
+print(qt.atlas.calibration("hftbacktest", symbol="ZZZA", source=atlas).settings)
+print(qt.fit("nautilus", data="synth", out="qt-fit-py").settings)
+```
+
 ## Files
 
 `--out` (default `qt-fit`) holds `fit.json` (the answer), `calibration/` (the calibration run, with

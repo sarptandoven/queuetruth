@@ -25,15 +25,15 @@ from queuetruth.results import Result
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "demo"))
 
-import demo_fixtures as F  # noqa: E402
-from atlas.test_atlas_lookup import _write_api  # noqa: E402
-from check import synth_atlas as sa  # noqa: E402
-from check import synth_backtests as sb  # noqa: E402
+import demo_fixtures as F
+from atlas.test_atlas_lookup import _write_api
+from check import synth_backtests as sb
 
 pytestmark = pytest.mark.requires_core
 
 REPO = Path(__file__).resolve().parents[2]
 DATA = REPO / "tests" / "fixtures" / "synth_small"
+ATLAS = REPO / "tests" / "fixtures" / "atlas_synth"
 SYMS = ["AAPL", "MSFT"]
 IEX_DAY = dt.date(2026, 10, 9)
 
@@ -108,8 +108,7 @@ def test_check_durations_in_every_form(backtest: Path, tmp_path: Path) -> None:
 def test_check_without_data_from_the_atlas(tmp_path: Path) -> None:
     orders = sb.orders(DATA)
     bt = sb.write_hftbacktest(tmp_path / "hbt.jsonl", orders)
-    atlas = sa.write_atlas(tmp_path / "site", symbols={"QTAU6": "T1_top100"})
-    res = qt.check(bt, bar="5m", tier="ALL", atlas=atlas, out=tmp_path / "o")
+    res = qt.check(bt, bar="5m", tier="ALL", atlas=ATLAS, out=tmp_path / "o")
     assert res.doc["mode"] == "atlas"
     assert_shape(res, tmp_path, columns=set())
     assert res.interval is not None and "95% interval" in res.interval
@@ -140,6 +139,15 @@ def test_atlas_lookup(tmp_path: Path) -> None:
     assert set(df["horizon"]) == {"1min"}
     assert res.interval is not None and "pp" in res.interval
     assert qt.atlas.lookup(library="nautilus", horizon=60_000_000_000, source=site).doc["horizon"] == "1min"
+
+
+@pytest.mark.parametrize(("library", "tier"), [("nautilus", "T1"), ("hftbacktest", "ALL")])
+def test_atlas_calibration(library: str, tier: str, tmp_path: Path) -> None:
+    res = qt.atlas.calibration(library, tier=tier, source=ATLAS)
+    df = assert_shape(res, tmp_path, columns={"setting", "tier", "horizon", "bias_pp", "ci_lo_pp", "ci_hi_pp"})
+    assert len(df) == 1 and res.doc["source"] == "atlas"
+    assert res.interval is not None and "in the atlas" in res.interval
+    assert res.snippet is not None and res.settings
 
 
 # ---- data --------------------------------------------------------------------------------------------------------
@@ -223,6 +231,7 @@ def test_verbs_have_typed_signatures() -> None:
     assert {"backtester", "data", "live", "split"} <= set(fit)
     assert {"backtester", "minutes", "symbols", "yes"} <= set(inspect.signature(qt.demo).parameters)
     assert {"library", "symbol", "tier", "horizon"} <= set(inspect.signature(qt.atlas.lookup).parameters)
+    assert {"library", "tier", "symbol", "source"} <= set(inspect.signature(qt.atlas.calibration).parameters)
     assert {"files", "out"} <= set(inspect.signature(qt.data.add).parameters)
     assert {"date", "symbols", "out"} <= set(inspect.signature(qt.data.fetch_iex).parameters)
     assert callable(qt.demo) and qt.demo.DemoOptions.__name__ == "DemoOptions"

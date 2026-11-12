@@ -34,8 +34,8 @@ from typing import Any, ClassVar
 import pyarrow.parquet as pq
 
 from queuetruth.errors import QtError
-from queuetruth.results import Result
 from queuetruth.fit import split as sp
+from queuetruth.results import Result
 from queuetruth.schemas.models import CalibrationResult
 from queuetruth.schemas.specs import WindowSpec
 from queuetruth.score._dataset import DatasetView
@@ -75,15 +75,23 @@ DEFAULT_N_SHADOWS = 1000
 
 @dataclass
 class FitResult(Result):
-    """The answer of `fit`: `summary` is the one-line answer, `doc` the `qt.fit` document, `calibration` the
-    `qt.calibration_result` behind it, `snippet` the paste-ready text (None when the fit is refused). The shared
-    result shape (`queuetruth.results.Result`): `table()` (the held-out comparison, one row per horizon),
-    `to_html()`, `save(path)` and a compact notebook view."""
+    """The answer of `fit` and of `qt.atlas.calibration`: `summary` is the one-line answer, `doc` the `qt.fit`
+    document, `calibration` the `qt.calibration_result` behind it (None for a setting read from the atlas),
+    `snippet` the paste-ready text (None when the fit is refused).
+
+    `doc["source"]` says where it came from: `order_level` or `live` (a fit on your data) or `atlas` (the atlas's
+    closest setting, with `doc["atlas"]` naming the atlas root, tier, horizon and days). `doc["settings"]` holds the
+    library settings to apply, in the library's own names; `queuetruth_nautilus.venue_options` and
+    `queuetruth_hftbacktest.configure` read them.
+
+    The shared result shape (`queuetruth.results.Result`): `table()` (the held-out comparison, one row per horizon;
+    for the atlas, the setting's row), `to_html()`, `save(path)` (the `qt.fit` document by default, which
+    `qthbt.configure(asset, path)` and `qtn.load_calibration(path)` read in another venv) and a notebook view."""
 
     title: ClassVar[str] = "queuetruth fit"
 
     doc: dict[str, Any]
-    calibration: CalibrationResult
+    calibration: CalibrationResult | None
     out: Path | None = None
 
     @property
@@ -97,6 +105,18 @@ class FitResult(Result):
         return bool(self.doc["verdict"]["passed"])
 
     @property
+    def source(self) -> str:
+        """`order_level`, `live` or `atlas`."""
+        return str(self.doc["source"])
+
+    @property
+    def settings(self) -> dict[str, Any]:
+        """The library settings to apply (`doc["settings"]`)."""
+        if "settings" in self.doc:
+            return dict(self.doc["settings"])
+        return settings_of(self.doc["backtester"], self.doc["family"], self.doc["param"]["value"])
+
+    @property
     def snippet(self) -> str | None:
         """The paste-ready snippet, or None when the fit is refused."""
         sn = self.doc.get("snippet")
@@ -108,9 +128,16 @@ class FitResult(Result):
 
     @property
     def interval(self) -> str | None:
-        """The fitted value with its 95% interval, in words."""
+        """The fitted value with its 95% interval (for the atlas: the setting's bias with its interval), in words."""
         from queuetruth.fit.render import _ci, num
 
+        a = self.doc.get("atlas")
+        if self.doc.get("source") == "atlas" and a:
+            b = a["fill_rate_bias_pp"]
+            if b.get("value") is None:
+                return None
+            ci = f" (95% CI {b['lo']:+.2f} to {b['hi']:+.2f} pp)" if b.get("lo") is not None else ""
+            return f"{a['label']}: fill-rate bias {b['value']:+.2f} pp{ci} at {a['horizon']} in the atlas."
         p = self.doc["param"]
         if p.get("value") is None:
             return None
@@ -119,6 +146,22 @@ class FitResult(Result):
     def _rows(self) -> list[dict[str, Any]]:
         from queuetruth import units
 
+        a = self.doc.get("atlas")
+        if self.doc.get("source") == "atlas" and a:
+            b = a["fill_rate_bias_pp"]
+            return [
+                {
+                    "setting": a["label"],
+                    "tier": a["tier"],
+                    "horizon": a["horizon"],
+                    "bias_pp": b.get("value"),
+                    "ci_lo_pp": b.get("lo"),
+                    "ci_hi_pp": b.get("hi"),
+                    "verdict": a["verdict"],
+                    "days": a["days"],
+                    "model_id": a["model_id"],
+                }
+            ]
         return [
             {
                 "horizon": units.format_duration(int(r["horizon_ns"])),
@@ -514,7 +557,44 @@ def _document(
             "remedies": [] if t.ok else _remedies(t.reasons, cal, s, ds, orders, what, fam, backtester),
         },
         "snippet": None,
+        "settings": settings_of(backtester, fam, _value(fam, cal, _finite(cal.estimate))),
     }
+
+
+def settings_of(backtester: str, family: str, value: float | None) -> dict[str, Any]:
+    """The library settings of a fill-model family at `value`, in the library's own names:
+
+    - nautilus: `prob_fill_on_limit`, `queue_position` (True for the queue-gated family), `book_type` and
+      `trade_execution` (the venue settings the fit and the atlas ran under);
+    - hftbacktest: `queue_model` (the `BacktestAsset` builder), `queue_model_args` and `exchange` (the export's
+      default, the one that runs on the released hftbacktest 2.4.4);
+    - databento: `k` of the queue-position estimator.
+
+    Empty when the family has no value to set."""
+    from queuetruth.export.hftbacktest import DEFAULT_EXCHANGE, EXCHANGES, FIXED_BUILDERS, POWER_BUILDERS
+
+    if backtester == "nautilus":
+        if value is None:
+            return {}
+        return {
+            "prob_fill_on_limit": float(value),
+            "queue_position": family != "nt_prob_touch",
+            "book_type": "L2_MBP",
+            "trade_execution": True,
+        }
+    if backtester == "hftbacktest":
+        if family in POWER_BUILDERS:
+            if value is None:
+                return {}
+            builder, args = POWER_BUILDERS[family], [float(value)]
+        elif family in FIXED_BUILDERS:
+            builder, args = FIXED_BUILDERS[family], []
+        else:
+            return {}
+        return {"queue_model": builder, "queue_model_args": args, "exchange": EXCHANGES[DEFAULT_EXCHANGE]}
+    if backtester == "databento":
+        return {} if value is None else {"k": float(value)}
+    return {}
 
 
 # ---- the snippet --------------------------------------------------------------------------------------------------
@@ -566,4 +646,4 @@ def _write_snippet(backtester: str, cal: CalibrationResult, cal_dir: Path, out: 
     return {"path": str(path), "text": text, "notes": notes, "one_liner": one_liner}
 
 
-__all__ = ["BACKTESTERS", "FAMILIES", "FitResult", "databento_snippet", "fit"]
+__all__ = ["BACKTESTERS", "FAMILIES", "FitResult", "databento_snippet", "fit", "settings_of"]
