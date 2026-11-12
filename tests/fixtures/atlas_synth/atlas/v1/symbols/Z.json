@@ -1,0 +1,29 @@
+{
+ "atlas_root": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+ "columns": [
+  "bias_pp",
+  "lo_pp",
+  "hi_pp",
+  "shrunk_pp",
+  "n",
+  "n_days"
+ ],
+ "horizons": [
+  "1min"
+ ],
+ "letter": "Z",
+ "mode": "faithful",
+ "schema": "qt.atlas_symbols",
+ "schema_version": 1,
+ "settings": [],
+ "shadow_population": "standard",
+ "symbols": [
+  {
+   "cells": [],
+   "days": 3,
+   "symbol": "ZZZA",
+   "tier": "T1_top100"
+  }
+ ],
+ "venue": "synthetic"
+}

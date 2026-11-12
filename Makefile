@@ -16,7 +16,7 @@ CARGO := cargo
 PY_DIRS := $(wildcard python service scripts tests benches tools integrations) actions
 # Test directories outside python/ and service/ (also in pyproject testpaths). Their optional dependencies
 # (the hftbacktest venvs, queuetruth._core, real data) skip with a reason when absent.
-EXTRA_TEST_DIRS := $(wildcard tools/livefill/tests scripts/nightly/tests scripts/scale/tests \
+EXTRA_TEST_DIRS := $(wildcard tools/tests tools/livefill/tests scripts/nightly/tests scripts/scale/tests \
 	integrations/hftbacktest/tests actions/referee/tests)
 # The released hftbacktest the integration tests and the nightly hbt check run (scripts/nightly reads this pin).
 # integrations/hftbacktest/setup_venvs.sh installs it into .scratch/hbt-venv with its numba, llvmlite and numpy pins.
@@ -65,17 +65,19 @@ fmt: ## format Rust and Python sources
 	$(CARGO) fmt --all
 	$(RUN) ruff format $(PY_DIRS)
 
-lint: ## rustfmt check, clippy -D warnings, ruff check and format check, import layers
+lint: ## rustfmt check, clippy -D warnings, ruff check and format check, import layers, changelog fragments
 	$(CARGO) fmt --all --check
 	$(CARGO) clippy --workspace --all-targets --locked -- -D warnings
 	$(RUN) ruff check $(PY_DIRS)
 	$(RUN) ruff format --check $(PY_DIRS)
 	$(RUN) python tools/check_layers.py
+	$(RUN) python tools/changelog.py check
 
-lint-py: ## ruff check, format check and the import-layer check (the Python half of lint)
+lint-py: ## ruff check, format check, the import-layer check and the changelog fragments (the Python half of lint)
 	$(RUN) ruff check $(PY_DIRS)
 	$(RUN) ruff format --check $(PY_DIRS)
 	$(RUN) python tools/check_layers.py
+	$(RUN) python tools/changelog.py check
 
 test-rust: ## all Rust tests including the cross-crate gate tests
 	$(CARGO) test --workspace --locked --exclude queuetruth-py --features gate

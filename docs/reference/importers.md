@@ -37,6 +37,7 @@ instrument map (`--account`, `--instrument-map`).
 | [`sim-backtrader`](#sim-backtrader) | sim | Backtrader backtest: order and trade notifications (log venue sim:backtrader) | [guide](../how-to/reconcile-backtrader-vectorbt.md#backtrader-add-an-analyzer) |
 | [`sim-vectorbt`](#sim-vectorbt) | sim | VectorBT portfolio: order or trade records (log venue sim:vectorbt) | [guide](../how-to/reconcile-backtrader-vectorbt.md#vectorbt-export-the-order-records) |
 | [`sim-lean`](#sim-lean) | sim | QuantConnect LEAN backtest: orders and order events (log venue sim:lean) | [guide](../how-to/reconcile-backtrader-vectorbt.md#7-quantconnect-lean) |
+| [`sim-backtesting-py`](#sim-backtesting-py) | sim | backtesting.py backtest: the trades of a Backtest.run() result (log venue sim:backtesting_py) | [guide](../how-to/check-my-backtest.md#backtestingpy) |
 
 ## binance
 
@@ -325,6 +326,30 @@ QuantConnect LEAN backtest: orders and order events (log venue sim:lean).
 | `instrument` | text | one live instrument name for every order |
 | `instruments` | text or object | LABEL:NAME[,LABEL:NAME...] per data feed or column |
 | `map_venue` | text | venue of the instrument-map rows when it differs from venue |
+| `pair_window_ms` | integer or text | pairing window in milliseconds |
+| `pair_with` | text or path or list | canonical live-log directory: paired orders take its order_key |
+| `price_exp` | integer or text | decimal exponent of prices (default -9) |
+| `size_exp` | integer or text | decimal exponent of sizes (default -8) |
+| `timeframe` | text | bar length, e.g. 5m |
+| `venue` | text | live venue whose instrument-map rows apply (e.g. binance) |
+
+## sim-backtesting-py
+
+backtesting.py backtest: the trades of a Backtest.run() result (log venue sim:backtesting_py).
+
+- `LiveImportSpec.venue`: `sim_backtesting_py`; kind `sim`; options model `BacktestingPyOptions`.
+- Reads: Backtest.run() result's _trades (to_csv, or to_json with orient=records).
+- Typical files: `*.csv`, `*.json`.
+- Guide: [how-to/check-my-backtest.md](../how-to/check-my-backtest.md#backtestingpy).
+
+| Option | Type | Meaning |
+|---|---|---|
+| `data_tz` | text | IANA zone of naive timestamps (default UTC) |
+| `fill_delay_bars` | integer or text | fills k bars after their timestamp (default 0) |
+| `instrument` | text | one live instrument name for every order |
+| `instruments` | text or object | LABEL:NAME[,LABEL:NAME...] per data feed or column |
+| `map_venue` | text | venue of the instrument-map rows when it differs from venue |
+| `order_type` | text | market (default) or limit: the order type of the trades' fills |
 | `pair_window_ms` | integer or text | pairing window in milliseconds |
 | `pair_with` | text or path or list | canonical live-log directory: paired orders take its order_key |
 | `price_exp` | integer or text | decimal exponent of prices (default -9) |

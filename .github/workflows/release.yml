@@ -12,7 +12,8 @@
 #   `queuetruth`, workflow `release.yml`, environment `pypi` (a "pending publisher" works before the first upload).
 # - GitHub: Settings -> Environments -> `pypi`, with the maintainer as required reviewer, so every upload waits for approval.
 # - Release checklist: version bumped in pyproject.toml, Cargo.toml and python/queuetruth/_version.py; CHANGELOG.md
-#   heading `## [X.Y.Z] - YYYY-MM-DD`; tag `vX.Y.Z`.
+#   heading `## [X.Y.Z] - YYYY-MM-DD`, written by `python tools/changelog.py release X.Y.Z`, which folds the
+#   changelog.d/ fragments into it; tag `vX.Y.Z`.
 #
 # Platforms (SPEC 1.1 item 13, 1.2): published wheels for macOS arm64 and x86_64 and manylinux_2_28 x86_64 and
 # aarch64. Windows and musllinux wheels are built as experiments only (continue-on-error, never uploaded): SPEC 1.2

@@ -32,6 +32,7 @@ def test_builtins_and_their_parts() -> None:
     assert "nt_prob_touch" in backtesters.get("nautilus").zoo_models
     assert ("hftbacktest", "hbt_l3_fifo") in set(backtesters.zoo_models())
     assert backtesters.get("freqtrade").import_live is not None and backtesters.get("lean").import_live is None
+    assert list(reg)[7] == "backtesting_py" and backtesters.get("backtesting_py").label == "backtesting.py"
     with pytest.raises(QtError, match="no backtester 'nope'"):
         backtesters.get("nope")
     assert qt.backtesters is backtesters
@@ -42,7 +43,9 @@ def test_cli_names_are_unchanged() -> None:
     from queuetruth.live import SIM_VENUES
     from queuetruth.live.importers import SIM_IMPORTERS
 
-    assert list(BACKTESTERS) == ["hftbacktest", "nautilus", "backtrader", "vectorbt", "lean", "freqtrade"]
+    assert list(BACKTESTERS) == [
+        "hftbacktest", "nautilus", "backtrader", "vectorbt", "lean", "freqtrade", "backtesting_py"
+    ]  # fmt: skip
     assert backtesters.builtin_names(reconcile=True) == ("freqtrade", "hummingbot", "backtrader", "vectorbt", "lean")
     assert SIM_VENUES == {f"sim_{k}": k for k in SIM_IMPORTERS}
 

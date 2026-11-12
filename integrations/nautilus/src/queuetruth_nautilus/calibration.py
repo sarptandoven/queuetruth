@@ -1,6 +1,11 @@
 """Reading a queuetruth calibration for NautilusTrader (stdlib only; nautilus_trader is not imported here).
 
-Two inputs are accepted:
+Inputs accepted (`as_calibration` takes any of them):
+
+- the `FitResult` of `qt.fit("nautilus", ...)` or `qt.atlas.calibration("nautilus", ...)` (anything with a `qt.fit`
+  `doc`), or a `qt.fit` document (`fit.json`). A fit on your data is read from its `qt.calibration_result`; an atlas
+  setting carries no fit of its own: its `settings`, its atlas verdict and where it came from (atlas root, tier,
+  horizon, days) are kept, and using it warns that it is the atlas, not your data.
 
 - a `qt.calibration_result` JSON document (`calibration.json` of `queuetruth calibrate nt-touch` or
   `calibrate-live`, `fit.json`, or a directory holding one). This is the full record: estimate, events, train and test
@@ -42,7 +47,9 @@ QUEUE_GATED = "nt_queue_l2_prob_touch"
 #: NautilusTrader's default `prob_fill_on_limit`.
 NT_DEFAULT_P = 1.0
 
-TrustSource = Literal["structured", "warnings", "snippet", "queuetruth", "none"]
+FIT_SCHEMA = "qt.fit"
+
+TrustSource = Literal["structured", "warnings", "snippet", "queuetruth", "atlas", "none"]
 
 
 @dataclass(frozen=True)
@@ -112,8 +119,10 @@ class NautilusCalibration:
     held_out: HeldOutScores | None
     baseline_held_out: HeldOutScores | None
     source_path: str
-    source_format: Literal["calibration_result", "nautilus_snippet"]
+    source_format: Literal["calibration_result", "nautilus_snippet", "atlas"]
     queuetruth_version: str | None = None
+    #: For an atlas setting: atlas root, venue, window, tier, horizon, model id, bias and verdict (else None).
+    atlas: dict[str, Any] | None = None
 
     @property
     def fits_fill_model(self) -> bool:
@@ -165,6 +174,7 @@ class NautilusCalibration:
             "source_path": self.source_path,
             "source_format": self.source_format,
             "queuetruth_version": self.queuetruth_version,
+            "atlas": None if self.atlas is None else dict(self.atlas),
         }
 
 
@@ -526,11 +536,123 @@ def from_snippet(text: str, path: str | Path = "<snippet>") -> NautilusCalibrati
     )
 
 
+# ---- qt.fit ---------------------------------------------------------------------------------------------------------
+
+
+def _fit_calibration_path(doc: dict[str, Any], path: Path) -> Path:
+    given = (doc.get("files") or {}).get("calibration")
+    tries = [Path(given)] if given else []
+    if path.suffix == ".json":
+        tries.append(path.parent / "calibration" / "calibration.json")
+    for t in tries:
+        if t.is_file():
+            return t
+    raise QtNautilusError(
+        "QT-INPUT-001",
+        f"{path}: the qt.fit document names its calibration {given!r}, which is not there",
+        "pass the FitResult itself, or keep fit.json next to its calibration/ directory",
+    )
+
+
+def _from_atlas(doc: dict[str, Any], path: Path) -> NautilusCalibration:
+    a = doc.get("atlas")
+    st = doc.get("settings") or {}
+    if not isinstance(a, dict) or not isinstance(st, dict):
+        raise _bad(path, "an atlas qt.fit document needs `atlas` and `settings` objects")
+    prob = st.get("prob_fill_on_limit")
+    if prob is not None and (not _is_num(prob) or not 0.0 <= float(prob) <= 1.0):
+        raise _bad(path, f"settings.prob_fill_on_limit {prob!r} is not a probability in [0, 1]")
+    v = doc.get("verdict") or {}
+    reasons = tuple(str(r.get("code")) for r in v.get("reasons") or [] if isinstance(r, dict))
+    texts = {str(r.get("code")): str(r.get("text")) for r in v.get("reasons") or [] if isinstance(r, dict)}
+    passed = bool(v.get("passed")) and prob is not None
+    if prob is None and not reasons:
+        reasons, texts = ("no_library_setting",), {"no_library_setting": "the atlas setting has no prob_fill_on_limit"}
+    root = str(a.get("atlas_root") or "")
+    where = f"atlas {a.get('venue_name', a.get('venue'))}, {a.get('window')}, tier {a.get('tier')}"
+    return NautilusCalibration(
+        run_id=f"atlas-{root[:12]}",
+        kind="atlas",
+        family=family_key(str(doc.get("family") or "")),
+        mode=str(a.get("mode") or "faithful"),
+        prob_fill_on_limit=None if prob is None else float(prob),
+        queue_position=bool(st.get("queue_position", False)),
+        latency=None,
+        trust=Trust(
+            verdict="exportable" if passed else "refused",
+            reasons=() if passed else reasons,
+            source="atlas",
+            texts=texts,
+        ),
+        n_events=None,
+        n_shadows=None,
+        ci_bootstrap=None,
+        train=where,
+        test=where,
+        data_sources=({"atlas_root": root, "venue": a.get("venue"), "source": a.get("source")},),
+        held_out=None,
+        baseline_held_out=None,
+        source_path=str(path),
+        source_format="atlas",
+        atlas=dict(a),
+    )
+
+
+def from_fit_document(
+    doc: dict[str, Any], path: str | Path = "<qt.fit>", calibration: dict[str, Any] | None = None
+) -> NautilusCalibration:
+    """A `qt.fit` document (of `qt.fit("nautilus", ...)` or `qt.atlas.calibration("nautilus", ...)`). A fit on your
+    data reads its `qt.calibration_result`: `calibration` when given, else the file the document names."""
+    p = Path(path)
+    if not isinstance(doc, dict) or doc.get("schema") != FIT_SCHEMA:
+        raise _bad(p, f"not a {FIT_SCHEMA} document")
+    if doc.get("backtester") != "nautilus":
+        raise QtNautilusError(
+            "QT-CONFIG-001",
+            f"{p}: this is a {doc.get('backtester')} setting, not a NautilusTrader one",
+            'fit or look up NautilusTrader: qt.fit("nautilus", ...) or qt.atlas.calibration("nautilus", ...)',
+        )
+    if doc.get("source") == "atlas":
+        return _from_atlas(doc, p)
+    if calibration is None:
+        cp = _fit_calibration_path(doc, p)
+        try:
+            calibration = json.loads(cp.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as e:
+            raise QtNautilusError("QT-INPUT-001", f"{cp}: unreadable calibration ({e})") from e
+        p = cp
+    return from_document(calibration, p)  # type: ignore[arg-type]
+
+
+def as_calibration(cal: Any) -> NautilusCalibration:
+    """A `NautilusCalibration` from what the one-liners accept: a `NautilusCalibration`, the `FitResult` of `qt.fit`
+    or `qt.atlas.calibration`, a `qt.fit` or `qt.calibration_result` document, or a path (`load_calibration`)."""
+    if isinstance(cal, NautilusCalibration):
+        return cal
+    if isinstance(cal, str | Path):
+        return load_calibration(cal)
+    doc = getattr(cal, "doc", None)
+    if isinstance(doc, dict) and doc.get("schema") == FIT_SCHEMA:
+        inner = getattr(cal, "calibration", None)
+        inner_doc = inner.model_dump(mode="json", by_alias=True) if hasattr(inner, "model_dump") else None
+        out = getattr(cal, "out", None)
+        return from_fit_document(doc, Path(out) / "fit.json" if out else "<qt.fit>", inner_doc)
+    if isinstance(cal, dict):
+        if cal.get("schema") == FIT_SCHEMA:
+            return from_fit_document(cal)
+        return from_document(cal)
+    raise QtNautilusError(
+        "QT-CONFIG-001",
+        f"expected a calibration (qt.fit or qt.atlas.calibration result, NautilusCalibration, document or path), "
+        f"got {type(cal).__name__}",
+    )
+
+
 # ---- entry point --------------------------------------------------------------------------------------------------
 
 
 def load_calibration(path: str | Path) -> NautilusCalibration:
-    """Reads a `qt.calibration_result` JSON file (or a directory with `calibration.json` / `fit.json`) or a
+    """Reads a `qt.calibration_result` or `qt.fit` JSON file (or a directory with `calibration.json` / `fit.json`) or a
     `queuetruth export nautilus` snippet. Raises `QT-INPUT-001` (missing or unreadable) or `QT-INPUT-002` (not one of
     these). The trust verdict is recorded, not enforced: `fill_model` and `venue_options` refuse a refused fit."""
     p = Path(path)
@@ -553,6 +675,8 @@ def load_calibration(path: str | Path) -> NautilusCalibration:
             doc = json.loads(text)
         except json.JSONDecodeError as e:
             raise _bad(p, f"invalid JSON ({e})") from e
+        if isinstance(doc, dict) and doc.get("schema") == FIT_SCHEMA:
+            return from_fit_document(doc, p)
         return from_document(doc, p)
     if stripped.startswith("# queuetruth"):
         return from_snippet(stripped, p)

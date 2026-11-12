@@ -16,4 +16,5 @@ pub(crate) const OPTION_VENUES: &[&str] = &[
     "sim_backtrader",
     "sim_vectorbt",
     "sim_lean",
+    "sim_backtesting_py",
 ];

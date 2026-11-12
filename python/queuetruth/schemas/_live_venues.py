@@ -23,4 +23,5 @@ LIVE_IMPORT_VENUES: tuple[str, ...] = (
     "sim_backtrader",
     "sim_vectorbt",
     "sim_lean",
+    "sim_backtesting_py",
 )

@@ -1,0 +1,845 @@
+{
+ "atlas_root": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+ "attribution": "Synthetic numbers for tests and docs.",
+ "days": [
+  "2026-11-06",
+  "2026-11-09",
+  "2026-11-10"
+ ],
+ "definition": "docs/concepts/touch-tables.md",
+ "flag_policy": "exclude",
+ "population": "standard",
+ "rows": [
+  {
+   "bar": "1m",
+   "bar_s": 60,
+   "dates": 3,
+   "flagged_share": 0.0,
+   "orders": 4000,
+   "p_real_given_rule": {
+    "ci_hi": 0.5,
+    "ci_lo": 0.4,
+    "value": 0.45
+   },
+   "p_rule_given_real": {
+    "ci_hi": 0.95,
+    "ci_lo": 0.85,
+    "value": 0.9
+   },
+   "pnl_overstated_ticks": {
+    "ci_hi": 0.5,
+    "ci_lo": 0.3,
+    "value": 0.4
+   },
+   "real_fill_rate": {
+    "ci_hi": 0.35,
+    "ci_lo": 0.25,
+    "value": 0.3
+   },
+   "real_markout_ticks": {
+    "ci_hi": -0.8,
+    "ci_lo": -1.2,
+    "value": -1.0
+   },
+   "rule": "touch",
+   "rule_fill_rate": {
+    "ci_hi": 0.65,
+    "ci_lo": 0.55,
+    "value": 0.6
+   },
+   "rule_markout_ticks": {
+    "ci_hi": 0.7,
+    "ci_lo": 0.3,
+    "value": 0.5
+   },
+   "side": "buy",
+   "symbols": 40,
+   "tier": "ALL"
+  },
+  {
+   "bar": "1m",
+   "bar_s": 60,
+   "dates": 3,
+   "flagged_share": 0.0,
+   "orders": 4000,
+   "p_real_given_rule": {
+    "ci_hi": 0.52,
+    "ci_lo": 0.42,
+    "value": 0.47
+   },
+   "p_rule_given_real": {
+    "ci_hi": 0.95,
+    "ci_lo": 0.85,
+    "value": 0.9
+   },
+   "pnl_overstated_ticks": {
+    "ci_hi": 0.5,
+    "ci_lo": 0.3,
+    "value": 0.4
+   },
+   "real_fill_rate": {
+    "ci_hi": 0.35,
+    "ci_lo": 0.25,
+    "value": 0.3
+   },
+   "real_markout_ticks": {
+    "ci_hi": -0.8,
+    "ci_lo": -1.2,
+    "value": -1.0
+   },
+   "rule": "touch",
+   "rule_fill_rate": {
+    "ci_hi": 0.65,
+    "ci_lo": 0.55,
+    "value": 0.6
+   },
+   "rule_markout_ticks": {
+    "ci_hi": 0.7,
+    "ci_lo": 0.3,
+    "value": 0.5
+   },
+   "side": "sell",
+   "symbols": 40,
+   "tier": "ALL"
+  },
+  {
+   "bar": "1m",
+   "bar_s": 60,
+   "dates": 3,
+   "flagged_share": 0.0,
+   "orders": 4000,
+   "p_real_given_rule": {
+    "ci_hi": 0.51,
+    "ci_lo": 0.41,
+    "value": 0.46
+   },
+   "p_rule_given_real": {
+    "ci_hi": 0.95,
+    "ci_lo": 0.85,
+    "value": 0.9
+   },
+   "pnl_overstated_ticks": {
+    "ci_hi": 0.5,
+    "ci_lo": 0.3,
+    "value": 0.4
+   },
+   "real_fill_rate": {
+    "ci_hi": 0.35,
+    "ci_lo": 0.25,
+    "value": 0.3
+   },
+   "real_markout_ticks": {
+    "ci_hi": -0.8,
+    "ci_lo": -1.2,
+    "value": -1.0
+   },
+   "rule": "touch",
+   "rule_fill_rate": {
+    "ci_hi": 0.65,
+    "ci_lo": 0.55,
+    "value": 0.6
+   },
+   "rule_markout_ticks": {
+    "ci_hi": 0.7,
+    "ci_lo": 0.3,
+    "value": 0.5
+   },
+   "side": "all",
+   "symbols": 40,
+   "tier": "ALL"
+  },
+  {
+   "bar": "5m",
+   "bar_s": 300,
+   "dates": 3,
+   "flagged_share": 0.0,
+   "orders": 4000,
+   "p_real_given_rule": {
+    "ci_hi": 0.6,
+    "ci_lo": 0.5,
+    "value": 0.55
+   },
+   "p_rule_given_real": {
+    "ci_hi": 0.95,
+    "ci_lo": 0.85,
+    "value": 0.9
+   },
+   "pnl_overstated_ticks": {
+    "ci_hi": 0.5,
+    "ci_lo": 0.3,
+    "value": 0.4
+   },
+   "real_fill_rate": {
+    "ci_hi": 0.35,
+    "ci_lo": 0.25,
+    "value": 0.3
+   },
+   "real_markout_ticks": {
+    "ci_hi": -0.8,
+    "ci_lo": -1.2,
+    "value": -1.0
+   },
+   "rule": "touch",
+   "rule_fill_rate": {
+    "ci_hi": 0.65,
+    "ci_lo": 0.55,
+    "value": 0.6
+   },
+   "rule_markout_ticks": {
+    "ci_hi": 0.7,
+    "ci_lo": 0.3,
+    "value": 0.5
+   },
+   "side": "buy",
+   "symbols": 40,
+   "tier": "ALL"
+  },
+  {
+   "bar": "5m",
+   "bar_s": 300,
+   "dates": 3,
+   "flagged_share": 0.0,
+   "orders": 4000,
+   "p_real_given_rule": {
+    "ci_hi": 0.62,
+    "ci_lo": 0.52,
+    "value": 0.57
+   },
+   "p_rule_given_real": {
+    "ci_hi": 0.95,
+    "ci_lo": 0.85,
+    "value": 0.9
+   },
+   "pnl_overstated_ticks": {
+    "ci_hi": 0.5,
+    "ci_lo": 0.3,
+    "value": 0.4
+   },
+   "real_fill_rate": {
+    "ci_hi": 0.35,
+    "ci_lo": 0.25,
+    "value": 0.3
+   },
+   "real_markout_ticks": {
+    "ci_hi": -0.8,
+    "ci_lo": -1.2,
+    "value": -1.0
+   },
+   "rule": "touch",
+   "rule_fill_rate": {
+    "ci_hi": 0.65,
+    "ci_lo": 0.55,
+    "value": 0.6
+   },
+   "rule_markout_ticks": {
+    "ci_hi": 0.7,
+    "ci_lo": 0.3,
+    "value": 0.5
+   },
+   "side": "sell",
+   "symbols": 40,
+   "tier": "ALL"
+  },
+  {
+   "bar": "5m",
+   "bar_s": 300,
+   "dates": 3,
+   "flagged_share": 0.0,
+   "orders": 4000,
+   "p_real_given_rule": {
+    "ci_hi": 0.61,
+    "ci_lo": 0.51,
+    "value": 0.56
+   },
+   "p_rule_given_real": {
+    "ci_hi": 0.95,
+    "ci_lo": 0.85,
+    "value": 0.9
+   },
+   "pnl_overstated_ticks": {
+    "ci_hi": 0.5,
+    "ci_lo": 0.3,
+    "value": 0.4
+   },
+   "real_fill_rate": {
+    "ci_hi": 0.35,
+    "ci_lo": 0.25,
+    "value": 0.3
+   },
+   "real_markout_ticks": {
+    "ci_hi": -0.8,
+    "ci_lo": -1.2,
+    "value": -1.0
+   },
+   "rule": "touch",
+   "rule_fill_rate": {
+    "ci_hi": 0.65,
+    "ci_lo": 0.55,
+    "value": 0.6
+   },
+   "rule_markout_ticks": {
+    "ci_hi": 0.7,
+    "ci_lo": 0.3,
+    "value": 0.5
+   },
+   "side": "all",
+   "symbols": 40,
+   "tier": "ALL"
+  },
+  {
+   "bar": "1h",
+   "bar_s": 3600,
+   "dates": 3,
+   "flagged_share": 0.0,
+   "orders": 4000,
+   "p_real_given_rule": {
+    "ci_hi": 0.75,
+    "ci_lo": 0.65,
+    "value": 0.7
+   },
+   "p_rule_given_real": {
+    "ci_hi": 0.95,
+    "ci_lo": 0.85,
+    "value": 0.9
+   },
+   "pnl_overstated_ticks": {
+    "ci_hi": 0.5,
+    "ci_lo": 0.3,
+    "value": 0.4
+   },
+   "real_fill_rate": {
+    "ci_hi": 0.35,
+    "ci_lo": 0.25,
+    "value": 0.3
+   },
+   "real_markout_ticks": {
+    "ci_hi": -0.8,
+    "ci_lo": -1.2,
+    "value": -1.0
+   },
+   "rule": "touch",
+   "rule_fill_rate": {
+    "ci_hi": 0.65,
+    "ci_lo": 0.55,
+    "value": 0.6
+   },
+   "rule_markout_ticks": {
+    "ci_hi": 0.7,
+    "ci_lo": 0.3,
+    "value": 0.5
+   },
+   "side": "buy",
+   "symbols": 40,
+   "tier": "ALL"
+  },
+  {
+   "bar": "1h",
+   "bar_s": 3600,
+   "dates": 3,
+   "flagged_share": 0.0,
+   "orders": 4000,
+   "p_real_given_rule": {
+    "ci_hi": 0.77,
+    "ci_lo": 0.67,
+    "value": 0.72
+   },
+   "p_rule_given_real": {
+    "ci_hi": 0.95,
+    "ci_lo": 0.85,
+    "value": 0.9
+   },
+   "pnl_overstated_ticks": {
+    "ci_hi": 0.5,
+    "ci_lo": 0.3,
+    "value": 0.4
+   },
+   "real_fill_rate": {
+    "ci_hi": 0.35,
+    "ci_lo": 0.25,
+    "value": 0.3
+   },
+   "real_markout_ticks": {
+    "ci_hi": -0.8,
+    "ci_lo": -1.2,
+    "value": -1.0
+   },
+   "rule": "touch",
+   "rule_fill_rate": {
+    "ci_hi": 0.65,
+    "ci_lo": 0.55,
+    "value": 0.6
+   },
+   "rule_markout_ticks": {
+    "ci_hi": 0.7,
+    "ci_lo": 0.3,
+    "value": 0.5
+   },
+   "side": "sell",
+   "symbols": 40,
+   "tier": "ALL"
+  },
+  {
+   "bar": "1h",
+   "bar_s": 3600,
+   "dates": 3,
+   "flagged_share": 0.0,
+   "orders": 4000,
+   "p_real_given_rule": {
+    "ci_hi": 0.76,
+    "ci_lo": 0.66,
+    "value": 0.71
+   },
+   "p_rule_given_real": {
+    "ci_hi": 0.95,
+    "ci_lo": 0.85,
+    "value": 0.9
+   },
+   "pnl_overstated_ticks": {
+    "ci_hi": 0.5,
+    "ci_lo": 0.3,
+    "value": 0.4
+   },
+   "real_fill_rate": {
+    "ci_hi": 0.35,
+    "ci_lo": 0.25,
+    "value": 0.3
+   },
+   "real_markout_ticks": {
+    "ci_hi": -0.8,
+    "ci_lo": -1.2,
+    "value": -1.0
+   },
+   "rule": "touch",
+   "rule_fill_rate": {
+    "ci_hi": 0.65,
+    "ci_lo": 0.55,
+    "value": 0.6
+   },
+   "rule_markout_ticks": {
+    "ci_hi": 0.7,
+    "ci_lo": 0.3,
+    "value": 0.5
+   },
+   "side": "all",
+   "symbols": 40,
+   "tier": "ALL"
+  },
+  {
+   "bar": "1m",
+   "bar_s": 60,
+   "dates": 3,
+   "flagged_share": 0.0,
+   "orders": 4000,
+   "p_real_given_rule": {
+    "ci_hi": 0.4,
+    "ci_lo": 0.3,
+    "value": 0.35
+   },
+   "p_rule_given_real": {
+    "ci_hi": 0.95,
+    "ci_lo": 0.85,
+    "value": 0.9
+   },
+   "pnl_overstated_ticks": {
+    "ci_hi": 0.5,
+    "ci_lo": 0.3,
+    "value": 0.4
+   },
+   "real_fill_rate": {
+    "ci_hi": 0.35,
+    "ci_lo": 0.25,
+    "value": 0.3
+   },
+   "real_markout_ticks": {
+    "ci_hi": -0.8,
+    "ci_lo": -1.2,
+    "value": -1.0
+   },
+   "rule": "touch",
+   "rule_fill_rate": {
+    "ci_hi": 0.65,
+    "ci_lo": 0.55,
+    "value": 0.6
+   },
+   "rule_markout_ticks": {
+    "ci_hi": 0.7,
+    "ci_lo": 0.3,
+    "value": 0.5
+   },
+   "side": "buy",
+   "symbols": 40,
+   "tier": "T1_top100"
+  },
+  {
+   "bar": "1m",
+   "bar_s": 60,
+   "dates": 3,
+   "flagged_share": 0.0,
+   "orders": 4000,
+   "p_real_given_rule": {
+    "ci_hi": 0.42,
+    "ci_lo": 0.32,
+    "value": 0.37
+   },
+   "p_rule_given_real": {
+    "ci_hi": 0.95,
+    "ci_lo": 0.85,
+    "value": 0.9
+   },
+   "pnl_overstated_ticks": {
+    "ci_hi": 0.5,
+    "ci_lo": 0.3,
+    "value": 0.4
+   },
+   "real_fill_rate": {
+    "ci_hi": 0.35,
+    "ci_lo": 0.25,
+    "value": 0.3
+   },
+   "real_markout_ticks": {
+    "ci_hi": -0.8,
+    "ci_lo": -1.2,
+    "value": -1.0
+   },
+   "rule": "touch",
+   "rule_fill_rate": {
+    "ci_hi": 0.65,
+    "ci_lo": 0.55,
+    "value": 0.6
+   },
+   "rule_markout_ticks": {
+    "ci_hi": 0.7,
+    "ci_lo": 0.3,
+    "value": 0.5
+   },
+   "side": "sell",
+   "symbols": 40,
+   "tier": "T1_top100"
+  },
+  {
+   "bar": "1m",
+   "bar_s": 60,
+   "dates": 3,
+   "flagged_share": 0.0,
+   "orders": 4000,
+   "p_real_given_rule": {
+    "ci_hi": 0.41,
+    "ci_lo": 0.31,
+    "value": 0.36
+   },
+   "p_rule_given_real": {
+    "ci_hi": 0.95,
+    "ci_lo": 0.85,
+    "value": 0.9
+   },
+   "pnl_overstated_ticks": {
+    "ci_hi": 0.5,
+    "ci_lo": 0.3,
+    "value": 0.4
+   },
+   "real_fill_rate": {
+    "ci_hi": 0.35,
+    "ci_lo": 0.25,
+    "value": 0.3
+   },
+   "real_markout_ticks": {
+    "ci_hi": -0.8,
+    "ci_lo": -1.2,
+    "value": -1.0
+   },
+   "rule": "touch",
+   "rule_fill_rate": {
+    "ci_hi": 0.65,
+    "ci_lo": 0.55,
+    "value": 0.6
+   },
+   "rule_markout_ticks": {
+    "ci_hi": 0.7,
+    "ci_lo": 0.3,
+    "value": 0.5
+   },
+   "side": "all",
+   "symbols": 40,
+   "tier": "T1_top100"
+  },
+  {
+   "bar": "5m",
+   "bar_s": 300,
+   "dates": 3,
+   "flagged_share": 0.0,
+   "orders": 4000,
+   "p_real_given_rule": {
+    "ci_hi": 0.55,
+    "ci_lo": 0.45,
+    "value": 0.5
+   },
+   "p_rule_given_real": {
+    "ci_hi": 0.95,
+    "ci_lo": 0.85,
+    "value": 0.9
+   },
+   "pnl_overstated_ticks": {
+    "ci_hi": 0.5,
+    "ci_lo": 0.3,
+    "value": 0.4
+   },
+   "real_fill_rate": {
+    "ci_hi": 0.35,
+    "ci_lo": 0.25,
+    "value": 0.3
+   },
+   "real_markout_ticks": {
+    "ci_hi": -0.8,
+    "ci_lo": -1.2,
+    "value": -1.0
+   },
+   "rule": "touch",
+   "rule_fill_rate": {
+    "ci_hi": 0.65,
+    "ci_lo": 0.55,
+    "value": 0.6
+   },
+   "rule_markout_ticks": {
+    "ci_hi": 0.7,
+    "ci_lo": 0.3,
+    "value": 0.5
+   },
+   "side": "buy",
+   "symbols": 40,
+   "tier": "T1_top100"
+  },
+  {
+   "bar": "5m",
+   "bar_s": 300,
+   "dates": 3,
+   "flagged_share": 0.0,
+   "orders": 4000,
+   "p_real_given_rule": {
+    "ci_hi": 0.57,
+    "ci_lo": 0.47,
+    "value": 0.52
+   },
+   "p_rule_given_real": {
+    "ci_hi": 0.95,
+    "ci_lo": 0.85,
+    "value": 0.9
+   },
+   "pnl_overstated_ticks": {
+    "ci_hi": 0.5,
+    "ci_lo": 0.3,
+    "value": 0.4
+   },
+   "real_fill_rate": {
+    "ci_hi": 0.35,
+    "ci_lo": 0.25,
+    "value": 0.3
+   },
+   "real_markout_ticks": {
+    "ci_hi": -0.8,
+    "ci_lo": -1.2,
+    "value": -1.0
+   },
+   "rule": "touch",
+   "rule_fill_rate": {
+    "ci_hi": 0.65,
+    "ci_lo": 0.55,
+    "value": 0.6
+   },
+   "rule_markout_ticks": {
+    "ci_hi": 0.7,
+    "ci_lo": 0.3,
+    "value": 0.5
+   },
+   "side": "sell",
+   "symbols": 40,
+   "tier": "T1_top100"
+  },
+  {
+   "bar": "5m",
+   "bar_s": 300,
+   "dates": 3,
+   "flagged_share": 0.0,
+   "orders": 4000,
+   "p_real_given_rule": {
+    "ci_hi": 0.56,
+    "ci_lo": 0.46,
+    "value": 0.51
+   },
+   "p_rule_given_real": {
+    "ci_hi": 0.95,
+    "ci_lo": 0.85,
+    "value": 0.9
+   },
+   "pnl_overstated_ticks": {
+    "ci_hi": 0.5,
+    "ci_lo": 0.3,
+    "value": 0.4
+   },
+   "real_fill_rate": {
+    "ci_hi": 0.35,
+    "ci_lo": 0.25,
+    "value": 0.3
+   },
+   "real_markout_ticks": {
+    "ci_hi": -0.8,
+    "ci_lo": -1.2,
+    "value": -1.0
+   },
+   "rule": "touch",
+   "rule_fill_rate": {
+    "ci_hi": 0.65,
+    "ci_lo": 0.55,
+    "value": 0.6
+   },
+   "rule_markout_ticks": {
+    "ci_hi": 0.7,
+    "ci_lo": 0.3,
+    "value": 0.5
+   },
+   "side": "all",
+   "symbols": 40,
+   "tier": "T1_top100"
+  },
+  {
+   "bar": "1h",
+   "bar_s": 3600,
+   "dates": 3,
+   "flagged_share": 0.0,
+   "orders": 4000,
+   "p_real_given_rule": {
+    "ci_hi": 0.7,
+    "ci_lo": 0.6,
+    "value": 0.65
+   },
+   "p_rule_given_real": {
+    "ci_hi": 0.95,
+    "ci_lo": 0.85,
+    "value": 0.9
+   },
+   "pnl_overstated_ticks": {
+    "ci_hi": 0.5,
+    "ci_lo": 0.3,
+    "value": 0.4
+   },
+   "real_fill_rate": {
+    "ci_hi": 0.35,
+    "ci_lo": 0.25,
+    "value": 0.3
+   },
+   "real_markout_ticks": {
+    "ci_hi": -0.8,
+    "ci_lo": -1.2,
+    "value": -1.0
+   },
+   "rule": "touch",
+   "rule_fill_rate": {
+    "ci_hi": 0.65,
+    "ci_lo": 0.55,
+    "value": 0.6
+   },
+   "rule_markout_ticks": {
+    "ci_hi": 0.7,
+    "ci_lo": 0.3,
+    "value": 0.5
+   },
+   "side": "buy",
+   "symbols": 40,
+   "tier": "T1_top100"
+  },
+  {
+   "bar": "1h",
+   "bar_s": 3600,
+   "dates": 3,
+   "flagged_share": 0.0,
+   "orders": 4000,
+   "p_real_given_rule": {
+    "ci_hi": 0.72,
+    "ci_lo": 0.62,
+    "value": 0.67
+   },
+   "p_rule_given_real": {
+    "ci_hi": 0.95,
+    "ci_lo": 0.85,
+    "value": 0.9
+   },
+   "pnl_overstated_ticks": {
+    "ci_hi": 0.5,
+    "ci_lo": 0.3,
+    "value": 0.4
+   },
+   "real_fill_rate": {
+    "ci_hi": 0.35,
+    "ci_lo": 0.25,
+    "value": 0.3
+   },
+   "real_markout_ticks": {
+    "ci_hi": -0.8,
+    "ci_lo": -1.2,
+    "value": -1.0
+   },
+   "rule": "touch",
+   "rule_fill_rate": {
+    "ci_hi": 0.65,
+    "ci_lo": 0.55,
+    "value": 0.6
+   },
+   "rule_markout_ticks": {
+    "ci_hi": 0.7,
+    "ci_lo": 0.3,
+    "value": 0.5
+   },
+   "side": "sell",
+   "symbols": 40,
+   "tier": "T1_top100"
+  },
+  {
+   "bar": "1h",
+   "bar_s": 3600,
+   "dates": 3,
+   "flagged_share": 0.0,
+   "orders": 4000,
+   "p_real_given_rule": {
+    "ci_hi": 0.71,
+    "ci_lo": 0.61,
+    "value": 0.66
+   },
+   "p_rule_given_real": {
+    "ci_hi": 0.95,
+    "ci_lo": 0.85,
+    "value": 0.9
+   },
+   "pnl_overstated_ticks": {
+    "ci_hi": 0.5,
+    "ci_lo": 0.3,
+    "value": 0.4
+   },
+   "real_fill_rate": {
+    "ci_hi": 0.35,
+    "ci_lo": 0.25,
+    "value": 0.3
+   },
+   "real_markout_ticks": {
+    "ci_hi": -0.8,
+    "ci_lo": -1.2,
+    "value": -1.0
+   },
+   "rule": "touch",
+   "rule_fill_rate": {
+    "ci_hi": 0.65,
+    "ci_lo": 0.55,
+    "value": 0.6
+   },
+   "rule_markout_ticks": {
+    "ci_hi": 0.7,
+    "ci_lo": 0.3,
+    "value": 0.5
+   },
+   "side": "all",
+   "symbols": 40,
+   "tier": "T1_top100"
+  }
+ ],
+ "schema": "qt.atlas.touch",
+ "schema_version": 1,
+ "source": "synthetic"
+}
