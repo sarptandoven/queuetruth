@@ -1,0 +1,249 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.atlas_summary",
+  "$defs": {
+    "Interval": {
+      "additionalProperties": false,
+      "description": "A point estimate with its 95% interval (from the atlas's bootstrap); `lo` and `hi` are null when the atlas\nhas no interval (a symbol seen on one day).",
+      "properties": {
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        },
+        "lo": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Lo"
+        },
+        "hi": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Hi"
+        }
+      },
+      "required": [
+        "value",
+        "lo",
+        "hi"
+      ],
+      "title": "Interval",
+      "type": "object"
+    },
+    "SummaryRow": {
+      "additionalProperties": false,
+      "description": "One model in one (mode, shadow population, tier, horizon).",
+      "properties": {
+        "library": {
+          "enum": [
+            "hftbacktest",
+            "nautilus",
+            "databento",
+            "bound",
+            "other"
+          ],
+          "title": "Library",
+          "type": "string"
+        },
+        "library_name": {
+          "title": "Library Name",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "model_id": {
+          "title": "Model Id",
+          "type": "string"
+        },
+        "is_setting": {
+          "title": "Is Setting",
+          "type": "boolean"
+        },
+        "mode": {
+          "title": "Mode",
+          "type": "string"
+        },
+        "shadow_population": {
+          "title": "Shadow Population",
+          "type": "string"
+        },
+        "tier": {
+          "title": "Tier",
+          "type": "string"
+        },
+        "tier_name": {
+          "title": "Tier Name",
+          "type": "string"
+        },
+        "horizon": {
+          "title": "Horizon",
+          "type": "string"
+        },
+        "horizon_seconds": {
+          "title": "Horizon Seconds",
+          "type": "number"
+        },
+        "fill_rate_bias_pp": {
+          "$ref": "#/$defs/Interval"
+        },
+        "exact_fill_rate_pct": {
+          "$ref": "#/$defs/Interval"
+        },
+        "model_fill_rate_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Model Fill Rate Pct"
+        },
+        "verdict": {
+          "enum": [
+            "too_optimistic",
+            "too_pessimistic",
+            "no_clear_difference"
+          ],
+          "title": "Verdict",
+          "type": "string"
+        },
+        "n": {
+          "title": "N",
+          "type": "integer"
+        },
+        "n_symbols": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "N Symbols"
+        },
+        "n_dates": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "N Dates"
+        },
+        "pnl_bias_ticks": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Interval"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "flagged_share": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Flagged Share"
+        }
+      },
+      "required": [
+        "library",
+        "library_name",
+        "label",
+        "model_id",
+        "is_setting",
+        "mode",
+        "shadow_population",
+        "tier",
+        "tier_name",
+        "horizon",
+        "horizon_seconds",
+        "fill_rate_bias_pp",
+        "exact_fill_rate_pct",
+        "model_fill_rate_pct",
+        "verdict",
+        "n",
+        "n_symbols",
+        "n_dates",
+        "pnl_bias_ticks",
+        "flagged_share"
+      ],
+      "title": "SummaryRow",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "`summary.json`: every row of the atlas's leaderboard, sorted by mode, population, tier, library, model id and\nhorizon.",
+  "properties": {
+    "schema": {
+      "const": "qt.atlas_summary",
+      "default": "qt.atlas_summary",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "venue": {
+      "title": "Venue",
+      "type": "string"
+    },
+    "atlas_root": {
+      "title": "Atlas Root",
+      "type": "string"
+    },
+    "headline_horizon": {
+      "title": "Headline Horizon",
+      "type": "string"
+    },
+    "rows": {
+      "items": {
+        "$ref": "#/$defs/SummaryRow"
+      },
+      "title": "Rows",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "venue",
+    "atlas_root",
+    "headline_horizon"
+  ],
+  "type": "object"
+}

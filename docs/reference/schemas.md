@@ -46,6 +46,12 @@ directory with `orders.parquet` (`qt.live_orders`), `events.parquet` (`qt.live_e
 |---|---|
 | [`qt.api_key`](#qtapi_key) | An API key (secret never included). |
 | [`qt.api_key_created`](#qtapi_key_created) | A newly created API key with its secret (shown once). |
+| [`qt.atlas.touch`](#qtatlastouch) | The document: the atlas it comes from, the days it used and every row. |
+| [`qt.atlas_answer`](#qtatlas_answer) |  |
+| [`qt.atlas_api_manifest`](#qtatlas_api_manifest) |  |
+| [`qt.atlas_configs`](#qtatlas_configs) | `configs.json`: one closest setting per (tier, library), `ALL` first. |
+| [`qt.atlas_summary`](#qtatlas_summary) | `summary.json`: every row of the atlas's leaderboard, sorted by mode, population, tier, library, model id and horizon. |
+| [`qt.atlas_symbols`](#qtatlas_symbols) | One shard: the symbols whose first letter is `letter` (`_` for any other first character). |
 | [`qt.bench`](#qtbench) | Result of `bench replay`. |
 | [`qt.bot_reconcile`](#qtbot_reconcile) | `reconcile.json` (`qt.bot_reconcile`): counts, price advantage, the score result and every order row (sorted). `run_id` hashes the spec (`options`: every input as a sha256, every option) with the engine version (SPEC 7.3); the log paths are relative to the output directory, so the document does not depend on where it was written. |
 | [`qt.calibration_result`](#qtcalibration_result) | Result of `calibrate` (SPEC 5.4). |
@@ -169,6 +175,306 @@ A newly created API key with its secret (shown once).
 | `last_used_at` | string or null | no | `null` |  |
 | `revoked_at` | string or null | no | `null` |  |
 | `secret` | string or null | yes |  |  |
+
+### qt.atlas.touch
+
+File: `schemas/json/qt.atlas.touch.schema.json`.
+
+The document: the atlas it comes from, the days it used and every row.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.atlas.touch" | yes | `"qt.atlas.touch"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `atlas_root` | string | yes |  |  |
+| `source` | string | yes |  | venue whose prints and queue are used: iex or nasdaq |
+| `population` | string | yes |  | the atlas shadow population |
+| `days` | array of string | yes |  | the days the tables pool (ISO dates); days reduced before them are left out |
+| `flag_policy` | string | yes |  |  |
+| `definition` | string | yes |  | docs page with the exact definitions |
+| `attribution` | string or null | no | `null` |  |
+| `rows` | array of TouchRow | yes |  |  |
+
+**`Estimate`** (in `qt.atlas.touch`)
+
+A value with its 95% interval (null when undefined).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `value` | number or null | yes |  |  |
+| `ci_lo` | number or null | yes |  |  |
+| `ci_hi` | number or null | yes |  |  |
+
+**`TouchRow`** (in `qt.atlas.touch`)
+
+One (tier, side, bar length, rule) cell.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `tier` | string | yes |  | liquidity tier, or ALL |
+| `side` | one of "buy", "sell", "all" | yes |  |  |
+| `bar` | string | yes |  | bar length: 1m, 5m or 1h |
+| `bar_s` | integer | yes |  | bar length in seconds |
+| `rule` | string | yes |  | touch, or penetrate_<k> (k ticks through the limit) |
+| `orders` | integer | yes |  | orders placed |
+| `dates` | integer | yes |  |  |
+| `symbols` | integer | yes |  |  |
+| `real_fill_rate` | Estimate | yes |  | share of orders the real queue filled before the close |
+| `rule_fill_rate` | Estimate | yes |  | share of orders the rule filled before the close |
+| `p_real_given_rule` | Estimate | yes |  | of the rule's fills, the share the real queue had filled by the end of the same bar |
+| `p_rule_given_real` | Estimate | yes |  | of the real fills, the share the rule had filled by the end of the same bar |
+| `real_markout_ticks` | Estimate | yes |  | average markout of the real fills one bar later, in ticks |
+| `rule_markout_ticks` | Estimate | yes |  | average markout of the rule's fills one bar later, in ticks |
+| `pnl_overstated_ticks` | Estimate | yes |  | the rule's markout P&L minus the real one per order placed, in ticks (positive: too high) |
+| `flagged_share` | number or null | yes |  | share of the orders on symbol-days that are not exact_ok (0 under flag policy exclude) |
+
+### qt.atlas_answer
+
+File: `schemas/json/qt.atlas_answer.schema.json`.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.atlas_answer" | yes | `"qt.atlas_answer"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `summary` | string | yes |  |  |
+| `venue` | string | yes |  |  |
+| `venue_name` | string | yes |  |  |
+| `atlas_root` | string | yes |  |  |
+| `built_at` | string | yes |  |  |
+| `window` | string | yes |  |  |
+| `library` | string or null | yes |  |  |
+| `symbol` | string or null | yes |  |  |
+| `tier` | string | yes |  |  |
+| `tier_name` | string | yes |  |  |
+| `horizon` | string | yes |  |  |
+| `mode` | string | yes |  |  |
+| `shadow_population` | string | yes |  |  |
+| `source` | string | yes |  |  |
+| `rows` | array of AnswerRow | no |  |  |
+| `configs` | array of AnswerConfig | no |  |  |
+| `attribution` | string or null | yes |  |  |
+| `warnings` | array of string | no |  |  |
+
+**`AnswerConfig`** (in `qt.atlas_answer`)
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `library` | one of "hftbacktest", "nautilus", "databento", "bound", "other" | yes |  |  |
+| `label` | string | yes |  |  |
+| `model_id` | string | yes |  |  |
+| `fill_rate_bias_pp` | Interval | yes |  |  |
+| `verdict` | one of "too_optimistic", "too_pessimistic", "no_clear_difference" | yes |  |  |
+| `verdict_text` | string | yes |  |  |
+| `config` | string or null | yes |  |  |
+| `config_kind` | string or null | yes |  |  |
+| `note` | string or null | yes |  |  |
+
+**`AnswerRow`** (in `qt.atlas_answer`)
+
+One setting in the answer's table.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `library` | one of "hftbacktest", "nautilus", "databento", "bound", "other" | yes |  |  |
+| `label` | string | yes |  |  |
+| `model_id` | string | yes |  |  |
+| `horizon` | string | yes |  |  |
+| `fill_rate_bias_pp` | Interval | yes |  |  |
+| `verdict` | one of "too_optimistic", "too_pessimistic", "no_clear_difference" | yes |  |  |
+| `n` | integer | yes |  |  |
+| `days` | integer or null | yes |  |  |
+
+**`Interval`** (in `qt.atlas_answer`)
+
+A point estimate with its 95% interval (from the atlas's bootstrap); `lo` and `hi` are null when the atlas has no interval (a symbol seen on one day).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `value` | number or null | yes |  |  |
+| `lo` | number or null | yes |  |  |
+| `hi` | number or null | yes |  |  |
+
+### qt.atlas_api_manifest
+
+File: `schemas/json/qt.atlas_api_manifest.schema.json`.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.atlas_api_manifest" | yes | `"qt.atlas_api_manifest"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `api_version` | const 1 | no | `1` |  |
+| `built_at` | string | yes |  |  |
+| `atlas_root` | string | yes |  |  |
+| `venue` | string | yes |  |  |
+| `venue_name` | string | yes |  |  |
+| `window` | Window | yes |  |  |
+| `days` | array of string | yes |  |  |
+| `symbol_days` | integer | yes |  |  |
+| `symbols` | integer | yes |  |  |
+| `mode` | string | yes |  |  |
+| `shadow_population` | string | yes |  |  |
+| `headline_horizon` | string | yes |  |  |
+| `attribution` | string or null | yes |  |  |
+| `verify` | string | yes |  |  |
+| `files` | array of ApiFile | yes |  |  |
+
+**`ApiFile`** (in `qt.atlas_api_manifest`)
+
+One file of the API, relative to the directory of `manifest.json` (`summary.json`, `symbols/A.json`).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `path` | string | yes |  |  |
+| `bytes` | integer | yes |  |  |
+| `sha256` | string | yes |  |  |
+
+**`Window`** (in `qt.atlas_api_manifest`)
+
+The trading days the atlas covers (ISO dates).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `from` | string | yes |  |  |
+| `to` | string | yes |  |  |
+
+### qt.atlas_configs
+
+File: `schemas/json/qt.atlas_configs.schema.json`.
+
+`configs.json`: one closest setting per (tier, library), `ALL` first.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.atlas_configs" | yes | `"qt.atlas_configs"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `venue` | string | yes |  |  |
+| `atlas_root` | string | yes |  |  |
+| `mode` | string | yes |  |  |
+| `shadow_population` | string | yes |  |  |
+| `horizon` | string | yes |  |  |
+| `notes` | map of string | no |  |  |
+| `configs` | array of Config | no |  |  |
+
+**`Config`** (in `qt.atlas_configs`)
+
+The closest setting of one library in one tier, at the document's horizon, mode and population.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `library` | one of "hftbacktest", "nautilus", "databento", "bound", "other" | yes |  |  |
+| `library_name` | string | yes |  |  |
+| `tier` | string | yes |  |  |
+| `tier_name` | string | yes |  |  |
+| `label` | string | yes |  |  |
+| `model_id` | string | yes |  |  |
+| `n_settings` | integer | yes |  |  |
+| `fill_rate_bias_pp` | Interval | yes |  |  |
+| `verdict` | one of "too_optimistic", "too_pessimistic", "no_clear_difference" | yes |  |  |
+| `verdict_text` | string | yes |  |  |
+| `overlapping` | array of string | yes |  |  |
+| `overlapping_labels` | array of string | yes |  |  |
+| `pnl_bias_ticks` | Interval or null | yes |  |  |
+| `config` | string or null | yes |  |  |
+| `config_kind` | string or null | yes |  |  |
+
+**`Interval`** (in `qt.atlas_configs`)
+
+A point estimate with its 95% interval (from the atlas's bootstrap); `lo` and `hi` are null when the atlas has no interval (a symbol seen on one day).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `value` | number or null | yes |  |  |
+| `lo` | number or null | yes |  |  |
+| `hi` | number or null | yes |  |  |
+
+### qt.atlas_summary
+
+File: `schemas/json/qt.atlas_summary.schema.json`.
+
+`summary.json`: every row of the atlas's leaderboard, sorted by mode, population, tier, library, model id and horizon.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.atlas_summary" | yes | `"qt.atlas_summary"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `venue` | string | yes |  |  |
+| `atlas_root` | string | yes |  |  |
+| `headline_horizon` | string | yes |  |  |
+| `rows` | array of SummaryRow | no |  |  |
+
+**`Interval`** (in `qt.atlas_summary`)
+
+A point estimate with its 95% interval (from the atlas's bootstrap); `lo` and `hi` are null when the atlas has no interval (a symbol seen on one day).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `value` | number or null | yes |  |  |
+| `lo` | number or null | yes |  |  |
+| `hi` | number or null | yes |  |  |
+
+**`SummaryRow`** (in `qt.atlas_summary`)
+
+One model in one (mode, shadow population, tier, horizon).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `library` | one of "hftbacktest", "nautilus", "databento", "bound", "other" | yes |  |  |
+| `library_name` | string | yes |  |  |
+| `label` | string | yes |  |  |
+| `model_id` | string | yes |  |  |
+| `is_setting` | boolean | yes |  |  |
+| `mode` | string | yes |  |  |
+| `shadow_population` | string | yes |  |  |
+| `tier` | string | yes |  |  |
+| `tier_name` | string | yes |  |  |
+| `horizon` | string | yes |  |  |
+| `horizon_seconds` | number | yes |  |  |
+| `fill_rate_bias_pp` | Interval | yes |  |  |
+| `exact_fill_rate_pct` | Interval | yes |  |  |
+| `model_fill_rate_pct` | number or null | yes |  |  |
+| `verdict` | one of "too_optimistic", "too_pessimistic", "no_clear_difference" | yes |  |  |
+| `n` | integer | yes |  |  |
+| `n_symbols` | integer or null | yes |  |  |
+| `n_dates` | integer or null | yes |  |  |
+| `pnl_bias_ticks` | Interval or null | yes |  |  |
+| `flagged_share` | number or null | yes |  |  |
+
+### qt.atlas_symbols
+
+File: `schemas/json/qt.atlas_symbols.schema.json`.
+
+One shard: the symbols whose first letter is `letter` (`_` for any other first character).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.atlas_symbols" | yes | `"qt.atlas_symbols"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `venue` | string | yes |  |  |
+| `atlas_root` | string | yes |  |  |
+| `letter` | string | yes |  |  |
+| `mode` | string | yes |  |  |
+| `shadow_population` | string | yes |  |  |
+| `horizons` | array of string | yes |  |  |
+| `columns` | array of string | no |  |  |
+| `settings` | array of SymbolSetting | no |  |  |
+| `symbols` | array of SymbolEntry | no |  |  |
+
+**`SymbolEntry`** (in `qt.atlas_symbols`)
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `symbol` | string | yes |  |  |
+| `tier` | string | yes |  |  |
+| `days` | integer | yes |  |  |
+| `cells` | array of array of array of number or null or null or null | yes |  |  |
+
+**`SymbolSetting`** (in `qt.atlas_symbols`)
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `library` | one of "hftbacktest", "nautilus", "databento", "bound", "other" | yes |  |  |
+| `label` | string | yes |  |  |
+| `model_id` | string | yes |  |  |
 
 ### qt.bench
 

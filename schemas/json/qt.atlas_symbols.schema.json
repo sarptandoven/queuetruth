@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.atlas_symbols",
+  "$defs": {
+    "SymbolEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "symbol": {
+          "title": "Symbol",
+          "type": "string"
+        },
+        "tier": {
+          "title": "Tier",
+          "type": "string"
+        },
+        "days": {
+          "title": "Days",
+          "type": "integer"
+        },
+        "cells": {
+          "items": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "type": "array"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Cells",
+          "type": "array"
+        }
+      },
+      "required": [
+        "symbol",
+        "tier",
+        "days",
+        "cells"
+      ],
+      "title": "SymbolEntry",
+      "type": "object"
+    },
+    "SymbolSetting": {
+      "additionalProperties": false,
+      "properties": {
+        "library": {
+          "enum": [
+            "hftbacktest",
+            "nautilus",
+            "databento",
+            "bound",
+            "other"
+          ],
+          "title": "Library",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "model_id": {
+          "title": "Model Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "library",
+        "label",
+        "model_id"
+      ],
+      "title": "SymbolSetting",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One shard: the symbols whose first letter is `letter` (`_` for any other first character).",
+  "properties": {
+    "schema": {
+      "const": "qt.atlas_symbols",
+      "default": "qt.atlas_symbols",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "venue": {
+      "title": "Venue",
+      "type": "string"
+    },
+    "atlas_root": {
+      "title": "Atlas Root",
+      "type": "string"
+    },
+    "letter": {
+      "title": "Letter",
+      "type": "string"
+    },
+    "mode": {
+      "title": "Mode",
+      "type": "string"
+    },
+    "shadow_population": {
+      "title": "Shadow Population",
+      "type": "string"
+    },
+    "horizons": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Horizons",
+      "type": "array"
+    },
+    "columns": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Columns",
+      "type": "array"
+    },
+    "settings": {
+      "items": {
+        "$ref": "#/$defs/SymbolSetting"
+      },
+      "title": "Settings",
+      "type": "array"
+    },
+    "symbols": {
+      "items": {
+        "$ref": "#/$defs/SymbolEntry"
+      },
+      "title": "Symbols",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "venue",
+    "atlas_root",
+    "letter",
+    "mode",
+    "shadow_population",
+    "horizons"
+  ],
+  "type": "object"
+}

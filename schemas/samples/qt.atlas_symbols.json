@@ -1,0 +1,38 @@
+{
+  "sample": {
+    "schema": "qt.atlas_symbols",
+    "schema_version": 1,
+    "venue": "x",
+    "atlas_root": "x",
+    "letter": "x",
+    "mode": "x",
+    "shadow_population": "x",
+    "horizons": [
+      "x"
+    ],
+    "columns": [
+      "x"
+    ],
+    "settings": [
+      {
+        "library": "hftbacktest",
+        "label": "x",
+        "model_id": "x"
+      }
+    ],
+    "symbols": [
+      {
+        "symbol": "x",
+        "tier": "x",
+        "days": 1,
+        "cells": [
+          [
+            [
+              0.5
+            ]
+          ]
+        ]
+      }
+    ]
+  }
+}
