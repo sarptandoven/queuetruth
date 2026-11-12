@@ -91,9 +91,10 @@ class CompareResult(Result):
         f = self.doc.get("fills") or {}
         if f.get("share") is None or f.get("ci_lo") is None:
             return None
+        label = (f.get("interval") or {}).get("label")
         return (
             f"Backtest fills that also filled live: {_pct(f['share'])} (95% CI {_pct(f['ci_lo'])} to "
-            f"{_pct(f['ci_hi'])})."
+            f"{_pct(f['ci_hi'])}{', ' + label if label else ''})."
         )
 
     def _rows(self) -> list[dict[str, Any]]:
