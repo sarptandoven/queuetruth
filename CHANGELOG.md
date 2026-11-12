@@ -8,19 +8,19 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ### Added
 
-- **`queuetruth compare --backtest B --live L [--data D]` and `qt.compare(...)`**: your backtest against your live
-  run, order by order, in one command (docs/how-to/compare-backtest-and-live.md). It reads the backtester from the
-  file (through the Backtester registry) and the live run's kind (a canonical live log, a bot's own database and
-  log, or a venue export) from its records, with `--backtester` and `--venue` to say them, then runs the existing
-  comparison: the reconciler for Freqtrade, Hummingbot, Backtrader, VectorBT and LEAN, and `score` with the
-  simulator arm for hftbacktest and NautilusTrader; with `--data` also the markouts, the P&L gap per order and the
-  exact arm. A venue export is imported first. No instrument map is needed for two logs of the same venue; with
-  `--data` the live instruments are matched to the dataset's symbols and only a name that matches none is asked
-  for. The answer comes first: how many of the backtest's fills happened live (with a 95% interval), the fills
-  only one side made and why, the P&L gap, time to fill (Kaplan-Meier, clustered log-rank), markouts at 100 ms,
-  1 s and 10 s, and the latency measured on the live log; then the orders that differ. It writes `orders.csv`
-  (symbols, decimal prices, venue-local times), `compare.json` and, with `--html`, `compare.html`. `reconcile` and
-  `score` are unchanged.
+- **`queuetruth.dataset`: one way to open, read, check and write a dataset.** `open_dataset(path)` opens an
+  order-level (MBO) or L2 dataset, a prediction-market dataset, or a live or simulator log and returns a `Dataset`:
+  `.kind`, `.manifest` (the document as read, key order and unknown fields kept, every field readers use checked),
+  `.instruments` and `.sessions` (symbol, `price_exp`, `size_exp`, `tick_size`, session times), `.days`,
+  `.table(name, columns=None, filter=None)` (each file's `qt.schema` metadata checked) and `.verify()` (the files
+  against the sha256 and row counts the manifest records, and the `dataset_id`). `DatasetWriter` writes the tables,
+  records their hashes and writes the manifest last, through a temporary name and a rename. The scorer, `dq`, the
+  sandbox, `pm`, `data add`, the certificates, the ledger, MCP, `check` and the live-log writer use it; the files
+  they write keep their bytes. Errors are `QT-INPUT-001` and `QT-INPUT-002` with the path and a hint. A manifest
+  that does not parse now fails with `QT-INPUT-002` where some readers used to treat it as absent.
+  `queuetruth.data.merge.dataset_id`, `queuetruth.cert.certify.dataset_id` and `queuetruth.dq.meta.dataset_id` are
+  deprecated aliases of `queuetruth.dataset.dataset_id`.
+
 - **`queuetruth.integrity`: one implementation of each integrity primitive.** Canonical JSON in each byte form
   that is already published (`canonical_json(obj)` is RFC 8785; `form="compact"`, `"atlas-v1"`, `"compact-ascii"`
   and `"sorted"` keep the other forms), sha256 of bytes, text, files and streams, the hash-chain digests of the run

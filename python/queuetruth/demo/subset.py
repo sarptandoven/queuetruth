@@ -41,6 +41,7 @@ from pathlib import Path
 from typing import Any
 
 from queuetruth._version import __version__
+from queuetruth.dataset import json_text, write_text_atomic
 from queuetruth.demo.fetch import Inflater, Stream, is_url
 from queuetruth.demo.iex import CaptureError, IexCutFilter
 from queuetruth.demo.itch import ItchCutFilter
@@ -394,9 +395,7 @@ def build_subset(
             "download_mb_per_s": round(stream.bytes_read / 1e6 / wall, 2) if wall > 0 else None,
         },
     }
-    tmp = man_p.with_name(man_p.name + ".part")
-    tmp.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-    os.replace(tmp, man_p)
+    write_text_atomic(man_p, json_text(manifest, allow_nan=True))
     return SubsetResult(sub_p, man_p, manifest, False, stream.bytes_read, wall)
 
 

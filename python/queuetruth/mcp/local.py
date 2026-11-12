@@ -54,6 +54,7 @@ from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
+from queuetruth.dataset import MANIFEST_FILE, read_manifest_doc
 from queuetruth.errors import QtError
 from queuetruth.schemas import specs as sp
 from queuetruth.schemas.models import DOC_MODELS, parse_document
@@ -238,7 +239,7 @@ def check_dataset_tree(
     """A dataset directory: `manifest.json` must exist when `require_manifest` (`QT-INPUT-001`; checked first, so a
     broad directory such as the root is refused without walking it), and no entry may be a symlink for which `inside`
     returns None (`QT-CONFIG-001`). At most `MAX_DATASET_ENTRIES` entries are walked (`QT-INPUT-002` beyond)."""
-    if require_manifest and not (top / "manifest.json").is_file():
+    if require_manifest and not (top / MANIFEST_FILE).is_file():
         raise QtError("QT-INPUT-001", f"{what}: not a dataset directory (no manifest.json)")
     seen = 0
     for dirpath, dirnames, filenames in os.walk(top, followlinks=False):
@@ -493,12 +494,12 @@ def _parquet_rows(path: Path, what: str) -> int:
 def _manifest_partitions(dataset: Path) -> list[tuple[int, int]]:
     """`(instrument_id, session_date)` of every partition in the dataset manifest (`QT-INPUT-002` when unreadable)."""
     try:
-        if (dataset / "manifest.json").stat().st_size > MAX_JSON_BYTES:
-            raise ValueError(f"larger than {MAX_JSON_BYTES} bytes")
-        manifest = json.loads((dataset / "manifest.json").read_text(encoding="utf-8"), parse_constant=_reject_constant)
+        manifest = read_manifest_doc(dataset, max_bytes=MAX_JSON_BYTES) or {}
         parts = manifest["partitions"]
         out = [(int(p["instrument_id"]), int(p["session_date"])) for p in parts]
-    except (OSError, ValueError, TypeError, KeyError) as e:
+    except QtError as e:
+        raise QtError("QT-INPUT-002", f"spec.dataset: manifest.json has no readable partitions: {e.message}") from e
+    except (ValueError, TypeError, KeyError) as e:
         raise QtError("QT-INPUT-002", f"spec.dataset: manifest.json has no readable partitions: {e}") from e
     if any(isinstance(p.get("instrument_id"), bool) or isinstance(p.get("session_date"), bool) for p in parts):
         raise QtError("QT-INPUT-002", "spec.dataset: manifest.json has no readable partitions: boolean ids")

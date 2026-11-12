@@ -44,6 +44,7 @@ import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
 from queuetruth import units
+from queuetruth.dataset import Dataset, open_dataset
 from queuetruth.errors import QtError
 from queuetruth.schemas.io import sha256_file
 from queuetruth.schemas.models import QtModel
@@ -744,9 +745,9 @@ _PRICE_COLUMNS = ("price", "limit_px", "px", "avg_px", "fill_px")
 
 
 def _instrument_table(instruments: Any, data: Mapping[str, Any]) -> dict[int, dict[str, Any]]:
-    """instrument id -> {symbol, price_exp, tick_size, session_tz}: from `instruments` (a dataset directory, its
-    `instruments.parquet`, an Arrow table or row dicts), else from the dataset the summary's spec names when it is
-    readable here; empty when unknown."""
+    """instrument id -> {symbol, price_exp, tick_size, session_tz}: from `instruments` (a `queuetruth.dataset.Dataset`,
+    a dataset directory, its `instruments.parquet`, an Arrow table or row dicts), else from the dataset the summary's
+    spec names when it is readable here; empty when unknown."""
     src = instruments
     if src is None:
         spec = data.get("spec") if isinstance(data.get("spec"), Mapping) else {}
@@ -755,14 +756,22 @@ def _instrument_table(instruments: Any, data: Mapping[str, Any]) -> dict[int, di
         if not isinstance(src, str):
             return {}
     rows: list[Mapping[str, Any]]
-    if isinstance(src, (str, Path)):
+    if isinstance(src, Dataset):
+        rows = src.instrument_rows()
+    elif isinstance(src, (str, Path)):
         p = Path(src)
-        p = p / "instruments.parquet" if p.is_dir() else p
-        if not p.is_file():
+        if p.is_dir():
+            if not (p / "instruments.parquet").is_file():
+                if instruments is None:
+                    return {}
+                raise QtError("QT-INPUT-001", f"{p / 'instruments.parquet'}: no instruments table")
+            rows = open_dataset(p, missing_ok=True).instrument_rows()
+        elif not p.is_file():
             if instruments is None:
                 return {}
             raise QtError("QT-INPUT-001", f"{p}: no instruments table")
-        rows = pq.read_table(p).to_pylist()
+        else:
+            rows = pq.read_table(p).to_pylist()
     elif isinstance(src, pa.Table):
         rows = src.to_pylist()
     elif isinstance(src, Sequence):

@@ -45,6 +45,7 @@ from queuetruth.check.symbols import (
     unmapped_error,
     write_map,
 )
+from queuetruth.dataset import MANIFEST_FILE, open_dataset
 from queuetruth.errors import QtError
 
 SCHEMA = "qt.check"
@@ -135,14 +136,13 @@ def _paths(backtest: str | Path | Sequence[str | Path]) -> list[str]:
 
 def _dataset(data: str | Path) -> tuple[Path, dict[str, Any]]:
     root = Path(data)
-    mp = root / "manifest.json"
-    if not mp.is_file():
+    if not (root / MANIFEST_FILE).is_file():
         raise QtError(
             "QT-INPUT-001",
             f"check: {root} is not a queuetruth dataset (no manifest.json)",
             "write one with `queuetruth ingest` (order-level data) or try `queuetruth fixtures synth --out synth`",
         )
-    man = json.loads(mp.read_text())
+    man = open_dataset(root).manifest.to_dict()
     if str(man.get("kind", "mbo")) == "l2":
         raise QtError(
             "QT-CONFIG-001",

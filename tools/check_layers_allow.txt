@@ -45,7 +45,6 @@ queuetruth.demo.cli -> queuetruth.cli._emit_error  # private
 queuetruth.demo.cli -> queuetruth.cli._table  # private
 queuetruth.demo.cli -> queuetruth.cli._wants_json  # private
 queuetruth.dq -> queuetruth.api  # layer
-queuetruth.dq.data -> queuetruth.live.importers._parquet.read_parquet  # private
 queuetruth.eval.toxicity -> queuetruth.api  # layer
 queuetruth.eval.toxicity -> queuetruth.api._planned_life  # private
 queuetruth.eval.toxicity -> queuetruth.api._validate  # private

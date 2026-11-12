@@ -161,6 +161,7 @@ PY_MODULES = [
     "integrity",
     "units",
     "data",
+    "dataset",
     "stats",
     "eval",
     "model",

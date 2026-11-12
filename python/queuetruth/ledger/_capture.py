@@ -12,7 +12,6 @@ from __future__ import annotations
 import datetime
 import functools
 import hashlib
-import json
 import logging
 import math
 import os
@@ -26,6 +25,7 @@ from typing import Any, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
+from queuetruth.dataset import MANIFEST_FILE, read_manifest_doc
 from queuetruth.errors import QtError
 from queuetruth.integrity import canonical_json
 from queuetruth.ledger import _series
@@ -359,15 +359,12 @@ def resolve_core(ref: dict[str, Any]) -> str:
         raise QtError("QT-CONFIG-001", f"cannot resolve reference {ref} locally")
     path = Path(p)
     if path.is_dir():
-        manifest = path / "manifest.json"
-        try:
-            doc = json.loads(manifest.read_text(encoding="utf-8"))
-        except OSError as e:
-            raise QtError("QT-INPUT-001", f"{manifest}: {e.strerror or e}") from None
-        except ValueError as e:
-            raise QtError("QT-INPUT-002", f"{manifest}: {e}") from None
+        manifest = path / MANIFEST_FILE
+        if not manifest.is_file():
+            raise QtError("QT-INPUT-001", f"{manifest}: No such file or directory")
+        doc = read_manifest_doc(path)
         did = doc.get("dataset_id") if isinstance(doc, dict) else None
-        if doc.get("schema") == "qt.dataset_manifest" and isinstance(did, str):
+        if doc is not None and doc.get("schema") == "qt.dataset_manifest" and isinstance(did, str):
             return did
         return sha256_file(manifest)
     got = _file_sha(p)

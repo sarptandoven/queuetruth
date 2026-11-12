@@ -3,12 +3,13 @@
 
 from __future__ import annotations
 
-import hashlib
+import warnings
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from queuetruth.dq.data import date_str
+from queuetruth.dataset import dataset_id as _dataset_id
+from queuetruth.dataset import date_str
 from queuetruth.dq.framework import Check
 from queuetruth.dq.model import DqCheck
 from queuetruth.integrity import sha256_file
@@ -118,8 +119,13 @@ class SymbologyCheck(Check):
 
 
 def dataset_id(shas: list[str], source_format: str) -> str:
-    """SPEC 3.10: sha256 of the sorted partition file hashes, newline-joined, then a newline and the format."""
-    return hashlib.sha256(("\n".join(sorted(shas)) + "\n" + source_format).encode()).hexdigest()
+    """Deprecated: use `queuetruth.dataset.dataset_id`."""
+    warnings.warn(
+        "queuetruth.dq.meta.dataset_id is deprecated; use queuetruth.dataset.dataset_id",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return _dataset_id(shas, source_format)
 
 
 class VintageCheck(Check):
@@ -159,7 +165,7 @@ class VintageCheck(Check):
                     if f.resolve() not in listed:
                         ev_files.add(("not_in_manifest", str(f.relative_to(ds.root)), None, None))
                         warn_n += 1
-        recomputed = dataset_id(shas, str(m.get("source_format") or ""))
+        recomputed = _dataset_id(shas, str(m.get("source_format") or ""))
         id_ok = recomputed == m.get("dataset_id")
         if not id_ok:
             fail_n += 1

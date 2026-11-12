@@ -15,6 +15,8 @@ import pyarrow as pa
 import pyarrow.csv as pacsv
 import pyarrow.parquet as pq
 
+from queuetruth.dataset import SIM_PREFIX as DATASET_SIM_PREFIX
+from queuetruth.dataset import read_manifest as dataset_read_manifest
 from queuetruth.errors import QtError
 from queuetruth.schemas.arrow import DICT_VALUES, FULL_SCHEMAS, SCHEMAS
 from queuetruth.schemas.io import sha256_file, write_table
@@ -202,18 +204,15 @@ def read_live_log(path: str | Path) -> tuple[list[Row], list[Row]]:
 
 
 def read_manifest(path: str | Path) -> dict[str, Any]:
-    """`manifest.json` of a directory as a dict ({} when absent or unreadable)."""
-    m = Path(path) / "manifest.json"
-    if not m.exists():
-        return {}
+    """`manifest.json` of a directory as a dict ({} when absent or unreadable; `queuetruth.dataset.read_manifest`
+    raises for an unreadable one)."""
     try:
-        doc = json.loads(m.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+        return dataset_read_manifest(path, missing_ok=True)
+    except QtError:
         return {}
-    return doc if isinstance(doc, dict) else {}
 
 
-SIM_PREFIX = "sim:"
+SIM_PREFIX = DATASET_SIM_PREFIX
 
 
 def sim_label(orders: list[Row], events: list[Row]) -> str | None:

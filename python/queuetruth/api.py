@@ -34,6 +34,7 @@ import pyarrow.parquet as pq
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from queuetruth import units
+from queuetruth.dataset import open_dataset, read_manifest_doc
 from queuetruth.errors import QtError
 from queuetruth.ledger import recorded as _ledger_recorded
 from queuetruth.schemas import models as m
@@ -481,15 +482,9 @@ def _model_ids(family: str, estimate: float) -> tuple[str, str]:
 
 def _instrument_index(dataset: str) -> dict[tuple[int, int], tuple[int, int, int]]:
     """(instrument_id, session_date days) -> (midnight_utc_ns, open_s, close_s)."""
-    t = pq.read_table(Path(dataset) / "instruments.parquet")
-    days = pc.cast(t.column("session_date"), pa.int32()).to_pylist()
     out = {}
-    for i, iid in enumerate(t.column("instrument_id").to_pylist()):
-        out[(int(iid), int(days[i]))] = (
-            int(t.column("midnight_utc_ns")[i].as_py()),
-            int(t.column("open_s")[i].as_py()),
-            int(t.column("close_s")[i].as_py()),
-        )
+    for ses in open_dataset(dataset, missing_ok=True).sessions:
+        out[ses.key] = (int(ses.midnight_utc_ns), int(ses.open_s), int(ses.close_s))  # type: ignore[arg-type]
     return out
 
 
@@ -840,8 +835,8 @@ _NS = 1_000_000_000
 def dataset_kind(dataset: str | Path) -> str | None:
     """`kind` of a dataset directory's manifest (`mbo` or `l2`); None when it cannot be read."""
     try:
-        doc = json.loads((Path(dataset) / "manifest.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+        doc = read_manifest_doc(dataset)
+    except QtError:
         return None
     k = doc.get("kind") if isinstance(doc, dict) else None
     return str(k) if k is not None else None
@@ -924,8 +919,23 @@ class WhyExplanation(BaseModel):
 
 
 def _instrument_units(root: Path, iid: int, ts: int | None) -> dict[str, Any]:
-    """`queuetruth.units.instrument_units` (kept for older callers)."""
-    return units.instrument_units(root, iid, ts)
+    """`queuetruth.units.instrument_units` over the dataset at `root` (kept for older callers)."""
+    return units.instrument_units(_units_source(root), iid, ts)
+
+
+def _units_source(root: Path) -> Any:
+    """The opened dataset for `units.instrument_units` (one without instruments when it cannot be read)."""
+    try:
+        return open_dataset(root, missing_ok=True)
+    except QtError:
+        return _NoInstruments()
+
+
+class _NoInstruments:
+    """A dataset that cannot be read: no instrument (units as `{}`, as for a missing table)."""
+
+    def instrument(self, instrument_id: int, *, ts: int | None = None) -> None:
+        return None
 
 
 def fmt_utc(ns: int | None, digits: int = 6, date: bool = False) -> str:
@@ -1373,7 +1383,7 @@ def why_explain(
             # `live` + `order_key` stay in the spec: the core removes the order's own MBO records (A1).
             run = sp.model_copy(update={"shadows": s.PathRef(path=str(sched)), "shadow_id": sid, "out": None})
         trace = _native("why", run, m.WhyTrace)
-        inst = units.instrument_units(root, trace.instrument_id, trace.ts_live)
+        inst = units.instrument_units(_units_source(root), trace.instrument_id, trace.ts_live)
         x = WhyExplanation(trace=trace, excluded_order_ids=[o for _, o in excluded], notes=notes, **inst)
         if model is not None or zoo is not None:
             sid = trace.subject.shadow_id or sp.shadow_id or ""
