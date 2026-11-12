@@ -6806,6 +6806,18 @@
             "title": "Bootstrap B",
             "type": "integer"
           },
+          "bootstrap_block": {
+            "default": "auto",
+            "enum": [
+              "auto",
+              "day",
+              "30min",
+              "1min",
+              "instrument_minute"
+            ],
+            "title": "Bootstrap Block",
+            "type": "string"
+          },
           "dataset": {
             "anyOf": [
               {
@@ -6934,6 +6946,17 @@
         "additionalProperties": false,
         "description": "Summary of `zoo`; the Rust runner leaves `leaderboard` empty (filled by `queuetruth.eval`).",
         "properties": {
+          "ci_block": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ci Block"
+          },
           "files": {
             "items": {
               "$ref": "#/components/schemas/FileEntry"
@@ -6961,6 +6984,17 @@
             },
             "title": "Models",
             "type": "array"
+          },
+          "n_ci_blocks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Ci Blocks"
           },
           "n_excluded_hbt_312": {
             "default": 0,
