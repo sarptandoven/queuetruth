@@ -39,6 +39,14 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   is dispatched with `site_only` to rebuild the site over the newest 20 kept days. A day that fails or times out is
   not kept and runs again on the next backfill. It runs only from the default branch, takes 1 to 20 sessions and 1 to
   20 parallel days, and each day checks again that it is still missing before it runs.
+- **Why hftbacktest's L3 FIFO model fills fewer orders** (`scripts/scale/findings/l3-fifo-gap.md`). On one IEX DEEP+
+  day and the Nasdaq ITCH demo window, the released hftbacktest 2.4.4 gives the same first fill as queuetruth's
+  `hbt_l3_fifo[mode=faithful]` on all 117,356 orders, so the atlas gap is hftbacktest's behaviour, not a replica
+  error. Every fill it misses is of an order better than every displayed order on its side: its trade-through needs
+  an execution through the feed's best price, and it skips hidden executions (three quarters of the IEX gap). It
+  fills most of these orders later, when the price moves through them. The page has the cause shares, a harness to
+  rerun it (`scripts/scale/findings/l3_fifo_gap/`), a new test that pins the claim on the synthetic days, and a draft
+  hftbacktest issue (`integrations/hftbacktest/upstream/l3-fifo-best-priced-orders.md`, not filed).
 
 ### Changed
 

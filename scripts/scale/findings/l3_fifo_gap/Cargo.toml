@@ -1,0 +1,15 @@
+# Real-data attribution harness of the hbt_l3_fifo gap (scripts/scale/findings/l3-fifo-gap.md). Not a workspace
+# member: build it with `cargo build --release --manifest-path scripts/scale/findings/l3_fifo_gap/Cargo.toml`.
+[package]
+name = "l3-fifo-gap"
+version = "0.0.0"
+edition = "2024"
+publish = false
+license = "Apache-2.0"
+
+[dependencies]
+queuetruth-types = { path = "../../../../crates/types" }
+queuetruth-book = { path = "../../../../crates/book" }
+queuetruth-zoo = { path = "../../../../crates/zoo" }
+
+[workspace]
