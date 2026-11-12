@@ -198,7 +198,7 @@ and size of the difference within the window with its 95% interval, the equivale
 followed by the cluster-robust p and cluster count, the number of orders and the gate status, for example:
 
 ```text
-no significant fill-rate difference within 60 s: +0.0 pp (95% CI [+0.0, +0.0]); equivalent within ±2 pp (TOST p = 0); McNemar p = 1 (cluster-robust p = 1, 26 clusters); 200 orders; no gates configured
+no significant fill-rate difference within 1min: +0.0 pp (95% CI [+0.0, +0.0]); equivalent within ±2 pp (TOST p = 0); McNemar p = 1 (cluster-robust p = 1, 26 clusters); 200 orders; no gates configured
 ```
 
 The terminal output of `queuetruth score` leads with the same answer in a `RESULT:` line, then the P&L gap in a
@@ -232,8 +232,8 @@ parts. Parts that offset one another, or a part that comes from a handful of ord
 data of [Getting started](../getting-started.md) (measured 2026-11-01), `front_of_queue` gives:
 
 ```text
-RESULT: the simulator fills 9.0 pp more often than live (95% CI +5.7 to +12.7 pp) within 60s of entry; significant (cluster-robust p = 7.73e-05, 26 clusters); plain McNemar p = 7.63e-06 assumes independent orders
-P&L: the simulator's P&L is 5.78 USD per order too high (95% CI +3.40 to +8.75) at the 1 s markout, mostly from fills it grants that live did not get (+3.09 USD per order); 200 orders
+RESULT: the simulator fills 9.0 pp more often than live (95% CI +5.7 to +12.7 pp) within 1min of entry; significant (cluster-robust p = 7.73e-05, 26 clusters); plain McNemar p = 7.63e-06 assumes independent orders
+P&L: the simulator's P&L is 5.78 USD per order too high (95% CI +3.40 to +8.75) at the 1s markout, mostly from fills it grants that live did not get (+3.09 USD per order); 200 orders
 ```
 
 The rest, +2.69 USD per order, is timing: fills both arms got, which the model gets earlier. With

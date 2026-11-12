@@ -7,6 +7,8 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from queuetruth import units
+
 #: Short reason of each refusal code, for the answer line.
 SHORT = {
     "no_estimate": "the data gave no estimate",
@@ -42,9 +44,14 @@ def _ci(doc: dict[str, Any]) -> str:
     return f"{word} {num(lo) if lo is not None else 'open'} to {num(hi) if hi is not None else 'open'}"
 
 
+def _h(r: dict[str, Any]) -> str:
+    """A held-out row's horizon for people (`1min`; `queuetruth.units`), from its nanoseconds."""
+    return units.format_duration(int(r["horizon_ns"])) if r.get("horizon_ns") is not None else str(r["horizon"])
+
+
 def headline(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
     """The held-out row the answer quotes: among the horizons where the fit wins (all scored horizons when it wins
-    nowhere), 60s when there, else the one where the default is most off."""
+    nowhere), 1min when there, else the one where the default is most off."""
     scored = [r for r in rows if r["fitted_bias_pp"] is not None and r["default_bias_pp"] is not None]
     pool = [r for r in scored if r["result"] == "better"] or scored
     if not pool:
@@ -54,9 +61,9 @@ def headline(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
 
 
 def gain(r: dict[str, Any]) -> str:
-    """`at 60s its fill-rate error is +2.8 pp against +9.2 pp for the default, log loss 89% lower`."""
+    """`at 1min its fill-rate error is +2.8 pp against +9.2 pp for the default, log loss 89% lower`."""
     text = (
-        f"at {r['horizon']} the fill rate is off by {pp(r['fitted_bias_pp'])} with the fit against "
+        f"at {_h(r)} the fill rate is off by {pp(r['fitted_bias_pp'])} with the fit against "
         f"{pp(r['default_bias_pp'])} with the default"
     )
     f, d = r["fitted_logloss"], r["default_logloss"]
@@ -91,7 +98,8 @@ def atlas_answer(doc: dict[str, Any]) -> str:
         "too_pessimistic": "still clearly too pessimistic",
     }.get(a["verdict"], "no clear difference from the real queue")
     return (
-        f"Use {_setting_words(doc)}: the atlas's closest setting for {where}; within {a['horizon']}{bias}{ci}, "
+        f"Use {_setting_words(doc)}: the atlas's closest setting for {where}; within "
+        f"{units.horizon_words(a['horizon'])}{bias}{ci}, "
         f"{clear}. From the atlas, not your data: fit on your own data to confirm."
     )
 
@@ -152,10 +160,10 @@ def answer(doc: dict[str, Any]) -> str:
 
 
 def _losses(rows: list[dict[str, Any]]) -> str:
-    """` (worse at 60s; mixed at 10s: better on one score, worse on the other)`, or empty."""
+    """` (worse at 1min; mixed at 10s: better on one score, worse on the other)`, or empty."""
     parts = []
     for label, text in (("worse", "worse at {}"), ("mixed", "mixed at {}: better on one score, worse on the other")):
-        hs = [r["horizon"] for r in rows if r["result"] == label]
+        hs = [_h(r) for r in rows if r["result"] == label]
         if hs:
             parts.append(text.format(", ".join(hs)))
     return f" ({'; '.join(parts)})" if parts else ""
@@ -191,7 +199,7 @@ def text(doc: dict[str, Any]) -> str:
             ["horizon", "fill-rate error fit", "default", "log loss fit", "default", "better"],
             [
                 [
-                    r["horizon"],
+                    _h(r),
                     pp(r["fitted_bias_pp"]),
                     pp(r["default_bias_pp"]),
                     num(r["fitted_logloss"]),

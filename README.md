@@ -166,8 +166,8 @@ The same from Python:
 import queuetruth as qt
 
 z = qt.run_zoo({"dataset": {"path": "synth"}, "shadows": {"path": "shadows.parquet"}, "out": "zoo"})
-for row in z.leaderboard:  # fill-rate bias vs exact at 60 s, with its 95% CI
-    b = row.fill_rate_bias["60000000000"]
+for row in z.leaderboard:  # fill-rate bias vs exact at 1min, with its 95% CI
+    b = row.fill_rate_bias["1min"]
     print(f"{row.model_id:50s} {100 * b.value:+.2f} pp [{100 * b.ci_lo:+.2f}, {100 * b.ci_hi:+.2f}]")
 ```
 

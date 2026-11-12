@@ -400,7 +400,7 @@ its 95% interval, the equivalence result, the exact McNemar p with the cluster-r
 number of orders and the gate status. On the synthetic exact arm above it reads:
 
 ```text
-no significant fill-rate difference within 60 s: +0.0 pp (95% CI [+0.0, +0.0]); equivalent within ±2 pp (TOST p = 0); McNemar p = 1 (cluster-robust p = 1, 26 clusters); 200 orders; no gates configured
+no significant fill-rate difference within 1min: +0.0 pp (95% CI [+0.0, +0.0]); equivalent within ±2 pp (TOST p = 0); McNemar p = 1 (cluster-robust p = 1, 26 clusters); 200 orders; no gates configured
 ```
 
 The cluster-robust test is also in the summary field `discordance_clustered` (method, estimate, interval, p,

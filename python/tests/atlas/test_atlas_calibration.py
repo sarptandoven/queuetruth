@@ -28,7 +28,7 @@ def test_nautilus_setting_is_a_fit_result_with_its_source() -> None:
     assert (a["tier"], a["horizon"], a["days"], a["atlas_root"]) == ("ALL", "1min", 3, "cd" * 32)
     assert a["verdict"] == "no_clear_difference" and a["fill_rate_bias_pp"] == {"value": 0.1, "lo": -0.2, "hi": 0.4}
     assert cal.summary.startswith("Use p = 1 for NautilusTrader prob_fill_on_limit: the atlas's closest setting for ")
-    assert "within 1min its fill rate is off by +0.1 pp (95% interval -0.2 pp to +0.4 pp)" in cal.summary
+    assert "within 1 minute its fill rate is off by +0.1 pp (95% interval -0.2 pp to +0.4 pp)" in cal.summary
     assert cal.summary.endswith("From the atlas, not your data: fit on your own data to confirm.")
     text = cal.text()
     assert text.splitlines()[0] == cal.summary and "settings: prob_fill_on_limit=1.0" in text

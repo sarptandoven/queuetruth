@@ -157,6 +157,9 @@ class Provenance:
 
     entries: list[tuple[str, str]] = field(default_factory=list)  # (source description, status)
     price_exp: dict[int, int | None] = field(default_factory=dict)
+    #: instrument id -> symbol and session time zone, from the datasets' `instruments.parquet` (human units).
+    symbol: dict[int, str] = field(default_factory=dict)
+    session_tz: dict[int, str] = field(default_factory=dict)
     vendor_ids: set[str] = field(default_factory=set)  # dataset ids ingested from a vendor file
 
     def add(self, what: str, status: str) -> None:
@@ -289,6 +292,25 @@ def _spec_path(spec: dict[str, Any], key: str) -> str | None:
     return None
 
 
+def _note_instruments(prov: Provenance, path: Path) -> None:
+    """Symbols and session time zones of a dataset's instruments (display only; unreadable files are skipped)."""
+    if not path.is_file():
+        return
+    try:
+        t = pq.read_table(path)
+    except (OSError, pa.ArrowException):
+        return
+    names = set(t.column_names)
+    for r in t.select([c for c in ("instrument_id", "symbol", "session_tz") if c in names]).to_pylist():
+        if r.get("instrument_id") is None:
+            continue
+        iid = int(r["instrument_id"])
+        if r.get("symbol"):
+            prov.symbol.setdefault(iid, str(r["symbol"]))
+        if r.get("session_tz"):
+            prov.session_tz.setdefault(iid, str(r["session_tz"]))
+
+
 def _provenance(runs: list[RunDir], files: list[FileRec]) -> Provenance:
     prov = Provenance()
     seen_paths: set[str] = set()
@@ -349,6 +371,7 @@ def _provenance(runs: list[RunDir], files: list[FileRec]) -> Provenance:
                             )
                         )
                         note_manifest(man, _display(ds, "manifest.json"))
+                _note_instruments(prov, Path(ds) / "instruments.parquet")
             lv = _spec_path(spec, "live")
             if lv and lv not in seen_paths:
                 seen_paths.add(lv)

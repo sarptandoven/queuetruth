@@ -273,3 +273,11 @@ def test_cli_asks_before_downloading(monkeypatch: Any, tmp_path: Path, capsys: p
     monkeypatch.setattr(_cli, "_ask", lambda prompt: "n\n")
     assert _cli.main(["atlas"]) == 2 and calls == []
     assert "nothing was downloaded" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("horizon", ["1min", "1m", "60 s", "60000000000", 60_000_000_000])
+def test_horizon_in_any_human_or_nanosecond_form(site: Path, horizon: Any) -> None:
+    """One duration grammar (`queuetruth.units`): `1min`, `60 s` and the nanoseconds of a JSON key are one horizon."""
+    want = qt.atlas.lookup(library="nautilus", source=site)
+    got = qt.atlas.lookup(library="nautilus", horizon=horizon, source=site)
+    assert got.summary == want.summary and got.rows == want.rows

@@ -96,7 +96,7 @@ def test_finding_names_the_granted_fills_and_parts_add_up():
     assert math.fsum(p.values()) == pytest.approx(g["mean_ccy"], rel=1e-12)
     assert g["parts_ci_lo"]["granted"] > 0 and g["main_part"] == "granted"
     assert g["headline"] == (
-        "the simulator's P&L is 0.682 USD per order too high (95% CI +0.400 to +0.900) at the 1 s markout, mostly "
+        "the simulator's P&L is 0.682 USD per order too high (95% CI +0.400 to +0.900) at the 1s markout, mostly "
         "from fills it grants that live did not get (+0.675 USD per order); 12 orders"
     )
 
@@ -126,7 +126,7 @@ def test_no_part_named_without_order_rows_or_when_parts_offset():
     orders = [_orow(S, f"g{i}", 0, 10, missed_fill=0.9) for i in range(9)]
     g = _gap(orders, 0.5, 1.2, scored=False)  # the report's fallback for older summaries
     assert g["parts_ci_lo"] == dict.fromkeys(PART_WORDS) and g["main_part"] is None
-    assert g["headline"].endswith("at the 1 s markout; 9 orders")
+    assert g["headline"].endswith("at the 1s markout; 9 orders")
     # timing +0.4 and granted +0.35 push up, denied -0.45 pulls down: the gap is +0.3 and no part is most of it
     parts = {"granted": 0.35, "denied": -0.45, "timing": 0.4, "fees": 0.0}
     sure = dict.fromkeys(PART_WORDS, (0.01, 1.0))
@@ -142,7 +142,7 @@ def test_ci_with_zero_is_no_difference_found():
     g = _gap(orders, -0.4, 0.7)
     assert g["direction"] == "no_significant_difference" and g["main_part"] is None
     h = g["headline"]
-    assert h.startswith("no P&L difference found at the 1 s markout: the simulator's P&L is +0.150 USD per order")
+    assert h.startswith("no P&L difference found at the 1s markout: the simulator's P&L is +0.150 USD per order")
     assert "95% CI -0.400 to +0.700 includes 0; 2 orders)" in h
     assert "too high" not in h and "mostly" not in h
     # a CI touching 0 does not exclude it
@@ -166,7 +166,7 @@ def test_fills_only_live_log_is_not_answerable():
     g = _gap(orders, -2.5, -1.5, fills_only=True)
     assert g["direction"] == "not_answerable" and g["main_part"] is None and g["mean_ccy"] == -2.0
     assert g["reason"] == FILLS_ONLY_REASON
-    assert g["headline"].startswith("P&L gap not answerable at the 1 s markout: the live log holds fills but not")
+    assert g["headline"].startswith("P&L gap not answerable at the 1s markout: the live log holds fills but not")
     assert "too low" not in g["headline"]
 
 
@@ -181,7 +181,7 @@ def test_not_computable_gives_the_reason():
     assert g["parts_ccy"] == dict.fromkeys(PART_WORDS)
     assert g["reason"] == "no dataset quotes: 2; no quote at t + h: 1"
     assert g["headline"] == (
-        "P&L not computable at the 1 s markout: no scored order could be valued (no dataset quotes: 2; no quote at "
+        "P&L not computable at the 1s markout: no scored order could be valued (no dataset quotes: 2; no quote at "
         "t + h: 1)"
     )
     PnlGap.model_validate(g)
@@ -229,7 +229,7 @@ def test_money_format():
 
 
 def _rising():
-    """Quotes that rise one tick every 200 ms around 100.00 (a buy filled at the bid makes money a second later)."""
+    """Quotes that rise one tick every 200ms around 100.00 (a buy filled at the bid makes money a second later)."""
     q = [(T0 - S + i * 200 * MS, PX + i * TICK, PX + (i + 1) * TICK) for i in range(1, 2000)]
     return _bbo(q), make_table("qt.instruments", [_instruments()])
 

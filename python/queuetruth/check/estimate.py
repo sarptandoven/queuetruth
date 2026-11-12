@@ -28,13 +28,13 @@ from __future__ import annotations
 import csv
 import json
 import math
-import re
 import tempfile
 import zipfile
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
+from queuetruth import units
 from queuetruth.errors import QtError
 
 SCHEMA = "qt.check_estimate"
@@ -55,13 +55,14 @@ _NO_TOUCH = (
 
 
 def bar_of(text: str) -> str:
-    """`1m`, `5m` or `1h` from `1m`, `1min`, `5min`, `60m`, `1h`, `3600s` (`QT-USAGE-001` otherwise)."""
-    m = re.fullmatch(r"\s*(\d+)\s*(s|sec|m|min|h|hr)\s*", str(text).lower())
-    if m is None:
-        raise QtError("QT-USAGE-001", f"check: --bar {text!r} is not a bar length (1m, 5m or 1h)")
-    sec = int(m.group(1)) * {"s": 1, "sec": 1, "m": 60, "min": 60, "h": 3600, "hr": 3600}[m.group(2)]
+    """`1m`, `5m` or `1h` (the touch tables' bar keys) from any duration `queuetruth.units.parse_duration` reads:
+    `1m`, `1min`, `5min`, `60m`, `1h`, `3600s`, `60 s` (`QT-USAGE-001` otherwise)."""
+    try:
+        ns = units.parse_duration(str(text), what="--bar", bare_ns=False)
+    except units.DurationError:
+        raise QtError("QT-USAGE-001", f"check: --bar {text!r} is not a bar length (1m, 5m or 1h)") from None
     for name, size in _BARS:
-        if sec == size:
+        if ns == size * 1_000_000_000:
             return name
     raise QtError(
         "QT-USAGE-001",

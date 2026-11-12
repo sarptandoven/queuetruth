@@ -52,6 +52,7 @@ MCS reuses `bootstrap_b` and `seed`.
 from __future__ import annotations
 
 import math
+import warnings
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -59,6 +60,7 @@ from typing import Any
 import numpy as np
 import pyarrow as pa
 
+from queuetruth import units
 from queuetruth.errors import QtError
 from queuetruth.eval import _cols as C
 
@@ -188,12 +190,13 @@ def rank_leaderboard(entries: Sequence[Any], horizon_ns: int | None) -> list[Any
 
 
 def duration_text(ns: int) -> str:
-    """`60 s`, `500 ms`, `1.5 s`, `5 min` (plain ASCII; minutes from 5 min on)."""
-    v = float(ns)
-    for unit, scale in (("min", 6e10), ("s", 1e9), ("ms", 1e6), ("us", 1e3)):
-        if v >= scale and (unit != "min" or (v % scale == 0 and v >= 3e11)):
-            return f"{v / scale:g} {unit}"
-    return f"{int(ns)} ns"
+    """Deprecated: use `queuetruth.units.format_duration` (`1min`, `500ms`, `1.5s`)."""
+    warnings.warn(
+        "queuetruth.eval.leaderboard.duration_text is deprecated; use queuetruth.units.format_duration",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return units.format_duration(int(ns))
 
 
 def pct(x: float) -> str:
@@ -251,7 +254,7 @@ def reality_gap_line(ranked: Sequence[Any], horizon_ns: int | None) -> str | Non
     rows = [(m, v) for m, v in rows if v is not None]
     if horizon_ns is None or not rows:
         return None
-    when = duration_text(int(horizon_ns))
+    when = units.format_duration(int(horizon_ns))
     (m0, v0), (m1, v1) = rows[0], rows[-1]
     if len(rows) == 1:
         return f"reality gap at {when}: {m0} {_pp(v0)} pp (model minus exact fill rate)"
@@ -264,7 +267,7 @@ def reality_gap_line(ranked: Sequence[Any], horizon_ns: int | None) -> str | Non
 def _bias_sentence(entry: Any, horizon_ns: int | None, m: str) -> str:
     if horizon_ns is None:
         return f"{m}: no horizon with an exact label."
-    when = duration_text(int(horizon_ns))
+    when = units.format_duration(int(horizon_ns))
     v, lo, hi = bias_at(entry, horizon_ns)
     if v is None:
         return f"At {when}, {m} has no fill-rate bias: no shadow has an exact label at that horizon."
@@ -452,7 +455,7 @@ def leaderboard_mcs(
         predictions, planned_life, h_max_ns=h_max_ns, exclude_families=exclude_families, block=block
     ):
         key = str(hl.horizon_ns)
-        when = duration_text(hl.horizon_ns)
+        when = units.format_duration(hl.horizon_ns)
         if hl.n_dropped:
             notes.append(
                 f"{MCS_WARNING_PREFIX}at {when}, {hl.n_dropped:,} shadow(s) lack a row for some model and are left "
@@ -484,7 +487,7 @@ def leaderboard_mcs(
     if few:  # one line for every horizon without a model confidence set
         counts = sorted({hl.n_blocks for hl in few})
         n_txt = str(counts[0]) if len(counts) == 1 else f"{counts[0]} to {counts[-1]}"
-        when = ", ".join(duration_text(hl.horizon_ns) for hl in few)
+        when = ", ".join(units.format_duration(hl.horizon_ns) for hl in few)
         notes.append(
             f"{MCS_WARNING_PREFIX}at {when}, {n_txt} bootstrap block(s) ({few[0].block_kind}) < {MCS_MIN_BLOCKS}: "
             "no model confidence set (MCS fields null)"
@@ -576,7 +579,7 @@ def mcs_sentence(entries: Sequence[Any], horizon_ns: int | None) -> str | None:
     (members by ascending error), or a sentence saying there is no set at that horizon; None without MCS fields."""
     if horizon_ns is None or not has_mcs(entries):
         return None
-    when = duration_text(int(horizon_ns))
+    when = units.format_duration(int(horizon_ns))
     key = str(int(horizon_ns))
     scored = [e for e in entries if isinstance(m := _field(e, "mcs_member") or {}, dict) and m.get(key) is not None]
     if not scored:
