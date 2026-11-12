@@ -161,7 +161,7 @@ Short summaries of the terms as we read them on 2026-10-18. Follow the links for
 - **Kalshi** (read 2026-10-22). The DCM Rulebook v1.29 (Rule 11.1(b)) lets members use market data for their own
   internal business purposes and bars distributing, selling or retransmitting it to third parties; the Developer
   Agreement limits API use to your own trading and bars use for other benchmarking or competitive purposes. Running
-  the prediction-market kit (`queuetruth pm`) on your own captures for your own trading fits that; sending captures,
+  the prediction-market kit (`queuetruth advanced pm`) on your own captures for your own trading fits that; sending captures,
   books or scores to anyone else, hosting them, or publishing scores derived from Kalshi data needs Kalshi's written
   permission.
 - **Polymarket** (read 2026-10-22). The Terms of Use (effective 2026-08-11) bar "Capital Market Clients" (market
@@ -170,7 +170,7 @@ Short summaries of the terms as we read them on 2026-10-18. Follow the links for
   are such a firm, you need that agreement before you capture data for the kit. Polymarket US (Rulebook Rule 5.3(g))
   bars redistributing information received through its trading system without express permission.
 - **The prediction-market kit is self-hosted use on your own data only.** It reads only files you captured under
-  your own account, makes no network calls, ships no venue data (its example captures, `queuetruth pm fixtures`, are
+  your own account, makes no network calls, ships no venue data (its example captures, `queuetruth advanced pm fixtures`, are
   simulated with invented markets and accounts) and has no upload, hosting or publishing path; every output document
   repeats a one-line terms notice. The sources and dates are in `queuetruth.pm.terms`, and the how-to explains them:
   [Score market making on Kalshi or Polymarket](how-to/prediction-market-making.md).

@@ -174,10 +174,10 @@ export QT_API_KEY=qt_live_...            # a write key
 cat > replay.json <<'JSON'
 {"dataset": {"dataset_id": "ds_01JABCDEFGHJKMNPQRSTVWXYZ0"}, "shadows": {"upload_id": "up_01JABCDEFGHJKMNPQRSTVWXYZ0"}}
 JSON
-queuetruth jobs submit replay --spec replay.json --wait --output-format json > job.json
+queuetruth advanced jobs submit replay --spec replay.json --wait --output-format json > job.json
 JOB=$(python -c 'import json; print(json.load(open("job.json"))["id"])')
-queuetruth jobs files "$JOB"
-queuetruth jobs download "$JOB" --out out/
+queuetruth advanced jobs files "$JOB"
+queuetruth advanced jobs download "$JOB" --out out/
 ```
 
 `jobs submit KIND` accepts `replay`, `zoo`, `calibration`, `scorecard` and `report`, sends an idempotency key (yours with
@@ -228,7 +228,7 @@ Directory inputs that are not datasets (a canonical live log for `ScorecardSpec.
 `sim.log`) are uploaded as one `.zip`, `.tar`, `.tar.gz` or `.tgz` archive. The worker downloads it and the job's
 child process extracts it into the job's private directory, with path and decompression-ratio guards. Dataset
 registration extracts archives only for `format` `parquet`: a dataset that queuetruth already normalized (for example
-the output of `queuetruth fixtures synth`) can be uploaded as one archive of its directory and registered with
+the output of `queuetruth advanced fixtures synth`) can be uploaded as one archive of its directory and registered with
 `format` `parquet` (uploading its `qt.mbo` partition files and `instruments.parquet` one by one also works). For the
 other formats, upload the source files themselves.
 

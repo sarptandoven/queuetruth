@@ -80,10 +80,13 @@ def test_every_argparse_option_is_in_the_clap_help(gen: ModuleType) -> None:
 
 
 def test_root_help_lists_every_group(run: Any) -> None:
+    # `demo` is a verb of the main help; the other groups are listed under `advanced`
     code, out, _ = run("--help")
+    assert code == 0 and "\n  demo " in out
+    code, out, _ = run("advanced", "--help")
     assert code == 0
     listed = {line.split()[0] for line in out.splitlines() if line.startswith("  ") and line.split()}
-    assert set(GROUPS) <= listed, set(GROUPS) - listed
+    assert set(GROUPS) - {"demo"} <= listed, set(GROUPS) - listed
 
 
 @pytest.mark.parametrize(

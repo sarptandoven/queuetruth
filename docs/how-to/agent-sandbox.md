@@ -6,7 +6,7 @@ clock; then get a scorecard (PnL after fees, fill rates, adverse selection) and 
 re-execute. The sandbox controls what the agent is shown, not what it already knows: see
 [What the guarantee does not cover](#what-the-guarantee-does-not-cover).
 
-**You need:** an MBO dataset (the synthetic fixture `queuetruth fixtures synth` writes is enough to try it), and for
+**You need:** an MBO dataset (the synthetic fixture `queuetruth advanced fixtures synth` writes is enough to try it), and for
 an MCP agent the MCP extra: `pip install "queuetruth[mcp]"`.
 
 The sandbox is `queuetruth.sandbox.Sandbox`; the MCP tools are in `queuetruth.mcp.sandbox_tools`. The design,

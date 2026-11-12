@@ -1,8 +1,8 @@
 # Import fills from my venue or broker
 
 **Goal:** turn your venue's order and fill records into one canonical live log that the scorer
-(`queuetruth score`), the live calibration (`queuetruth calibrate-live`), the latency fit and the schedule builder
-(`queuetruth shadows from-live`) all read.
+(`queuetruth advanced score`), the live calibration (`queuetruth advanced calibrate-live`), the latency fit and the schedule builder
+(`queuetruth advanced shadows from-live`) all read.
 
 **You need:** your own order and fill records, in one of the formats listed below: captured WebSocket messages,
 REST history responses, a broker export or a FIX log. Everything runs locally; nothing is uploaded.
@@ -34,8 +34,8 @@ venue `cme`, account `SYNTH`):
 
 <!-- check-docs: run -->
 ```sh
-queuetruth fixtures synth --out synth
-queuetruth live validate --live synth/own_orders/live
+queuetruth advanced fixtures synth --out synth
+queuetruth advanced live validate --live synth/own_orders/live
 queuetruth --output-format json live validate --live synth/own_orders/live
 ```
 
@@ -43,7 +43,7 @@ queuetruth --output-format json live validate --live synth/own_orders/live
 
 <!-- check-docs: skip (needs your records) -->
 ```sh
-queuetruth live import --venue binance --account main --instrument-map instrument_map.csv \
+queuetruth advanced live import --venue binance --account main --instrument-map instrument_map.csv \
     --in user_stream_2026-10-05.jsonl --in mytrades_2026-10-05.json --out live/
 ```
 
@@ -69,9 +69,9 @@ Try it on a synthetic fixture from the repository (written from Binance's public
 <!-- check-docs: run -->
 ```sh
 F="$QT_SRC/python/tests/live/fixtures/binance"
-queuetruth live import --venue binance --account acct1 \
+queuetruth advanced live import --venue binance --account acct1 \
     --in "$F/01_ws_execution_report_lifecycle/user_data_stream.jsonl" --out bn-live
-queuetruth live validate --live bn-live
+queuetruth advanced live validate --live bn-live
 ```
 
 This fixture gives 5 orders, 15 events and 6 fills (`test_import_venue_writes_valid_dir` in
@@ -82,7 +82,7 @@ Two inputs with the same fill, a WebSocket copy and a REST `myTrades` copy:
 <!-- check-docs: run -->
 ```sh
 F="$QT_SRC/python/tests/live/fixtures/binance/04_ws_rest_dedupe"
-queuetruth live import --venue binance --account acct1 \
+queuetruth advanced live import --venue binance --account acct1 \
     --in "$F/user_data_stream.jsonl" --in "$F/myTrades.json" --out bn-dedupe
 ```
 
@@ -148,7 +148,7 @@ its fractional prices cannot be represented:
 F="$QT_SRC/python/tests/live/fixtures/deribit/01_ws_user_orders_trades"
 printf 'venue,instrument,instrument_id,session_date,price_exp,size_exp,tick_size,lot_size\n' > deribit_map.csv
 printf 'deribit,BTC-PERPETUAL,101,,0,0,1,10\n' >> deribit_map.csv
-queuetruth live import --venue deribit --instrument-map deribit_map.csv \
+queuetruth advanced live import --venue deribit --instrument-map deribit_map.csv \
     --in "$F/ws_notifications.jsonl" --out deribit-live
 ```
 
@@ -266,7 +266,7 @@ All importer facts below are from the code in `python/queuetruth/live/importers/
 <!-- check-docs: run -->
 ```sh
 F="$QT_SRC/python/tests/live/fixtures/ibkr_flex/01_flex_xml_executions"
-queuetruth live import --venue ibkr-flex --account U1 --tz America/New_York \
+queuetruth advanced live import --venue ibkr-flex --account U1 --tz America/New_York \
     --in "$F/flex_trades.xml" --out ib-live
 ```
 
@@ -307,9 +307,9 @@ The warnings name the two orders rebuilt from fills and the line `coverage=fills
 
 `queuetruth.live.import_sim(kind, inputs, out, account=None, instrument_map=None, venue=None, append=False,
 **options)` with `kind` = `hftbacktest` or `nautilus` writes a canonical log of your simulator's orders for the
-scorer's external arm (`queuetruth score --sim-log DIR`); on the command line it is `queuetruth live import --venue
+scorer's external arm (`queuetruth advanced score --sim-log DIR`); on the command line it is `queuetruth live import --venue
 sim-hftbacktest|sim-nautilus` with options as `--option KEY=VALUE`. The log has `venue = sim:hftbacktest` or
-`sim:nautilus`, `source = sim` and `validation_status = simulated`. `queuetruth export replay-schedule` writes the
+`sim:nautilus`, `source = sim` and `validation_status = simulated`. `queuetruth advanced export replay-schedule` writes the
 replay program whose output these importers read. A simulator order is linked to the live order it replays through its client order
 id: an id of the form `<venue>:<account>:<id>` becomes the `order_key` (a `.leg<k>` suffix is stripped). `venue`
 names the live venue whose instrument-map rows apply.
@@ -326,7 +326,7 @@ Tests: `test_hftbacktest_snapshots_jsonl_and_csv`, `test_nautilus_reports_and_ev
 
 ## Validate
 
-`queuetruth live validate --live DIR` prints a `qt.live_validation` document (`path`, `n_orders`, `n_events`,
+`queuetruth advanced live validate --live DIR` prints a `qt.live_validation` document (`path`, `n_orders`, `n_events`,
 `errors`, `warnings`) and exits 2 when there is any error. The import runs the same checks.
 
 Errors (code `QT-INPUT-003` when any of them is a duplicate, else `QT-INPUT-002`):
@@ -352,14 +352,14 @@ The repository has one canonical fixture per case (`python/tests/live/fixtures/c
 
 <!-- check-docs: run exit=2 -->
 ```sh
-queuetruth live validate --live "$QT_SRC/python/tests/live/fixtures/canonical/neg_duplicate_fill_id"
+queuetruth advanced live validate --live "$QT_SRC/python/tests/live/fixtures/canonical/neg_duplicate_fill_id"
 ```
 
 prints `QT-INPUT-003: ... duplicate fill_id F-5-1 ...` on stderr. A post-only order with a taker fill only warns:
 
 <!-- check-docs: run -->
 ```sh
-queuetruth live validate --live "$QT_SRC/python/tests/live/fixtures/canonical/warn_post_only_taker_fill"
+queuetruth advanced live validate --live "$QT_SRC/python/tests/live/fixtures/canonical/warn_post_only_taker_fill"
 ```
 
 From Python, `qt.validate_live(path)` returns the warnings and raises `QtError` on errors;
@@ -411,7 +411,7 @@ print([f.name for f in files])
 
 <!-- check-docs: run -->
 ```sh
-queuetruth live validate --live my-live
+queuetruth advanced live validate --live my-live
 ```
 
 ## Privacy
@@ -436,7 +436,7 @@ The schema and its metadata stay the same, so the log still validates:
 
 <!-- check-docs: run -->
 ```sh
-queuetruth live validate --live bn-live
+queuetruth advanced live validate --live bn-live
 ```
 
 Live logs never leave your machine unless you upload them to a queuetruth service yourself.

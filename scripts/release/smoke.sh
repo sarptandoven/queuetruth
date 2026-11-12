@@ -47,7 +47,7 @@ step "doctor"
 queuetruth doctor
 
 step "fixtures synth"
-queuetruth fixtures synth --out synth
+queuetruth advanced fixtures synth --out synth
 python - <<'EOF'
 import hashlib
 from pathlib import Path
@@ -63,8 +63,8 @@ print(f"synth: all {n} files verified")
 EOF
 
 step "shadows sample, zoo, leaderboard"
-queuetruth shadows sample --data synth --n 1000 --out qt-shadows.parquet
-queuetruth zoo --data synth --shadows qt-shadows.parquet --out qt-zoo --quiet
+queuetruth advanced shadows sample --data synth --n 1000 --out qt-shadows.parquet
+queuetruth advanced zoo --data synth --shadows qt-shadows.parquet --out qt-zoo --quiet
 python - <<'EOF'
 import json
 
@@ -89,7 +89,7 @@ print(f"qt-report.html: {len(html):,} characters, no external references")
 EOF
 
 step "replay and why"
-queuetruth replay --data synth --shadows qt-shadows.parquet --out qt-replay
+queuetruth advanced replay --data synth --shadows qt-shadows.parquet --out qt-replay
 SID=$(python -c "
 import pyarrow.compute as pc, pyarrow.parquet as pq
 t = pq.read_table('qt-replay/shadow_results.parquet')
@@ -130,7 +130,7 @@ EOF
 
 step "score gate"
 set +e
-queuetruth score --live synth/own_orders/live --data synth --sim-model "hbt_power3[n=2]" --out sc \
+queuetruth advanced score --live synth/own_orders/live --data synth --sim-model "hbt_power3[n=2]" --out sc \
     --fail-abs-bias 0.5 --format json --quiet > sc.json
 rc=$?
 set -e
@@ -139,13 +139,13 @@ python -c "import json; print(json.load(open('sc.json'))['verdict']['headline'])
 test "$rc" -le 1
 
 step "schema list / show"
-queuetruth schema list --format json | python -c "
+queuetruth advanced schema list --format json | python -c "
 import json, sys
 d = json.load(sys.stdin)
 assert d['json'] and d['arrow'], d
 print(len(d['json']), 'JSON Schemas,', len(d['arrow']), 'Arrow schemas')
 "
-queuetruth schema show qt.doctor --format json > /dev/null
+queuetruth advanced schema show qt.doctor --format json > /dev/null
 
 step "mcp without the extra fails cleanly"
 set +e

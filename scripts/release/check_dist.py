@@ -51,6 +51,8 @@ WHEEL_REQUIRED = [
     "queuetruth/_core.pyi",
     "queuetruth/py.typed",
     "queuetruth/api.py",
+    "queuetruth/ops/__init__.py",
+    "queuetruth/ops/_call.py",
     "queuetruth/cli.py",
     "queuetruth/errors.py",
     "queuetruth/client/__init__.py",

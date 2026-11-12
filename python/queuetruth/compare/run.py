@@ -383,14 +383,14 @@ def _require_ids(live_dir: Path) -> None:
 
 
 def _score(live_dir: Path, sim: dict[str, Any], out: Path, window_ns: int | None, data: str | None) -> Any:
-    from queuetruth import api
+    from queuetruth.ops.score import score
 
     spec: dict[str, Any] = {"live": {"path": str(live_dir)}, "sim": sim, "out": str(out)}
     if window_ns is not None:
         spec["window_ns"] = int(window_ns)
     if data is not None:
         spec["dataset"] = {"path": str(data)}
-    return api.score(spec).model_dump(mode="json", by_alias=True)
+    return score(spec).model_dump(mode="json", by_alias=True)
 
 
 def _summary(path: Path) -> dict[str, Any] | None:

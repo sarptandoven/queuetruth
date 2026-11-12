@@ -30,7 +30,7 @@ hbt-venv/bin/pip install numba==0.68.0 llvmlite==0.50.0 numpy==2.5.3
 hbt-venv/bin/pip install --no-deps hftbacktest==2.4.4
 ```
 
-Your data goes into a queuetruth dataset first (`queuetruth ingest`).
+Your data goes into a queuetruth dataset first (`queuetruth advanced ingest`).
 
 ## Use
 
@@ -82,7 +82,7 @@ The tests run on queuetruth's synthetic dataset. Those that run hftbacktest use 
 ## Limits
 
 - One simulator order per scheduled order: later legs of a re-priced live order are left out by `prepare`
-  (replay those with `queuetruth export replay-schedule` and score with `queuetruth score --sim-log`).
+  (replay those with `queuetruth advanced export replay-schedule` and score with `queuetruth advanced score --sim-log`).
 - Fill times have the resolution of the replay step; the per-horizon comparison is of first fills.
 - The calibration fits the allocation of cancels (teacher forced), not the fill rate itself; read its held-out
   fill-rate bias next to the log loss, and see [Calibration](https://github.com/sarptandoven/queuetruth/blob/main/docs/concepts/calibration.md).
