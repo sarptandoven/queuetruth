@@ -705,6 +705,17 @@ impl Iterator for TableReader {
     }
 }
 
+/// Equal data types, where a list's child field may have any name: pyarrow writes Parquet lists with the
+/// compliant child name `element`, arrow-rs with `item`, and readers of either take both.
+fn same_type(got: &DataType, expected: &DataType) -> bool {
+    match (got, expected) {
+        (DataType::List(g), DataType::List(e)) | (DataType::LargeList(g), DataType::LargeList(e)) => {
+            g.is_nullable() == e.is_nullable() && same_type(g.data_type(), e.data_type())
+        }
+        _ => got == expected,
+    }
+}
+
 fn fields_match(got: &SchemaRef, expected: &SchemaRef) -> Result<(), String> {
     if got.fields().len() != expected.fields().len() {
         return Err(format!(
@@ -714,7 +725,7 @@ fn fields_match(got: &SchemaRef, expected: &SchemaRef) -> Result<(), String> {
         ));
     }
     for (g, e) in got.fields().iter().zip(expected.fields().iter()) {
-        if g.name() != e.name() || g.data_type() != e.data_type() || g.is_nullable() != e.is_nullable() {
+        if g.name() != e.name() || !same_type(g.data_type(), e.data_type()) || g.is_nullable() != e.is_nullable() {
             return Err(format!(
                 "column {:?}: expected {} (nullable {}), found {:?} {} (nullable {})",
                 e.name(),
@@ -873,6 +884,20 @@ mod tests {
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).expect("scratch");
         d
+    }
+
+    #[test]
+    fn list_child_name_is_not_compared() {
+        use arrow_schema::Field;
+        use std::sync::Arc;
+        let item = DataType::List(Arc::new(Field::new("item", DataType::Utf8, true)));
+        let element = DataType::List(Arc::new(Field::new("element", DataType::Utf8, true)));
+        let ints = DataType::List(Arc::new(Field::new("element", DataType::Int64, true)));
+        let required = DataType::List(Arc::new(Field::new("element", DataType::Utf8, false)));
+        assert!(same_type(&element, &item));
+        assert!(!same_type(&ints, &item));
+        assert!(!same_type(&required, &item));
+        assert!(!same_type(&DataType::Utf8, &item));
     }
 
     /// `qt.trades` rows: a nullable column (`maker_order_id`) and a dictionary column (`kind`).

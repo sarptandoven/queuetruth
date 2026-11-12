@@ -21,6 +21,9 @@ content digests), then writes
 - `pnl_cells.parquet` (when the plan's units computed the P&L error, `plan.py` without `--no-pnl`): the units'
   `pnl_stats` summed over blocks, one row per (mode, shadow population, model, markout horizon, symbol-day) with
   the `blocks.PNL_SUMS` and the same `tier`, `replay_ok`, `trading_ok` and `exact_ok`;
+- `touch_cells.parquet` (when the plan's units computed the touch tables, `plan.py` without `--no-touch`): the
+  units' `touch_stats` with the same `tier`, `replay_ok`, `trading_ok` and `exact_ok` (`atlas_touch.py`,
+  docs/concepts/touch-tables.md); the day manifest then has `touch` (units with the table, errors);
 - `day_manifest.json`: run id, date, `symbol_sample` (when the plan ran a symbol sample), the day's Merkle root
   over its leaves (with proofs), invalid / missing shards,
   units whose replay checks flagged anything, `flagged_symbols` (per symbol-day that is not `exact_ok`: unit, replay
@@ -43,6 +46,10 @@ combine (any number of days; `--flag-policy label`, the default, keeps the flagg
   minus exact P&L per order placed, in ticks at the mid `horizon_ns` after the first fill; positive = the model's
   P&L is too high), the model's and the exact P&L, its grant / deny / timing parts and `pnl_bias_bps`, with 95%
   CIs from the same two-way bootstrap and BH-adjusted p-values of `pnl_bias_ticks`;
+- `touch_by_tier.parquet` (when some day has `touch_cells`; `touch_days` in the manifest lists them, and days
+  reduced before the tables are left out): per (shadow population, tier incl. `ALL`, side incl. `all`, bar length,
+  rule) a bar backtester's touch rule against the real queue (`atlas_touch.METRICS`) with 95% CIs from the same
+  two-way bootstrap;
 - `per_symbol.parquet`: per symbol, model, horizon, mode and population: the cross-day bias with a day-cluster
   bootstrap CI (symbols seen on >= 2 days), the empirical-Bayes estimate shrunk toward its tier (DerSimonian-Laird),
   and BH-adjusted p-values across symbols per (mode, population, model, horizon); `n_flagged_days` and `flags`
@@ -65,6 +72,7 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
+import atlas_touch as AT  # noqa: E402
 import common as K  # noqa: E402
 import symbol_exactness as SE  # noqa: E402
 
@@ -311,9 +319,17 @@ def reduce_day(
         return t.append_column("exact_ok", pa.array([s not in flagged_syms for s in syms], pa.bool_()))
 
     flag_cols = ["tier", "replay_ok", "trading_ok", "exact_ok"]
-    cells, strata, pnl = [], [], []
+    cells, strata, pnl, touch = [], [], [], []
     pnl_units, pnl_errors = 0, []
+    touch_units, touch_errors = 0, []
     for m in ok:
+        if "touch_stats" in m["files"]:
+            touch_units += 1
+            if "error" in (m["leaf"].get("touch") or {}):
+                touch_errors.append({"unit_id": m["unit_id"], "error": m["leaf"]["touch"]["error"]})
+            tt = pq.read_table(Path(m["_dir"]) / m["files"]["touch_stats"]["file"])
+            if tt.num_rows:
+                touch.append(AT.reduce_rows(labelled(tt)))
         if "pnl_stats" in m["files"]:
             pnl_units += 1
             pnl_errors += [
@@ -341,6 +357,11 @@ def reduce_day(
         if pnl_t.num_rows:
             pnl_t = pnl_t.sort_by([(k, "ascending") for k in PNL_CELL_KEYS])
         pq.write_table(pnl_t, out / "pnl_cells.parquet", compression="zstd")
+    if touch_units:  # a day whose units had no touch tables writes what it did before
+        touch_t = pa.concat_tables(touch) if touch else AT.empty_stats()
+        if touch_t.num_rows:
+            touch_t = touch_t.sort_by([(k, "ascending") for k in AT.KEYS])
+        pq.write_table(touch_t, out / AT.CELLS, compression="zstd")
     leaves = [m["leaf_hash"] for m in ok]
     by_tier: dict[str, list] = defaultdict(list)
     aborts: dict[str, int] = defaultdict(int)
@@ -413,6 +434,8 @@ def reduce_day(
             "max_peak_rss_mb": max((t["peak_rss_mb"] for t in tel), default=None),
         },
     }
+    if touch_units:
+        doc["touch"] = {"units_with_touch": touch_units, "errors": touch_errors, "rule": AT.DOC}
     # the plan holds every unit spec (verify_unit.py needs it to re-run a unit), so the published day carries it
     plan_bytes = (json.dumps(plan, separators=(",", ":")) + "\n").encode()
     (out / "plan.json").write_bytes(plan_bytes)
@@ -768,6 +791,9 @@ def combine(
     if pnl_days:
         pq.write_table(pa.Table.from_pylist(pnl_board), out / "pnl_by_tier.parquet", compression="zstd")
 
+    # 1c. touch tables for bar backtests (the days whose units computed them), the same two-way bootstrap
+    touch_days = AT.combine(days, out, flag_policy=flag_policy, bootstrap_b=bootstrap_b, seed=seed)
+
     # 3. maps: tier x queue decile / liquidity bucket, day-cluster bootstrap
     st = pa.concat_tables([pq.read_table(d / "strata_by_tier.parquet") for _, d in days], promote_options="default")
     if "exact_ok" not in st.column_names:  # legacy days only: per-tier strata cannot be split by symbol
@@ -837,6 +863,8 @@ def combine(
         "distinct_symbols": len(sym_set),
         "flag_policy": flag_policy,
         "pnl_days": pnl_days,
+        # only when some day has touch tables, so an atlas of days without them is what it was
+        **({"touch_days": touch_days} if touch_days else {}),
         "flagged_symbol_days": flagged_days,
         "flagged_cell_rows": n_rows_flagged,
         "days_without_symbol_exactness": no_symbols,
@@ -855,6 +883,7 @@ def combine(
         "flag_policy": flag_policy,
         "flagged_symbol_days": len(flagged_days),
         "pnl_days": len(pnl_days),
+        **({"touch_days": len(touch_days)} if touch_days else {}),
     }
 
 

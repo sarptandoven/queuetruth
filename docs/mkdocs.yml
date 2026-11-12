@@ -43,8 +43,8 @@ nav:
       - Your first leaderboard: getting-started.md
       - A real day from free IEX data: how-to/iex-public-demo.md
   - Read the atlas: concepts/fill-realism-atlas.md
-  # S6 adds how-to/check-my-backtest.md ("Check my backtest") as the first entry of this section.
   - Check my backtester:
+      - Check my backtest: how-to/check-my-backtest.md
       - hftbacktest: how-to/calibrate-hftbacktest.md
       - hftbacktest plugin: how-to/score-and-calibrate-hftbacktest.md
       - NautilusTrader: how-to/score-nautilus-vs-binance.md
@@ -74,6 +74,7 @@ nav:
       - Forecasts: how-to/score-forecasts.md
       - Own-account live fills: how-to/own-account-live-fills.md
   - Explanation:
+      - Touch tables for bar-based backtests: concepts/touch-tables.md
       - Exact FIFO truth: concepts/exact-truth.md
       - Shadow orders: concepts/shadow-orders.md
       - The L2 model zoo: concepts/l2-model-zoo.md

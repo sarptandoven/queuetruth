@@ -176,7 +176,7 @@ def test_atlas_api_documents_are_registered_one_module_per_file() -> None:
     import pkgutil
 
     import queuetruth.atlas as atlas
-    from queuetruth.atlas import answer, configs, manifest, summary, symbols
+    from queuetruth.atlas import answer, configs, manifest, summary, symbols, touch
 
     for mod, name, model in (
         (manifest, "qt.atlas_api_manifest", manifest.AtlasApiManifest),
@@ -184,6 +184,7 @@ def test_atlas_api_documents_are_registered_one_module_per_file() -> None:
         (configs, "qt.atlas_configs", configs.AtlasConfigs),
         (symbols, "qt.atlas_symbols", symbols.AtlasSymbols),
         (answer, "qt.atlas_answer", answer.AtlasAnswer),
+        (touch, "qt.atlas.touch", touch.TouchTables),
     ):
         assert DOC_MODELS[name] is model and mod.DOC_MODELS == {name: model}
     for info in pkgutil.iter_modules(atlas.__path__):

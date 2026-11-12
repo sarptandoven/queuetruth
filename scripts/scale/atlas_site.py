@@ -1323,6 +1323,15 @@ def build(
         built=built,
     )
 
+    # touch tables for bar backtests (scripts/scale/atlas_touch.py): a section and atlas/v1/touch.json when the atlas
+    # has them, listed in the manifest with its sha256 like every other file of the API
+    import atlas_touch
+
+    touch = atlas_touch.section(atlas, out, population=population, source=source, docs=DOCS,
+                                attribution=IEX_ATTRIBUTION if source == "iex" else None)  # fmt: skip
+    if touch:
+        api = A.add_file(out, "touch.json")
+
     # ---- index.html: the answer first ----------------------------------------------------------------------------
     first = tiers[0] if tiers else "ALL"
     here = [x for x in summary if x["mode"] == mode and x["shadow_population"] == population]
@@ -1366,6 +1375,8 @@ def build(
             "it is exact.</p>"
             f'<div class="boxes">{"".join(boxes)}</div>'
         )
+    if touch:  # the answer for bar-based backtests, after the libraries'
+        parts.append(touch)
     parts.append(
         "<h2>Your symbol</h2>"
         '<form class="lookup" action="symbol.html" method="get" role="search">'

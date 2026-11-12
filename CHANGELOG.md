@@ -8,6 +8,18 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ### Added
 
+- **Touch tables for bar-based backtests** (docs/concepts/touch-tables.md). For the atlas's shadow orders resting
+  until the close, the atlas now measures what a candle backtester's fill rule says against the exact replay of the
+  real queue: the `touch` rule (the bar's low reaches a buy's limit, or its high a sell's) and `penetrate_1`,
+  `penetrate_2` (one or two ticks through), on 1-minute, 5-minute and 1-hour bars built from the day's prints. Per
+  liquidity tier, side and bar length: the real and the rule's fill rates, the share of the rule's fills that were
+  real by the end of the same bar and the share of real fills the rule catches, the markouts of both kinds of fills
+  one bar later and how much the rule overstates P&L per order, each with a 95% interval from the atlas's bootstrap
+  over dates and symbols. Units write `touch_stats.parquet` (one more exact replay per unit), `atlas.py reduce-day`
+  keeps `touch_cells.parquet`, `atlas.py combine` writes `touch_by_tier.parquet` from the days that have them and
+  lists them as `touch_days`, and the site gets a short section and `atlas/v1/touch.json`
+  (`queuetruth.atlas.touch.TouchTables`). `plan.py --no-touch` leaves them out. Every existing table is unchanged;
+  days kept before this need a rebuild to get the new table.
 - **Docs: one "What is validated" page and three front doors.** `docs/validated.toml` is the single source of what is
   checked on real data, against the real library, or on fixtures only; `docs/gen_validated.py` writes
   `docs/validated.md` and the README status block from it, and `make check-docs` fails when either is stale. It
@@ -27,11 +39,27 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   reads on a 390 px phone and in dark mode. Next to the site, `atlas/v1/` is a versioned data API: `manifest.json`
   (with the sha256 of every other file), `summary.json`, `configs.json` and `symbols/<letter>.json`, defined in the
   new `queuetruth.atlas` subpackage (schemas `qt.atlas_api_manifest`, `qt.atlas_summary`, `qt.atlas_configs`,
-  `qt.atlas_symbols`). `queuetruth atlas [--library hftbacktest|nautilus|databento] [--symbol S] [--tier T]
+  `qt.atlas_symbols`; the touch tables' `touch.json` is listed in the manifest too and its `qt.atlas.touch` schema is
+  registered). `queuetruth atlas [--library hftbacktest|nautilus|databento] [--symbol S] [--tier T]
   [--horizon 1min] [--json]` and `qt.atlas.lookup(...)` print the answer, the table and the config to paste
   (`qt.atlas_answer`), from `--from DIR` or the public site; like `demo`, nothing is downloaded until you agree
   (`--yes` or the prompt), and the files are cached and checked against the manifest's hashes. The maintainer part of
   the atlas guide moves to [Run the atlas](docs/how-to/run-the-atlas.md).
+
+- **`queuetruth check BACKTEST --data DATASET`** (and `qt.check(backtest, data=...)`): how wrong a backtest is, in
+  one command. It replays the backtest's own resting limit orders, at their own entry times and prices, in the exact
+  queue of an order-level dataset and compares them order by order. The first line is the answer, for example "Your
+  backtest filled 6 of 12 limit orders within 10s; in the real queue 3 would have filled (backtest minus real: +3
+  orders, 95% CI -3 to +8). 5 fills are phantom; ...", then the 2x2 table, the time to fill, the most overfilled
+  symbols and `queuetruth why` commands for a few phantom fills. It reads hftbacktest snapshots, NautilusTrader
+  reports and events, Backtrader `QtOrderLog` lines, VectorBT records, LEAN results and Freqtrade backtest results,
+  tells which from the file (`--backtester` overrides), and maps the backtest's instrument names to the dataset's
+  symbols, asking for `--instrument-map` only when a name matches none (and saying which and why). `--json` prints
+  the `qt.check` summary, `--html` writes a self-contained report, and the output directory holds `orders.csv` (one
+  row per order in symbols, decimal prices and venue-local times), the imported log and the full scorecard. Without
+  `--data` it says what it needs and exits 2; the estimate from the atlas comes later. Guide:
+  docs/how-to/check-my-backtest.md.
+
 - **Atlas backfill** (`.github/workflows/atlas-backfill.yml`, ROADMAP W1): a manual run fills the atlas window at once.
   `scripts/scale/iex_latest.py --count N --kept FILE` lists the N newest published IEX sessions the `atlas-days`
   release does not hold yet (`--rebuild` keeps them in) as a job matrix; each day runs on its own runner, up to
@@ -86,6 +114,9 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 - `rustix` 1.1.5 to 1.1.6 in `Cargo.lock` (RUSTSEC-2026-0486: its xattr functions marked unwritten bytes as
   initialized when given a zero-length buffer). Reached only through `tempfile`; 1.1.6 was released on 2026-10-27.
+- `queuetruth why --live` refused every live log written by Python (`live import`, `reconcile`) with `QT-INPUT-002:
+  ... column "client_order_id_chain": expected List(Utf8) ..., found ... List(Utf8, field: 'element')`. pyarrow names
+  a Parquet list's child `element`, the Rust reader expected `item`; the reader now takes either name.
 - `atlas.py combine` no longer runs out of memory on a full window. It read every day's cells and P&L cells into
   one table: about 1.2 GB per IEX day, so 20 days needed about 25 GB, and the first site rebuild after the backfill
   stopped the 16 GB runner two minutes in. It now reads the days one (mode, shadow population) slice at a time, with

@@ -291,4 +291,20 @@ def write_api(
     return m.model_dump(mode="json", by_alias=True)
 
 
-__all__ = ["API_DIR", "built_at", "config_rows", "letter", "summary_rows", "symbol_shards", "write_api"]
+def add_file(site: Path, path: str) -> dict[str, Any]:
+    """Lists another file of the API, written next to the others (`touch.json` from `atlas_touch.section`), in
+    `manifest.json` with its size and sha256; returns the manifest. The file must already be in `<site>/atlas/v1/`."""
+    from queuetruth.atlas.manifest import AtlasApiManifest
+
+    base = site / API_DIR
+    data = (base / path).read_bytes()
+    m = json.loads((base / "manifest.json").read_text(encoding="utf-8"))
+    files = [f for f in m["files"] if f["path"] != path]
+    files.append({"path": path, "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()})
+    m["files"] = sorted(files, key=lambda f: f["path"])
+    m = AtlasApiManifest.model_validate(m).model_dump(mode="json", by_alias=True)
+    (base / "manifest.json").write_text(json.dumps(m, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    return m
+
+
+__all__ = ["API_DIR", "add_file", "built_at", "config_rows", "letter", "summary_rows", "symbol_shards", "write_api"]

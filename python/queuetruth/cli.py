@@ -1209,6 +1209,7 @@ def main(argv: list[str] | None = None) -> int:
         "cert",
         "reconcile",
         "atlas",
+        "check",
     )
     i = 0
     while i < len(args) and args[i].startswith("-") and args[i] != "--":
@@ -1242,6 +1243,10 @@ def main(argv: list[str] | None = None) -> int:
     from queuetruth.atlas._cli import maybe_main as atlas_main  # `atlas` (Python-only grammar)
 
     if (rc := atlas_main(args)) is not None:
+        return rc
+    from queuetruth.check.cli import maybe_main as check_main  # `check` (Python-only grammar)
+
+    if (rc := check_main(args)) is not None:
         return rc
     json_out = _wants_json(args)
     try:

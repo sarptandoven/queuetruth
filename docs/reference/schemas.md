@@ -46,6 +46,7 @@ directory with `orders.parquet` (`qt.live_orders`), `events.parquet` (`qt.live_e
 |---|---|
 | [`qt.api_key`](#qtapi_key) | An API key (secret never included). |
 | [`qt.api_key_created`](#qtapi_key_created) | A newly created API key with its secret (shown once). |
+| [`qt.atlas.touch`](#qtatlastouch) | The document: the atlas it comes from, the days it used and every row. |
 | [`qt.atlas_answer`](#qtatlas_answer) |  |
 | [`qt.atlas_api_manifest`](#qtatlas_api_manifest) |  |
 | [`qt.atlas_configs`](#qtatlas_configs) | `configs.json`: one closest setting per (tier, library), `ALL` first. |
@@ -174,6 +175,58 @@ A newly created API key with its secret (shown once).
 | `last_used_at` | string or null | no | `null` |  |
 | `revoked_at` | string or null | no | `null` |  |
 | `secret` | string or null | yes |  |  |
+
+### qt.atlas.touch
+
+File: `schemas/json/qt.atlas.touch.schema.json`.
+
+The document: the atlas it comes from, the days it used and every row.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `schema` | const "qt.atlas.touch" | yes | `"qt.atlas.touch"` |  |
+| `schema_version` | const 1 | yes | `1` |  |
+| `atlas_root` | string | yes |  |  |
+| `source` | string | yes |  | venue whose prints and queue are used: iex or nasdaq |
+| `population` | string | yes |  | the atlas shadow population |
+| `days` | array of string | yes |  | the days the tables pool (ISO dates); days reduced before them are left out |
+| `flag_policy` | string | yes |  |  |
+| `definition` | string | yes |  | docs page with the exact definitions |
+| `attribution` | string or null | no | `null` |  |
+| `rows` | array of TouchRow | yes |  |  |
+
+**`Estimate`** (in `qt.atlas.touch`)
+
+A value with its 95% interval (null when undefined).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `value` | number or null | yes |  |  |
+| `ci_lo` | number or null | yes |  |  |
+| `ci_hi` | number or null | yes |  |  |
+
+**`TouchRow`** (in `qt.atlas.touch`)
+
+One (tier, side, bar length, rule) cell.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `tier` | string | yes |  | liquidity tier, or ALL |
+| `side` | one of "buy", "sell", "all" | yes |  |  |
+| `bar` | string | yes |  | bar length: 1m, 5m or 1h |
+| `bar_s` | integer | yes |  | bar length in seconds |
+| `rule` | string | yes |  | touch, or penetrate_<k> (k ticks through the limit) |
+| `orders` | integer | yes |  | orders placed |
+| `dates` | integer | yes |  |  |
+| `symbols` | integer | yes |  |  |
+| `real_fill_rate` | Estimate | yes |  | share of orders the real queue filled before the close |
+| `rule_fill_rate` | Estimate | yes |  | share of orders the rule filled before the close |
+| `p_real_given_rule` | Estimate | yes |  | of the rule's fills, the share the real queue had filled by the end of the same bar |
+| `p_rule_given_real` | Estimate | yes |  | of the real fills, the share the rule had filled by the end of the same bar |
+| `real_markout_ticks` | Estimate | yes |  | average markout of the real fills one bar later, in ticks |
+| `rule_markout_ticks` | Estimate | yes |  | average markout of the rule's fills one bar later, in ticks |
+| `pnl_overstated_ticks` | Estimate | yes |  | the rule's markout P&L minus the real one per order placed, in ticks (positive: too high) |
+| `flagged_share` | number or null | yes |  | share of the orders on symbol-days that are not exact_ok (0 under flag policy exclude) |
 
 ### qt.atlas_answer
 

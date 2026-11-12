@@ -23,6 +23,7 @@ pub(crate) const PYTHON_LONG_ABOUT: &[(&[&str], &str)] = &[
     (&["pm"], "Prediction-market kit (Kalshi, Polymarket): your own captures -> books, queue calibration and reward-aware market-making PnL. Self-hosted use on your own data only; see `queuetruth.pm.terms`."),
     (&["reconcile"], "A trading bot's simulator arm (Freqtrade backtest or dry run, Hummingbot paper bot) against its live run, or a Backtrader, VectorBT or LEAN backtest against a canonical live log: paired orders, why each differs, and the sim-vs-live scorecard."),
     (&["atlas"], "The Fill-Realism Atlas answer for your library, liquidity tier or symbol: how far each setting fills from the exact replay of the real queue, with its 95% interval, and the closest setting's config to paste. Reads the atlas data API from a local directory or the public site (asks before it downloads)."),
+    (&["check"], "How wrong is my backtest: replays the backtest's own resting limit orders (hftbacktest, NautilusTrader, Backtrader, VectorBT, LEAN or Freqtrade output) in the exact queue of an order-level dataset and compares them order by order: fills, phantom fills, time to fill and the P&L gap."),
 ];
 
 /// Help of positional arguments: (command path, argument name, help).
@@ -30,6 +31,7 @@ pub(crate) const PYTHON_LONG_ABOUT: &[(&[&str], &str)] = &[
 pub(crate) const PYTHON_POSITIONAL_HELP: &[(&[&str], &str, &str)] = &[
     (&["certify"], "RUN_DIR...", "run directory, or LABEL=RUN_DIR"),
     (&["cert", "partial-opening"], "opening", "the private qt.commitment_opening"),
+    (&["check"], "BACKTEST...", "the backtester's output file(s) of one run"),
 ];
 
 /// The Python-only commands, after `grammar::COMMANDS` in the command table.
@@ -514,6 +516,25 @@ pub(crate) const PYTHON_COMMANDS: &[Cmd] = &[
             Flag { long: "json", kind: Kind::Flag, to: "_cli.json", required: false, help: "print the qt.atlas_answer document (same as --format json)", short: None, value_name: None },
         ],
         positional: &[],
+        globals: Globals::None,
+        hidden: false,
+    },
+    Cmd {
+        path: &["check"],
+        imp: Implementation::Python,
+        about: "how wrong a backtest is: its own limit orders replayed in the real queue",
+        flags: &[
+            Flag { long: "data", kind: Kind::Str, to: "_cli.data", required: false, help: "order-level (MBO) dataset covering the backtest's days", short: None, value_name: Some("DIR") },
+            Flag { long: "backtester", kind: Kind::Enum(&["hftbacktest", "nautilus", "backtrader", "vectorbt", "lean", "freqtrade"]), to: "_cli.backtester", required: false, help: "the backtester (default: read from the file)", short: None, value_name: None },
+            Flag { long: "instrument-map", kind: Kind::Str, to: "_cli.instrument_map", required: false, help: "instrument_map.csv (default: built from the dataset's symbols; needed only when they do not match)", short: None, value_name: Some("FILE") },
+            Flag { long: "out", kind: Kind::Str, to: "_cli.out", required: false, help: "output directory (default qt-check)", short: None, value_name: Some("DIR") },
+            Flag { long: "window", kind: Kind::Str, to: "_cli.window", required: false, help: "how long after entry a fill counts, e.g. 10min (default 1h)", short: None, value_name: Some("DURATION") },
+            Flag { long: "markout", kind: Kind::Str, to: "_cli.markout", required: false, help: "P&L horizon: fills marked to the mid this long after (default 1min)", short: None, value_name: Some("DURATION") },
+            Flag { long: "option", kind: Kind::StrAppend, to: "_cli.option", required: false, help: "importer option, e.g. timeframe=5m, data_tz=America/New_York, column=LABEL (repeatable)", short: None, value_name: Some("KEY=VALUE") },
+            Flag { long: "json", kind: Kind::Flag, to: "_cli.json", required: false, help: "print the full summary as JSON (as --format json)", short: None, value_name: None },
+            Flag { long: "html", kind: Kind::Flag, to: "_cli.html", required: false, help: "also write a self-contained report to <out>/check.html", short: None, value_name: None },
+        ],
+        positional: &[("BACKTEST...", "backtest", true)],
         globals: Globals::None,
         hidden: false,
     },
