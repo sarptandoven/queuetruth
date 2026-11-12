@@ -83,6 +83,7 @@ nav:
   - Venue semantics: venue-semantics.md
   - Data and licensing: data-and-licensing.md
   - Design:
+      - The next phase (0.4 to 1.0): design/next-phase.md
       - How it was built and verified: design/build-plan.md
       - Design specification: design/spec.md
       - Design extensions:
