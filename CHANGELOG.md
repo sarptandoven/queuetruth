@@ -66,7 +66,6 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 - The service accepts `format: nyse_ibf` for ingest jobs.
 - Reports label datasets ingested from crypto and Tardis captures as vendor data (`VENDOR_FORMATS`), as for ITCH, DBN
   and IEX: a `synthetic_only` status there describes the venue rules, not the data.
-
 - `atlas.py combine` no longer runs out of memory on a full window. It read every day's cells and P&L cells into
   one table: about 1.2 GB per IEX day, so 20 days needed about 25 GB, and the first site rebuild after the backfill
   stopped the 16 GB runner two minutes in. It now reads the days one (mode, shadow population) slice at a time, with
