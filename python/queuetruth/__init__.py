@@ -1,9 +1,10 @@
 """queuetruth: fill-realism and queue-truth kit (SPEC 4.3). Re-exports the Python API.
 
-`queuetruth.score`, `queuetruth.report`, `queuetruth.export`, `queuetruth.check` and `queuetruth.fit` are both
-subpackages and API functions (`qt.score(spec)`, `qt.report(spec)`, `qt.export(spec)`, `qt.check(backtest,
-data=...)`, `qt.fit(backtester, data=...)`): the subpackage modules are callable and delegate to the
-`queuetruth.api` function of the same name, so `import queuetruth.score as s` and `qt.score(spec)` both work.
+`queuetruth.score`, `queuetruth.report`, `queuetruth.export`, `queuetruth.check`, `queuetruth.fit` and
+`queuetruth.compare` are both subpackages and API functions (`qt.score(spec)`, `qt.report(spec)`, `qt.export(spec)`,
+`qt.check(backtest, data=...)`, `qt.fit(backtester, data=...)`, `qt.compare(backtest, live)`): the subpackage
+modules are callable and delegate to the `queuetruth.api` function of the same name, so `import queuetruth.score as
+s` and `qt.score(spec)` both work.
 `qt.HazardModel` is imported on first use (it needs scikit-learn), and so are `qt.backtesters` (the backtester plugin
 registry), `qt.backtrader` and `qt.lean` (fill models and logs for those frameworks, which stay optional).
 """
@@ -60,7 +61,7 @@ def __dir__() -> list[str]:
     return sorted({*globals(), *_LAZY, *_LAZY_MODULES})
 
 
-_CALLABLE_NAMES = ("score", "report", "export", "check", "fit")
+_CALLABLE_NAMES = ("score", "report", "export", "check", "fit", "compare")
 
 
 class _CallableModule(types.ModuleType):
@@ -90,7 +91,8 @@ report = importlib.import_module("queuetruth.report")
 export = importlib.import_module("queuetruth.export")
 check = importlib.import_module("queuetruth.check")
 fit = importlib.import_module("queuetruth.fit")
-for _m in (score, report, export, check, fit):
+compare = importlib.import_module("queuetruth.compare")
+for _m in (score, report, export, check, fit, compare):
     _m.__class__ = _CallableModule
 del _m
 
@@ -103,6 +105,7 @@ __all__ = [
     "calibrate",
     "calibrate_live",
     "check",
+    "compare",
     "export",
     "extract_features",
     "fit",

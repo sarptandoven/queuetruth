@@ -1340,6 +1340,7 @@ def main(argv: list[str] | None = None) -> int:
         "atlas",
         "check",
         "fit",
+        "compare",
     )
     i = 0
     while i < len(args) and args[i].startswith("-") and args[i] != "--":
@@ -1381,6 +1382,10 @@ def main(argv: list[str] | None = None) -> int:
     from queuetruth.fit.cli import maybe_main as fit_main  # `fit` (Python-only grammar)
 
     if (rc := fit_main(args)) is not None:
+        return rc
+    from queuetruth.compare.cli import maybe_main as compare_main  # `compare` (Python-only grammar)
+
+    if (rc := compare_main(args)) is not None:
         return rc
     json_out = _wants_json(args)
     try:

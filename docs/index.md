@@ -29,6 +29,7 @@ venue with its own rules: [how the atlas is made](concepts/fill-realism-atlas.md
 
 | You use | Start here |
 |---|---|
+| any backtester, against your live run of the same strategy | [Compare my backtest with my live run](how-to/compare-backtest-and-live.md) |
 | hftbacktest, NautilusTrader or Databento's queue estimator, to fix the fill model | [Fit my backtester's fill model](how-to/fit-my-backtester.md) |
 | hftbacktest | [Calibrate my hftbacktest model](how-to/calibrate-hftbacktest.md), [score and calibrate with the plugin](how-to/score-and-calibrate-hftbacktest.md) |
 | NautilusTrader | [Score my Nautilus backtest against my live fills](how-to/score-nautilus-vs-binance.md) |
