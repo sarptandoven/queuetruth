@@ -116,7 +116,7 @@ install commands and versions are in the `integrations` job of `.github/workflow
   the Rust spec and document structs `crates/schema/src/specs_gen.rs` and `json_gen.rs` (step `rust-specs`,
   `scripts/gen_rust_specs.py`: generated from the JSON Schemas, so change the Pydantic model and regenerate; a hash
   on the first line of each makes a test fail when it is edited by hand), `service/openapi.json`, `crates/cli/src/python_commands.rs`, the CLI golden files, `docs/reference/`,
-  `docs/validated.md` and the README status block, the README chart, and the synthetic zoo, tape, referee and NYSE
+  `docs/validated.md` and the README status block, the README chart, the prediction-market kit's schemas, and the synthetic zoo, tape, referee and NYSE
   fixtures. `--only STEP` runs one step. The steps that read the CLI grammar rebuild `queuetruth._core` first when
   an earlier step changed a Rust file.
 - **Imports go down the layers.** In `python/queuetruth`: contracts, data adapters, engine, models, evaluation,
