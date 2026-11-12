@@ -17,6 +17,7 @@ from typing import Any
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from queuetruth.dataset import MANIFEST_FILE, Manifest, read_manifest_doc
 from queuetruth.errors import QtError
 from queuetruth.eval.leaderboard import without_degenerate_cis
 from queuetruth.schemas.arrow import SCHEMAS
@@ -331,12 +332,15 @@ def _provenance(runs: list[RunDir], files: list[FileRec]) -> Provenance:
             ds = _spec_path(spec, "dataset")
             if ds and ds not in seen_paths:
                 seen_paths.add(ds)
-                mp = Path(ds) / "manifest.json"
-                data = _load_json(mp) if mp.is_file() else None
-                if isinstance(data, dict) and data.get("schema") == "qt.dataset_manifest":
+                mp = Path(ds) / MANIFEST_FILE
+                try:
+                    data = read_manifest_doc(ds, missing_ok=True)
+                except QtError:
+                    data = None
+                if data is not None and data.get("schema") == "qt.dataset_manifest":
                     try:
-                        man = DatasetManifest.model_validate(data)
-                    except ValueError:
+                        man = Manifest(data, mp, check=False).model()
+                    except QtError:
                         man = None
                     if man is not None:
                         files.append(
