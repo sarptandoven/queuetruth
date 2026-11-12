@@ -59,6 +59,14 @@ extract_features(spec: s.FeatureSpec | dict[str, Any]) -> m.FeatureSummary
 
 `features`.
 
+### `fit`
+
+```python
+fit(*args: Any, **kwargs: Any) -> Any
+```
+
+`queuetruth fit`: the parameter that fixes a backtester's fill model, with its verdict.
+
 ### `fit_hazard` **SPEC 4.3**
 
 ```python

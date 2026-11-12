@@ -1897,5 +1897,42 @@
     "timeframe=5m",
     "--json",
     "--html"
+  ],
+  [
+    "queuetruth",
+    "fit",
+    "--backtester",
+    "nautilus",
+    "--data",
+    "synth",
+    "--shadows",
+    "qt-shadows.parquet",
+    "--family",
+    "nt-prob-touch",
+    "--split",
+    "70%",
+    "--out",
+    "qt-fit",
+    "--n-shadows",
+    "500",
+    "--json"
+  ],
+  [
+    "queuetruth",
+    "fit",
+    "--backtester",
+    "hftbacktest",
+    "--live",
+    "live",
+    "--data",
+    "tape",
+    "--family",
+    "power3",
+    "--test-after",
+    "09:42",
+    "--train",
+    "2026-06-15",
+    "--test",
+    "blocks:4/5"
   ]
 ]
