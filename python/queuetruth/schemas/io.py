@@ -6,23 +6,15 @@ pyarrow cannot set the Parquet `created_by` field; files written here carry pyar
 
 from __future__ import annotations
 
-import hashlib
 from pathlib import Path
 from typing import Any
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from queuetruth.integrity import sha256_file  # re-exported: every Python writer hashes its files with it
+
 MAX_ROW_GROUP_ROWS = 1_048_576
-
-
-def sha256_file(path: str | Path) -> str:
-    """Lower-case hex sha256 of a file."""
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(1 << 20), b""):
-            h.update(chunk)
-    return h.hexdigest()
 
 
 def _dictionary_columns(schema: pa.Schema) -> list[str]:

@@ -172,9 +172,9 @@ def resolve_ref(ref: dict[str, Any]) -> str:
         if p.exists():
             return sha256_file(p)
         raise input_missing(p, "not found")
-    import hashlib
+    from queuetruth.integrity import canonical_sha256
 
-    return hashlib.sha256(json.dumps(ref, sort_keys=True).encode()).hexdigest()
+    return canonical_sha256(ref, "sorted")
 
 
 # ---- canonical live logs ------------------------------------------------------------------------------------------

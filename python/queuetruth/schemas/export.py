@@ -15,10 +15,11 @@ from typing import Any, get_args
 
 from pydantic import BaseModel
 
+from queuetruth.integrity import canonical_json
 from queuetruth.schemas import arrow
 from queuetruth.schemas import specs as sp
 from queuetruth.schemas.models import DOC_MODELS
-from queuetruth.schemas.runid import canonical_json, identity_document, is_ref, run_id, spec_echo
+from queuetruth.schemas.runid import identity_document, is_ref, run_id, spec_echo
 from queuetruth.schemas.specs import SPEC_MODELS
 
 DRAFT = "https://json-schema.org/draft/2020-12/schema"

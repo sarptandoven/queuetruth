@@ -23,8 +23,8 @@ import pytest
 
 import queuetruth.api
 from queuetruth.errors import QtError
+from queuetruth.integrity import canonical_json
 from queuetruth.sandbox import Sandbox
-from queuetruth.schemas.runid import canonical_json
 from sandbox.sbx_helpers import (
     LAST,
     MS,

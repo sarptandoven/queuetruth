@@ -20,6 +20,7 @@ import numpy as np
 
 from queuetruth.stats._seed import stable_seed
 from queuetruth.stats._types import CI
+from queuetruth.stats.intervals import percentile_ci
 
 MIN_DAY_BLOCKS = 5
 HALF_HOUR_NS = 1_800_000_000_000
@@ -178,16 +179,6 @@ def block_replicates(
     for i in range(int(b)):
         reps[i] = float(stat(np.concatenate([members[j] for j in draws[i]])))
     return estimate, reps
-
-
-def percentile_ci(replicates: np.ndarray, alpha: float = 0.05) -> tuple[float, float]:
-    """Percentile interval of the finite replicates (NaN if none)."""
-    r = np.asarray(replicates, dtype=float)
-    r = r[np.isfinite(r)]
-    if r.size == 0:
-        return float("nan"), float("nan")
-    lo, hi = np.quantile(r, [alpha / 2.0, 1.0 - alpha / 2.0])
-    return float(lo), float(hi)
 
 
 def bootstrap_p_two_sided(replicates: np.ndarray, null: float = 0.0) -> float:

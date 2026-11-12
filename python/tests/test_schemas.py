@@ -16,6 +16,7 @@ from pydantic import ValidationError
 
 import queuetruth as qt
 from queuetruth.errors import QtApiError, QtError
+from queuetruth.integrity import canonical_json
 from queuetruth.schemas import (
     ADDED_COLUMNS,
     DICT_VALUES,
@@ -25,7 +26,6 @@ from queuetruth.schemas import (
     SPEC_MODELS,
     V1_1_DEFAULTS,
     arrow,
-    canonical_json,
     drop_v1_1_defaults,
     export,
     features_schema,

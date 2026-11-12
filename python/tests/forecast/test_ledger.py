@@ -8,7 +8,6 @@ import json
 import threading
 from pathlib import Path
 
-import numpy as np
 import pytest
 
 from forecast.helpers import HOUR, SEC, T0, Clock, commit, fc, nonce, resolve
@@ -16,7 +15,7 @@ from queuetruth.errors import QtError
 from queuetruth.forecast import ledger as lg
 from queuetruth.forecast.io import format_ts, parse_ts, read_quotes, read_records
 from queuetruth.forecast.schemas import ForecastCommitment, ForecastEntry
-from queuetruth.schemas.runid import canonical_json
+from queuetruth.integrity import canonical_json
 
 
 def _lines(path: Path) -> list[dict]:
@@ -455,25 +454,12 @@ def test_commitment_document_round_trip(tmp_path: Path) -> None:
     assert json.loads(c.model_dump_json())["schema"] == "qt.forecast_commitment"
 
 
-def test_fast_canonical_json_matches_runid() -> None:
-    """The ledger's canonical JSON is byte-identical to `queuetruth.schemas.runid.canonical_json`."""
-    from queuetruth.schemas import runid
+def test_ledger_canonical_json_is_the_shared_one() -> None:
+    """The ledger hashes with `queuetruth.integrity.canonical_json` (checked against the RFC 8785 reference rule in
+    `tests/integrity/test_canonical.py`)."""
+    from queuetruth import integrity
 
-    kat = json.loads((Path(__file__).resolve().parents[3] / "schemas" / "run_id_kat.json").read_text())
-    docs: list[object] = [c["spec"] for c in kat["cases"]]
-    docs += [json.loads(text) for text, _ in kat["numbers"]]
-    every_char = "".join(chr(c) for c in range(0x10000) if not 0xD800 <= c < 0xE000) + "\U0001f600\U00010000"
-    docs += [
-        every_char,
-        {every_char[i : i + 7]: i for i in range(0, 2000, 7)},
-        {"": 1, "\U0001f600": 2, "a": [None, True, False, 0, -1, 1e-7, 1e21, 0.1, 2**70]},
-        [{"z": {"y": [1.5, "x\u0000\u001f\u007f"]}}],
-    ]
-    rng = np.random.default_rng(1)
-    for _ in range(200):
-        docs.append({"p": float(rng.random()), "n": int(rng.integers(-(10**12), 10**12)), "s": rng.bytes(8).hex()})
-    for d in docs:
-        assert lg.canonical_json(d) == runid.canonical_json(d)
+    assert lg.canonical_json is integrity.canonical_json
     with pytest.raises(TypeError):
         lg.canonical_json({1: 2})
     with pytest.raises(TypeError):
