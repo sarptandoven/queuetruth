@@ -1,10 +1,15 @@
 # Import-layer violations recorded on purpose (tools/check_layers.py). One `source -> target` per line;
 # the comment names the rules it breaks. Remove a line when its import is gone; never add one to pass CI
 # without saying why in the pull request.
+queuetruth.api -> queuetruth.check.run  # cycle
 queuetruth.api -> queuetruth.ledger  # cycle
 queuetruth.api -> queuetruth.score._io.resolve_ref  # private
 queuetruth.cert.certify -> queuetruth.score._io.resolve_ref  # private
 queuetruth.cert.verify -> queuetruth.score._io.resolve_ref  # private
+queuetruth.check.cli -> queuetruth.live.reconcile_cli._options  # private
+queuetruth.check.run -> queuetruth.api  # cycle
+queuetruth.check.run -> queuetruth.live.importers.vectorbt._table  # private
+queuetruth.check.run -> queuetruth.pm.cli  # layer
 queuetruth.cli -> queuetruth.api._call  # private
 queuetruth.cli -> queuetruth.api._qt_error  # private
 queuetruth.cli -> queuetruth.demo._dispatch  # layer

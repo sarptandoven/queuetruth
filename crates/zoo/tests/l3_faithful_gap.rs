@@ -222,6 +222,9 @@ struct Seen {
     through_at_feed_best: bool,
     hidden_at: bool,
     hidden_through: bool,
+    /// At one of these executions or prints, no displayed order on the shadow's side was at or better than its
+    /// price (the shadow was alone ahead of the displayed book).
+    alone: bool,
 }
 
 /// A displayed execution's resting side and price, and whether it rested at the feed best of that side.
@@ -259,7 +262,7 @@ fn touch_price(side: BookSide, offset: i64, tick: Px, book: &Book) -> Option<Px>
 /// Runs both modes on the synthetic Nasdaq fixture days (`tests/fixtures/synth_small_nasdaq`, regenerated in
 /// memory) for shadows of the `standard` placements, 60 s each, and returns per bucket the shadows filled by one mode
 /// only within 60 s.
-fn attribution() -> (BTreeMap<&'static str, usize>, usize, [usize; 2]) {
+fn attribution() -> (BTreeMap<&'static str, usize>, usize, [usize; 2], usize) {
     let cfg = fixture_config(Venue::Nasdaq);
     let out = qt_testkit::generate_sessions_with(&cfg, 2, Some(QueueMix::REALISTIC));
     let mut by_inst: BTreeMap<u32, Vec<MboEvent>> = BTreeMap::new();
@@ -269,14 +272,14 @@ fn attribution() -> (BTreeMap<&'static str, usize>, usize, [usize; 2]) {
     let mut buckets: BTreeMap<&'static str, usize> = BTreeMap::new();
     let mut rng = Xoshiro256StarStar::new(7);
     let mut unit = move || (rng.next_u64() >> 11) as f64 / (1u64 << 53) as f64;
-    let (mut n, mut filled) = (0usize, [0usize; 2]);
+    let (mut n, mut filled, mut not_alone) = (0usize, [0usize; 2], 0usize);
     for events in by_inst.values() {
         let mut book = Book::new(rules(Venue::Nasdaq));
         let mut live: Vec<Live> = Vec::new();
         let mut done: Vec<Live> = Vec::new();
         let mut at_start = true;
         let mut n_events = 0usize;
-        let mut ev_recs: Vec<(MboEvent, Option<Exec>)> = Vec::new();
+        let mut ev_recs: Vec<(MboEvent, Option<Exec>, [Option<Px>; 2])> = Vec::new();
         for e in events {
             if at_start {
                 at_start = false;
@@ -310,6 +313,7 @@ fn attribution() -> (BTreeMap<&'static str, usize>, usize, [usize; 2]) {
                 .then(|| book.order(e.order_id))
                 .flatten()
                 .map(|(s, p, _)| (s, p, book.best(s).is_some_and(|l| l.price == p)));
+            let best = [BookSide::Bid, BookSide::Ask].map(|s| book.best(s).map(|l| l.price));
             let effect = book.apply(e);
             if matches!(effect, Effect::Clear) {
                 // administrative end in the zoo: nothing is scored past it
@@ -317,7 +321,7 @@ fn attribution() -> (BTreeMap<&'static str, usize>, usize, [usize; 2]) {
                     l.deadline = l.deadline.min(e.ts_event - 1);
                 }
             }
-            ev_recs.push((*e, exec));
+            ev_recs.push((*e, exec, best));
             for l in &mut live {
                 for p in l.pair.iter_mut().flatten() {
                     p.on_record(e, &effect, &book, (None, None));
@@ -341,16 +345,22 @@ fn attribution() -> (BTreeMap<&'static str, usize>, usize, [usize; 2]) {
                                 through_at_feed_best: true,
                                 ..Seen::default()
                             };
-                            for (r, exec) in &ev_recs {
+                            for (r, exec, best) in &ev_recs {
+                                let own_best = best[usize::from(l.side == BookSide::Ask)];
+                                let ahead = own_best.is_none_or(|b| worse(l.side, b, l.px));
                                 match (Action::from_byte(r.action), exec) {
                                     (Some(Action::Fill), Some((side, rpx, at_best))) => {
                                         if *side == l.side && worse(l.side, *rpx, l.px) && worse(l.side, r.price, l.px)
                                         {
                                             s.disp_through = true;
                                             s.through_at_feed_best &= *at_best;
+                                            s.alone |= ahead;
                                         }
                                     }
                                     (Some(Action::Trade), _) if r.side == b'N' => {
+                                        if r.price == l.px || worse(l.side, r.price, l.px) {
+                                            s.alone |= ahead;
+                                        }
                                         if r.price == l.px {
                                             s.hidden_at = true;
                                         } else if worse(l.side, r.price, l.px) {
@@ -382,6 +392,7 @@ fn attribution() -> (BTreeMap<&'static str, usize>, usize, [usize; 2]) {
                 (false, true) => {
                     let (_, r) = l.first[1].unwrap();
                     let s = l.seen;
+                    not_alone += usize::from(!s.alone);
                     if r == L3Reason::TradeThrough && s.disp_through && s.through_at_feed_best {
                         // split by placement: at the execution the shadow is strictly better than the feed best either
                         // way (it rests above the executed order, which is at that best)
@@ -407,7 +418,7 @@ fn attribution() -> (BTreeMap<&'static str, usize>, usize, [usize; 2]) {
             *buckets.entry(key).or_insert(0) += 1;
         }
     }
-    (buckets, n, filled)
+    (buckets, n, filled, not_alone)
 }
 
 /// Every fill the faithful mode misses within 60 s on the synthetic Nasdaq days falls under mechanism 1 or 2 of the
@@ -416,7 +427,7 @@ fn attribution() -> (BTreeMap<&'static str, usize>, usize, [usize; 2]) {
 /// both. Run with `--nocapture` for the table.
 #[test]
 fn fixture_day_attribution() {
-    let (b, n, filled) = attribution();
+    let (b, n, filled, _) = attribution();
     eprintln!(
         "shadows {n}, filled within 60 s: faithful {} ({:.2}%), exact {} ({:.2}%)",
         filled[0],
@@ -444,4 +455,19 @@ fn fixture_day_attribution() {
     .into_iter()
     .collect();
     assert_eq!(b, want);
+}
+
+/// The real-data finding (`scripts/scale/findings/l3-fifo-gap.md`): every fill the faithful mode misses is an order
+/// priced strictly better than every displayed order on its side when the execution or print that fills it in the
+/// exact replay happens. Both of hftbacktest's rules miss exactly that case: its trade-through needs a displayed order
+/// better than the execution, and it never sees the hidden print.
+#[test]
+fn every_missed_fill_is_an_order_alone_ahead_of_the_displayed_book() {
+    let (b, _, _, not_alone) = attribution();
+    let missed: usize = b.iter().filter(|(k, _)| k.starts_with("missed")).map(|(_, v)| v).sum();
+    assert!(missed > 0);
+    assert_eq!(
+        not_alone, 0,
+        "{not_alone} of {missed} missed fills had a displayed order at or ahead of them"
+    );
 }

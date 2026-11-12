@@ -40,7 +40,7 @@ LAYERS: dict[str, tuple[str, ...]] = {
     "engine": ("_core",),
     "models": ("model",),
     "evaluation": ("eval", "score", "report", "dq"),
-    "operations": ("api", "export", "ledger", "cert"),
+    "operations": ("api", "export", "ledger", "cert", "check"),
     "interfaces": ("queuetruth", "cli", "client", "mcp"),
     "products": ("pm", "forecast", "sandbox", "demo"),
 }
