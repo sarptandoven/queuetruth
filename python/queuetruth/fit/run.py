@@ -29,12 +29,13 @@ import warnings
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import pyarrow.parquet as pq
 
 from queuetruth.errors import QtError
 from queuetruth.fit import split as sp
+from queuetruth.results import Result
 from queuetruth.schemas.models import CalibrationResult
 from queuetruth.schemas.specs import WindowSpec
 from queuetruth.score._dataset import DatasetView
@@ -72,8 +73,8 @@ HALF_HOUR_NS = 1_800_000_000_000
 DEFAULT_N_SHADOWS = 1000
 
 
-@dataclass
-class FitResult:
+@dataclass(repr=False)
+class FitResult(Result):
     """The answer of `fit` and of `qt.atlas.calibration`: `summary` is the one-line answer, `doc` the `qt.fit`
     document, `calibration` the `qt.calibration_result` behind it (None for a setting read from the atlas),
     `snippet` the paste-ready text (None when the fit is refused).
@@ -81,7 +82,13 @@ class FitResult:
     `doc["source"]` says where it came from: `order_level` or `live` (a fit on your data) or `atlas` (the atlas's
     closest setting, with `doc["atlas"]` naming the atlas root, tier, horizon and days). `doc["settings"]` holds the
     library settings to apply, in the library's own names; `queuetruth_nautilus.venue_options` and
-    `queuetruth_hftbacktest.configure` read them."""
+    `queuetruth_hftbacktest.configure` read them.
+
+    The shared result shape (`queuetruth.results.Result`): `table()` (the held-out comparison, one row per horizon;
+    for the atlas, the setting's row), `to_html()`, `save(path)` (the `qt.fit` document by default, which
+    `qthbt.configure(asset, path)` and `qtn.load_calibration(path)` read in another venv) and a notebook view."""
+
+    title: ClassVar[str] = "queuetruth fit"
 
     doc: dict[str, Any]
     calibration: CalibrationResult | None
@@ -119,12 +126,61 @@ class FitResult:
         """The `qt.fit` document (JSON-ready)."""
         return self.doc
 
-    def save(self, path: str | Path) -> Path:
-        """Writes the `qt.fit` document to `path` (for a framework in another venv: `qthbt.configure(asset, path)`,
-        `qtn.load_calibration(path)`); returns the path."""
-        p = Path(path)
-        p.write_text(json.dumps(self.doc, indent=2, ensure_ascii=False, allow_nan=False) + "\n", encoding="utf-8")
-        return p
+    @property
+    def interval(self) -> str | None:
+        """The fitted value with its 95% interval (for the atlas: the setting's bias with its interval), in words."""
+        from queuetruth.fit.render import _ci, num
+
+        a = self.doc.get("atlas")
+        if self.doc.get("source") == "atlas" and a:
+            b = a["fill_rate_bias_pp"]
+            if b.get("value") is None:
+                return None
+            ci = f" (95% CI {b['lo']:+.2f} to {b['hi']:+.2f} pp)" if b.get("lo") is not None else ""
+            return f"{a['label']}: fill-rate bias {b['value']:+.2f} pp{ci} at {a['horizon']} in the atlas."
+        p = self.doc["param"]
+        if p.get("value") is None:
+            return None
+        return f"{p['name']} = {num(p['value'])} ({_ci(self.doc)}); library default {num(p['default'])}."
+
+    def _rows(self) -> list[dict[str, Any]]:
+        from queuetruth import units
+
+        a = self.doc.get("atlas")
+        if self.doc.get("source") == "atlas" and a:
+            b = a["fill_rate_bias_pp"]
+            return [
+                {
+                    "setting": a["label"],
+                    "tier": a["tier"],
+                    "horizon": a["horizon"],
+                    "bias_pp": b.get("value"),
+                    "ci_lo_pp": b.get("lo"),
+                    "ci_hi_pp": b.get("hi"),
+                    "verdict": a["verdict"],
+                    "days": a["days"],
+                    "model_id": a["model_id"],
+                }
+            ]
+        return [
+            {
+                "horizon": units.format_duration(int(r["horizon_ns"])),
+                **{k: v for k, v in r.items() if k not in ("horizon", "horizon_ns")},
+            }
+            for r in self.doc.get("held_out") or []
+        ]
+
+    def _html_sections(self) -> list[str]:
+        from queuetruth.report.page import code_block, section, ul
+
+        out = []
+        reasons = [str(x["text"]) for x in self.doc["verdict"]["reasons"]]
+        remedies = [str(x) for x in self.doc["verdict"].get("remedies") or []]
+        verdict = "PASS" if self.passed else "REFUSED"
+        out.append(section("verdict", f"Verdict: {verdict}", [ul(reasons + remedies)] if reasons + remedies else []))
+        if self.snippet is not None:
+            out.append(section("snippet", "Paste this", [code_block(self.snippet, "snippet")]))
+        return out
 
     def text(self) -> str:
         """The terminal report: the answer first, then the held-out table, the verdict and the snippet."""
