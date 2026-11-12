@@ -1077,20 +1077,93 @@ fn spec_samples_round_trip_byte_for_byte() {
     assert_eq!(checked, 15);
 }
 
-/// `specs_gen.rs` is what `scripts/gen_rust_specs.py` wrote: its first line is the sha256 of the lines below it, so
+/// A generated file is what `scripts/gen_rust_specs.py` wrote: its first line is the sha256 of the lines below it, so
 /// an edit by hand fails here (and `make generate-check` fails on any difference from the schemas).
-#[test]
-fn specs_gen_is_current() {
+fn assert_generated_unedited(rel: &str) {
     use sha2::{Digest, Sha256};
-    let path = repo().join("crates/schema/src/specs_gen.rs");
+    let path = repo().join(rel);
     let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
     let (first, body) = text.split_once('\n').unwrap_or_default();
     let want = first.strip_prefix("// sha256 of the lines below: ").unwrap_or_default();
     assert_eq!(
         hex::encode(Sha256::digest(body.as_bytes())),
         want,
-        "crates/schema/src/specs_gen.rs was edited by hand: change python/queuetruth/schemas/specs.py or \
-         scripts/gen_rust_specs.py and run `make generate`"
+        "{rel} was edited by hand: change the Pydantic model or scripts/gen_rust_specs.py and run `make generate`"
+    );
+}
+
+#[test]
+fn specs_gen_is_current() {
+    assert_generated_unedited("crates/schema/src/specs_gen.rs");
+}
+
+#[test]
+fn json_gen_is_current() {
+    assert_generated_unedited("crates/schema/src/json_gen.rs");
+}
+
+/// Every document sample serializes through its generated struct to the same bytes as the committed sample (key
+/// order and number forms included; the `Value` comparison of `json_mirrors_round_trip_committed_samples` ignores
+/// key order).
+#[test]
+fn document_samples_round_trip_byte_for_byte() {
+    fn text<T: serde::Serialize + serde::de::DeserializeOwned>(name: &str, v: &Value) -> String {
+        let t: T = serde_json::from_value(v.clone()).unwrap_or_else(|e| panic!("{name}: deserialize: {e}"));
+        serde_json::to_string_pretty(&t).unwrap_or_else(|e| panic!("{name}: serialize: {e}"))
+    }
+    macro_rules! docs {
+        ($($name:literal => $t:ty),* $(,)?) => {
+            [$(($name, text::<$t> as fn(&str, &Value) -> String)),*]
+        };
+    }
+    let all = docs![
+        "qt.error" => json::ErrorDoc,
+        "qt.dataset_manifest" => json::DatasetManifest,
+        "qt.data_quality" => json::DataQuality,
+        "qt.ingest_summary" => json::IngestSummary,
+        "qt.replay_summary" => json::ReplaySummary,
+        "qt.shadow_sample_summary" => json::ShadowSampleSummary,
+        "qt.zoo_summary" => json::ZooSummary,
+        "qt.calibration_result" => json::CalibrationResult,
+        "qt.live_calibration_test" => json::LiveCalibrationTest,
+        "qt.feature_summary" => json::FeatureSummary,
+        "qt.hazard_model_card" => json::HazardModelCard,
+        "qt.live_import_summary" => json::LiveImportSummary,
+        "qt.live_manifest" => json::LiveManifest,
+        "qt.live_validation" => json::LiveValidation,
+        "qt.scorecard_summary" => json::ScorecardSummary,
+        "qt.referee_report" => json::RefereeReport,
+        "qt.why_trace" => json::WhyTrace,
+        "qt.report_summary" => json::ReportSummary,
+        "qt.export_summary" => json::ExportSummary,
+        "qt.fixtures_summary" => json::FixturesSummary,
+        "qt.doctor" => json::Doctor,
+        "qt.bench" => json::Bench,
+        "qt.problem" => json::Problem,
+        "qt.job" => json::Job,
+        "qt.file_manifest" => json::FileManifest,
+        "qt.estimate" => json::Estimate,
+    ];
+    for (name, f) in all {
+        let doc = read_json(&repo().join(format!("schemas/samples/{name}.json")));
+        let pretty = serde_json::to_string_pretty(&doc["sample"]).unwrap_or_default();
+        assert_eq!(f(name, &doc["sample"]), pretty, "{name}: sample");
+    }
+}
+
+/// Drift fixed with the generated document structs: an optional field (a Pydantic default of `None`, so absent from
+/// the schema's `required`) may be left out; the hand-written structs required the key.
+#[test]
+fn optional_document_fields_may_be_absent() {
+    let v = serde_json::json!({"schema": "qt.error", "schema_version": 1, "code": "QT-INPUT-003", "message": "m",
+                               "details": {}});
+    let e: json::ErrorDoc = serde_json::from_value(v).unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(e.hint, None);
+    let back = serde_json::to_value(&e).unwrap_or_default();
+    assert_eq!(
+        back["hint"],
+        Value::Null,
+        "an absent optional field is still written as null"
     );
 }
 

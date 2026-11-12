@@ -79,3 +79,25 @@ def test_defaults_without_a_schema_default_come_from_the_samples() -> None:
     assert score["bootstrap"].default["b"] == 1000
     grid = {f.name: f.default for f in g.structs["CalibrationGrid"].fields}
     assert grid["alloc"] == {"lo": -3.0, "hi": 4.0, "n": 141}
+
+
+@needs_rustfmt
+def test_the_committed_document_file_is_current() -> None:
+    assert (ROOT / gen.DOC_OUT).read_text(encoding="utf-8") == gen.generate(ROOT, gen.DOC_CONFIG), "run `make generate`"
+
+
+def test_every_document_struct_and_field_comes_from_the_schema() -> None:
+    g = gen.Gen(ROOT, gen.DOC_CONFIG)
+    g.load()
+    for name, rust in gen.DOCS:
+        schema = json.loads((ROOT / f"schemas/json/{name}.schema.json").read_text(encoding="utf-8"))
+        s = g.structs[rust]
+        assert [f.name for f in s.fields] == list(schema["properties"])
+        assert {f.name for f in s.fields if f.required} == set(schema.get("required", []))
+        assert s.fields[0].ty == gen.T("tag", rust) and s.fields[1].ty == gen.T("v1")
+
+
+def test_a_document_binding_that_matches_no_field_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setitem(gen.DOC_OMIT, "ErrorDoc.gone", "Option::is_none")
+    with pytest.raises(gen.GenError, match=r"ErrorDoc\.gone"):
+        gen.Gen(ROOT, gen.DOC_CONFIG).load()
