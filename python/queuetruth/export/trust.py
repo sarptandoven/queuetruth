@@ -1,5 +1,8 @@
 """Fail-safe assessment of a `qt.calibration_result` before its parameter is exported (trader review D1, D2, D4, E1).
 
+The rule has one implementation, `qt_calib::trust` (`assess`, `annotate`), which this module calls through
+`queuetruth._core`; what stays here reads the structured field, formats for display and raises the refusal.
+
 A calibration is exportable only when all of these hold:
 
 - it has a finite estimate fitted on at least `MIN_EXPORT_EVENTS` events (`no_estimate`, `few_events`);
@@ -25,13 +28,14 @@ hftbacktest|nautilus` raises `ExportRefused` (`QT-CALIB-001`, exit code 1) for a
 
 from __future__ import annotations
 
+import json
 import math
 import re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
 from queuetruth.errors import QtError
-from queuetruth.schemas.models import CalibrationResult, CalibrationTrust, HeldOut
+from queuetruth.schemas.models import CalibrationResult, CalibrationTrust
 
 #: Fewest events (allocation events, touches, filled train orders) of an exportable fit.
 MIN_EXPORT_EVENTS = 30
@@ -139,21 +143,9 @@ def dur(ns: int) -> str:
 # ---- held-out comparison ----------------------------------------------------------------------------------------
 
 
-def _tie(a: float, b: float) -> bool:
-    return abs(a - b) <= TIE_REL_TOL * max(abs(a), abs(b), 1e-300)
-
-
-def _cmp(f: float | None, d: float | None) -> int | None:
-    """-1 fitted better (lower), 0 tie, 1 worse, None not comparable."""
-    if f is None or d is None or not (math.isfinite(f) and math.isfinite(d)):
-        return None
-    if _tie(f, d):
-        return 0
-    return -1 if f < d else 1
-
-
 def horizon_label(ll: int | None, br: int | None) -> str:
-    """Label from the log-loss and Brier comparisons (`_cmp` codes)."""
+    """Label from the log-loss and Brier comparisons (-1 fitted better, 0 tie, 1 worse, None not comparable), as
+    `qt_calib::trust::horizon_label`."""
     codes = [c for c in (ll, br) if c is not None]
     if not codes:
         return "n/a"
@@ -166,26 +158,31 @@ def horizon_label(ll: int | None, br: int | None) -> str:
     return "tie"
 
 
-def _first(d: dict[str, HeldOut]) -> tuple[str | None, HeldOut | None]:
-    for k, v in d.items():
-        return k, v
-    return None, None
+def _rust_assess(cal: CalibrationResult) -> dict:
+    """`qt_calib::trust::assess`: the export rule, implemented once in Rust."""
+    from queuetruth import _core
+
+    return json.loads(_core.trust_assess(cal.model_dump_json()))
+
+
+def _horizons(d: dict) -> list[HorizonVerdict]:
+    return [
+        HorizonVerdict(
+            h["horizon_ns"],
+            h["fitted_logloss"],
+            h["default_logloss"],
+            h["fitted_brier"],
+            h["default_brier"],
+            h["label"],
+        )
+        for h in d["horizons"]
+    ]
 
 
 def held_out_verdicts(cal: CalibrationResult) -> tuple[str | None, str | None, list[HorizonVerdict]]:
     """(fitted model id, default model id, per-horizon verdicts) from `held_out` / `baseline_held_out`."""
-    fid, fho = _first(cal.held_out)
-    did, dho = _first(cal.baseline_held_out)
-    if fho is None or dho is None:
-        return fid, did, []
-    keys = sorted({int(k) for k in (*fho.logloss, *fho.brier, *dho.logloss, *dho.brier)})
-    out = []
-    for h in keys:
-        k = str(h)
-        fl, dl = fho.logloss.get(k), dho.logloss.get(k)
-        fb, db = fho.brier.get(k), dho.brier.get(k)
-        out.append(HorizonVerdict(h, fl, dl, fb, db, horizon_label(_cmp(fl, dl), _cmp(fb, db))))
-    return fid, did, out
+    d = _rust_assess(cal)
+    return d["fitted_id"], d["default_id"], _horizons(d)
 
 
 def held_out_summary(t: Trust, fmt: Callable[[int], str] | None = None) -> str:
@@ -237,24 +234,6 @@ def parse_flags(warnings: Sequence[str]) -> dict[str, str]:
     return out
 
 
-def _legacy_flags(cal: CalibrationResult) -> dict[str, str]:
-    """Flags derivable from the numbers of a result written before `trust:` lines existed."""
-    out: dict[str, str] = {}
-    ci = cal.ci_bootstrap
-    if ci is not None and ci[0] is not None and ci[0] == ci[1]:
-        out["degenerate_ci"] = f"bootstrap CI [{g6(ci[0])}, {g6(ci[1])}] has zero width"
-    grid = cal.spec.get("grid") if isinstance(cal.spec, dict) else None
-    fam = (cal.family or "").lower().removeprefix("hbt_")
-    if cal.estimate is not None and isinstance(grid, dict) and cal.kind == "alloc":
-        g = grid.get("databento" if fam == "databento" else "alloc")
-        if isinstance(g, dict) and {"lo", "hi"} <= set(g):
-            lo, hi = float(g["lo"]), float(g["hi"])
-            theta = cal.estimate if fam == "databento" else math.log(max(cal.estimate, 1e-300))
-            if any(abs(theta - e) <= 1e-9 * max(1.0, abs(e)) for e in (lo, hi)):
-                out["at_grid_edge"] = f"estimate {g6(cal.estimate)} is the end of the fitting grid"
-    return out
-
-
 #: Generic texts of tokens known only from the structured field (no `trust:` line to quote).
 _TOKEN_TEXT = {
     "no_estimate": "the fit has no finite estimate",
@@ -270,33 +249,16 @@ _TOKEN_TEXT = {
 
 
 def _compute(cal: CalibrationResult, fmt: Callable[[int], str] | None = None) -> Trust:
-    """Assessment from the `trust:` lines and the numbers (ignores the structured `trust` field)."""
-    flags = parse_flags(cal.warnings)
-    if not any(k not in OWN_TOKENS for k in flags):
-        flags.update({k: v for k, v in _legacy_flags(cal).items() if k not in flags})
-    fid, did, hs = held_out_verdicts(cal)
-    reasons: dict[str, str] = {}
-    if cal.kind == "latency":
-        lat = cal.latency
-        if lat is None or not lat.entry_ns.n:
-            reasons["no_estimate"] = "no entry-latency samples (no ack with an exchange match/gateway timestamp)"
-        return Trust(flags, [], None, None, [(k, reasons[k]) for k in REFUSING if k in reasons])
-    if cal.estimate is None or not math.isfinite(cal.estimate):
-        reasons["no_estimate"] = "the fit has no finite estimate"
-    if cal.n_events < MIN_EXPORT_EVENTS:
-        reasons["few_events"] = f"fitted on {cal.n_events} event(s), fewer than {MIN_EXPORT_EVENTS}"
-    for tok in ("at_grid_edge", "flat_likelihood", "not_identified", "degenerate_ci", "own_orders_in_depth"):
-        if tok in flags:
-            reasons[tok] = flags[tok]
-    t = Trust(flags, hs, fid, did)
-    if not hs or all(h.label == "n/a" for h in hs):
-        reasons["no_held_out"] = (
-            "no held-out comparison with the default (empty test window, or a Rust-only fit.json): "
-            "the fit is not shown to beat the default out of sample"
-        )
-    elif not _beats(hs):
-        reasons["not_beating_default"] = held_out_summary(t, fmt)
-    return Trust(flags, hs, fid, did, [(k, reasons[k]) for k in REFUSING if k in reasons])
+    """Assessment from the `trust:` lines and the numbers (ignores the structured `trust` field), by
+    `qt_calib::trust::assess`. `fmt` rewrites the horizons of the `not_beating_default` text for display."""
+    d = _rust_assess(cal)
+    hs = _horizons(d)
+    flags = {k: v for k, v in d["flags"]}
+    reasons = [(k, v) for k, v in d["reasons"]]
+    if fmt is not None:
+        shown = Trust(flags, hs, d["fitted_id"], d["default_id"])
+        reasons = [(k, held_out_summary(shown, fmt) if k == "not_beating_default" else v) for k, v in reasons]
+    return Trust(flags, hs, d["fitted_id"], d["default_id"], reasons)
 
 
 def assess(cal: CalibrationResult, fmt: Callable[[int], str] | None = None) -> Trust:
@@ -359,12 +321,13 @@ def trust_lines(t: Trust) -> list[str]:
 
 def annotate(cal: CalibrationResult) -> CalibrationResult:
     """A copy of `cal` with the structured `trust` field (schema 1.1) and its `warnings` ending with the
-    `beats_default` and `verdict` lines (replacing older ones). The assessment is recomputed from the lines and the
-    numbers: an earlier structured field (e.g. the Rust part's, which has no held-out comparison) is replaced."""
-    kept = [w for w in cal.warnings if not any(w.startswith(f"{PREFIX}{t}:") for t in OWN_TOKENS)]
-    base = cal.model_copy(update={"warnings": kept, "trust": None})
-    t = _compute(base)
-    return base.model_copy(update={"warnings": kept + trust_lines(t), "trust": structured(t)})
+    `beats_default` and `verdict` lines (replacing older ones), by `qt_calib::trust::annotate`. The assessment is
+    recomputed from the lines and the numbers: an earlier structured field (e.g. the Rust part's, which has no
+    held-out comparison) is replaced."""
+    from queuetruth import _core
+
+    d = json.loads(_core.trust_annotate(cal.model_dump_json()))
+    return cal.model_copy(update={"warnings": d["warnings"], "trust": CalibrationTrust.model_validate(d["trust"])})
 
 
 def refusal(cal: CalibrationResult, target: str) -> ExportRefused | None:

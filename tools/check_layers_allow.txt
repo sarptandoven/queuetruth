@@ -107,11 +107,13 @@ queuetruth.schemas -> queuetruth.forecast.schemas  # layer
 queuetruth.schemas -> queuetruth.ledger.models  # layer
 queuetruth.schemas -> queuetruth.sandbox.models  # layer
 queuetruth.schemas.models -> queuetruth.cert.models  # layer
+queuetruth.schemas.runid -> queuetruth._core  # layer: run ids have one implementation, qt_schema::run_id (W7 single-source contracts)
 queuetruth.score.calibrate_live -> queuetruth.export  # layer
 queuetruth.score.calibrate_live -> queuetruth.export.trust  # layer
 queuetruth.score.outcomes -> queuetruth.api  # layer
 queuetruth.score.runner -> queuetruth.api  # layer
 queuetruth.score.scorecard -> queuetruth.eval.impact  # cycle
+queuetruth.stats._seed -> queuetruth._core  # layer: seed derivation has one implementation, qt_types::stable_seed (W7 single-source contracts)
 scripts/oracle/disagreements.py -> sys.path += tests  # tests
 scripts/oracle/run_oracle.py -> sys.path += tests  # tests
 scripts/scale/atlas_api.py -> queuetruth.atlas._common  # private

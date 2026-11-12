@@ -4,6 +4,7 @@
 //! `|k_hat - k0| < 0.012`, `|p_hat - p0| < 0.005`); the profile-CI coverage assertions use pinned seeds
 //! (`1000 + 10 * family + n0 index`), recorded here as the audit asks.
 
+use qt_schema::json;
 use qt_schema::rows::{AllocEventRow, TouchRecordRow};
 use qt_types::{Dur, QtResult, Xoshiro256StarStar, stable_seed};
 use qt_zoo::{ParticleSimulator, ShadowCurve};
@@ -375,6 +376,98 @@ fn trust_degenerate_ci_is_suppressed() {
     assert_eq!(trust::g6(2.0), "2");
     assert_eq!(trust::g6(123456789.0), "1.23457e+08");
     assert_eq!(trust::g6(-0.8), "-0.8");
+}
+
+/// `g6` is Python's `format(x, ".6g")`; before the trust rule moved here it wrote `0.00001` for `1e-05`, `1000000`
+/// for `1e+06` after rounding, `0` for `-0.0` and `NaN` for `nan`.
+#[test]
+fn trust_g6_is_python_format() {
+    for (x, want) in [
+        (1e-5, "1e-05"),
+        (9.999995e-5, "0.0001"),
+        (0.0001, "0.0001"),
+        (999999.7, "1e+06"),
+        (99999.95, "99999.9"),
+        (1234565.0, "1.23456e+06"),
+        (1e21, "1e+21"),
+        (5e-324, "4.94066e-324"),
+        (-0.0, "-0"),
+        (f64::NAN, "nan"),
+        (f64::INFINITY, "inf"),
+        (f64::NEG_INFINITY, "-inf"),
+    ] {
+        assert_eq!(trust::g6(x), want, "{x}");
+    }
+}
+
+#[test]
+fn trust_dur_and_parse_flags() {
+    assert_eq!(
+        [
+            100_000_000,
+            1_000_000_000,
+            90_000_000_000,
+            240_000_000_000,
+            300_000_000_000,
+            1_500,
+            7
+        ]
+        .map(trust::dur),
+        ["100ms", "1s", "90s", "240s", "5m", "1500ns", "7ns"]
+    );
+    let w: Vec<String> = [
+        "trust: a_b: x",
+        "trust: Bad: y",
+        "trust: a_b: z",
+        "trust: c:no space",
+        "other",
+    ]
+    .iter()
+    .map(|s| (*s).to_owned())
+    .collect();
+    assert_eq!(trust::parse_flags(&w), [("a_b".to_owned(), "z".to_owned())]);
+}
+
+/// The export rule moved from `queuetruth.export.trust`: a fit that beats the default at 10 s and ties at 1 s is
+/// exportable; the lines are the bytes the Python rule wrote (`python/tests/trust/test_trust_assess.py`).
+#[test]
+fn trust_annotate_writes_the_held_out_verdict() {
+    let ho = |ll: [f64; 2], br: [f64; 2]| -> json::HeldOut {
+        serde_json::from_value(serde_json::json!({
+            "logloss": {"1000000000": ll[0], "10000000000": ll[1]},
+            "brier": {"1000000000": br[0], "10000000000": br[1]},
+            "fill_rate_bias": {}
+        }))
+        .unwrap_or_default()
+    };
+    let mut r = json::CalibrationResult {
+        estimate: Some(1.5),
+        n_events: 500,
+        family: "power3".into(),
+        warnings: vec!["trust: verdict: refused (few_events)".into()],
+        ..Default::default()
+    };
+    r.held_out
+        .insert("hbt_power3[n=1.5]".into(), ho([0.1, 0.2], [0.05, 0.08]));
+    r.baseline_held_out
+        .insert("hbt_power3[n=2]".into(), ho([0.1, 0.3], [0.05, 0.09]));
+    let out = trust::annotate(&r).unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(
+        out.warnings,
+        [
+            "trust: beats_default: 1000000000=tie,10000000000=better (beats the default hbt_power3[n=2] out of \
+             sample: better at 10s; tie at 1s)",
+            "trust: verdict: exportable",
+        ]
+    );
+    let t = out.trust.unwrap_or_default();
+    assert_eq!(t.verdict, json::TrustVerdict::Exportable);
+    r.baseline_held_out.clear();
+    let t = trust::annotate(&r)
+        .unwrap_or_else(|e| panic!("{e}"))
+        .trust
+        .unwrap_or_default();
+    assert_eq!(t.reasons, ["no_held_out"]);
 }
 
 #[test]
