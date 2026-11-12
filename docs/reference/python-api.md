@@ -279,6 +279,39 @@ Interactive replay session: `.advance_to(ts)`, `.bbo(inst)`, `.depth(inst, n)`, 
 | `FetchPlan` | class |  | | What `fetch_iex` would do (no I/O): the day, symbols, URL and output dataset. |
 | `plan_fetch` | function |  | `(date: str \| dt.date, symbols: Sequence[str] \| str, out: str \| Path \| None = None, *, url: str \| None = None) -> FetchPlan` | The plan of a fetch (module docstring); `QT-USAGE-001` for a bad date or symbol, or a day in the future. |
 
+## `queuetruth.dataset`
+
+One way to open, read, check and write a queuetruth dataset (plan section 5.3 step 3).
+
+| Name | Kind | Binding | Signature | Description |
+|---|---|---|---|---|
+| `check_rel_path` | function |  | `(rel: str, where: str) -> Path` | `rel` as a relative path made only of normal components, else `QT-INPUT-002` (a manifest must not make a reader open `/etc/passwd` or a sibling dataset). The check is lexical and mirrors the engine's (`qt_ingest` `check_rel_path`): no absolute path, drive, `..`, leading `.` or NUL. Symlinks are followed, as the engine follows them (datasets with partitions on another volume are linked in). |
+| `check_table_schema` | function |  | `(table: pa.Table \| pa.Schema, want: str, where: str \| Path) -> None` | `QT-INPUT-002` when the table carries a `qt.schema` other than `want` (a table without one is accepted: CSV files and tables written by other tools carry none). |
+| `Dataset` | class |  | | An opened dataset directory or live log. Open one with `open_dataset`. |
+| `dataset_id` | function |  | `(partition_shas: list[str], source_format: str) -> str` | SPEC 3.10 `dataset_id`: sha256 of the sorted partition-file sha256 list, newline-joined, then a newline and `source_format` (the rule of `qt_schema::json::dataset_id`). |
+| `DatasetKind` | class |  | | What a directory holds. |
+| `DatasetWriter` | class |  | | Writes the files of a dataset directory, records each file's `Files` entry (`name`, `rows`, `bytes`, `sha256`) and finally the manifest, atomically (`finalize`: a temporary name, then a rename), so a directory with a manifest is always complete. |
+| `date_str` | function |  | `(days: int) -> str` | `YYYY-MM-DD` of a day number (days since 1970-01-01). |
+| `day_number` | function |  | `(value: Any) -> int` | Days since 1970-01-01 of a `datetime.date`, a `YYYY-MM-DD` string or a day number. |
+| `expansion_limit` | function |  | `(size: int, slack: int = 67108864) -> int` | Largest decoded size accepted for an input of `size` bytes on disk. |
+| `Instrument` | class |  | | An instrument's identity and units on one session date. Prices are integers scaled by `10**price_exp`, sizes by `10**size_exp`; `tick_size` is in price units. |
+| `instrument_rows` | function |  | `(t: pa.Table, where: str \| Path) -> list[dict[str, Any]]` | Rows of a `qt.instruments` table with the known columns cast to their types and `session_date` as a day number (`QT-INPUT-002` naming the column when a value does not fit). |
+| `json_text` | function |  | `(doc: Any, *, indent: int \| None = 2, ensure_ascii: bool = True, sort_keys: bool = False, allow_nan: bool = False) -> str` | The text a writer stores for a JSON document (a dict or a Pydantic model): `json.dumps` with these options and a trailing newline (NaN and Infinity refused unless `allow_nan`). |
+| `Manifest` | class |  | | A manifest document as read (a read-only mapping in file order), with typed views of the fields readers use. |
+| `open_dataset` | function |  | `(path: str \| Path, *, missing_ok: bool = False, contain: Contain \| None = None, bounded: bool = False, max_manifest_bytes: int \| None = None) -> Dataset` | Opens a queuetruth dataset directory (an MBO or L2 dataset, a prediction-market dataset) or a live or simulator log, and checks its manifest. |
+| `Partition` | class |  | | One (instrument, session date) partition of a dataset manifest. |
+| `PartitionFile` | class |  | | One Parquet file of a partition (path relative to the dataset root). |
+| `read_manifest` | function |  | `(path: str \| Path, *, missing_ok: bool = True) -> dict[str, Any]` | The `manifest.json` of a directory as a dict (`{}` when absent and `missing_ok`); `QT-INPUT-002` when it does not parse. |
+| `read_manifest_doc` | function |  | `(root: str \| Path, *, missing_ok: bool = False, contain: Callable[[Path], Path] \| None = None, max_bytes: int \| None = None) -> dict[str, Any] \| None` | The `manifest.json` of a directory as a dict; None when it is absent and `missing_ok`. `QT-INPUT-001` when absent, `QT-INPUT-002` when it is not a JSON object (NaN and Infinity are refused). |
+| `read_parquet_bounded` | function |  | `(path: Path, *, columns: list[str] \| None = None, code: str = QT-INPUT-002, what: str = unreadable, slack: int = 67108864) -> pa.Table` | The Parquet file's table (only `columns` that exist when given), its decoded size bounded by `expansion_limit(file size, slack)`. `code` for a damaged file (any Arrow error, invalid UTF-8 in a column name), `QT-INPUT-002` for a file that decodes past the limit or has a nested column. |
+| `Session` | class | SPEC 4.3 | | One instrument-day: the instrument's units that day and the session times. `midnight_utc_ns` is the local midnight in UTC ns; `open_s` and `close_s` are seconds after it (continuous trading). |
+| `table_schema_name` | function |  | `(table: pa.Table \| pa.Schema) -> str \| None` | The `qt.schema` metadata of a table or schema, if any. |
+| `TableDef` | class |  | | A logical table of a dataset: its `qt.schema` name and where its files are. |
+| `Verification` | class |  | | What `Dataset.verify` found: `problems` is empty when every file the manifest lists is there with the sha256, size and row count it records. |
+| `write_text_atomic` | function |  | `(path: Path, text: str) -> None` | Writes `text` to `path` through a temporary name in the same directory and a rename, so a reader sees the old file or the new one, never a part. |
+
+Constants: `DATA_QUALITY_FILE`, `DATASET_SCHEMA`, `EVENTS_FILE`, `INSTRUMENT_TYPES`, `INSTRUMENTS_FILE`, `LIVE_SCHEMA`, `MANIFEST_FILE`, `MAX_RATIO`, `ORDERS_FILE`, `PREDICTION_MARKET_VENUES`, `PRICE_EXP_MAX`, `PRICE_EXP_MIN`, `SIM_PREFIX`, `SLACK`, `TABLES`.
+
 ## `queuetruth.stats`
 
 Statistics used by evaluation and the scorer (SPEC 4.3 `queuetruth.stats`, 5.5.7, 5.6, 5.7.5).
