@@ -12,12 +12,19 @@ polling with `qt_get_job`. No tool deletes anything or manages keys.
 Zoo runs on the service (`ZOO_TOOLS`, remote mode, listed after the SPEC 4.6 tools): `qt_get_zoo` reads a zoo run's
 `qt.zoo_summary`; `qt_submit_zoo` (with `allow_submit`) starts one and returns its `qt.job`.
 
-Run mode (`allow_run=True`, `--allow-run` or `QT_MCP_ALLOW_RUN=1`; either mode): `RUN_TOOLS` are listed after those
-and run shadow sampling, replay and zoo on local datasets without the service or Postgres, and `qt_local_why` runs
-under the same limits (`queuetruth.mcp.local.LocalRunner`: path sandbox, child process, `RunLimits`). Their listed
-input schemas accept only `{"path"}` references and no `out`. Each returns its summary document as
-`structuredContent`, the output directory as text and in `_meta` (`queuetruth/out_dir`, `queuetruth/run_id`,
-`queuetruth/reused`), and every output file as a `file://` `resource_link`.
+Run mode (`allow_run=True`, `--allow-run` or `QT_MCP_ALLOW_RUN=1`; either mode): `RUN_TOOLS` are listed after those.
+They are generated from the operation table (`queuetruth.ops.table`): one tool per operation with a `tool` name
+(shadow sampling, replay and zoo on local datasets, and the verbs `qt_check`, `qt_fit`, `qt_compare`, `qt_data`,
+`qt_atlas`, `qt_demo`), with the operation's description, the run-mode form of its spec model as input
+(`local_spec_model`: only `{"path"}` references, no `out`) and its document model as output. Each runs without the
+service or Postgres in a limited child that calls `queuetruth.runner.run` (`queuetruth.mcp.local.LocalRunner`: path
+sandbox, child process, `RunLimits`), and `qt_local_why` runs under the same limits. Each returns its document as
+`structuredContent`, the answer line first in the text when the result has one, the output directory as text and in
+`_meta` (`queuetruth/out_dir`, `queuetruth/run_id`, `queuetruth/reused`, and `queuetruth/answer` and
+`queuetruth/warnings` when there are some), and every output file as a `file://` `resource_link`. A spec that needs
+the network is refused unless `allow_network` (`QT_MCP_ALLOW_NETWORK=1`). The remote tools call the service's HTTP
+API and the local read tools read output directories; they are not operations and are declared in
+`queuetruth.mcp.tools`.
 
 Optional tool modules (`OPTIONAL_TOOL_MODULES`, e.g. `queuetruth.mcp.sandbox_tools`): in run mode only (they run
 replays, like `RUN_TOOLS`), the stdio server (`serve`, so `queuetruth mcp serve --allow-run` and
@@ -57,6 +64,7 @@ from queuetruth._version import __version__
 from queuetruth.client import ENV_API_KEY, Client
 from queuetruth.errors import QtError
 from queuetruth.mcp.local import (
+    ENV_ALLOW_NETWORK,
     ENV_ALLOW_RUN,
     MAX_LINKS,
     LocalOutputs,
@@ -66,6 +74,7 @@ from queuetruth.mcp.local import (
     core_why,
     env_flag,
     output_links,
+    run_operations,
 )
 from queuetruth.mcp.metrics import METRICS, explain
 from queuetruth.mcp.tools import (
@@ -78,7 +87,9 @@ from queuetruth.mcp.tools import (
     input_schema,
     output_schema,
 )
+from queuetruth.ops.table import OperationDef
 from queuetruth.schemas import specs as sp
+from queuetruth.schemas.export import json_schema
 
 _tool_input_schema, _tool_output_schema = input_schema, output_schema  # `add_tool` has parameters of these names
 SERVER_NAME = "queuetruth"
@@ -102,14 +113,6 @@ LOCAL_INSTRUCTIONS = (
 )
 
 
-#: Added to the instructions in run mode (it names only the run tools, which run mode lists in both modes).
-RUN_INSTRUCTIONS = (
-    "Run tools: qt_local_sample_shadows, qt_local_run_replay and qt_local_run_zoo run on local datasets "
-    '({"path": ...} references under QT_MCP_ROOT, QT_MCP_DATA_ROOTS or the run root; spec.out null) and write only '
-    "under the run root (QT_MCP_RUN_ROOT), at <kind>/<run_id>; the result names the directory, and the same spec "
-    "returns the finished run instead of running again. Sample shadows first, then pass the sampled shadows.parquet "
-    "to the zoo. qt_local_why runs under the same limits."
-)
 ENV_OPTIONAL_TOOLS = "QT_MCP_OPTIONAL_TOOLS"
 #: Optional tool modules: (module, register function called with the `QtMcpServer`).
 OPTIONAL_TOOL_MODULES: tuple[tuple[str, str], ...] = (("queuetruth.mcp.sandbox_tools", "register_sandbox_tools"),)
@@ -162,7 +165,7 @@ ZOO_TOOLS: tuple[ToolDef, ...] = (
 
 
 class LocalRunArgs(Args):
-    """Run tools at runtime (the spec is validated for the tool's kind by `LocalRunner.prepare`)."""
+    """Run tools at runtime (the spec is validated for the tool's operation by `LocalRunner.prepare`)."""
 
     spec: dict[str, Any]
 
@@ -175,7 +178,7 @@ def _path_only(annotation: Any) -> Any:
     return annotation
 
 
-def local_spec_model(spec: type[sp.SpecModel]) -> type[sp.SpecModel]:
+def local_spec_model(spec: type[BaseModel]) -> type[BaseModel]:
     """`spec` as run mode accepts it: every reference a `{"path"}` and no `out` (the run root holds the outputs)."""
     fields: dict[str, Any] = {}
     for name, info in spec.model_fields.items():
@@ -190,66 +193,75 @@ def local_spec_model(spec: type[sp.SpecModel]) -> type[sp.SpecModel]:
     return create_model(f"Local{spec.__name__}", __base__=sp.SpecModel, __doc__=doc, **fields)
 
 
+#: The order of the run tools: the pipeline (sample, replay, zoo), then the verbs; any other operation with a tool
+#: follows by name.
+RUN_ORDER: tuple[str, ...] = ("shadows", "replay", "zoo", "check", "fit", "compare", "data", "atlas", "demo")
+#: Run-mode description suffix of every run tool.
+RUN_NOTE = (
+    ' Runs in a sandboxed child process; references are {"path"} under the allowed roots, spec.out is null and '
+    "the outputs go under the run root."
+)
+
+
+def run_operations_in_order() -> list[OperationDef]:
+    """The operations with an MCP tool, in `RUN_ORDER`."""
+    ops = run_operations()
+    rank = {name: i for i, name in enumerate(RUN_ORDER)}
+    return sorted(ops.values(), key=lambda op: (rank.get(op.name, len(rank)), op.name))
+
+
+def _run_tool(op: OperationDef) -> ToolDef:
+    assert op.tool is not None
+    local = local_spec_model(op.spec)
+    schema = create_model(
+        f"Local{op.name.capitalize()}Schema",
+        __base__=Args,
+        __doc__=f"`{op.tool}`.",
+        spec=(local, ...),
+    )
+    return ToolDef(
+        op.tool,
+        op.title or op.tool,
+        op.description + RUN_NOTE,
+        LocalRunArgs,
+        getattr(op.document, "SCHEMA", None) or f"qt.{op.name}",
+        schema_args=schema,
+        local=True,
+        kind=op.name,
+    )
+
+
+def run_tool_schemas(op: OperationDef, tool: ToolDef) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Input and output JSON Schema of a run tool: the run-mode spec model, and the operation's document model."""
+    out = json_schema(tool.output, op.document)
+    return input_schema(tool), out
+
+
+#: Run-mode tools, one per operation of the table with a tool, listed after the SPEC 4.6 tools.
+RUN_TOOLS: tuple[ToolDef, ...] = tuple(_run_tool(op) for op in run_operations_in_order())
+RUN_TOOL_NAMES: tuple[str, ...] = tuple(t.name for t in RUN_TOOLS)
+#: The run-mode forms of the pipeline's spec models (`qt_local_sample_shadows`, `qt_local_run_replay`,
+#: `qt_local_run_zoo`).
 LocalShadowSampleSpec = local_spec_model(sp.ShadowSampleSpec)
 LocalReplaySpec = local_spec_model(sp.ReplaySpec)
 LocalZooSpec = local_spec_model(sp.ZooSpec)
+_PIPELINE = ("qt_local_sample_shadows", "qt_local_run_replay", "qt_local_run_zoo")
+_VERB_TOOLS = [t.name for t in RUN_TOOLS if t.name not in _PIPELINE]
 
-
-class LocalSampleSchema(Args):
-    """`qt_local_sample_shadows`."""
-
-    spec: LocalShadowSampleSpec  # type: ignore[valid-type]
-
-
-class LocalReplaySchema(Args):
-    """`qt_local_run_replay`."""
-
-    spec: LocalReplaySpec  # type: ignore[valid-type]
-
-
-class LocalZooSchema(Args):
-    """`qt_local_run_zoo`."""
-
-    spec: LocalZooSpec  # type: ignore[valid-type]
-
-
-#: Run-mode tools, listed after the SPEC 4.6 tools.
-RUN_TOOLS: tuple[ToolDef, ...] = (
-    ToolDef(
-        "qt_local_sample_shadows",
-        "Sample shadows locally",
-        "Seeded random shadow orders on a local dataset (ShadowSampleSpec, out null); writes shadows.parquet under "
-        "the run root and returns qt.shadow_sample_summary. Pass the file to qt_local_run_replay or qt_local_run_zoo.",
-        LocalRunArgs,
-        "qt.shadow_sample_summary",
-        schema_args=LocalSampleSchema,
-        local=True,
-        kind="shadows",
-    ),
-    ToolDef(
-        "qt_local_run_replay",
-        "Run replay locally",
-        "Exact replay of a local dataset with optional shadows (ReplaySpec, out null) in a sandboxed child process; "
-        "outputs under the run root; returns qt.replay_summary.",
-        LocalRunArgs,
-        "qt.replay_summary",
-        schema_args=LocalReplaySchema,
-        local=True,
-        kind="replay",
-    ),
-    ToolDef(
-        "qt_local_run_zoo",
-        "Run model zoo locally",
-        "Runs L2 queue models on a local dataset's L2 view and scores them against exact truth (ZooSpec, out null) "
-        "in a sandboxed child process; outputs under the run root; returns qt.zoo_summary with the leaderboard.",
-        LocalRunArgs,
-        "qt.zoo_summary",
-        schema_args=LocalZooSchema,
-        local=True,
-        kind="zoo",
-    ),
+#: Added to the instructions in run mode (it names only the run tools, which run mode lists in both modes).
+RUN_INSTRUCTIONS = (
+    "Run tools: qt_local_sample_shadows, qt_local_run_replay and qt_local_run_zoo run on local datasets "
+    '({"path": ...} references under QT_MCP_ROOT, QT_MCP_DATA_ROOTS or the run root; spec.out null) and write only '
+    "under the run root (QT_MCP_RUN_ROOT), at <kind>/<run_id>; the result names the directory, and the same spec "
+    "returns the finished run instead of running again. Sample shadows first, then pass the sampled shadows.parquet "
+    "to the zoo. qt_local_why runs under the same limits."
+    + (
+        f" The verbs {', '.join(_VERB_TOOLS)} run the same way, each into a new directory; the first text line is "
+        f"the answer. A spec that needs the network is refused unless {ENV_ALLOW_NETWORK}=1."
+        if _VERB_TOOLS
+        else ""
+    )
 )
-RUN_TOOL_NAMES: tuple[str, ...] = tuple(t.name for t in RUN_TOOLS)
 
 
 def instructions_for(local_mode: bool, allow_run: bool = False, allow_submit: bool = False) -> str:
@@ -278,11 +290,12 @@ def _first_error(e: ValidationError) -> str:
     return f"{loc or '<arguments>'}: {err.get('msg')}"
 
 
-def render_text(doc: dict[str, Any]) -> str:
-    """Short text rendering of a tool result: one headline, plus the compact JSON when it is small."""
+def render_text(doc: dict[str, Any], answer: str | None = None) -> str:
+    """Short text rendering of a tool result: one headline, plus the compact JSON when it is small. `answer` (the
+    answer line of the operation's result, `.summary` of the shared result shape) is the headline when given."""
     schema = doc.get("schema")
     try:
-        head = _headline(doc)
+        head = answer or _headline(doc)
     except (KeyError, TypeError, ValueError, IndexError):
         head = f"{schema or 'result'} document"
     body = json.dumps(doc, separators=(",", ":"), ensure_ascii=False)
@@ -397,6 +410,7 @@ class QtMcpServer:
         run_root: str | os.PathLike[str] | None = None,
         data_roots: Sequence[str | os.PathLike[str]] | None = None,
         tool_modules: Sequence[tuple[str, str]] = (),
+        allow_network: bool | None = None,
     ) -> None:
         if client is None and not local and os.environ.get(ENV_API_KEY):
             client = Client()
@@ -406,9 +420,12 @@ class QtMcpServer:
         self.allow_run = allow_run
         self.outputs = LocalOutputs(root)
         self.runner: LocalRunner | None = None
+        #: run tools may reach the network (`QT_MCP_ALLOW_NETWORK`; off by default)
+        self.allow_network = env_flag(ENV_ALLOW_NETWORK) if allow_network is None else allow_network
         if allow_run:
             sandbox = Sandbox(root, data_roots=data_roots, run_root=run_root)
-            self.runner = LocalRunner(sandbox, run_limits or RunLimits.from_env())
+            limits = run_limits or RunLimits.from_env()
+            self.runner = LocalRunner(sandbox, limits, allow_network=self.allow_network)
         self._why = why
         self.tools: list[ToolDef] = [
             t for t in TOOLS if (t.local or not self.local_mode) and (not t.submit or self.allow_submit)
@@ -421,6 +438,16 @@ class QtMcpServer:
         #: Tools that write (annotated `readOnlyHint: false`); custom schemas of added tools: name -> (in, out).
         self._writes: set[str] = set(RUN_TOOL_NAMES) if allow_run else set()
         self._schemas: dict[str, tuple[dict[str, Any], dict[str, Any]]] = {}
+        #: Tools that may reach the network (annotated `openWorldHint: true`): run tools of network operations when
+        #: the network is allowed.
+        self._open_world: set[str] = set()
+        if allow_run:
+            ops = run_operations()
+            for t in RUN_TOOLS:
+                op = ops[str(t.kind)]
+                self._schemas[t.name] = run_tool_schemas(op, t)
+                if op.network and self.allow_network:
+                    self._open_world.add(t.name)
         self._handlers: dict[str, Handler] = {
             "qt_meta": self._meta,
             "qt_list_datasets": self._list_datasets,
@@ -441,9 +468,7 @@ class QtMcpServer:
             "qt_local_read_summary": self._local_read_summary,
             "qt_local_list_outputs": self._local_list_outputs,
             "qt_local_why": self._local_why,
-            "qt_local_sample_shadows": self._local_run,
-            "qt_local_run_replay": self._local_run,
-            "qt_local_run_zoo": self._local_run,
+            **{name: self._local_run for name in RUN_TOOL_NAMES},
         }
         self.server: Server[Any] = Server(
             SERVER_NAME,
@@ -550,7 +575,7 @@ class QtMcpServer:
                         read_only_hint=not (t.submit or t.name in self._writes),
                         destructive_hint=False,
                         idempotent_hint=not t.submit,
-                        open_world_hint=False,
+                        open_world_hint=t.name in self._open_world,
                     ),
                 )
             )
@@ -580,7 +605,8 @@ class QtMcpServer:
             return error_result(QtError("QT-ENGINE-001", f"{tool.name}: internal error: {type(e).__name__}: {e}"))
         doc, extra = out[0], out[1]
         meta = out[2] if len(out) > 2 else None
-        content = [types.TextContent(text=render_text(doc)), *extra]
+        answer = (meta or {}).get("queuetruth/answer")
+        content = [types.TextContent(text=render_text(doc, answer if isinstance(answer, str) else None)), *extra]
         return types.CallToolResult(content=content, structured_content=doc, meta=meta)
 
     async def _remote(self, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
@@ -681,7 +707,16 @@ class QtMcpServer:
             types.ResourceLink(name=name, uri=path.as_uri(), mime_type=_mime(name), size=size)
             for name, path, size in files
         ]
-        meta = {"queuetruth/out_dir": str(res.out), "queuetruth/run_id": res.out.name, "queuetruth/reused": res.cached}
+        meta: dict[str, Any] = {
+            "queuetruth/out_dir": str(res.out),
+            "queuetruth/run_id": res.out.name,
+            "queuetruth/reused": res.cached,
+        }
+        if res.answer:
+            meta["queuetruth/answer"] = res.answer
+        if res.warnings:
+            meta["queuetruth/warnings"] = list(res.warnings)
+            note += "\nwarnings: " + "; ".join(res.warnings)
         return res.summary, [types.TextContent(text=note), *links], meta
 
 
@@ -775,9 +810,10 @@ def build_server(
     run_root: str | os.PathLike[str] | None = None,
     data_roots: Sequence[str | os.PathLike[str]] | None = None,
     tool_modules: Sequence[tuple[str, str]] = (),
+    allow_network: bool | None = None,
 ) -> QtMcpServer:
     """The configured server (its `.server` is the MCP `Server`), with the optional tool modules `tool_modules`
-    (none by default; `serve` passes `default_tool_modules()`)."""
+    (none by default; `serve` passes `default_tool_modules()`). `allow_network` None reads `QT_MCP_ALLOW_NETWORK`."""
     return QtMcpServer(
         allow_submit=allow_submit,
         local=local,
@@ -789,6 +825,7 @@ def build_server(
         run_root=run_root,
         data_roots=data_roots,
         tool_modules=tool_modules,
+        allow_network=allow_network,
     )
 
 
@@ -838,6 +875,7 @@ __all__ = [
     "LOCAL_INSTRUCTIONS",
     "OPTIONAL_TOOL_MODULES",
     "RUN_INSTRUCTIONS",
+    "RUN_ORDER",
     "RUN_TOOLS",
     "RUN_TOOL_NAMES",
     "ZOO_TOOLS",
@@ -850,7 +888,9 @@ __all__ = [
     "main",
     "register_optional_tools",
     "render_text",
+    "run_operations_in_order",
     "run_stdio",
+    "run_tool_schemas",
     "serve",
     "trust_lines",
 ]

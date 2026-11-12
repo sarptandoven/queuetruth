@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from queuetruth.ops._call import _call, _parse_doc, _validate
+from queuetruth.ops.table import OperationDef
 from queuetruth.schemas import models as m
 from queuetruth.schemas import specs as s
 
@@ -20,3 +21,14 @@ def referee(spec: s.RefereeSpec | dict[str, Any]) -> m.RefereeReport:
     from queuetruth.score import run_referee
 
     return run_referee(_validate(s.RefereeSpec, spec))
+
+
+OPERATIONS = (
+    OperationDef(
+        "referee",
+        s.RefereeSpec,
+        referee,
+        m.RefereeReport,
+        "A simulator checked against the bug-class fixtures.",
+    ),
+)

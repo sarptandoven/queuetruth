@@ -1,0 +1,1084 @@
+{
+ "local": [
+  {
+   "arguments": [
+    "path"
+   ],
+   "idempotent": true,
+   "input_sha256": "5f956b569fcc8ed756eefb992d9e25a1b9ffc578ad3b090e9f0fed5cf35c045a",
+   "name": "qt_local_read_summary",
+   "output_sha256": "9fc248d7463ffedeaa526da53083ebf9bb1b0f07d6aa757b3b15d5ace5c2fcc7",
+   "read_only": true,
+   "required": [
+    "path"
+   ]
+  },
+  {
+   "arguments": [
+    "path"
+   ],
+   "idempotent": true,
+   "input_sha256": "5f956b569fcc8ed756eefb992d9e25a1b9ffc578ad3b090e9f0fed5cf35c045a",
+   "name": "qt_local_list_outputs",
+   "output_sha256": "7fe304a785225661e6c692603852647fd3819546822334ce56008e9d0a8ba02b",
+   "read_only": true,
+   "required": [
+    "path"
+   ]
+  },
+  {
+   "arguments": [
+    "dataset_path",
+    "shadow_id",
+    "shadows_path"
+   ],
+   "idempotent": true,
+   "input_sha256": "e03590b940e3d0fbbc5ebaac2c80cc2f5bd7466f9b7a5ec5c3772434e6a4f695",
+   "name": "qt_local_why",
+   "output_sha256": "cbc82c6db6f8eaf2604c2baf01d78beeae59aba7787459d189f15e5bff306a41",
+   "read_only": true,
+   "required": [
+    "dataset_path",
+    "shadow_id",
+    "shadows_path"
+   ]
+  }
+ ],
+ "local+run": [
+  {
+   "arguments": [
+    "path"
+   ],
+   "idempotent": true,
+   "input_sha256": "5f956b569fcc8ed756eefb992d9e25a1b9ffc578ad3b090e9f0fed5cf35c045a",
+   "name": "qt_local_read_summary",
+   "output_sha256": "9fc248d7463ffedeaa526da53083ebf9bb1b0f07d6aa757b3b15d5ace5c2fcc7",
+   "read_only": true,
+   "required": [
+    "path"
+   ]
+  },
+  {
+   "arguments": [
+    "path"
+   ],
+   "idempotent": true,
+   "input_sha256": "5f956b569fcc8ed756eefb992d9e25a1b9ffc578ad3b090e9f0fed5cf35c045a",
+   "name": "qt_local_list_outputs",
+   "output_sha256": "7fe304a785225661e6c692603852647fd3819546822334ce56008e9d0a8ba02b",
+   "read_only": true,
+   "required": [
+    "path"
+   ]
+  },
+  {
+   "arguments": [
+    "dataset_path",
+    "shadow_id",
+    "shadows_path"
+   ],
+   "idempotent": true,
+   "input_sha256": "e03590b940e3d0fbbc5ebaac2c80cc2f5bd7466f9b7a5ec5c3772434e6a4f695",
+   "name": "qt_local_why",
+   "output_sha256": "cbc82c6db6f8eaf2604c2baf01d78beeae59aba7787459d189f15e5bff306a41",
+   "read_only": true,
+   "required": [
+    "dataset_path",
+    "shadow_id",
+    "shadows_path"
+   ]
+  },
+  {
+   "arguments": [
+    "spec"
+   ],
+   "idempotent": true,
+   "input_sha256": "0625d3f83e4aa62d7564d1b62e71820b94a6c8162b08d6f2f1ac1124c9d8e062",
+   "name": "qt_local_sample_shadows",
+   "output_sha256": "8efa1de5c6964afa9dfd4b9354ea2ca413c5caadc81c1b9c3ed444b24916ed1e",
+   "read_only": false,
+   "required": [
+    "spec"
+   ]
+  },
+  {
+   "arguments": [
+    "spec"
+   ],
+   "idempotent": true,
+   "input_sha256": "7db9016feb5ce99b856252913cdafcae6bd0d00339c2e76bfb068e65c62ca90d",
+   "name": "qt_local_run_replay",
+   "output_sha256": "3ba8781f98063ccfeec9c879b1996d32731f80ada1e461b3353331763ee2873a",
+   "read_only": false,
+   "required": [
+    "spec"
+   ]
+  },
+  {
+   "arguments": [
+    "spec"
+   ],
+   "idempotent": true,
+   "input_sha256": "aa35a1d0dfd4dda125e3d786819e9c8929a306409986750f8550f011d7a173ec",
+   "name": "qt_local_run_zoo",
+   "output_sha256": "ed37044017a90281d8025d0870f1d222846f69d1653a376faf4d60fccba10db9",
+   "read_only": false,
+   "required": [
+    "spec"
+   ]
+  }
+ ],
+ "local+run+sandbox": [
+  {
+   "arguments": [
+    "path"
+   ],
+   "idempotent": true,
+   "input_sha256": "5f956b569fcc8ed756eefb992d9e25a1b9ffc578ad3b090e9f0fed5cf35c045a",
+   "name": "qt_local_read_summary",
+   "output_sha256": "9fc248d7463ffedeaa526da53083ebf9bb1b0f07d6aa757b3b15d5ace5c2fcc7",
+   "read_only": true,
+   "required": [
+    "path"
+   ]
+  },
+  {
+   "arguments": [
+    "path"
+   ],
+   "idempotent": true,
+   "input_sha256": "5f956b569fcc8ed756eefb992d9e25a1b9ffc578ad3b090e9f0fed5cf35c045a",
+   "name": "qt_local_list_outputs",
+   "output_sha256": "7fe304a785225661e6c692603852647fd3819546822334ce56008e9d0a8ba02b",
+   "read_only": true,
+   "required": [
+    "path"
+   ]
+  },
+  {
+   "arguments": [
+    "dataset_path",
+    "shadow_id",
+    "shadows_path"
+   ],
+   "idempotent": true,
+   "input_sha256": "e03590b940e3d0fbbc5ebaac2c80cc2f5bd7466f9b7a5ec5c3772434e6a4f695",
+   "name": "qt_local_why",
+   "output_sha256": "cbc82c6db6f8eaf2604c2baf01d78beeae59aba7787459d189f15e5bff306a41",
+   "read_only": true,
+   "required": [
+    "dataset_path",
+    "shadow_id",
+    "shadows_path"
+   ]
+  },
+  {
+   "arguments": [
+    "spec"
+   ],
+   "idempotent": true,
+   "input_sha256": "0625d3f83e4aa62d7564d1b62e71820b94a6c8162b08d6f2f1ac1124c9d8e062",
+   "name": "qt_local_sample_shadows",
+   "output_sha256": "8efa1de5c6964afa9dfd4b9354ea2ca413c5caadc81c1b9c3ed444b24916ed1e",
+   "read_only": false,
+   "required": [
+    "spec"
+   ]
+  },
+  {
+   "arguments": [
+    "spec"
+   ],
+   "idempotent": true,
+   "input_sha256": "7db9016feb5ce99b856252913cdafcae6bd0d00339c2e76bfb068e65c62ca90d",
+   "name": "qt_local_run_replay",
+   "output_sha256": "3ba8781f98063ccfeec9c879b1996d32731f80ada1e461b3353331763ee2873a",
+   "read_only": false,
+   "required": [
+    "spec"
+   ]
+  },
+  {
+   "arguments": [
+    "spec"
+   ],
+   "idempotent": true,
+   "input_sha256": "aa35a1d0dfd4dda125e3d786819e9c8929a306409986750f8550f011d7a173ec",
+   "name": "qt_local_run_zoo",
+   "output_sha256": "ed37044017a90281d8025d0870f1d222846f69d1653a376faf4d60fccba10db9",
+   "read_only": false,
+   "required": [
+    "spec"
+   ]
+  },
+  {
+   "arguments": [
+    "dataset_path",
+    "depth_levels",
+    "end",
+    "feed_latency",
+    "fees",
+    "hidden_print_policy",
+    "instrument_id",
+    "jitter",
+    "latency",
+    "market_collar_bps",
+    "markout_horizons",
+    "max_open_orders",
+    "max_order_qty",
+    "max_position",
+    "max_trades",
+    "seed",
+    "self_trade_prevention",
+    "session_date",
+    "start",
+    "symbol"
+   ],
+   "idempotent": false,
+   "input_sha256": "761f3e13d378381bb8ac7bb939d5cc555b2f1736cb06993456833bd470bc516b",
+   "name": "qt_sandbox_start",
+   "output_sha256": "284edab114fed09607706cd8ee63004a49dd3caaa68495876dda12d59e216c79",
+   "read_only": false,
+   "required": [
+    "dataset_path"
+   ]
+  },
+  {
+   "arguments": [
+    "session_id"
+   ],
+   "idempotent": true,
+   "input_sha256": "54e4f18341ff3de2a5b963de7d7f43dfaca8a05310ba84942b4d5271bb2c370a",
+   "name": "qt_sandbox_observe",
+   "output_sha256": "1c04837a674ab741f535c570a733ad4774f74cdc559e86e897447dce849bfc67",
+   "read_only": true,
+   "required": [
+    "session_id"
+   ]
+  },
+  {
+   "arguments": [
+    "client_order_id",
+    "peg_offset_ticks",
+    "price",
+    "qty",
+    "session_id",
+    "side",
+    "tif",
+    "type"
+   ],
+   "idempotent": false,
+   "input_sha256": "6ea9fb79d115ffa5d12480cb364f4f619cdc3d105bc48200a5d7804dddf552c5",
+   "name": "qt_sandbox_submit",
+   "output_sha256": "1b866caa5764b9d4d5ee8ced39586d3327ea50e0a1023e26497a8f8fc33ce75c",
+   "read_only": false,
+   "required": [
+    "qty",
+    "session_id",
+    "side"
+   ]
+  },
+  {
+   "arguments": [
+    "order_id",
+    "qty",
+    "session_id"
+   ],
+   "idempotent": false,
+   "input_sha256": "0716bcc81da07f7b31906f19bcb902de9a0378052035960127d90c9aaaf9be4d",
+   "name": "qt_sandbox_cancel",
+   "output_sha256": "1b866caa5764b9d4d5ee8ced39586d3327ea50e0a1023e26497a8f8fc33ce75c",
+   "read_only": false,
+   "required": [
+    "order_id",
+    "session_id"
+   ]
+  },
+  {
+   "arguments": [
+    "by",
+    "session_id",
+    "to"
+   ],
+   "idempotent": false,
+   "input_sha256": "8f3bde8e7a0fd44647200326bbf39460a6887dc7baf72cd158ec8d880acc2375",
+   "name": "qt_sandbox_advance",
+   "output_sha256": "1c04837a674ab741f535c570a733ad4774f74cdc559e86e897447dce849bfc67",
+   "read_only": false,
+   "required": [
+    "session_id"
+   ]
+  },
+  {
+   "arguments": [
+    "detail",
+    "include_log",
+    "session_id"
+   ],
+   "idempotent": false,
+   "input_sha256": "078903ae8c1892f54efaa9c46922e70f11b603732265018aa7cedf3360ba0c1c",
+   "name": "qt_sandbox_finish",
+   "output_sha256": "8a1f2340e65f4c79c0324062f4809a403cab01e99cc74d36392a4520dc9daf67",
+   "read_only": false,
+   "required": [
+    "session_id"
+   ]
+  },
+  {
+   "arguments": [],
+   "idempotent": true,
+   "input_sha256": "218ab9e376e2390a9ef0c8e8fcccf1c69c90389fd72005cfbd9aedc6ff017c4e",
+   "name": "qt_sandbox_list",
+   "output_sha256": "53f851ef64e933448cb69fd7897dcb9a165c4c289b75371a780130a8c3adfe73",
+   "read_only": true,
+   "required": []
+  },
+  {
+   "arguments": [
+    "session_id"
+   ],
+   "idempotent": false,
+   "input_sha256": "54e4f18341ff3de2a5b963de7d7f43dfaca8a05310ba84942b4d5271bb2c370a",
+   "name": "qt_sandbox_close",
+   "output_sha256": "53f851ef64e933448cb69fd7897dcb9a165c4c289b75371a780130a8c3adfe73",
+   "read_only": false,
+   "required": [
+    "session_id"
+   ]
+  }
+ ],
+ "remote": [
+  {
+   "arguments": [],
+   "idempotent": true,
+   "input_sha256": "1a85382c5215c94779e9fad9cf79b126ee2b2405d7bb342328b0377f5968b9f5",
+   "name": "qt_meta",
+   "output_sha256": "70e6df4e977e135a6a95891e4c54692cd880cef138a6da6dd65c5ad476b21340",
+   "read_only": true,
+   "required": []
+  },
+  {
+   "arguments": [
+    "limit",
+    "starting_after"
+   ],
+   "idempotent": true,
+   "input_sha256": "60126748fad1141374c5293c2a07f30d97805d24c24cff6c24aa788d7f2ec6fa",
+   "name": "qt_list_datasets",
+   "output_sha256": "ad47fcc1e05da2c0109d33b5261dd31894b7d6dd928253b91d017e42784dac8a",
+   "read_only": true,
+   "required": []
+  },
+  {
+   "arguments": [
+    "dataset_id"
+   ],
+   "idempotent": true,
+   "input_sha256": "ea303aebc4ec5f6d4463c2a881741a4e4f7f46103fc75d89eece016e885ba3eb",
+   "name": "qt_describe_dataset",
+   "output_sha256": "a092e62436547e196f8545b4fe702e65fe0297b0f4073f518d90d42c0fe66b9b",
+   "read_only": true,
+   "required": [
+    "dataset_id"
+   ]
+  },
+  {
+   "arguments": [
+    "kind",
+    "spec"
+   ],
+   "idempotent": true,
+   "input_sha256": "e3a1fd289dffb8927f835286923f58886cb24491d4e902c3655bde4bb62725be",
+   "name": "qt_estimate",
+   "output_sha256": "a5b0d7a31c249f1b3a6fea54316189c146226aa4e9682a00dfa19e85b6d7e0bb",
+   "read_only": true,
+   "required": [
+    "kind",
+    "spec"
+   ]
+  },
+  {
+   "arguments": [
+    "job_id"
+   ],
+   "idempotent": true,
+   "input_sha256": "1968b0fcf519a52d40a69d62602f1c89548ca676773072338fc738d2cca2c974",
+   "name": "qt_get_job",
+   "output_sha256": "66df263415c6c52140cd3281f350c36ba3120f8d6da3e85bca58aaf41cfe83d9",
+   "read_only": true,
+   "required": [
+    "job_id"
+   ]
+  },
+  {
+   "arguments": [
+    "job_id"
+   ],
+   "idempotent": true,
+   "input_sha256": "1968b0fcf519a52d40a69d62602f1c89548ca676773072338fc738d2cca2c974",
+   "name": "qt_list_job_files",
+   "output_sha256": "d6bfc450f48e352609e3068b1753bf128b8a9c97756745654e4223710771b445",
+   "read_only": true,
+   "required": [
+    "job_id"
+   ]
+  },
+  {
+   "arguments": [
+    "id"
+   ],
+   "idempotent": true,
+   "input_sha256": "af5578ab2dc4927afba6e22de9bcd94449fd2ca5d313155d1f55037a51cc645e",
+   "name": "qt_get_replay",
+   "output_sha256": "3ba8781f98063ccfeec9c879b1996d32731f80ada1e461b3353331763ee2873a",
+   "read_only": true,
+   "required": [
+    "id"
+   ]
+  },
+  {
+   "arguments": [
+    "id"
+   ],
+   "idempotent": true,
+   "input_sha256": "80b1fdd4c15909242d85246d5375a477da437715edb6d67b91c04188bef0a188",
+   "name": "qt_get_calibration",
+   "output_sha256": "b3eb08f1395dc814a333f4cd4be1de52e66591e077ab69b5ac3cb72bf35a70c7",
+   "read_only": true,
+   "required": [
+    "id"
+   ]
+  },
+  {
+   "arguments": [
+    "id"
+   ],
+   "idempotent": true,
+   "input_sha256": "cc542bd56437082eacddcb7d6310c0dfdbec1f83ddcb427fb3b293fc18f5b7d1",
+   "name": "qt_get_scorecard",
+   "output_sha256": "072ad5e6794a3f859798007ba7a6feaa428b308848d2a8427ca61bc3a13a3d67",
+   "read_only": true,
+   "required": [
+    "id"
+   ]
+  },
+  {
+   "arguments": [
+    "name"
+   ],
+   "idempotent": true,
+   "input_sha256": "e1cd0cbca22028f2f1a37ecda35adabc97c6d4686619ff01716ac0cd3e896c87",
+   "name": "qt_explain_metric",
+   "output_sha256": "439859176ad191b57d68188dd73c734cd0fb884de00909ed8f5b68ca8a902dc1",
+   "read_only": true,
+   "required": [
+    "name"
+   ]
+  },
+  {
+   "arguments": [
+    "path"
+   ],
+   "idempotent": true,
+   "input_sha256": "5f956b569fcc8ed756eefb992d9e25a1b9ffc578ad3b090e9f0fed5cf35c045a",
+   "name": "qt_local_read_summary",
+   "output_sha256": "9fc248d7463ffedeaa526da53083ebf9bb1b0f07d6aa757b3b15d5ace5c2fcc7",
+   "read_only": true,
+   "required": [
+    "path"
+   ]
+  },
+  {
+   "arguments": [
+    "path"
+   ],
+   "idempotent": true,
+   "input_sha256": "5f956b569fcc8ed756eefb992d9e25a1b9ffc578ad3b090e9f0fed5cf35c045a",
+   "name": "qt_local_list_outputs",
+   "output_sha256": "7fe304a785225661e6c692603852647fd3819546822334ce56008e9d0a8ba02b",
+   "read_only": true,
+   "required": [
+    "path"
+   ]
+  },
+  {
+   "arguments": [
+    "dataset_path",
+    "shadow_id",
+    "shadows_path"
+   ],
+   "idempotent": true,
+   "input_sha256": "e03590b940e3d0fbbc5ebaac2c80cc2f5bd7466f9b7a5ec5c3772434e6a4f695",
+   "name": "qt_local_why",
+   "output_sha256": "cbc82c6db6f8eaf2604c2baf01d78beeae59aba7787459d189f15e5bff306a41",
+   "read_only": true,
+   "required": [
+    "dataset_path",
+    "shadow_id",
+    "shadows_path"
+   ]
+  },
+  {
+   "arguments": [
+    "id"
+   ],
+   "idempotent": true,
+   "input_sha256": "2419f7abd8111776e492ee24a0acd2b2e306ff20d23bf835d19edf00a2e0874b",
+   "name": "qt_get_zoo",
+   "output_sha256": "ed37044017a90281d8025d0870f1d222846f69d1653a376faf4d60fccba10db9",
+   "read_only": true,
+   "required": [
+    "id"
+   ]
+  }
+ ],
+ "remote+submit": [
+  {
+   "arguments": [],
+   "idempotent": true,
+   "input_sha256": "1a85382c5215c94779e9fad9cf79b126ee2b2405d7bb342328b0377f5968b9f5",
+   "name": "qt_meta",
+   "output_sha256": "70e6df4e977e135a6a95891e4c54692cd880cef138a6da6dd65c5ad476b21340",
+   "read_only": true,
+   "required": []
+  },
+  {
+   "arguments": [
+    "limit",
+    "starting_after"
+   ],
+   "idempotent": true,
+   "input_sha256": "60126748fad1141374c5293c2a07f30d97805d24c24cff6c24aa788d7f2ec6fa",
+   "name": "qt_list_datasets",
+   "output_sha256": "ad47fcc1e05da2c0109d33b5261dd31894b7d6dd928253b91d017e42784dac8a",
+   "read_only": true,
+   "required": []
+  },
+  {
+   "arguments": [
+    "dataset_id"
+   ],
+   "idempotent": true,
+   "input_sha256": "ea303aebc4ec5f6d4463c2a881741a4e4f7f46103fc75d89eece016e885ba3eb",
+   "name": "qt_describe_dataset",
+   "output_sha256": "a092e62436547e196f8545b4fe702e65fe0297b0f4073f518d90d42c0fe66b9b",
+   "read_only": true,
+   "required": [
+    "dataset_id"
+   ]
+  },
+  {
+   "arguments": [
+    "kind",
+    "spec"
+   ],
+   "idempotent": true,
+   "input_sha256": "e3a1fd289dffb8927f835286923f58886cb24491d4e902c3655bde4bb62725be",
+   "name": "qt_estimate",
+   "output_sha256": "a5b0d7a31c249f1b3a6fea54316189c146226aa4e9682a00dfa19e85b6d7e0bb",
+   "read_only": true,
+   "required": [
+    "kind",
+    "spec"
+   ]
+  },
+  {
+   "arguments": [
+    "job_id"
+   ],
+   "idempotent": true,
+   "input_sha256": "1968b0fcf519a52d40a69d62602f1c89548ca676773072338fc738d2cca2c974",
+   "name": "qt_get_job",
+   "output_sha256": "66df263415c6c52140cd3281f350c36ba3120f8d6da3e85bca58aaf41cfe83d9",
+   "read_only": true,
+   "required": [
+    "job_id"
+   ]
+  },
+  {
+   "arguments": [
+    "job_id"
+   ],
+   "idempotent": true,
+   "input_sha256": "1968b0fcf519a52d40a69d62602f1c89548ca676773072338fc738d2cca2c974",
+   "name": "qt_list_job_files",
+   "output_sha256": "d6bfc450f48e352609e3068b1753bf128b8a9c97756745654e4223710771b445",
+   "read_only": true,
+   "required": [
+    "job_id"
+   ]
+  },
+  {
+   "arguments": [
+    "id"
+   ],
+   "idempotent": true,
+   "input_sha256": "af5578ab2dc4927afba6e22de9bcd94449fd2ca5d313155d1f55037a51cc645e",
+   "name": "qt_get_replay",
+   "output_sha256": "3ba8781f98063ccfeec9c879b1996d32731f80ada1e461b3353331763ee2873a",
+   "read_only": true,
+   "required": [
+    "id"
+   ]
+  },
+  {
+   "arguments": [
+    "id"
+   ],
+   "idempotent": true,
+   "input_sha256": "80b1fdd4c15909242d85246d5375a477da437715edb6d67b91c04188bef0a188",
+   "name": "qt_get_calibration",
+   "output_sha256": "b3eb08f1395dc814a333f4cd4be1de52e66591e077ab69b5ac3cb72bf35a70c7",
+   "read_only": true,
+   "required": [
+    "id"
+   ]
+  },
+  {
+   "arguments": [
+    "id"
+   ],
+   "idempotent": true,
+   "input_sha256": "cc542bd56437082eacddcb7d6310c0dfdbec1f83ddcb427fb3b293fc18f5b7d1",
+   "name": "qt_get_scorecard",
+   "output_sha256": "072ad5e6794a3f859798007ba7a6feaa428b308848d2a8427ca61bc3a13a3d67",
+   "read_only": true,
+   "required": [
+    "id"
+   ]
+  },
+  {
+   "arguments": [
+    "name"
+   ],
+   "idempotent": true,
+   "input_sha256": "e1cd0cbca22028f2f1a37ecda35adabc97c6d4686619ff01716ac0cd3e896c87",
+   "name": "qt_explain_metric",
+   "output_sha256": "439859176ad191b57d68188dd73c734cd0fb884de00909ed8f5b68ca8a902dc1",
+   "read_only": true,
+   "required": [
+    "name"
+   ]
+  },
+  {
+   "arguments": [
+    "idempotency_key",
+    "spec"
+   ],
+   "idempotent": false,
+   "input_sha256": "024aeb898a4cdb784f662341b00036f5954b21f35c97f75141e0859b533d1987",
+   "name": "qt_submit_replay",
+   "output_sha256": "66df263415c6c52140cd3281f350c36ba3120f8d6da3e85bca58aaf41cfe83d9",
+   "read_only": false,
+   "required": [
+    "spec"
+   ]
+  },
+  {
+   "arguments": [
+    "idempotency_key",
+    "spec"
+   ],
+   "idempotent": false,
+   "input_sha256": "4a4d982bdd1a8caea67e5438a67c57c2f5e94577a0881a9b5f71ca184b8f439d",
+   "name": "qt_submit_calibration",
+   "output_sha256": "66df263415c6c52140cd3281f350c36ba3120f8d6da3e85bca58aaf41cfe83d9",
+   "read_only": false,
+   "required": [
+    "spec"
+   ]
+  },
+  {
+   "arguments": [
+    "idempotency_key",
+    "spec"
+   ],
+   "idempotent": false,
+   "input_sha256": "85aa8a3ffacd9cee656459bc21c24e12216eca2f05e5fc5c3ad2a9bb0af9bd6d",
+   "name": "qt_submit_scorecard",
+   "output_sha256": "66df263415c6c52140cd3281f350c36ba3120f8d6da3e85bca58aaf41cfe83d9",
+   "read_only": false,
+   "required": [
+    "spec"
+   ]
+  },
+  {
+   "arguments": [
+    "idempotency_key",
+    "spec"
+   ],
+   "idempotent": false,
+   "input_sha256": "b24a8432a2b07dd981c7e01f7989f6e358fcc6efbc08ac4c928b5dc8ed383afb",
+   "name": "qt_submit_report",
+   "output_sha256": "66df263415c6c52140cd3281f350c36ba3120f8d6da3e85bca58aaf41cfe83d9",
+   "read_only": false,
+   "required": [
+    "spec"
+   ]
+  },
+  {
+   "arguments": [
+    "path"
+   ],
+   "idempotent": true,
+   "input_sha256": "5f956b569fcc8ed756eefb992d9e25a1b9ffc578ad3b090e9f0fed5cf35c045a",
+   "name": "qt_local_read_summary",
+   "output_sha256": "9fc248d7463ffedeaa526da53083ebf9bb1b0f07d6aa757b3b15d5ace5c2fcc7",
+   "read_only": true,
+   "required": [
+    "path"
+   ]
+  },
+  {
+   "arguments": [
+    "path"
+   ],
+   "idempotent": true,
+   "input_sha256": "5f956b569fcc8ed756eefb992d9e25a1b9ffc578ad3b090e9f0fed5cf35c045a",
+   "name": "qt_local_list_outputs",
+   "output_sha256": "7fe304a785225661e6c692603852647fd3819546822334ce56008e9d0a8ba02b",
+   "read_only": true,
+   "required": [
+    "path"
+   ]
+  },
+  {
+   "arguments": [
+    "dataset_path",
+    "shadow_id",
+    "shadows_path"
+   ],
+   "idempotent": true,
+   "input_sha256": "e03590b940e3d0fbbc5ebaac2c80cc2f5bd7466f9b7a5ec5c3772434e6a4f695",
+   "name": "qt_local_why",
+   "output_sha256": "cbc82c6db6f8eaf2604c2baf01d78beeae59aba7787459d189f15e5bff306a41",
+   "read_only": true,
+   "required": [
+    "dataset_path",
+    "shadow_id",
+    "shadows_path"
+   ]
+  },
+  {
+   "arguments": [
+    "id"
+   ],
+   "idempotent": true,
+   "input_sha256": "2419f7abd8111776e492ee24a0acd2b2e306ff20d23bf835d19edf00a2e0874b",
+   "name": "qt_get_zoo",
+   "output_sha256": "ed37044017a90281d8025d0870f1d222846f69d1653a376faf4d60fccba10db9",
+   "read_only": true,
+   "required": [
+    "id"
+   ]
+  },
+  {
+   "arguments": [
+    "idempotency_key",
+    "spec"
+   ],
+   "idempotent": false,
+   "input_sha256": "7fb732887007e3abcf428d723f79120c6b1e96a1ae993413a28fe59cea3e82c2",
+   "name": "qt_submit_zoo",
+   "output_sha256": "66df263415c6c52140cd3281f350c36ba3120f8d6da3e85bca58aaf41cfe83d9",
+   "read_only": false,
+   "required": [
+    "spec"
+   ]
+  }
+ ],
+ "remote+submit+run": [
+  {
+   "arguments": [],
+   "idempotent": true,
+   "input_sha256": "1a85382c5215c94779e9fad9cf79b126ee2b2405d7bb342328b0377f5968b9f5",
+   "name": "qt_meta",
+   "output_sha256": "70e6df4e977e135a6a95891e4c54692cd880cef138a6da6dd65c5ad476b21340",
+   "read_only": true,
+   "required": []
+  },
+  {
+   "arguments": [
+    "limit",
+    "starting_after"
+   ],
+   "idempotent": true,
+   "input_sha256": "60126748fad1141374c5293c2a07f30d97805d24c24cff6c24aa788d7f2ec6fa",
+   "name": "qt_list_datasets",
+   "output_sha256": "ad47fcc1e05da2c0109d33b5261dd31894b7d6dd928253b91d017e42784dac8a",
+   "read_only": true,
+   "required": []
+  },
+  {
+   "arguments": [
+    "dataset_id"
+   ],
+   "idempotent": true,
+   "input_sha256": "ea303aebc4ec5f6d4463c2a881741a4e4f7f46103fc75d89eece016e885ba3eb",
+   "name": "qt_describe_dataset",
+   "output_sha256": "a092e62436547e196f8545b4fe702e65fe0297b0f4073f518d90d42c0fe66b9b",
+   "read_only": true,
+   "required": [
+    "dataset_id"
+   ]
+  },
+  {
+   "arguments": [
+    "kind",
+    "spec"
+   ],
+   "idempotent": true,
+   "input_sha256": "e3a1fd289dffb8927f835286923f58886cb24491d4e902c3655bde4bb62725be",
+   "name": "qt_estimate",
+   "output_sha256": "a5b0d7a31c249f1b3a6fea54316189c146226aa4e9682a00dfa19e85b6d7e0bb",
+   "read_only": true,
+   "required": [
+    "kind",
+    "spec"
+   ]
+  },
+  {
+   "arguments": [
+    "job_id"
+   ],
+   "idempotent": true,
+   "input_sha256": "1968b0fcf519a52d40a69d62602f1c89548ca676773072338fc738d2cca2c974",
+   "name": "qt_get_job",
+   "output_sha256": "66df263415c6c52140cd3281f350c36ba3120f8d6da3e85bca58aaf41cfe83d9",
+   "read_only": true,
+   "required": [
+    "job_id"
+   ]
+  },
+  {
+   "arguments": [
+    "job_id"
+   ],
+   "idempotent": true,
+   "input_sha256": "1968b0fcf519a52d40a69d62602f1c89548ca676773072338fc738d2cca2c974",
+   "name": "qt_list_job_files",
+   "output_sha256": "d6bfc450f48e352609e3068b1753bf128b8a9c97756745654e4223710771b445",
+   "read_only": true,
+   "required": [
+    "job_id"
+   ]
+  },
+  {
+   "arguments": [
+    "id"
+   ],
+   "idempotent": true,
+   "input_sha256": "af5578ab2dc4927afba6e22de9bcd94449fd2ca5d313155d1f55037a51cc645e",
+   "name": "qt_get_replay",
+   "output_sha256": "3ba8781f98063ccfeec9c879b1996d32731f80ada1e461b3353331763ee2873a",
+   "read_only": true,
+   "required": [
+    "id"
+   ]
+  },
+  {
+   "arguments": [
+    "id"
+   ],
+   "idempotent": true,
+   "input_sha256": "80b1fdd4c15909242d85246d5375a477da437715edb6d67b91c04188bef0a188",
+   "name": "qt_get_calibration",
+   "output_sha256": "b3eb08f1395dc814a333f4cd4be1de52e66591e077ab69b5ac3cb72bf35a70c7",
+   "read_only": true,
+   "required": [
+    "id"
+   ]
+  },
+  {
+   "arguments": [
+    "id"
+   ],
+   "idempotent": true,
+   "input_sha256": "cc542bd56437082eacddcb7d6310c0dfdbec1f83ddcb427fb3b293fc18f5b7d1",
+   "name": "qt_get_scorecard",
+   "output_sha256": "072ad5e6794a3f859798007ba7a6feaa428b308848d2a8427ca61bc3a13a3d67",
+   "read_only": true,
+   "required": [
+    "id"
+   ]
+  },
+  {
+   "arguments": [
+    "name"
+   ],
+   "idempotent": true,
+   "input_sha256": "e1cd0cbca22028f2f1a37ecda35adabc97c6d4686619ff01716ac0cd3e896c87",
+   "name": "qt_explain_metric",
+   "output_sha256": "439859176ad191b57d68188dd73c734cd0fb884de00909ed8f5b68ca8a902dc1",
+   "read_only": true,
+   "required": [
+    "name"
+   ]
+  },
+  {
+   "arguments": [
+    "idempotency_key",
+    "spec"
+   ],
+   "idempotent": false,
+   "input_sha256": "024aeb898a4cdb784f662341b00036f5954b21f35c97f75141e0859b533d1987",
+   "name": "qt_submit_replay",
+   "output_sha256": "66df263415c6c52140cd3281f350c36ba3120f8d6da3e85bca58aaf41cfe83d9",
+   "read_only": false,
+   "required": [
+    "spec"
+   ]
+  },
+  {
+   "arguments": [
+    "idempotency_key",
+    "spec"
+   ],
+   "idempotent": false,
+   "input_sha256": "4a4d982bdd1a8caea67e5438a67c57c2f5e94577a0881a9b5f71ca184b8f439d",
+   "name": "qt_submit_calibration",
+   "output_sha256": "66df263415c6c52140cd3281f350c36ba3120f8d6da3e85bca58aaf41cfe83d9",
+   "read_only": false,
+   "required": [
+    "spec"
+   ]
+  },
+  {
+   "arguments": [
+    "idempotency_key",
+    "spec"
+   ],
+   "idempotent": false,
+   "input_sha256": "85aa8a3ffacd9cee656459bc21c24e12216eca2f05e5fc5c3ad2a9bb0af9bd6d",
+   "name": "qt_submit_scorecard",
+   "output_sha256": "66df263415c6c52140cd3281f350c36ba3120f8d6da3e85bca58aaf41cfe83d9",
+   "read_only": false,
+   "required": [
+    "spec"
+   ]
+  },
+  {
+   "arguments": [
+    "idempotency_key",
+    "spec"
+   ],
+   "idempotent": false,
+   "input_sha256": "b24a8432a2b07dd981c7e01f7989f6e358fcc6efbc08ac4c928b5dc8ed383afb",
+   "name": "qt_submit_report",
+   "output_sha256": "66df263415c6c52140cd3281f350c36ba3120f8d6da3e85bca58aaf41cfe83d9",
+   "read_only": false,
+   "required": [
+    "spec"
+   ]
+  },
+  {
+   "arguments": [
+    "path"
+   ],
+   "idempotent": true,
+   "input_sha256": "5f956b569fcc8ed756eefb992d9e25a1b9ffc578ad3b090e9f0fed5cf35c045a",
+   "name": "qt_local_read_summary",
+   "output_sha256": "9fc248d7463ffedeaa526da53083ebf9bb1b0f07d6aa757b3b15d5ace5c2fcc7",
+   "read_only": true,
+   "required": [
+    "path"
+   ]
+  },
+  {
+   "arguments": [
+    "path"
+   ],
+   "idempotent": true,
+   "input_sha256": "5f956b569fcc8ed756eefb992d9e25a1b9ffc578ad3b090e9f0fed5cf35c045a",
+   "name": "qt_local_list_outputs",
+   "output_sha256": "7fe304a785225661e6c692603852647fd3819546822334ce56008e9d0a8ba02b",
+   "read_only": true,
+   "required": [
+    "path"
+   ]
+  },
+  {
+   "arguments": [
+    "dataset_path",
+    "shadow_id",
+    "shadows_path"
+   ],
+   "idempotent": true,
+   "input_sha256": "e03590b940e3d0fbbc5ebaac2c80cc2f5bd7466f9b7a5ec5c3772434e6a4f695",
+   "name": "qt_local_why",
+   "output_sha256": "cbc82c6db6f8eaf2604c2baf01d78beeae59aba7787459d189f15e5bff306a41",
+   "read_only": true,
+   "required": [
+    "dataset_path",
+    "shadow_id",
+    "shadows_path"
+   ]
+  },
+  {
+   "arguments": [
+    "id"
+   ],
+   "idempotent": true,
+   "input_sha256": "2419f7abd8111776e492ee24a0acd2b2e306ff20d23bf835d19edf00a2e0874b",
+   "name": "qt_get_zoo",
+   "output_sha256": "ed37044017a90281d8025d0870f1d222846f69d1653a376faf4d60fccba10db9",
+   "read_only": true,
+   "required": [
+    "id"
+   ]
+  },
+  {
+   "arguments": [
+    "idempotency_key",
+    "spec"
+   ],
+   "idempotent": false,
+   "input_sha256": "7fb732887007e3abcf428d723f79120c6b1e96a1ae993413a28fe59cea3e82c2",
+   "name": "qt_submit_zoo",
+   "output_sha256": "66df263415c6c52140cd3281f350c36ba3120f8d6da3e85bca58aaf41cfe83d9",
+   "read_only": false,
+   "required": [
+    "spec"
+   ]
+  },
+  {
+   "arguments": [
+    "spec"
+   ],
+   "idempotent": true,
+   "input_sha256": "0625d3f83e4aa62d7564d1b62e71820b94a6c8162b08d6f2f1ac1124c9d8e062",
+   "name": "qt_local_sample_shadows",
+   "output_sha256": "8efa1de5c6964afa9dfd4b9354ea2ca413c5caadc81c1b9c3ed444b24916ed1e",
+   "read_only": false,
+   "required": [
+    "spec"
+   ]
+  },
+  {
+   "arguments": [
+    "spec"
+   ],
+   "idempotent": true,
+   "input_sha256": "7db9016feb5ce99b856252913cdafcae6bd0d00339c2e76bfb068e65c62ca90d",
+   "name": "qt_local_run_replay",
+   "output_sha256": "3ba8781f98063ccfeec9c879b1996d32731f80ada1e461b3353331763ee2873a",
+   "read_only": false,
+   "required": [
+    "spec"
+   ]
+  },
+  {
+   "arguments": [
+    "spec"
+   ],
+   "idempotent": true,
+   "input_sha256": "aa35a1d0dfd4dda125e3d786819e9c8929a306409986750f8550f011d7a173ec",
+   "name": "qt_local_run_zoo",
+   "output_sha256": "ed37044017a90281d8025d0870f1d222846f69d1653a376faf4d60fccba10db9",
+   "read_only": false,
+   "required": [
+    "spec"
+   ]
+  }
+ ]
+}
