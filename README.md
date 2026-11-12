@@ -92,8 +92,9 @@ Every term (shadow, zoo, exact arm, faithful and corrected) is in the
 | A Backtrader or VectorBT backtest (an analyzer's JSON lines, or `records_readable` CSV / JSON) and your live log | the same per-order account, and the backtest scored against live or exact queues | `queuetruth reconcile --kind backtrader` or `vectorbt`; `live import --venue sim-backtrader` or `sim-vectorbt` |
 | A QuantConnect LEAN backtest (the result JSON and its order-events JSON) and your live log | the same per-order account and scorecard | `queuetruth reconcile --kind lean`; `live import --venue sim-lean` |
 
-queuetruth ships no market data and fetches none except `demo`'s public sample day, after you agree. You need a
-licence for the data you process: [Data and licensing](https://sarptandoven.github.io/queuetruth/docs/data-and-licensing/).
+queuetruth ships no market data. Three commands download public data, each only after you agree (a prompt, or
+`--yes`): `demo` (a sample day), `data fetch iex` (a free IEX day) and `atlas` (the atlas files); commands that read
+the atlas follow the same rule. Nothing is sent anywhere. You need a licence for the data you process: [Data and licensing](https://sarptandoven.github.io/queuetruth/docs/data-and-licensing/).
 
 ## Why the answer is exact
 

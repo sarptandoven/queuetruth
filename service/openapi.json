@@ -230,6 +230,42 @@
         "title": "ArmCounts",
         "type": "object"
       },
+      "Attribution": {
+        "additionalProperties": false,
+        "description": "1.2: the provider of a dataset's data, its required citation and its terms.",
+        "properties": {
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "terms_url": {
+            "title": "Terms Url",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "required": [
+          "source",
+          "text",
+          "terms_url"
+        ],
+        "title": "Attribution",
+        "type": "object"
+      },
       "Bias": {
         "additionalProperties": false,
         "description": "Signed fill-rate and quantity bias (sim minus live).",
@@ -1470,6 +1506,20 @@
         "additionalProperties": false,
         "description": "`manifest.json` of a dataset directory (SPEC 3.3).",
         "properties": {
+          "attribution": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Attribution"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attribution"
+          },
           "created_by": {
             "title": "Created By",
             "type": "string"
@@ -3842,6 +3892,13 @@
           },
           "limits": {
             "$ref": "#/components/schemas/Limits"
+          },
+          "live_venues": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Live Venues",
+            "type": "array"
           },
           "schema": {
             "const": "qt.meta",

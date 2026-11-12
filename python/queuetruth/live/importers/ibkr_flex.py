@@ -32,6 +32,8 @@ import datetime as dt
 import re
 from pathlib import Path
 
+from pydantic import Field
+
 from queuetruth.errors import QtError
 from queuetruth.live._common import (
     Record,
@@ -43,7 +45,7 @@ from queuetruth.live._common import (
     text_or_none,
 )
 from queuetruth.live.builder import ImportResult, LogBuilder
-from queuetruth.live.importers._base import ImportOptions, new_builder
+from queuetruth.live.importers._base import ImporterDef, ImporterOptions, ImportOptions, Text, new_builder
 from queuetruth.live.importers._xml import parse_xml, to_text
 
 VENUE = "ibkr_flex"
@@ -284,3 +286,26 @@ def _execution(
         else None,
     )
     return h, fid if text_or_none(fid) else None
+
+
+# ---- registry entry (queuetruth.live.importers.registry()) ------------------------------------------------------
+
+
+class IbkrFlexOptions(ImporterOptions):
+    """Options of the IBKR Flex importer."""
+
+    tz: Text = Field(None, description="IANA zone of the statement's times (default UTC, with a warning)")
+    flex_date_order: Text = Field(None, description="mdy or dmy: the order of slash dates (default: inferred per file)")
+
+
+IMPORTER = ImporterDef(
+    name="ibkr_flex",
+    kind="venue",
+    run=import_ibkr_flex,
+    options=IbkrFlexOptions,
+    formats=("Flex Query Trades XML", "Flex Query Trades CSV"),
+    patterns=("*.xml", "*.csv"),
+    description="Interactive Brokers Flex Query Trades: executions of your own account",
+    docs="how-to/import-live-logs.md#ibkr-flex",
+    rank=80,
+)

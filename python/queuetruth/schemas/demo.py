@@ -43,14 +43,17 @@ class ModelRow(QtModel):
 
 
 class Headline(QtModel):
-    """The answer: NautilusTrader's default fill model against the exact queue. `verified_against` says which
-    NautilusTrader releases the zoo's faithful replica was checked against, order for order (docs/RESULTS.md)."""
+    """The answer: the chosen backtester's default fill model against the exact queue (NautilusTrader unless
+    `demo --backtester` names another). `verified_against` says what the zoo's replica of that setting was checked
+    against (docs/RESULTS.md, docs/testing.md)."""
 
     model_id: str
     label: str
     verified_against: str
     sentence: str
     cells: dict[str, Cell]
+    #: the library the answer is about (`demo --backtester`)
+    backtester: Literal["nautilus", "hftbacktest", "databento"] = "nautilus"
 
 
 class Reference(QtModel):

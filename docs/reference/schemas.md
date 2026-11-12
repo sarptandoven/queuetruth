@@ -1403,6 +1403,17 @@ A service dataset.
 | `created_at` | string | yes |  |  |
 | `job_id` | string or null | no | `null` |  |
 
+**`Attribution`** (in `qt.dataset`)
+
+1.2: the provider of a dataset's data, its required citation and its terms.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `source` | string | yes |  |  |
+| `text` | string | yes |  |  |
+| `terms_url` | string | yes |  |  |
+| `url` | string or null | no | `null` |  |
+
 **`DataQuality`** (in `qt.dataset`)
 
 Data-quality counters and verdict (SPEC 5.1.5).
@@ -1451,6 +1462,7 @@ Data-quality counters and verdict (SPEC 5.1.5).
 | `validation_status` | one of "real_data", "synthetic_only", "assumed", "fixture_only" | yes |  |  |
 | `rule_set` | one of "generic", "nasdaq", "cme", "coinbase", "crypto_l3", "iex", "nyse" or null | no | `null` |  |
 | `source_vintage` | array of SourceVintage or null | no | `null` |  |
+| `attribution` | array of Attribution or null | no | `null` |  |
 
 **`FeedGap`** (in `qt.dataset`)
 
@@ -1544,6 +1556,18 @@ File: `schemas/json/qt.dataset_manifest.schema.json`.
 | `validation_status` | one of "real_data", "synthetic_only", "assumed", "fixture_only" | yes |  |  |
 | `rule_set` | one of "generic", "nasdaq", "cme", "coinbase", "crypto_l3", "iex", "nyse" or null | no | `null` |  |
 | `source_vintage` | array of SourceVintage or null | no | `null` |  |
+| `attribution` | array of Attribution or null | no | `null` |  |
+
+**`Attribution`** (in `qt.dataset_manifest`)
+
+1.2: the provider of a dataset's data, its required citation and its terms.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `source` | string | yes |  |  |
+| `text` | string | yes |  |  |
+| `terms_url` | string | yes |  |  |
+| `url` | string or null | no | `null` |  |
 
 **`InputFile`** (in `qt.dataset_manifest`)
 
@@ -1731,7 +1755,7 @@ One model at one horizon: fill rates, bias (model minus exact) and its 95% inter
 
 **`Headline`** (in `qt.demo_summary`)
 
-The answer: NautilusTrader's default fill model against the exact queue. `verified_against` says which NautilusTrader releases the zoo's faithful replica was checked against, order for order (docs/RESULTS.md).
+The answer: the chosen backtester's default fill model against the exact queue (NautilusTrader unless `demo --backtester` names another). `verified_against` says what the zoo's replica of that setting was checked against (docs/RESULTS.md, docs/testing.md).
 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
@@ -1740,6 +1764,7 @@ The answer: NautilusTrader's default fill model against the exact queue. `verifi
 | `verified_against` | string | yes |  |  |
 | `sentence` | string | yes |  |  |
 | `cells` | map of Cell | yes |  |  |
+| `backtester` | one of "nautilus", "hftbacktest", "databento" | no | `"nautilus"` |  |
 
 **`Interval`** (in `qt.demo_summary`)
 
@@ -2951,6 +2976,17 @@ Summary of `ingest`.
 | `timings` | map of number or null | no | `null` |  |
 | `warnings` | array of string | no |  |  |
 
+**`Attribution`** (in `qt.ingest_summary`)
+
+1.2: the provider of a dataset's data, its required citation and its terms.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `source` | string | yes |  |  |
+| `text` | string | yes |  |  |
+| `terms_url` | string | yes |  |  |
+| `url` | string or null | no | `null` |  |
+
 **`DataQuality`** (in `qt.ingest_summary`)
 
 Data-quality counters and verdict (SPEC 5.1.5).
@@ -2999,6 +3035,7 @@ Data-quality counters and verdict (SPEC 5.1.5).
 | `validation_status` | one of "real_data", "synthetic_only", "assumed", "fixture_only" | yes |  |  |
 | `rule_set` | one of "generic", "nasdaq", "cme", "coinbase", "crypto_l3", "iex", "nyse" or null | no | `null` |  |
 | `source_vintage` | array of SourceVintage or null | no | `null` |  |
+| `attribution` | array of Attribution or null | no | `null` |  |
 
 **`FeedGap`** (in `qt.ingest_summary`)
 
@@ -3943,6 +3980,7 @@ Service metadata.
 | `limits` | Limits | yes |  |  |
 | `formats` | array of string | yes |  |  |
 | `zero_egress` | boolean | yes |  |  |
+| `live_venues` | array of string | no |  |  |
 
 **`Limits`** (in `qt.meta`)
 

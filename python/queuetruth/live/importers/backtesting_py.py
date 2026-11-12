@@ -30,11 +30,13 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+from pydantic import Field
+
 from queuetruth.errors import QtError
 from queuetruth.live.builder import ImportResult
-from queuetruth.live.importers._base import ImportOptions
+from queuetruth.live.importers._base import ImporterDef, ImportOptions, Text
 from queuetruth.live.importers.backtest import (
-    COMMON_OPTIONS,
+    BacktestOptions,
     SimFill,
     SimOrder,
     SimRun,
@@ -49,7 +51,15 @@ from queuetruth.live.importers.vectorbt import _new_order, _order_type, _req, _t
 SIM = "sim:backtesting_py"
 #: backtesting.py release the format notes were read from.
 BACKTESTING_PY_VERSION = "0.6.6"
-OPTIONS = COMMON_OPTIONS | {"order_type"}
+
+
+class BacktestingPyOptions(BacktestOptions):
+    """`BacktestOptions` and the backtesting.py one."""
+
+    order_type: Text = Field(None, description="market (default) or limit: the order type of the trades' fills")
+
+
+OPTIONS = BacktestingPyOptions.option_names()
 #: Columns every `_trades` export has; `detect` and the importer require them.
 REQUIRED = ("Size", "EntryPrice", "ExitPrice", "EntryTime", "ExitTime")
 #: Columns that mark a backtesting.py `_trades` table (no other backtester writes `EntryBar` and `ExitBar`).
@@ -184,11 +194,25 @@ def import_backtesting_py(
     return finish_to_dir(SIM, res, paths, Path(out), append=append, status="simulated")
 
 
+IMPORTER = ImporterDef(
+    name="backtesting_py",
+    kind="sim",
+    run=import_backtesting_py_sim,
+    options=BacktestingPyOptions,
+    formats=("Backtest.run() result's _trades (to_csv, or to_json with orient=records)",),
+    patterns=("*.csv", "*.json"),
+    description="backtesting.py backtest: the trades of a Backtest.run() result (log venue sim:backtesting_py)",
+    docs="how-to/check-my-backtest.md#backtestingpy",
+    rank=190,
+)
+
 __all__ = [
     "BACKTESTING_PY_VERSION",
+    "IMPORTER",
     "MARKERS",
     "OPTIONS",
     "SIM",
+    "BacktestingPyOptions",
     "import_backtesting_py",
     "import_backtesting_py_sim",
     "read_backtesting_py",

@@ -1,52 +1,114 @@
-"""Venue importers (SPEC 5.7.1) and simulator-output importers; every importer maps
-`(input paths, ImportOptions) -> ImportResult` (see `queuetruth.live.builder` for the shared semantics)."""
+"""Venue importers (SPEC 5.7.1), simulator-output importers and trading-bot importers; every importer maps
+`(input paths, ImportOptions) -> ImportResult` (see `queuetruth.live.builder` for the shared semantics).
+
+Each importer module declares an `ImporterDef` next to its code; `registry()` collects them, with third-party ones
+from the `queuetruth.importers` entry-point group (`queuetruth.live.importers._registry` documents both).
+`VENUE_IMPORTERS`, `SIM_IMPORTERS` and `BOT_IMPORTERS` are read-only views of the registry kept for compatibility:
+name -> importer function."""
 
 from __future__ import annotations
 
+from collections.abc import Iterator, Mapping
+from typing import Any
+
 from queuetruth.live.builder import ImportResult
-from queuetruth.live.importers._base import Importer, ImportOptions
-from queuetruth.live.importers.backtesting_py import import_backtesting_py_sim
-from queuetruth.live.importers.backtrader import import_backtrader_sim
-from queuetruth.live.importers.binance import import_binance
-from queuetruth.live.importers.bybit import import_bybit
-from queuetruth.live.importers.coinbase import import_coinbase
-from queuetruth.live.importers.deribit import import_deribit
-from queuetruth.live.importers.fix44 import import_fix44
-from queuetruth.live.importers.freqtrade import import_freqtrade, import_freqtrade_sim
-from queuetruth.live.importers.hummingbot import import_hummingbot, import_hummingbot_sim
-from queuetruth.live.importers.hyperliquid import import_hyperliquid
-from queuetruth.live.importers.ibkr_flex import import_ibkr_flex
-from queuetruth.live.importers.kraken import import_kraken
-from queuetruth.live.importers.lean import import_lean_sim
-from queuetruth.live.importers.okx import import_okx
-from queuetruth.live.importers.sim import import_hftbacktest, import_nautilus
-from queuetruth.live.importers.vectorbt import import_vectorbt_sim
+from queuetruth.live.importers._base import (
+    KINDS,
+    Importer,
+    ImporterDef,
+    ImporterKind,
+    ImporterOptions,
+    ImportOptions,
+)
+from queuetruth.live.importers._registry import (
+    ENTRY_POINT_GROUP,
+    LIVE_IMPORTERS_RS,
+    LIVE_VENUES_PY,
+    ImporterWarning,
+    builtins,
+    by_venue,
+    generated,
+    get,
+    importers,
+    live_importers_rs,
+    live_venues,
+    live_venues_py,
+    names,
+    option_rows,
+    register,
+    registry,
+    reload,
+    unregister,
+)
 
-#: The nine venue importers of SPEC 5.7.1 (`LiveImportSpec.venue` values).
-VENUE_IMPORTERS: dict[str, Importer] = {
-    "binance": import_binance,
-    "bybit": import_bybit,
-    "okx": import_okx,
-    "coinbase": import_coinbase,
-    "kraken": import_kraken,
-    "deribit": import_deribit,
-    "hyperliquid": import_hyperliquid,
-    "ibkr_flex": import_ibkr_flex,
-    "fix44": import_fix44,
-}
-#: Simulator-output importers (not `LiveImportSpec` venues; see `queuetruth.live.import_sim`).
-SIM_IMPORTERS: dict[str, Importer] = {
-    "hftbacktest": import_hftbacktest,
-    "nautilus": import_nautilus,
-    "freqtrade": import_freqtrade_sim,
-    "hummingbot": import_hummingbot_sim,
-    "backtrader": import_backtrader_sim,
-    "vectorbt": import_vectorbt_sim,
-    "lean": import_lean_sim,
-    "backtesting_py": import_backtesting_py_sim,
-}
+
+class _KindView(Mapping[str, Importer]):
+    """Read-only view: importer name -> importer function, for one kind (built-ins and plugins, in list order)."""
+
+    def __init__(self, kind: str) -> None:
+        self._kind = kind
+
+    def _map(self) -> dict[str, Importer]:
+        return {d.name: d.run for d in importers(self._kind)}
+
+    def __getitem__(self, name: str) -> Importer:
+        return self._map()[name]
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._map())
+
+    def __len__(self) -> int:
+        return len(self._map())
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({self._kind!r}: {list(self._map())})"
+
+
+#: The venue importers of SPEC 5.7.1 (`LiveImportSpec.venue` values): name -> importer.
+VENUE_IMPORTERS: Mapping[str, Importer] = _KindView("venue")
+#: Simulator-output importers (`LiveImportSpec.venue` `sim_<name>`; see `queuetruth.live.import_sim`).
+SIM_IMPORTERS: Mapping[str, Importer] = _KindView("sim")
 #: Trading-bot importers of the live arm (Freqtrade trades database + bot log, Hummingbot database / trades CSV);
-#: not `LiveImportSpec` venues: `import_freqtrade_live` / `import_hummingbot_live` write their logs.
-BOT_IMPORTERS: dict[str, Importer] = {"freqtrade": import_freqtrade, "hummingbot": import_hummingbot}
+#: `import_freqtrade_live` / `import_hummingbot_live` write their logs.
+BOT_IMPORTERS: Mapping[str, Importer] = _KindView("bot")
 
-__all__ = ["BOT_IMPORTERS", "SIM_IMPORTERS", "VENUE_IMPORTERS", "ImportOptions", "ImportResult", "Importer"]
+
+def __getattr__(name: str) -> Any:
+    """The importer functions by their own name (`import_binance`), as this package exported them before."""
+    if name.startswith("import_"):
+        for d in builtins():
+            if getattr(d.run, "__name__", None) == name:
+                return d.run
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+__all__ = [
+    "BOT_IMPORTERS",
+    "ENTRY_POINT_GROUP",
+    "KINDS",
+    "LIVE_IMPORTERS_RS",
+    "LIVE_VENUES_PY",
+    "SIM_IMPORTERS",
+    "VENUE_IMPORTERS",
+    "ImportOptions",
+    "ImportResult",
+    "Importer",
+    "ImporterDef",
+    "ImporterKind",
+    "ImporterOptions",
+    "ImporterWarning",
+    "builtins",
+    "by_venue",
+    "generated",
+    "get",
+    "importers",
+    "live_importers_rs",
+    "live_venues",
+    "live_venues_py",
+    "names",
+    "option_rows",
+    "register",
+    "registry",
+    "reload",
+    "unregister",
+]

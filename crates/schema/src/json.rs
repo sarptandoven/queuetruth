@@ -229,8 +229,27 @@ pub struct DatasetManifest {
     /// 1.1: data vintage per source file; `None` = not recorded.
     #[serde(default)]
     pub source_vintage: Option<Vec<SourceVintage>>,
+    /// 1.2: who provided the data and on which terms (for example IEX's required citation, written by `queuetruth
+    /// data fetch iex`); omitted when `None`, so a dataset without it writes the same bytes as before.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attribution: Option<Vec<Attribution>>,
 }
 doc!(DatasetManifest, "qt.dataset_manifest");
+
+/// 1.2: the provider of a dataset's data, its required citation and its terms.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Attribution {
+    /// The source, e.g. `IEX DEEP+ (IEX HIST)`.
+    pub source: String,
+    /// The citation the terms require, verbatim.
+    pub text: String,
+    /// The terms of use.
+    pub terms_url: String,
+    /// Where the data was read from.
+    #[serde(default)]
+    pub url: Option<String>,
+}
 
 /// 1.1: data vintage of one source file (DBN metadata).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -282,6 +301,7 @@ impl Default for DatasetManifest {
             validation_status: ValidationStatus::SyntheticOnly,
             rule_set: None,
             source_vintage: None,
+            attribution: None,
         }
     }
 }

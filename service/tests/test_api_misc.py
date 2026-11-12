@@ -35,6 +35,9 @@ def test_meta_and_tenant(svc):
     assert meta.api_version == "v1" and meta.limits.part_size_bytes == svc.settings.part_size_bytes
     assert "itch" in meta.formats and meta.schema_versions["qt.job"] == 1 and meta.zero_egress is False
     assert set(meta.limits.rate_limits) == {"read", "write", "submit"}
+    from queuetruth.live import importers
+
+    assert meta.live_venues == list(importers.live_venues()) and "binance" in meta.live_venues  # the registry's
     t = m.Tenant.model_validate(svc.client.get("/v1/tenant", headers=svc.h()).json())
     assert t.id == svc.tenants["A"] and t.retention.uploads_days == 30
 

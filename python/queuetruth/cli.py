@@ -1320,6 +1320,42 @@ def _emit_error(e: QtError, json_out: bool) -> int:
     return e.exit_code
 
 
+#: The built-in venue `live import --venue PLUGIN` is parsed as (it takes `--option` and `--tz`, not `--fix-*`).
+_PLUGIN_STAND_IN = "sim-hftbacktest"
+
+
+def _plugin_live_venue(args: list[str]) -> tuple[list[str], str | None]:
+    """`live import --venue NAME` where NAME is registered by a plugin (`queuetruth.importers` entry point): the clap
+    grammar lists the built-ins only, so the command is parsed with a built-in stand-in and NAME is put back before
+    it runs. Returns (argv to parse, the plugin venue or None)."""
+    words, k = [], 0
+    while k < len(args) and len(words) < 2:
+        if args[k] in ("--format", "--output-format", "--log-level", "--threads", "--seed"):
+            k += 2
+            continue
+        if not args[k].startswith("-"):
+            words.append(args[k])
+        k += 1
+    if words != ["live", "import"]:
+        return args, None
+    for i, a in enumerate(args):
+        if a == "--venue" and i + 1 < len(args):
+            j, value = i + 1, args[i + 1]
+        elif a.startswith("--venue="):
+            j, value = i, a.split("=", 1)[1]
+        else:
+            continue
+        from queuetruth.live import importers
+
+        venue = value.replace("-", "_")
+        if venue in importers.live_venues(builtin=True) or venue not in importers.registry():
+            return args, None
+        out = list(args)
+        out[j] = _PLUGIN_STAND_IN if j == i + 1 else f"--venue={_PLUGIN_STAND_IN}"
+        return out, venue
+    return args, None
+
+
 def main(argv: list[str] | None = None) -> int:
     """Entry point; returns the exit code (0 ok, 1 gate failed, 2 error)."""
     args = list(sys.argv[1:] if argv is None else argv)
@@ -1339,6 +1375,7 @@ def main(argv: list[str] | None = None) -> int:
         "reconcile",
         "atlas",
         "check",
+        "data",
         "fit",
     )
     i = 0
@@ -1378,6 +1415,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if (rc := check_main(args)) is not None:
         return rc
+    from queuetruth.data.cli import maybe_main as data_main  # `data add`, `data fetch` (Python-only grammar)
+
+    if (rc := data_main(args)) is not None:
+        return rc
     from queuetruth.fit.cli import maybe_main as fit_main  # `fit` (Python-only grammar)
 
     if (rc := fit_main(args)) is not None:
@@ -1389,11 +1430,14 @@ def main(argv: list[str] | None = None) -> int:
         return _emit_error(
             QtError("QT-ENGINE-001", f"queuetruth._core is not available: {e}", "reinstall queuetruth"), json_out
         )
+    args, plugin_venue = _plugin_live_venue(args)
     try:
         cmd = json.loads(core.cli_parse(["queuetruth", *args]))
     except core.CliExit as x:
         print(str(x.text).rstrip("\n"), file=sys.stderr if x.to_stderr else sys.stdout)
         return int(x.code)
+    if plugin_venue is not None:
+        cmd["args"]["venue"] = plugin_venue
     g = cmd["global"]
     json_out = g["format"] == "json"
     quiet = bool(g.get("quiet"))

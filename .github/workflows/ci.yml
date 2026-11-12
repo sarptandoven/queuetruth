@@ -83,8 +83,10 @@ jobs:
           uv run --frozen --no-sync ruff format --check python service scripts tests benches tools integrations
       - name: import layers (tools/check_layers.py; recorded exceptions in tools/check_layers_allow.txt)
         run: uv run --frozen --no-sync python tools/check_layers.py
-      - name: schemas up to date
-        run: make schemas-check
+      # Every generated file (schemas, openapi, the importer registry's files, CLI rows and golden files, reference
+      # pages, validated page, README chart, synthetic fixtures), in one place; it lists what is stale and the fix.
+      - name: generated files up to date (make generate-check)
+        run: make generate-check
       - name: test-py
         run: make test-py
       - name: e2e (no integration; data guardrail, bench gate statistics)

@@ -17,6 +17,7 @@ use clap::{Arg, ArgAction, ArgMatches, Command};
 use serde_json::{Map, Value, json};
 
 use crate::Implementation;
+use crate::live_importers::{FIX_VENUES, OPTION_VENUES};
 use crate::python_commands::{PYTHON_COMMANDS, PYTHON_GROUPS, PYTHON_LONG_ABOUT, PYTHON_POSITIONAL_HELP};
 
 /// How a flag's string value(s) become JSON.
@@ -834,9 +835,8 @@ pub(crate) const COMMANDS: &[Cmd] = &[
                 "option",
                 Kind::KeyValue,
                 "_cli.options",
-                "importer option KEY=VALUE (sim-* venues: venue, size_exp, key_from_client_id; freqtrade, hummingbot: \
-                 dry_run, log_tz, timeframe, pair_with, ...; sim-backtrader, sim-vectorbt, sim-lean, \
-                 sim-backtesting-py: pair_with, timeframe, instrument, ...)",
+                "importer option KEY=VALUE, repeatable (the importer's own options, e.g. timeframe=5m, dry_run=true; \
+                 every importer's are listed in docs/reference/importers.md)",
             ),
         ],
         positional: &[],
@@ -2250,16 +2250,18 @@ pub(crate) fn build_args(
             }
         }
         ["live", "import"] => {
+            // Which venues take which flags comes from the importer registry (generated `live_importers.rs`).
             let venue = args.get("venue").and_then(Value::as_str).unwrap_or_default().to_owned();
-            if args.get("fix").is_some() && venue != "fix44" {
-                return Err("--fix-* flags apply to --venue fix44 only".into());
+            let cli = |vs: &[&str]| vs.iter().map(|v| v.replace('_', "-")).collect::<Vec<_>>().join(", ");
+            if args.get("fix").is_some() && !FIX_VENUES.contains(&venue.as_str()) {
+                return Err(format!("--fix-* flags apply to --venue {} only", cli(FIX_VENUES)));
             }
             let has_options = args.get("_cli").and_then(|c| c.get("options")).is_some();
-            if has_options && !(venue.starts_with("sim_") || venue == "freqtrade" || venue == "hummingbot") {
-                return Err(
-                    "--option applies to the simulator (sim-*) and trading-bot (freqtrade, hummingbot) venues only"
-                        .into(),
-                );
+            if has_options && !OPTION_VENUES.contains(&venue.as_str()) {
+                return Err(format!(
+                    "--option applies to the venues whose importer has options: {}",
+                    cli(OPTION_VENUES)
+                ));
             }
         }
         ["export", "replay-schedule"] => {

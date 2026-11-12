@@ -101,6 +101,7 @@ from typing import Any, Literal
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
+from pydantic import Field
 
 from queuetruth.errors import QtError
 from queuetruth.live._common import (
@@ -117,7 +118,7 @@ from queuetruth.live._common import (
 )
 from queuetruth.live.builder import ImportResult, LogBuilder
 from queuetruth.live.imap import InstrumentEntry, InstrumentMap, load_instrument_map
-from queuetruth.live.importers._base import ImportOptions
+from queuetruth.live.importers._base import Flag, ImporterDef, ImporterOptions, ImportOptions, Int, Paths, Text
 from queuetruth.schemas.io import sha256_file
 from queuetruth.schemas.models import QtModel
 from queuetruth.schemas.reconcile import ReconcileOrder, ReconcileReport, ReconcileScore
@@ -151,24 +152,33 @@ _EXCHANGE_CANCEL = "cancelled on exchange"
 _CANCEL_REPLACE_FAILED = "cancel to replace not confirmed, replacement abandoned"
 _STATUS = {"cancelled": "canceled", "canceled": "canceled", "closed": "closed", "open": "open"}
 _STATUS.update({"expired": "expired", "rejected": "rejected"})
-FT_OPTIONS = frozenset(
-    {
-        "strategy",
-        "timeframe",
-        "tif",
-        "dry_run",
-        "order_date_clock",
-        "log_tz",
-        "venue",
-        "map_venue",
-        "pair_with",
-        "pair_tolerance_candles",
-        "price_exp",
-        "size_exp",
-        "live_dry_run",
-        "live_venue",
-    }
-)
+
+
+class FreqtradeOptions(ImporterOptions):
+    """Options of the Freqtrade importers (the live bot reads these; the simulator arm adds the pairing ones)."""
+
+    strategy: Text = Field(None, description="strategy name in a backtest result with several")
+    timeframe: Text = Field(None, description="candle length, e.g. 5m (default: the backtest's)")
+    tif: Text = Field(None, description="time in force of limit orders (default gtc)")
+    dry_run: Flag = Field(None, description="the run is a dry run (default: read from the database)")
+    order_date_clock: Text = Field(None, description="exchange (default) or local: the clock of order dates")
+    log_tz: Text = Field(None, description="IANA zone of bot log times (default UTC)")
+    venue: Text = Field(None, description="the exchange the bot traded on (default: from the config)")
+    map_venue: Text = Field(None, description="venue of the instrument-map rows when it differs from venue")
+    pair_tolerance_candles: Int = Field(None, description="pairing tolerance in candles (default 1)")
+    price_exp: Int = Field(None, description="decimal exponent of prices (default -9)")
+    size_exp: Int = Field(None, description="decimal exponent of sizes (default -8)")
+
+
+class FreqtradeSimOptions(FreqtradeOptions):
+    """`FreqtradeOptions` and the live run the backtest is paired with."""
+
+    pair_with: Paths = Field(None, description="the live bot's database and logs: paired orders take their order_key")
+    live_dry_run: Flag = Field(None, description="dry_run of the pair_with run")
+    live_venue: Text = Field(None, description="venue of the pair_with run")
+
+
+FT_OPTIONS = FreqtradeSimOptions.option_names()
 #: Freqtrade's `internals.process_throttle_secs` default: a bot reacts to the market at most every 5 s, so two bot
 #: runs (dry-run vs live) are compared with this time tolerance by default.
 BOT_TIME_TOL_NS = 5 * 1_000_000_000
@@ -2380,3 +2390,30 @@ __all__ = [
     "timeframe_seconds",
     "write_reconcile",
 ]
+
+# ---- registry entry (queuetruth.live.importers.registry()) ------------------------------------------------------
+
+IMPORTERS = (
+    ImporterDef(
+        name="freqtrade",
+        kind="bot",
+        run=import_freqtrade,
+        options=FreqtradeOptions,
+        formats=("trades database (SQLite) of a dry-run or live bot", "bot log"),
+        patterns=("*.sqlite", "*.log"),
+        description="Freqtrade bot: the orders and fills of a live or dry run (log venue = the exchange)",
+        docs="how-to/reconcile-freqtrade-hummingbot.md#3-against-a-live-bot",
+        rank=120,
+    ),
+    ImporterDef(
+        name="freqtrade",
+        kind="sim",
+        run=import_freqtrade_sim,
+        options=FreqtradeSimOptions,
+        formats=("backtest result zip or JSON", ".last_result.json", "dry-run trades database"),
+        patterns=("backtest-result-*.zip", "backtest-result-*.json", ".last_result.json", "*.sqlite"),
+        description="Freqtrade backtest (or dry run) as the simulator arm (log venue sim:freqtrade)",
+        docs="how-to/reconcile-freqtrade-hummingbot.md#part-1-freqtrade-backtest-vs-dry-run-and-live",
+        rank=140,
+    ),
+)

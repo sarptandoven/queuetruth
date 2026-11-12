@@ -59,6 +59,7 @@ nav:
       - My own simulator (referee in CI): how-to/referee-your-simulator.md
       - My own backtester as a plugin: how-to/add-a-backtester.md
   - Bring your data:
+      - Add order-level data: how-to/add-data.md
       - Import fills from my venue or broker: how-to/import-live-logs.md
       - Check a feed before you trust it: how-to/check-a-feed.md
       - Databento MBO for CME and Nasdaq: how-to/databento-mbo.md
@@ -93,6 +94,7 @@ nav:
       - HTTP API: reference/http-api.md
       - MCP tools: reference/mcp.md
       - Schemas: reference/schemas.md
+      - Importers: reference/importers.md
       - Error codes: reference/errors.md
       - Venue semantics: venue-semantics.md
       - Glossary: concepts/glossary.md

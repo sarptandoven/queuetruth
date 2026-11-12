@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import json
 import warnings
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +34,7 @@ from pydantic import ValidationError
 
 from queuetruth import backtesters as _backtesters
 from queuetruth.errors import QtError
+from queuetruth.live import importers as _importers
 from queuetruth.live._common import valid_id
 from queuetruth.live.builder import ImportResult
 from queuetruth.live.canonical import (
@@ -54,7 +55,7 @@ from queuetruth.live.canonical import (
     write_log,
 )
 from queuetruth.live.imap import InstrumentMap, load_instrument_map
-from queuetruth.live.importers import SIM_IMPORTERS, VENUE_IMPORTERS, ImportOptions
+from queuetruth.live.importers import SIM_IMPORTERS, VENUE_IMPORTERS, ImporterDef, ImportOptions
 from queuetruth.live.importers.quickfix import expand_inputs
 from queuetruth.live.schedule import (
     ENTRY_KINDS,
@@ -79,15 +80,39 @@ from queuetruth.schemas.models import (
 )
 from queuetruth.schemas.specs import FixOptions, LiveImportSpec
 
-#: Venue name -> importer `(input paths, ImportOptions) -> ImportResult` (the nine `LiveImportSpec` venues).
-IMPORTERS: dict[str, Callable[..., Any]] = dict(VENUE_IMPORTERS)
-#: `LiveImportSpec.venue` values of the simulator importers (1.1, SPEC 3.11 #13) -> `import_sim` kind: one per
-#: built-in of the `queuetruth.backtesters` registry (plugins are reached through `import_sim`).
-SIM_VENUES: dict[str, str] = {f"sim_{n}": n for n in _backtesters.builtin_names()}
+#: Venue name -> importer `(input paths, ImportOptions) -> ImportResult` (the venue importers of the registry,
+#: `queuetruth.live.importers.registry()`; a read-only view).
+IMPORTERS: Mapping[str, Callable[..., Any]] = VENUE_IMPORTERS
+#: `LiveImportSpec.venue` values of the built-in simulator importers (1.1, SPEC 3.11 #13) -> `import_sim` kind
+#: (plugins are reached through `import_sim` and `import_venue` too).
+SIM_VENUES: dict[str, str] = {d.venue: d.name for d in _importers.builtins() if d.kind == "sim"}
 #: Trading-bot venues of the live arm (`queuetruth.live.importers.BOT_IMPORTERS`): the log venue is the exchange.
-BOT_VENUES = frozenset({"freqtrade", "hummingbot"})
+BOT_VENUES = frozenset(d.venue for d in _importers.builtins() if d.kind == "bot")
 #: Venues whose importer reads `tz` (IBKR Flex account times; FIX log times captured by `fix.local_ts_regex`).
-TZ_VENUES = frozenset({"ibkr_flex", "fix44"})
+TZ_VENUES = frozenset(d.venue for d in _importers.builtins() if d.kind == "venue" and "tz" in d.options.option_names())
+
+
+class _AnyVenueSpec(LiveImportSpec):
+    """`LiveImportSpec` for a venue registered by a plugin (the spec's enum lists the built-ins)."""
+
+    venue: str  # type: ignore[assignment]
+
+
+def live_import_spec(spec: LiveImportSpec | dict[str, Any]) -> LiveImportSpec:
+    """`spec` as a `LiveImportSpec` (pydantic validation, as `LiveImportSpec.model_validate`); a venue registered by a
+    plugin (`queuetruth.importers` entry point) is accepted too."""
+    if isinstance(spec, LiveImportSpec):
+        return spec
+    venue = spec.get("venue") if isinstance(spec, dict) else None
+    plugin = (
+        isinstance(venue, str) and venue not in _importers.live_venues(builtin=True) and venue in _importers.registry()
+    )
+    return (_AnyVenueSpec if plugin else LiveImportSpec).model_validate(spec)
+
+
+def _only_for(option: str) -> str:
+    venues = [d.venue for d in _importers.importers("venue") if option in d.options.option_names()]
+    return f"venue {', '.join(venues)}" if len(venues) == 1 else f"venues {', '.join(venues)}"
 
 
 class LiveImportWarning(UserWarning):
@@ -303,7 +328,7 @@ def _finish_import(
     )
 
 
-def import_venue(spec: LiveImportSpec | dict[str, Any], *, tz: str | None = None) -> LiveImportSummary:
+def import_venue(spec: LiveImportSpec | dict[str, Any], *, tz: str | None = None, **options: Any) -> LiveImportSummary:
     """`live import`: venue exports -> canonical live-log directory `spec.out`.
 
     `tz` (IANA name) overrides `spec.tz`: the account time zone of IBKR Flex times, or the zone of `fix44` log times
@@ -312,43 +337,53 @@ def import_venue(spec: LiveImportSpec | dict[str, Any], *, tz: str | None = None
     `sim_nautilus` run the simulator importers (`import_sim`). `fix44` inputs may be QuickFIX log / store
     directories; every `FixOptions` field (delimiter, local_ts_regex, venue_name, checksum, data_dictionary,
     session_venues, instrument_tag) is honoured. The summary carries the 1.1 `unmapped_instruments` and
-    `instrument_scales` next to their warning lines."""
-    s = spec if isinstance(spec, LiveImportSpec) else LiveImportSpec.model_validate(spec)
+    `instrument_scales` next to their warning lines.
+
+    The importer is the registry's (`queuetruth.live.importers.by_venue`), plugins included. `options` are the
+    importer's own (its typed options model, e.g. `flex_date_order` for `ibkr_flex`); a wrong or unknown one fails
+    `QT-CONFIG-001`."""
+    s = live_import_spec(spec)
     if not s.out:
         raise QtError("QT-CONFIG-001", "out: an output directory is required")
+    d = _importers.by_venue(s.venue)
     tz_eff = tz if tz is not None else s.tz
     fix_set = s.fix != FixOptions()
-    if s.venue in SIM_VENUES:
+    if d.kind == "sim":
         bad = [n for n, v in (("tz", tz_eff), ("fix", fix_set)) if v]
         if bad:
             raise QtError("QT-CONFIG-001", f"{', '.join(bad)}: not used by the {s.venue} simulator importer")
         return import_sim(
-            SIM_VENUES[s.venue],
+            d.name,
             _paths(list(s.inputs)),
             s.out,
             account=s.account,
             instrument_map=_paths([s.instrument_map])[0] if s.instrument_map is not None else None,
             append=s.append,
+            **options,
         )
-    if s.venue in BOT_VENUES:
-        return import_bot(s, tz=tz_eff)
-    if fix_set and s.venue != "fix44":
-        raise QtError("QT-CONFIG-001", f"fix: FIX options apply to venue fix44 only, not {s.venue}")
-    if tz_eff and s.venue not in TZ_VENUES:
+    if d.kind == "bot":
+        return import_bot(s, tz=tz_eff, **options)
+    known = d.options.option_names()
+    if fix_set and "fix" not in known:
+        raise QtError("QT-CONFIG-001", f"fix: FIX options apply to {_only_for('fix')} only, not {s.venue}")
+    if tz_eff and "tz" not in known:
         raise QtError(
             "QT-CONFIG-001",
             f"tz: the {s.venue} importer reads UTC / epoch times only; tz applies to {sorted(TZ_VENUES)}",
         )
+    extra: dict[str, Any] = dict(options)
+    if "fix" in known:
+        extra["fix"] = s.fix.model_dump()
+    if tz_eff:
+        extra["tz"] = tz_eff
+    d.validate(s.account, None, **extra)  # before any input is read
     paths = _paths(list(s.inputs))
-    if s.venue == "fix44":
+    if "fix" in known:
         paths = expand_inputs(paths)
     imap: InstrumentMap | None = None
     if s.instrument_map is not None:
         imap = load_instrument_map(_paths([s.instrument_map])[0])
-    extra: dict[str, Any] = {"fix": s.fix.model_dump()}
-    if tz_eff:
-        extra["tz"] = tz_eff
-    res = IMPORTERS[s.venue](paths, ImportOptions(account=s.account, imap=imap, extra=extra))
+    res = d.run(paths, d.import_options(s.account, imap, **extra))
     return _finish_import(res.venue, res, paths, s.out, append=s.append)
 
 
@@ -400,7 +435,8 @@ def import_quickfix(
     extra: dict[str, Any] = {"fix": opts.model_dump()}
     if tz:
         extra["tz"] = tz
-    res = IMPORTERS["fix44"](paths, ImportOptions(account=account, imap=imap, extra=extra))
+    d = _importers.by_venue("fix44")
+    res = d.run(paths, d.import_options(account, imap, **extra))
     return _finish_import(res.venue, res, paths, out, append=append)
 
 
@@ -410,16 +446,21 @@ def import_bot(spec: LiveImportSpec, *, tz: str | None = None, **options: Any) -
     or paper run is marked `validation_status = simulated`. `options` are the importer's (`dry_run`, `venue`, `tif`,
     `log_tz`, `timeframe`, `price_exp`, `size_exp`, ...; docs/how-to/reconcile-freqtrade-hummingbot.md); bot log
     times take `log_tz`, not `tz`."""
-    if spec.venue not in BOT_VENUES:
-        raise QtError("QT-CONFIG-001", f"venue {spec.venue!r} is not a trading bot ({sorted(BOT_VENUES)})")
+    d = _importers.registry().get(spec.venue)
+    if d is None or d.kind != "bot":
+        bots = sorted(x.venue for x in _importers.importers("bot"))
+        raise QtError("QT-CONFIG-001", f"venue {spec.venue!r} is not a trading bot ({bots})")
     if not spec.out:
         raise QtError("QT-CONFIG-001", "out: an output directory is required")
     if tz:
         raise QtError("QT-CONFIG-001", f"tz: bot log times take the importer option log_tz (e.g. log_tz={tz})")
     if spec.fix != FixOptions():
-        raise QtError("QT-CONFIG-001", f"fix: FIX options apply to venue fix44 only, not {spec.venue}")
-    run = _backtesters.get(spec.venue).import_live
-    assert run is not None  # every BOT_VENUES entry has a live importer
+        raise QtError("QT-CONFIG-001", f"fix: FIX options apply to {_only_for('fix')} only, not {spec.venue}")
+    d.validate(spec.account, None, **options)
+    bt = _backtesters.registry().get(spec.venue)
+    run = getattr(bt, "import_live", None)
+    if run is None:  # a bot importer without its own writer (a plugin): import, then write the log
+        return _import_with(d, spec, options)
     return run(
         _paths(list(spec.inputs)),
         spec.out,
@@ -441,25 +482,43 @@ def import_sim(
     append: bool = False,
     **options: Any,
 ) -> LiveImportSummary:
-    """Simulator output (`kind` = `hftbacktest`, `nautilus`, `freqtrade`, `hummingbot`, `backtrader`, `vectorbt`, `lean`
-    or `backtesting_py`) -> canonical live-log directory for the scorer's external arm. `venue` names the live venue
-    whose instrument-map rows apply; other options go to the importer (`order_key_map`, `key_from_client_id`,
-    `size_exp`; for `backtrader`, `vectorbt` and `lean` `pair_with` = a canonical live-log directory, `timeframe`,
-    ...). The log is marked `venue = sim:<kind>`, `source = sim`, `validation_status = simulated` (schema 1.1; 0.1.0
-    used synthetic / fixture_only)."""
-    if kind not in _backtesters.registry():
-        raise QtError("QT-CONFIG-001", f"simulator kind must be one of {sorted(_backtesters.registry())}, got {kind!r}")
+    """Simulator output (`kind` = `hftbacktest`, `nautilus`, `freqtrade`, `hummingbot`, `backtrader`, `vectorbt` or
+    `lean`) -> canonical live-log directory for the scorer's external arm. `venue` names the live venue whose
+    instrument-map rows apply; other options go to the importer (`order_key_map`, `key_from_client_id`, `size_exp`;
+    for `backtrader`, `vectorbt` and `lean` `pair_with` = a canonical live-log directory, `timeframe`, ...). The
+    log is marked `venue = sim:<kind>`, `source = sim`, `validation_status = simulated` (schema 1.1; 0.1.0 used
+    synthetic / fixture_only)."""
+    sims = {d.name: d for d in _importers.importers("sim")}
+    if kind not in _backtesters.registry() and kind not in sims:
+        known = sorted(set(_backtesters.registry()) | set(sims))
+        raise QtError("QT-CONFIG-001", f"simulator kind must be one of {known}, got {kind!r}")
     if kind == "lean":
         from queuetruth.live.importers.lean import check_append
 
         check_append(out, append)
-    paths = _paths([{"path": p} for p in inputs])
-    imap = load_instrument_map(instrument_map) if instrument_map else None
     extra = dict(options)
     if venue:
         extra["venue"] = venue
-    res = _backtesters.get(kind).import_sim(paths, ImportOptions(account=account, imap=imap, extra=extra))
+    d = sims.get(kind)
+    if d is not None:
+        d.validate(account, None, **extra)  # before any input is read
+    paths = _paths([{"path": p} for p in inputs])
+    imap = load_instrument_map(instrument_map) if instrument_map else None
+    # the registry's typed options when it has the importer; a backtester plugin without one checks its own
+    opts = d.import_options(account, imap, **extra) if d is not None else ImportOptions(account, imap, extra)
+    bt = _backtesters.registry().get(kind)
+    run = bt.import_sim if bt is not None else d.run  # type: ignore[union-attr]
+    res = run(paths, opts)
     return _finish_import(f"sim:{kind}", res, paths, out, append=append, status="simulated")
+
+
+def _import_with(d: ImporterDef, spec: LiveImportSpec, options: dict[str, Any]) -> LiveImportSummary:
+    """Runs the importer `d` on the spec's inputs and writes the canonical log `spec.out`."""
+    paths = _paths(list(spec.inputs))
+    imap = load_instrument_map(_paths([spec.instrument_map])[0]) if spec.instrument_map is not None else None
+    res = d.run(paths, d.import_options(spec.account, imap, **options))
+    assert spec.out is not None
+    return _finish_import(res.venue, res, paths, spec.out, append=spec.append)
 
 
 def manifest(path: str | Path) -> dict[str, Any]:
@@ -499,6 +558,7 @@ __all__ = [
     "import_venue",
     "instrument_scales",
     "latency_stats",
+    "live_import_spec",
     "load_instrument_map",
     "manifest",
     "manifest_sha256",
