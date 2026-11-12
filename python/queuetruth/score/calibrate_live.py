@@ -63,6 +63,7 @@ from queuetruth.schemas.arrow import ENGINE_VERSION
 from queuetruth.schemas.io import write_table
 from queuetruth.schemas.models import CalibrationResult
 from queuetruth.schemas.runid import run_id, spec_echo
+from queuetruth.schemas.schedule import schedule_table
 from queuetruth.schemas.specs import (
     GridRange,
     LiveCalibrationSpec,
@@ -70,7 +71,7 @@ from queuetruth.schemas.specs import (
     ZooSpec,
 )
 from queuetruth.score._dataset import DatasetView
-from queuetruth.score._io import Row, make_table, read_live_log, ref_path, resolve_ref, rows, write_json
+from queuetruth.score._io import Row, read_live_log, ref_path, resolve_ref, rows, write_json
 from queuetruth.score.outcomes import log_outcomes
 from queuetruth.score.runner import DefaultRunner, ScoreRunner, find_table
 from queuetruth.score.schedule import (
@@ -408,7 +409,7 @@ def calibrate_live(
         work = Path(tmp)
         first_legs = [lg[0] for _, lg in sorted(legs.items())]
         sched_path = work / "schedule.parquet"
-        write_table(make_table("qt.shadow_spec", first_legs), sched_path)
+        write_table(schedule_table(first_legs), sched_path)
         root = ds.root
         if ds.kind != "l2" and self_exclude:
             tw = match_twins(
@@ -437,7 +438,7 @@ def calibrate_live(
                 if s.entry == "exchange_ack":
                     moved, n_moved = align_to_twins(first_legs, tw, twin_entry_points(ds.root, tw.ids))
                     if n_moved:
-                        write_table(make_table("qt.shadow_spec", moved), sched_path)
+                        write_table(schedule_table(moved), sched_path)
                         warnings.append(f"self_exclusion: {n_moved} order(s) activated in their twin's queue place")
         elif ds.kind == "l2":
             # Trader review E2: on an L2-only tape the user's own resting size is in the visible depth; without its

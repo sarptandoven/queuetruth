@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from queuetruth.errors import QtError
+from queuetruth.schemas.schedule import amend_rows, schedule_rows
 from queuetruth.score._io import Row, input_format
 
 I64_MAX = 2**63 - 1
@@ -194,17 +195,21 @@ class UnitMap:
         return [self._conv(str(e["order_key"]), e, EVENT_PX, EVENT_QTY, "events") for e in rows]
 
     def schedule(self, rows: list[Row]) -> list[Row]:
-        """`qt.shadow_spec` rows in target units (keyed by `order_key`, else `shadow_id`)."""
-        return [
-            self._conv(str(r.get("order_key") or r["shadow_id"]), r, ("price",), ("qty",), "schedule") for r in rows
-        ]
+        """`qt.shadow_spec` rows in target units (keyed by `order_key`, else `shadow_id`), validated as schedule legs
+        (`queuetruth.schemas.schedule`)."""
+        return schedule_rows(
+            [self._conv(str(r.get("order_key") or r["shadow_id"]), r, ("price",), ("qty",), "schedule") for r in rows]
+        )
 
     def amends(self, rows: list[Row], schedule: list[Row]) -> list[Row]:
-        """`qt.shadow_amend` rows in target units (the leg's `order_key` from `schedule`)."""
+        """`qt.shadow_amend` rows in target units (the leg's `order_key` from `schedule`), validated."""
         owner = {str(r["shadow_id"]): str(r.get("order_key") or r["shadow_id"]) for r in schedule}
-        return [
-            self._conv(owner.get(str(a["shadow_id"]), str(a["shadow_id"])), a, (), ("new_qty",), "amends") for a in rows
-        ]
+        return amend_rows(
+            [
+                self._conv(owner.get(str(a["shadow_id"]), str(a["shadow_id"])), a, (), ("new_qty",), "amends")
+                for a in rows
+            ]
+        )
 
     def notes(self, label: str) -> list[str]:
         """One warning line per converted instrument."""

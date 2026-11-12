@@ -40,7 +40,7 @@ import pyarrow as pa
 from queuetruth.errors import QtError
 from queuetruth.live.canonical import ENTRY_KINDS, RESTING_TIF, entry_fallback_warning, read_log, table_rows
 from queuetruth.live.validate import check_tables, raise_on_errors
-from queuetruth.schemas.arrow import DICT_VALUES, SCHEMAS
+from queuetruth.schemas.schedule import amend_table, schedule_table
 
 TERMINAL = ("cancel_ack", "expire", "done", "reject", "post_only_reject")
 #: Venues whose documented amend rule keeps queue priority on a size decrease at the same price (used when
@@ -77,30 +77,6 @@ class Schedule:
     def entry_fallback_share(self) -> float | None:
         """Share of scheduled orders whose entry fell back to send_plus_latency."""
         return None if self.n_scheduled == 0 else self.n_entry_fallback / self.n_scheduled
-
-
-def _dict_array(values: list[str | None], table: str, col: str) -> pa.Array:
-    allowed = DICT_VALUES[table][col]
-    idx = [None if v is None else allowed.index(v) for v in values]
-    return pa.DictionaryArray.from_arrays(pa.array(idx, type=pa.int8()), pa.array(list(allowed), type=pa.utf8()))
-
-
-def _spec_table(rows: list[dict[str, Any]]) -> pa.Table:
-    name = "qt.shadow_spec"
-    schema = SCHEMAS[name]
-    cols = []
-    for f in schema:
-        vals = [r.get(f.name) for r in rows]
-        if pa.types.is_dictionary(f.type):
-            cols.append(_dict_array(vals, name, f.name))
-        else:
-            cols.append(pa.array(vals, type=f.type))
-    return pa.Table.from_arrays(cols, schema=schema)
-
-
-def _amend_table(rows: list[dict[str, Any]]) -> pa.Table:
-    schema = SCHEMAS["qt.shadow_amend"]
-    return pa.Table.from_arrays([pa.array([r[f.name] for r in rows], type=f.type) for f in schema], schema=schema)
 
 
 def _quantiles(values: list[int]) -> dict[str, Any]:
@@ -378,8 +354,8 @@ def schedule_from_rows(
         w.append(f"{counts[head]} event(s): {head}")
     amend_rows.sort(key=lambda r: (r["shadow_id"], r["ts_send"]))
     return Schedule(
-        spec=_spec_table(spec_rows),
-        amends=_amend_table(amend_rows),
+        spec=schedule_table(spec_rows),
+        amends=amend_table(amend_rows),
         legs=legs,
         n_orders=len(orows),
         n_scheduled=n_sched,

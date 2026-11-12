@@ -244,8 +244,56 @@ def sandbox_outputs(tmp: Path) -> dict[str, Any]:
     return {"spec": _table(spec), "amends": _table(am)}
 
 
+def scorer_outputs(tmp: Path) -> dict[str, Any]:
+    """The scorer's schedule file and the schedules it sends to the engine, on the scorer tests' synthetic orders,
+    with the helpers' minimal schedule and with the live-log schedule."""
+    tests = Path(__file__).resolve().parents[1]
+    if str(tests) not in sys.path:
+        sys.path.insert(0, str(tests))
+    from score.qt_score_helpers import T0 as ST0
+    from score.qt_score_helpers import FakeRunner, S, log_from, make_dataset, order_events
+
+    from queuetruth.live import to_schedule
+    from queuetruth.score import build_scorecard
+    from queuetruth.score._io import read_parquet
+
+    px = 100_000_000_000
+    oe = [
+        order_events("o1", "buy", px, 10, ST0, fills=[(ST0 + 2 * S, 10)]),
+        order_events("o2", "buy", px, 10, ST0 + S, cancel_at=ST0 + 30 * S),
+        order_events("o3", "sell", px + 10_000_000, 5, ST0 + 2 * S, fills=[(ST0 + 5 * S, 5)]),
+        order_events("o4", "buy", px, 3, ST0 + 3 * S),
+    ]
+    live = log_from(oe, tmp / "slive")
+    ds = make_dataset(
+        tmp / "sds", [{"ts_event": ST0 + 3600 * S, "action": ord("N"), "side": ord("N"), "price": 2**63 - 1}]
+    )
+    out: dict[str, Any] = {}
+    for name, fn in (("helper", None), ("live", to_schedule)):
+        kw = {} if fn is None else {"schedule_fn": fn}
+        fr = FakeRunner(
+            sim_fills={"o1": [(ST0 + 3 * S, 10, "queue_depleted")], "o4": [(ST0 + 9 * S, 3, "queue_depleted")]},
+            bbo=[{"ts_event": ST0 - S, "bid_px": px, "bid_sz": 5, "ask_px": px + 10_000_000, "ask_sz": 5}],
+            **kw,
+        )
+        spec = {
+            "live": {"path": str(live)},
+            "sim": {"kind": "exact"},
+            "bootstrap": {"b": 20},
+            "perm_b": 20,
+            "dataset": {"path": str(ds)},
+            "out": str(tmp / f"sout_{name}"),
+        }
+        build_scorecard(spec, runner=fr)
+        out[name] = {
+            "schedule": _table(read_parquet(tmp / f"sout_{name}" / "schedule.parquet")),
+            "sent": h(fr.schedules),
+        }
+    return out
+
+
 def outputs(tmp: Path, *, core: bool) -> dict[str, Any]:
-    out = {"live": live_outputs(tmp), "replay": replay_outputs(tmp)}
+    out = {"live": live_outputs(tmp), "replay": replay_outputs(tmp), "scorer": scorer_outputs(tmp)}
     if core:
         out["sandbox"] = sandbox_outputs(tmp)
     return out
@@ -257,6 +305,10 @@ def _pins() -> dict[str, Any]:
 
 def test_live_schedule_is_pinned(tmp_path: Path) -> None:
     assert live_outputs(tmp_path) == _pins()["live"]
+
+
+def test_scorer_schedule_is_pinned(tmp_path: Path) -> None:
+    assert scorer_outputs(tmp_path) == _pins()["scorer"]
 
 
 def test_replay_schedule_is_pinned(tmp_path: Path) -> None:

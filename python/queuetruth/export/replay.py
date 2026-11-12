@@ -116,12 +116,15 @@ def _amend_sibling(p: Path) -> Path | None:
 
 
 def read_schedule(schedule: Any, amends: Any = None) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """(leg rows, amend rows) of a `qt.shadow_spec` path / table / rows; amends default to the sibling
-    `<stem>_amends.parquet` (`shadows from-live`) or `amends.parquet` / `schedule_amends.parquet` next to it."""
-    legs = _rows(schedule)
+    """(leg rows, amend rows) of a `qt.shadow_spec` path / table / rows, validated (`queuetruth.schemas.schedule`:
+    a bad row is `QT-INPUT-002` naming its leg); amends default to the sibling `<stem>_amends.parquet` (`shadows
+    from-live`) or `amends.parquet` / `schedule_amends.parquet` next to it."""
+    from queuetruth.schemas.schedule import amend_rows, schedule_rows
+
+    legs = schedule_rows(_rows(schedule))
     if amends is None and isinstance(schedule, (str, Path)):
         amends = _amend_sibling(Path(schedule))
-    return legs, _rows(amends)
+    return legs, amend_rows(_rows(amends))
 
 
 def _side(v: Any, where: str) -> Literal["B", "A"]:

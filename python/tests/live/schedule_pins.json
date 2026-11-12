@@ -1579,5 +1579,305 @@
    },
    "schema": "shadow_id: string not null\ninstrument_id: uint32 not null\nside: uint8 not null\nprice_mode: dictionary<values=string, indices=int8, ordered=0> not null\nprice: int64\noffset_ticks: int32 not null\nqty: uint64 not null\nts_submit: timestamp[ns, tz=UTC] not null\nlatency_ns: int64 not null\nts_cancel: timestamp[ns, tz=UTC]\ngroup: string\nsource: dictionary<values=string, indices=int8, ordered=0> not null\norder_key: string\n-- schema metadata --\nqt.schema: 'qt.shadow_spec'\nqt.schema_version: '1.1'\nqt.engine_version: '0.3.0'"
   }
+ },
+ "scorer": {
+  "helper": {
+   "schedule": {
+    "columns": {
+     "group": [
+      null,
+      null,
+      null,
+      null
+     ],
+     "instrument_id": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "latency_ns": [
+      0,
+      0,
+      0,
+      0
+     ],
+     "offset_ticks": [
+      0,
+      0,
+      0,
+      0
+     ],
+     "order_key": [
+      "o1",
+      "o2",
+      "o3",
+      "o4"
+     ],
+     "price": [
+      100000000000,
+      100000000000,
+      100010000000,
+      100000000000
+     ],
+     "price_mode": [
+      "abs",
+      "abs",
+      "abs",
+      "abs"
+     ],
+     "qty": [
+      10,
+      10,
+      5,
+      3
+     ],
+     "shadow_id": [
+      "o1",
+      "o2",
+      "o3",
+      "o4"
+     ],
+     "side": [
+      66,
+      66,
+      65,
+      66
+     ],
+     "source": [
+      "live_log",
+      "live_log",
+      "live_log",
+      "live_log"
+     ],
+     "ts_cancel": [
+      null,
+      1767261630000000000,
+      null,
+      null
+     ],
+     "ts_submit": [
+      1767261600000000000,
+      1767261601000000000,
+      1767261602000000000,
+      1767261603000000000
+     ]
+    },
+    "schema": "shadow_id: string not null\ninstrument_id: uint32 not null\nside: uint8 not null\nprice_mode: dictionary<values=string, indices=int8, ordered=0> not null\nprice: int64\noffset_ticks: int32 not null\nqty: uint64 not null\nts_submit: timestamp[ns, tz=UTC] not null\nlatency_ns: int64 not null\nts_cancel: timestamp[ns, tz=UTC]\ngroup: string\nsource: dictionary<values=string, indices=int8, ordered=0> not null\norder_key: string\n-- schema metadata --\nqt.schema: 'qt.shadow_spec'\nqt.schema_version: '1.1'\nqt.engine_version: '0.3.0'"
+   },
+   "sent": [
+    [
+     {
+      "group": null,
+      "instrument_id": 1,
+      "latency_ns": 0,
+      "offset_ticks": 0,
+      "order_key": "o1",
+      "price": 100000000000,
+      "price_mode": "abs",
+      "qty": 10,
+      "shadow_id": "o1",
+      "side": 66,
+      "source": "live_log",
+      "ts_cancel": null,
+      "ts_submit": 1767261600000000000
+     },
+     {
+      "group": null,
+      "instrument_id": 1,
+      "latency_ns": 0,
+      "offset_ticks": 0,
+      "order_key": "o2",
+      "price": 100000000000,
+      "price_mode": "abs",
+      "qty": 10,
+      "shadow_id": "o2",
+      "side": 66,
+      "source": "live_log",
+      "ts_cancel": 1767261630000000000,
+      "ts_submit": 1767261601000000000
+     },
+     {
+      "group": null,
+      "instrument_id": 1,
+      "latency_ns": 0,
+      "offset_ticks": 0,
+      "order_key": "o3",
+      "price": 100010000000,
+      "price_mode": "abs",
+      "qty": 5,
+      "shadow_id": "o3",
+      "side": 65,
+      "source": "live_log",
+      "ts_cancel": null,
+      "ts_submit": 1767261602000000000
+     },
+     {
+      "group": null,
+      "instrument_id": 1,
+      "latency_ns": 0,
+      "offset_ticks": 0,
+      "order_key": "o4",
+      "price": 100000000000,
+      "price_mode": "abs",
+      "qty": 3,
+      "shadow_id": "o4",
+      "side": 66,
+      "source": "live_log",
+      "ts_cancel": null,
+      "ts_submit": 1767261603000000000
+     }
+    ]
+   ]
+  },
+  "live": {
+   "schedule": {
+    "columns": {
+     "group": [
+      null,
+      null,
+      null,
+      null
+     ],
+     "instrument_id": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "latency_ns": [
+      0,
+      0,
+      0,
+      0
+     ],
+     "offset_ticks": [
+      0,
+      0,
+      0,
+      0
+     ],
+     "order_key": [
+      "o1",
+      "o2",
+      "o3",
+      "o4"
+     ],
+     "price": [
+      100000000000,
+      100000000000,
+      100010000000,
+      100000000000
+     ],
+     "price_mode": [
+      "abs",
+      "abs",
+      "abs",
+      "abs"
+     ],
+     "qty": [
+      10,
+      10,
+      5,
+      3
+     ],
+     "shadow_id": [
+      "o1",
+      "o2",
+      "o3",
+      "o4"
+     ],
+     "side": [
+      66,
+      66,
+      65,
+      66
+     ],
+     "source": [
+      "live_log",
+      "live_log",
+      "live_log",
+      "live_log"
+     ],
+     "ts_cancel": [
+      null,
+      1767261630000000000,
+      null,
+      null
+     ],
+     "ts_submit": [
+      1767261600000000000,
+      1767261601000000000,
+      1767261602000000000,
+      1767261603000000000
+     ]
+    },
+    "schema": "shadow_id: string not null\ninstrument_id: uint32 not null\nside: uint8 not null\nprice_mode: dictionary<values=string, indices=int8, ordered=0> not null\nprice: int64\noffset_ticks: int32 not null\nqty: uint64 not null\nts_submit: timestamp[ns, tz=UTC] not null\nlatency_ns: int64 not null\nts_cancel: timestamp[ns, tz=UTC]\ngroup: string\nsource: dictionary<values=string, indices=int8, ordered=0> not null\norder_key: string\n-- schema metadata --\nqt.schema: 'qt.shadow_spec'\nqt.schema_version: '1.1'\nqt.engine_version: '0.3.0'"
+   },
+   "sent": [
+    [
+     {
+      "group": null,
+      "instrument_id": 1,
+      "latency_ns": 0,
+      "offset_ticks": 0,
+      "order_key": "o1",
+      "price": 100000000000,
+      "price_mode": "abs",
+      "qty": 10,
+      "shadow_id": "o1",
+      "side": 66,
+      "source": "live_log",
+      "ts_cancel": null,
+      "ts_submit": 1767261600000000000
+     },
+     {
+      "group": null,
+      "instrument_id": 1,
+      "latency_ns": 0,
+      "offset_ticks": 0,
+      "order_key": "o2",
+      "price": 100000000000,
+      "price_mode": "abs",
+      "qty": 10,
+      "shadow_id": "o2",
+      "side": 66,
+      "source": "live_log",
+      "ts_cancel": 1767261630000000000,
+      "ts_submit": 1767261601000000000
+     },
+     {
+      "group": null,
+      "instrument_id": 1,
+      "latency_ns": 0,
+      "offset_ticks": 0,
+      "order_key": "o3",
+      "price": 100010000000,
+      "price_mode": "abs",
+      "qty": 5,
+      "shadow_id": "o3",
+      "side": 65,
+      "source": "live_log",
+      "ts_cancel": null,
+      "ts_submit": 1767261602000000000
+     },
+     {
+      "group": null,
+      "instrument_id": 1,
+      "latency_ns": 0,
+      "offset_ticks": 0,
+      "order_key": "o4",
+      "price": 100000000000,
+      "price_mode": "abs",
+      "qty": 3,
+      "shadow_id": "o4",
+      "side": 66,
+      "source": "live_log",
+      "ts_cancel": null,
+      "ts_submit": 1767261603000000000
+     }
+    ]
+   ]
+  }
  }
 }
