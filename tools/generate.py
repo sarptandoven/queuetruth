@@ -13,7 +13,8 @@ The steps, in order (a later step reads what an earlier one writes):
 
 1. importers: the importer registry -> `LiveImportSpec.venue` values and the CLI's live-import rules
 2. schemas: JSON Schemas, Arrow schemas, samples, run id known answers and the Rust `LiveVenue`
-3. rust-specs: the Rust spec structs (`crates/schema/src/specs_gen.rs`) from the JSON Schemas and samples
+3. rust-specs: the Rust spec and document structs (`crates/schema/src/specs_gen.rs`, `json_gen.rs`) from the JSON
+   Schemas and samples
 4. openapi: service/openapi.json
 5. python-commands: the clap rows of the Python-only command groups
 6. extension: rebuilds `queuetruth._core` (`make develop`) when a step above changed a Rust file; the steps
@@ -93,9 +94,9 @@ STEPS: tuple[Step, ...] = (
     ),
     Step(
         "rust-specs",
-        "Rust spec structs from the JSON Schemas, crates/schema/src/specs_gen.rs",
+        "Rust spec and document structs from the JSON Schemas (crates/schema/src/specs_gen.rs, json_gen.rs)",
         _py("scripts/gen_rust_specs.py"),
-        ("crates/schema/src/specs_gen.rs",),
+        ("crates/schema/src/specs_gen.rs", "crates/schema/src/json_gen.rs"),
     ),
     Step(
         "openapi",
