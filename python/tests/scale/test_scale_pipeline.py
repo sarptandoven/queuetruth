@@ -405,6 +405,28 @@ def test_two_day_pipeline_reduce_and_combine(tmp_path) -> None:
         parts = r["pnl_grant_ticks_value"] + r["pnl_deny_ticks_value"] + r["pnl_timing_ticks_value"]
         assert r["pnl_bias_ticks_value"] == pytest.approx(parts, abs=1e-9)
 
+    # touch tables for bar backtests: every unit computed them and the atlas pools the day cells
+    import atlas_touch as AT
+
+    assert man["touch_days"] == ["01022020", "01032020"] and res["touch_days"] == 2
+    for d in day_dirs:
+        dm = json.loads((d / "day_manifest.json").read_text())
+        assert dm["touch"]["units_with_touch"] == dm["units_valid"] and dm["touch"]["errors"] == []
+    tcells = pa.concat_tables([pq.read_table(d / AT.CELLS) for d in day_dirs])
+    assert set(tcells.column("symbol").to_pylist()) == set(SYMS)
+    for r in pq.read_table(tmp_path / "atlas" / AT.TABLE).to_pylist():
+        if r["tier"] != "ALL" or r["side"] != "all":
+            continue
+        sel = tcells.filter(
+            pc.and_(pc.equal(tcells["shadow_pop"], r["shadow_pop"]), pc.equal(tcells["bar_s"], r["bar_s"]))
+        )
+        sel = sel.filter(pc.equal(sel["rule"], r["rule"]))
+        s = {f: pc.sum(sel[f]).as_py() for f in AT.SUMS}
+        assert r["n"] == s["n"] > 0 and r["n_dates"] == 2 and r["n_symbols"] == 5
+        assert r["rule_fill_rate_value"] == pytest.approx(s["n_rule"] / s["n"], abs=1e-12)
+        if r["rule"] == "touch":  # a real fill comes with a print at the limit, unless the book crossed it
+            assert s["n_real_rule"] >= 0.9 * s["n_real"]
+
     # ... and a unit's P&L is what `zoo-toxicity` reports on the unit's own dataset, shadows and zoo run
     from unit import _zoo_native
 
@@ -447,6 +469,11 @@ def test_two_day_pipeline_reduce_and_combine(tmp_path) -> None:
             "--fixed-n", "30", "--populations", "standard", "--modes", "faithful", "--unit-core-s", "1e9",
             "--no-pnl"])  # fmt: skip
     assert all("pnl_horizons_ns" not in x for x in json.loads((tmp_path / "nopnl.json").read_text())["units"])
+    # and without touch tables (`--no-touch`) likewise
+    P.main(["--split", str(tmp_path / "split" / date), "--out", str(tmp_path / "notouch.json"), "--quota-rule",
+            "fixed", "--fixed-n", "30", "--populations", "standard", "--modes", "faithful", "--unit-core-s", "1e9",
+            "--no-touch"])  # fmt: skip
+    assert all("touch" not in x for x in json.loads((tmp_path / "notouch.json").read_text())["units"])
 
 
 def test_session_hours_and_tiers() -> None:

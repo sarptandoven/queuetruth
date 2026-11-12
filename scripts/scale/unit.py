@@ -25,7 +25,11 @@ and seed. The unit:
    as `zoo-toxicity` replays) and per mode `queuetruth.eval.toxicity.evaluate_toxicity` over the zoo's predictions and
    fill rows (fill window `h_max_ns`, markouts at `pnl_horizons_ns`), its per-shadow PnL terms summed with
    `blocks.pnl_block_stats`; leaf `pnl` holds per population and mode the evaluated shadows, the exclusions and
-   warnings, or the error when the step raised (the unit still completes);
+   warnings, or the error when the step raised (the unit still completes). With `touch` in the spec (`plan.py`
+   unless `--no-touch`), one more exact replay of every population's shadows resting until the session close, and
+   per (population, symbol-day, side, bar length, rule) what a bar backtester's touch rule says against the real
+   queue (`atlas_touch.unit_touch`, docs/concepts/touch-tables.md): `touch_stats.parquet`, leaf `touch` (counts, or
+   the error when the step raised; the unit still completes);
 5. writes `block_stats.parquet`, `shadows.parquet`, `exact.parquet`, `predictions_sample.parquet` (and
    `pnl_stats.parquet` with `pnl_horizons_ns`) and `shard_manifest.json`. The manifest's `leaf` (unit spec hash, input
    hashes, shadow-file hashes, zoo run ids, content digests of the outputs, exactness and zoo-abort counts) is what the
@@ -50,6 +54,7 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
+import atlas_touch as AT  # noqa: E402
 import common as K  # noqa: E402
 import symbol_exactness as SE  # noqa: E402
 
@@ -91,6 +96,7 @@ OUTPUT_KEYS = {
     "exact": ["mode", "shadow_pop", "model_id", "horizon_ns", "symbol", "session_date"],
     "predictions_sample": ["mode", "shadow_pop", "model_id", "shadow_id", "horizon_ns"],
     "pnl_stats": PNL_STAT_KEYS,
+    "touch_stats": AT.KEYS,
 }
 
 
@@ -253,6 +259,8 @@ def run_unit(unit: dict[str, Any], split: Path, out: Path, threads: int = 1, wor
         pnl_leaf: dict[str, Any] = {}
         pnl_h = [int(x) for x in unit.get("pnl_horizons_ns") or []]
         n_shadows = 0
+        touch_spec = unit.get("touch")
+        touch_sh: dict[str, Path] = {}
         h_max = int(unit.get("h_max_ns", K.H_MAX_NS))
         bm = int(unit.get("block_minutes", 30))
         for pop, spec in unit["populations"].items():
@@ -377,7 +385,25 @@ def run_unit(unit: dict[str, Any], split: Path, out: Path, threads: int = 1, wor
                         pnl_leaf[f"{pop}/{mode}"] = {"error": f"{type(e).__name__}: {e}"}
                     tel.step(f"pnl_{mode}", t0, c0)
                 shutil.rmtree(zout, ignore_errors=True)
-            sh.unlink(missing_ok=True)
+            if touch_spec:
+                touch_sh[pop] = sh  # replayed again below, every population at once
+            else:
+                sh.unlink(missing_ok=True)
+
+        touch_t, touch_leaf = None, {}
+        if touch_spec:
+            t0, c0 = time.perf_counter(), time.process_time()
+            touch_t = AT.empty_stats()
+            try:
+                if touch_sh:
+                    touch_t, touch_leaf = AT.unit_touch(
+                        ds, touch_sh, wd, touch_spec, seed=unit["seed"], threads=threads, symbols=loc2sym
+                    )
+            except Exception as e:  # the fill statistics stand; the gap is recorded
+                print(f"{unit['unit_id']}: touch tables failed: {e!r}", file=sys.stderr)
+                touch_leaf = {"error": f"{type(e).__name__}: {e}"}
+            shutil.rmtree(wd / "touch-replay", ignore_errors=True)
+            tel.step("touch", t0, c0)
 
         t0, c0 = time.perf_counter(), time.process_time()
         tables = {
@@ -388,6 +414,8 @@ def run_unit(unit: dict[str, Any], split: Path, out: Path, threads: int = 1, wor
         }
         if pnl_h:  # a unit without P&L horizons writes what it always wrote, so its leaf is unchanged
             tables["pnl_stats"] = (B.concat(pnl_stats), OUTPUT_KEYS["pnl_stats"])
+        if touch_t is not None:  # likewise: a unit without `touch` writes and hashes what it did before
+            tables["touch_stats"] = (touch_t, OUTPUT_KEYS["touch_stats"])
         outputs, files = {}, {}
         for name, (t, keys) in tables.items():
             p = out / f"{name}.parquet"
@@ -414,6 +442,8 @@ def run_unit(unit: dict[str, Any], split: Path, out: Path, threads: int = 1, wor
             leaf["exactness_by_symbol"] = by_symbol
         if pnl_h:
             leaf["pnl"] = pnl_leaf
+        if touch_spec:
+            leaf["touch"] = touch_leaf
         manifest = {
             "schema": SHARD_SCHEMA,
             "schema_version": 1,

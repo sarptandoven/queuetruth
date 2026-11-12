@@ -56,6 +56,7 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
+import atlas_touch as AT  # noqa: E402
 import common as K  # noqa: E402
 
 PLAN_SCHEMA = "qt.scale.plan"
@@ -217,6 +218,8 @@ def make_plan(a: argparse.Namespace) -> dict[str, Any]:
     }
     if a.pnl:  # absent without P&L, so such a plan's units and run id are what they were before P&L existed
         run_spec["pnl_horizons_ns"] = list(K.PNL_HORIZONS_NS)
+    if a.touch:  # likewise: without touch tables a plan's units and run id are what they were before
+        run_spec["touch"] = AT.DEFAULT_SPEC
     sources, universe, exclusions, units = [], [], [], []
     symbol_sample: dict[str, dict[str, Any]] = {}
     if (a.sample_budget_core_h is not None or a.sample_per_tier is not None) and len(a.split) != 1:
@@ -396,6 +399,12 @@ def main(argv: list[str] | None = None) -> int:
         dest="pnl",
         action="store_false",
         help="leave out the P&L error (units then skip the exact replay with quotes and `evaluate_toxicity`)",
+    )
+    ap.add_argument(
+        "--no-touch",
+        dest="touch",
+        action="store_false",
+        help="leave out the touch tables for bar backtests (units then skip their day-long exact replay)",
     )
     ap.add_argument(
         "--sample-budget-core-h",
