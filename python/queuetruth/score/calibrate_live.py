@@ -164,14 +164,40 @@ def _smooth_n(family: str, particles: int) -> int:
     return 1
 
 
+def _core_call(name: str, *args: Any) -> Any:
+    """`queuetruth._core.<name>(*args)` with its errors as `QtError`."""
+    from queuetruth import _core as core
+
+    try:
+        return getattr(core, name)(*args)
+    except core.QtCoreError as e:
+        raise QtError(str(e.args[0]), str(e.args[1])) from None
+
+
 def interval_loglik(p_by_h: np.ndarray, k: int, delta: int, n_smooth: int) -> float:
-    """C2 log-likelihood of one order: `p_by_h` = model P(fill by tau_j), j = 1..J; truth interval `k` (1-based)."""
-    s = (np.clip(1.0 - p_by_h, 0.0, 1.0) * n_smooth + 0.5) / (n_smooth + 1)
-    prev = np.concatenate([[1.0], s[:-1]])
-    h = np.clip(1.0 - s / prev, 1e-12, 1 - 1e-12)
-    ll = float(np.sum(np.log(1.0 - h[: k - 1])))
-    ll += math.log(h[k - 1]) if delta else math.log(1.0 - h[k - 1])
-    return ll
+    """C2 log-likelihood of one order: `p_by_h` = model P(fill by tau_j), j = 1..J; truth interval `k` (1-based).
+    Computed in Rust (`qt_calib::live::interval_loglik`)."""
+    p = np.ascontiguousarray(p_by_h, dtype=np.float64)
+    return float(_core_call("calib_interval_loglik", p.tobytes(), int(k), bool(delta), int(n_smooth)))
+
+
+def loglik_matrix(p: np.ndarray, present: np.ndarray, k: list[int], delta: list[int], n_smooth: int) -> np.ndarray:
+    """The grid search's order-by-grid log-likelihood matrix: `p` (orders x grid x J, NaN-free) fill probabilities,
+    `present` (orders x grid) whether the model predicted that order, `k`/`delta` each order's truth interval; a cell
+    without a prediction scores 0. Computed in Rust (`qt_calib::live::loglik_matrix`)."""
+    n_orders, n_grid = present.shape
+    p = np.ascontiguousarray(p, dtype=np.float64)
+    out = _core_call(
+        "calib_live_loglik_matrix",
+        p.tobytes(),
+        [bool(x) for x in present.reshape(-1)],
+        n_orders,
+        n_grid,
+        [int(x) for x in k],
+        [bool(x) for x in delta],
+        int(n_smooth),
+    )
+    return np.frombuffer(out, dtype=np.float64).reshape(n_orders, n_grid).copy()
 
 
 def _truth_interval(t_fill: int | None, t_censor: int, taus: list[int]) -> tuple[int, int] | None:
@@ -489,12 +515,17 @@ def calibrate_live(
 
     nsm = _smooth_n(fam, s.particles)
     usable = [k for k in train if truth[k]["interval"] is not None]
-    L = np.zeros((len(usable), len(grid_pts)))
+    P = np.zeros((len(usable), len(grid_pts), len(taus)))
+    present = np.zeros((len(usable), len(grid_pts)), dtype=bool)
     for i, k in enumerate(usable):
-        kk, delta = truth[k]["interval"]
         for g, (_, v) in enumerate(grid_pts):
             p = pvec(v, truth[k]["sid"])
-            L[i, g] = interval_loglik(np.nan_to_num(p, nan=0.0), kk, delta, nsm) if p is not None else 0.0
+            if p is not None:
+                P[i, g] = np.nan_to_num(p, nan=0.0)
+                present[i, g] = True
+    L = loglik_matrix(
+        P, present, [truth[k]["interval"][0] for k in usable], [truth[k]["interval"][1] for k in usable], nsm
+    )
     if not usable:
         raise QtError("QT-DATA-001", "calibrate-live: no train order with an observed interval")
     n_filled_train = sum(1 for k in usable if truth[k]["interval"][1] == 1)
