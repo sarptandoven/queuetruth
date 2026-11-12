@@ -67,7 +67,8 @@
           "n": 1,
           "ci_method": "cluster_bootstrap"
         }
-      }
+      },
+      "backtester": "nautilus"
     },
     "models": [
       {

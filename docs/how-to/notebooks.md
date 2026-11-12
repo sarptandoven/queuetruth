@@ -55,6 +55,10 @@ The stored outputs used an ingest of the same days from the order-level CSVs of 
 the dataset these three commands build (run on four-symbol extracts of the two files) gives the same exact fill
 rates, bias table, McNemar counts and fitted `p` to the printed digit.
 
+Since 0.4.0 one command builds the same dataset (the same partition files and `dataset_id`) from the two files:
+`queuetruth data add 12302019.NASDAQ_ITCH50.gz 01302020.NASDAQ_ITCH50.gz --symbols AAPL,MSFT,SPY,TSLA --out
+nasdaq-2d` ([Add order-level data](add-data.md)).
+
 ## Load run outputs as DataFrames
 
 Every queuetruth command writes a summary document and Parquet tables. `queuetruth.frames` reads them into pandas

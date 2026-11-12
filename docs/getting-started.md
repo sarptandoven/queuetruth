@@ -275,6 +275,9 @@ test "$rc" -eq 1
 
 ## Next
 
+- Your own data: `queuetruth data add FILES --out DATASET` ingests order-level files with the format, venue and date
+  read from them, and `queuetruth data fetch iex --date YYYY-MM-DD --symbols AAPL,MSFT` fetches a free IEX day
+  ([Add order-level data](how-to/add-data.md)). Every command above then takes `--data DATASET` in place of `synth`.
 - [A real day from free IEX data](how-to/iex-public-demo.md): the same analysis on a public order-level day.
 - [Check my backtester](index.md#check-my-backtester): the guide for your framework.
 - [Exact FIFO truth](concepts/exact-truth.md): what "exact" means here and where it stops.

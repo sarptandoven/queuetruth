@@ -646,7 +646,7 @@ def test_v1_1_documents_accept_v0_1() -> None:
                 "ttf_survival",
             ],
         ),
-        ("qt.dataset_manifest", ["rule_set", "source_vintage"]),
+        ("qt.dataset_manifest", ["rule_set", "source_vintage", "attribution"]),
         (
             "qt.live_import_summary",
             ["coverage", "entry_fallback_share", "unmapped_instruments", "instrument_scales"],

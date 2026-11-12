@@ -114,6 +114,9 @@ section below is the command's own `--help` text.
 | [`queuetruth verify`](#queuetruth-verify) | verify a published result: the Fill-Realism Atlas |
 | [`queuetruth verify atlas`](#queuetruth-verify-atlas) | check the published atlas: file hashes, the atlas root, a day's proofs, and re-run one unit |
 | [`queuetruth check`](#queuetruth-check) | how wrong a backtest is: its own limit orders replayed in the real queue |
+| [`queuetruth data`](#queuetruth-data) | bring order-level data in: add files to a dataset, or fetch a free IEX day |
+| [`queuetruth data add`](#queuetruth-data-add) | ingest order-level files into one dataset, format, venue and date inferred |
+| [`queuetruth data fetch`](#queuetruth-data-fetch) | fetch a free public day into a dataset (iex: IEX DEEP+) |
 | [`queuetruth fit`](#queuetruth-fit) | the parameter that fixes your backtester's fill model, with its verdict |
 
 ## queuetruth ingest
@@ -1461,7 +1464,7 @@ Options:
 ## queuetruth demo
 
 ```text
-Fetch a small public order-level subset (the first minutes of a Nasdaq TotalView-ITCH or IEX DEEP+ day), place simulated resting orders in the real queue, and show how often NautilusTrader's default fill model fills them compared with the exact replay, by horizon, with base rates. Writes <out>/demo.html and <out>/demo.json.
+Fetch a small public order-level subset (the first minutes of a Nasdaq TotalView-ITCH or IEX DEEP+ day), place simulated resting orders in the real queue, and show how often your backtester's default fill model (NautilusTrader unless --backtester says otherwise) fills them compared with the exact replay, by horizon, with base rates. Writes <out>/demo.html and <out>/demo.json.
 
 Usage: queuetruth demo [OPTIONS]
 
@@ -1477,6 +1480,11 @@ Options:
 
       --n <N>
           simulated orders (default 3000)
+
+      --backtester <backtester>
+          the library the answer is about, at its default setting (default nautilus)
+          
+          [possible values: nautilus, hftbacktest, databento]
 
       --models <MODELS>
           comma-separated zoo model ids, or all (default: nt_prob_touch[p=1], nt_queue_l2, hbt_power3[n=2], hbt_risk_adverse, databento_mc[k=-0.8;particles=100], front_of_queue, trade_through_only)
@@ -2694,6 +2702,162 @@ Options:
 
       --html
           also write a self-contained report to <out>/check.html
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+      --log-level <log_level>
+          stderr log level (default warn)
+          
+          [possible values: error, warn, info, debug]
+
+      --output-format <human|json>
+          output format (also --format human|json)
+          
+          [possible values: human, json]
+
+      --quiet
+          no progress or warnings on stderr
+
+      --seed <seed>
+          random seed (default 0)
+
+      --threads <threads>
+          worker threads (outputs do not depend on it; default 1)
+
+      --verbose
+          human output: every summary field after the answer; every warning and note on stderr
+```
+
+## queuetruth data
+
+```text
+Bring order-level data in: add files (format, venue and date inferred, days merged, quality checked) or fetch a free IEX DEEP+ day.
+
+Usage: queuetruth data [OPTIONS] <COMMAND>
+
+Commands:
+  add    ingest order-level files into one dataset, format, venue and date inferred
+  fetch  fetch a free public day into a dataset (iex: IEX DEEP+)
+  help   Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help
+          Print help (see a summary with '-h')
+
+      --log-level <log_level>
+          stderr log level (default warn)
+          
+          [possible values: error, warn, info, debug]
+
+      --output-format <human|json>
+          output format (also --format human|json)
+          
+          [possible values: human, json]
+
+      --quiet
+          no progress or warnings on stderr
+
+      --seed <seed>
+          random seed (default 0)
+
+      --threads <threads>
+          worker threads (outputs do not depend on it; default 1)
+
+      --verbose
+          human output: every summary field after the answer; every warning and note on stderr
+```
+
+## queuetruth data add
+
+```text
+Ingests one or more order-level files (ITCH, IEX DEEP+, DBN, NYSE TAQ Integrated Feed, the crypto captures, Tardis L2) into one dataset: the format, venue and session date are read from the files, several days are merged, and the data-quality checks run. An existing dataset at --out gains the new days.
+
+Usage: queuetruth data add [OPTIONS] --out <DIR> <FILE>...
+
+Arguments:
+  <FILE>...
+          order-level files or capture directories
+
+Options:
+      --out <DIR>
+          the dataset directory (created, or added to)
+
+      --input-format <input-format>
+          source format, when it cannot be read from the files
+          
+          [possible values: itch, dbn, etcsv, parquet, bitstamp, bitfinex, coinbase, coinbase-level3, kraken-l3, hyperliquid-node, tardis-l2, iex-deep-plus, nyse-ibf]
+
+      --venue <VENUE>
+          venue rule set, when the format does not decide it (nasdaq, cme, generic, ...)
+
+      --date <YYYY-MM-DD>
+          session date, when neither the name nor a manifest gives it
+
+      --symbols <S,S>
+          keep only these symbols (comma separated)
+
+      --json
+          print the full summary as JSON (as --format json)
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+      --log-level <log_level>
+          stderr log level (default warn)
+          
+          [possible values: error, warn, info, debug]
+
+      --output-format <human|json>
+          output format (also --format human|json)
+          
+          [possible values: human, json]
+
+      --quiet
+          no progress or warnings on stderr
+
+      --seed <seed>
+          random seed (default 0)
+
+      --threads <threads>
+          worker threads (outputs do not depend on it; default 1)
+
+      --verbose
+          human output: every summary field after the answer; every warning and note on stderr
+```
+
+## queuetruth data fetch
+
+```text
+Streams a free public order-level day (iex: IEX DEEP+ from IEX's public bucket) after you agree, keeps only the symbols you ask for and adds them to a dataset, with IEX's attribution in its manifest. The day's file (several GB) is never stored.
+
+Usage: queuetruth data fetch [OPTIONS] --date <YYYY-MM-DD> --symbols <S,S> <SOURCE>
+
+Arguments:
+  <SOURCE>
+          the public source: iex
+
+Options:
+      --date <YYYY-MM-DD>
+          the trading day
+
+      --symbols <S,S>
+          symbols to keep (comma separated)
+
+      --out <DIR>
+          the dataset directory (default iex-<date>; an existing one gains the day)
+
+  -y, --yes
+          download without asking
+
+      --dry-run
+          show what would be downloaded and where, then stop
+
+      --url <URL>
+          stream this URL instead of IEX's bucket (a mirror of the day's file)
+
+      --json
+          print the full summary as JSON (as --format json)
 
   -h, --help
           Print help (see a summary with '-h')
