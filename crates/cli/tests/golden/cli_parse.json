@@ -5018,5 +5018,95 @@
       },
       "implementation": "python"
     }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "fit",
+      "--backtester",
+      "nautilus",
+      "--data",
+      "synth",
+      "--shadows",
+      "qt-shadows.parquet",
+      "--family",
+      "nt-prob-touch",
+      "--split",
+      "70%",
+      "--out",
+      "qt-fit",
+      "--n-shadows",
+      "500",
+      "--json"
+    ],
+    "command": {
+      "path": [
+        "fit"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "backtester": "nautilus",
+          "data": "synth",
+          "shadows": "qt-shadows.parquet",
+          "family": "nt_prob_touch",
+          "split": "70%",
+          "out": "qt-fit",
+          "n_shadows": 500,
+          "json": true
+        }
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "fit",
+      "--backtester",
+      "hftbacktest",
+      "--live",
+      "live",
+      "--data",
+      "tape",
+      "--family",
+      "power3",
+      "--test-after",
+      "09:42",
+      "--train",
+      "2026-06-15",
+      "--test",
+      "blocks:4/5"
+    ],
+    "command": {
+      "path": [
+        "fit"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "backtester": "hftbacktest",
+          "data": "tape",
+          "live": "live",
+          "family": "power3",
+          "test_after": "09:42",
+          "train": "2026-06-15",
+          "test": "blocks:4/5"
+        }
+      },
+      "implementation": "python"
+    }
   }
 ]
