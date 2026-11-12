@@ -26,7 +26,16 @@ from typing import Any
 
 from queuetruth.live._common import Record, as_bool, dec, dec_text, dsub, epoch_ns, text_or_none
 from queuetruth.live.builder import ImportResult, LogBuilder
-from queuetruth.live.importers._base import ImportOptions, json_records, new_builder, obj_field, side_of, sub_records
+from queuetruth.live.importers._base import (
+    ImporterDef,
+    ImporterOptions,
+    ImportOptions,
+    json_records,
+    new_builder,
+    obj_field,
+    side_of,
+    sub_records,
+)
 
 VENUE = "hyperliquid"
 FILLS_CAP = 2000
@@ -264,3 +273,18 @@ def _prealias(
         b.alias_oid(h, new_oid)
         new_oids.add(new_oid)
     return frozenset(new_oids)
+
+
+# ---- registry entry (queuetruth.live.importers.registry()) ------------------------------------------------------
+
+IMPORTER = ImporterDef(
+    name="hyperliquid",
+    kind="venue",
+    run=import_hyperliquid,
+    options=ImporterOptions,
+    formats=("WebSocket userFills and orderUpdates (JSON lines)", "info userFills and historicalOrders JSON"),
+    patterns=("*.jsonl", "*.json"),
+    description="Hyperliquid: orders and fills of your own account",
+    docs="how-to/import-live-logs.md#hyperliquid",
+    rank=70,
+)

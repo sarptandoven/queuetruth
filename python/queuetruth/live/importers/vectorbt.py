@@ -36,12 +36,14 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+from pydantic import Field
+
 from queuetruth.errors import QtError
 from queuetruth.live._common import Record, dump_raw, epoch_ns, input_error, read_csv_rows, read_json_records, read_text
 from queuetruth.live.builder import ImportResult
-from queuetruth.live.importers._base import ImportOptions
+from queuetruth.live.importers._base import ImporterDef, ImportOptions, Text
 from queuetruth.live.importers.backtest import (
-    COMMON_OPTIONS,
+    BacktestOptions,
     SimFill,
     SimOrder,
     SimRun,
@@ -60,7 +62,16 @@ from queuetruth.live.importers.freqtrade import ReconcileReport, check_options, 
 VBT_SIM = "sim:vectorbt"
 #: VectorBT release the format notes were read from.
 VECTORBT_VERSION = "0.28.1"
-VBT_OPTIONS = COMMON_OPTIONS | {"column", "order_type"}
+
+
+class VectorbtOptions(BacktestOptions):
+    """`BacktestOptions` and the VectorBT ones."""
+
+    column: Text = Field(None, description="the one column label to read (a sweep has several)")
+    order_type: Text = Field(None, description="market (default) or limit: the order type of the records")
+
+
+VBT_OPTIONS = VectorbtOptions.option_names()
 _NS = 1_000_000_000
 _ORDER_COLS = ("Order Id", "Column", "Timestamp", "Size", "Price", "Fees", "Side")
 _TRADE_IDS = ("Exit Trade Id", "Entry Trade Id", "Trade Id", "Position Id")
@@ -384,3 +395,17 @@ __all__ = [
     "read_vectorbt",
     "reconcile_vectorbt",
 ]
+
+# ---- registry entry (queuetruth.live.importers.registry()) ------------------------------------------------------
+
+IMPORTER = ImporterDef(
+    name="vectorbt",
+    kind="sim",
+    run=import_vectorbt_sim,
+    options=VectorbtOptions,
+    formats=("Portfolio order or trade records (records_readable as CSV or JSON)",),
+    patterns=("*.csv", "*.json"),
+    description="VectorBT portfolio: order or trade records (log venue sim:vectorbt)",
+    docs="how-to/reconcile-backtrader-vectorbt.md#vectorbt-export-the-order-records",
+    rank=170,
+)

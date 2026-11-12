@@ -24,7 +24,15 @@ from typing import Any
 
 from queuetruth.live._common import Record, as_bool, dec, dec_text, epoch_ns, text_or_none
 from queuetruth.live.builder import ImportResult, LogBuilder
-from queuetruth.live.importers._base import ImportOptions, json_records, new_builder, side_of, sub_records
+from queuetruth.live.importers._base import (
+    ImporterDef,
+    ImporterOptions,
+    ImportOptions,
+    json_records,
+    new_builder,
+    side_of,
+    sub_records,
+)
 
 VENUE = "bybit"
 _TIF = {"GTC": "gtc", "IOC": "ioc", "FOK": "fok", "POSTONLY": "post_only", "RPI": "post_only"}
@@ -215,3 +223,18 @@ def import_bybit(paths: list[str], opts: ImportOptions) -> ImportResult:
             else:
                 b.skip("unrecognised record")
     return b.finish()
+
+
+# ---- registry entry (queuetruth.live.importers.registry()) ------------------------------------------------------
+
+IMPORTER = ImporterDef(
+    name="bybit",
+    kind="venue",
+    run=import_bybit,
+    options=ImporterOptions,
+    formats=("private WebSocket order and execution topics (JSON lines)", "REST execution/list and order/history JSON"),
+    patterns=("*.jsonl", "*.json"),
+    description="Bybit v5: orders and fills of your own account",
+    docs="how-to/import-live-logs.md#bybit",
+    rank=20,
+)

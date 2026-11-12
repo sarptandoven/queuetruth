@@ -21,6 +21,25 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   1 s and 10 s, and the latency measured on the live log; then the orders that differ. It writes `orders.csv`
   (symbols, decimal prices, venue-local times), `compare.json` and, with `--html`, `compare.html`. `reconcile` and
   `score` are unchanged.
+- **One registry of importers; a new live venue is one Python file** (docs/reference/importers.md). Each venue,
+  simulator and trading-bot importer declares an `ImporterDef` next to its code (name, kind `venue` / `sim` / `bot`,
+  a typed Pydantic options model with `account` and the instrument map inherited, the formats and file patterns it
+  reads, a one-line description, its docs page), and `queuetruth.live.importers.registry()` collects them. Third
+  parties add importers through the `queuetruth.importers` entry-point group; `live import --venue NAME`,
+  `queuetruth.import_live` and `queuetruth.live.import_venue` run them with no queuetruth edit. Every consumer reads
+  the registry: the `live import --venue` choices and its `--fix-*` and `--option` rules, `LiveImportSpec.venue` and
+  its JSON Schema enum, the Rust `LiveVenue`, `queuetruth.live` (`SIM_VENUES`, `BOT_VENUES`, `TZ_VENUES`), the new
+  `live_venues` field of the service's `qt.meta`, and the generated importer table. `VENUE_IMPORTERS`,
+  `SIM_IMPORTERS` and `BOT_IMPORTERS` stay as read-only views. Importer options are checked against the importer's
+  model at the API and CLI boundary: an unknown or mistyped option fails `QT-CONFIG-001` with the importer's known
+  options (the hftbacktest and NautilusTrader importers used to ignore unknown options). Values pass to the importer
+  as given, so every accepted option behaves as before. `live import --option` now also works for `ibkr-flex`
+  (`flex_date_order`), the one venue importer with an option of its own.
+- **`make generate` and `make generate-check`** (`tools/generate.py`). One command regenerates every generated file
+  in dependency order: the importer registry's files, JSON and Arrow schemas, samples and run id known answers,
+  `service/openapi.json`, the Python command rows, the CLI golden files, the reference pages, the validated page and
+  README status block, the README chart and the synthetic fixtures. The check runs the same generators, lists each
+  stale file with the command that fixes it, and leaves the tree as it was; CI runs it in place of the schema check.
 - **`queuetruth check` without data: an estimate from the atlas touch tables.** `queuetruth check BACKTEST` with no
   `--data` (and `qt.check(backtest)`) now answers for a bar backtest (Freqtrade, Backtrader, VectorBT, LEAN, and
   hftbacktest or NautilusTrader on bars): how many of its resting limit orders' fills were touch-only and how many the
