@@ -181,12 +181,14 @@ def _local(v: Any, tz: str) -> str | None:
 
 
 def _wilson(k: int, n: int) -> tuple[float | None, float | None]:
+    """The 95% Wilson interval (`queuetruth.stats.wilson`, exact 0 and 1 edges); no interval without orders."""
     if n <= 0:
         return None, None
-    from queuetruth.report.compute import wilson
+    from queuetruth.stats import wilson
 
-    lo, hi = wilson(k, n)
-    return float(lo), float(hi)
+    ci = wilson(k, n, edges="exact")
+    assert ci is not None
+    return float(ci[0]), float(ci[1])
 
 
 def _ms(v: Any) -> str:
