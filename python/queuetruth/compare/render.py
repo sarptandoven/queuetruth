@@ -48,7 +48,8 @@ def text(doc: dict[str, Any], orders: list[dict[str, Any]], *, max_rows: int = 1
     path = "paired by its reconciler" if doc["path"] == "reconcile" else "scored as the simulator arm"
     lines = list(doc["lines"])
     lines.append("")
-    lines.append(f"{doc['backtester_label']} backtest against {_live(doc)}, {path}; times in {doc['tz']}.")
+    within = f"; fills count within {doc['window']} of entry" if doc.get("window") else ""
+    lines.append(f"{doc['backtester_label']} backtest against {_live(doc)}, {path}{within}; times in {doc['tz']}.")
     diff = differing(orders)
     if diff:
         lines.append(f"orders that differ ({len(diff)} of {len(orders)}):")

@@ -34,9 +34,8 @@ from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
-from zoneinfo import ZoneInfo
 
-from queuetruth import backtesters
+from queuetruth import backtesters, units
 from queuetruth.compare.detect import BOTS, LiveKind, detect_backtest, detect_live
 from queuetruth.errors import QtError
 from queuetruth.score.lines import pct as _pct
@@ -145,28 +144,40 @@ def _dec(v: Any) -> Decimal | None:
 
 
 def _fixed(v: int | None, exp: int | None) -> str | None:
-    if v is None:
+    """A fixed-point size or quantity as a decimal (`queuetruth.units.format_scaled`); None stays None."""
+    return None if v is None else units.format_scaled(int(v), exp)
+
+
+def _price(v: int | None, exp: int | None) -> str | None:
+    """A fixed-point price as a decimal (`queuetruth.units.format_price`); None stays None."""
+    return None if v is None else units.format_price(int(v), exp)
+
+
+def _epoch_ns(v: Any) -> int | None:
+    """Epoch nanoseconds of a time given as an integer, a timestamp, a datetime or RFC 3339 text."""
+    if v is None or v == "":
         return None
-    d = Decimal(int(v)).scaleb(int(exp or 0)).normalize()
-    return format(d, "f")
+    if isinstance(v, int) and not isinstance(v, bool):
+        return v
+    if hasattr(v, "value") and isinstance(v.value, int):  # pandas.Timestamp keeps nanoseconds
+        return int(v.value)
+    if isinstance(v, dt.datetime):
+        t = v if v.tzinfo else v.replace(tzinfo=dt.UTC)
+    else:
+        try:
+            t = dt.datetime.fromisoformat(str(v).replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        t = t if t.tzinfo else t.replace(tzinfo=dt.UTC)
+    return int(t.timestamp()) * 1_000_000_000 + t.microsecond * 1000
 
 
 def _local(v: Any, tz: str) -> str | None:
-    """A time (epoch ns, datetime or RFC 3339 text) as venue-local `YYYY-MM-DD HH:MM:SS.ffffff`."""
-    if v is None or v == "":
-        return None
-    if isinstance(v, dt.datetime):
-        t = v if v.tzinfo else v.replace(tzinfo=dt.UTC)
-    elif isinstance(v, int):
-        t = dt.datetime.fromtimestamp(v // 1_000_000_000, tz=dt.UTC).replace(microsecond=(v // 1000) % 1_000_000)
-    else:
-        s = str(v).replace("Z", "+00:00")
-        try:
-            t = dt.datetime.fromisoformat(s)
-        except ValueError:
-            return str(v)
-        t = t if t.tzinfo else t.replace(tzinfo=dt.UTC)
-    return t.astimezone(ZoneInfo(tz)).strftime("%Y-%m-%d %H:%M:%S.%f")
+    """A time as venue-local wall time (`queuetruth.units.local_time`; the zone is named in the `tz` column)."""
+    ns = _epoch_ns(v)
+    if ns is None:
+        return None if v in (None, "") else str(v)
+    return units.local_time(ns, tz, named=False)
 
 
 def _wilson(k: int, n: int) -> tuple[float | None, float | None]:
@@ -179,7 +190,8 @@ def _wilson(k: int, n: int) -> tuple[float | None, float | None]:
 
 
 def _ms(v: Any) -> str:
-    return "n/a" if v is None else f"{float(v) / 1e6:.3g} ms"
+    """A measured latency, three significant digits (`queuetruth.units.format_duration`)."""
+    return "n/a" if v is None else units.format_duration(float(v), sig=3)
 
 
 def _prepare_out(out: str | Path | None) -> Path:
@@ -551,7 +563,7 @@ def _reconcile_rows(report: Any, tz: str, gaps: dict[str, float]) -> list[dict[s
             {
                 "order": key,
                 "symbol": r.instrument,
-                "side": r.side,
+                "side": units.side_word(r.side),
                 "qty": r.qty,
                 "backtest_price": r.sim_limit_px,
                 "live_price": r.live_limit_px,
@@ -595,10 +607,10 @@ def _score_rows(run: _Run, tz: str, gaps: dict[str, float]) -> list[dict[str, An
             {
                 "order": k,
                 "symbol": names.get(k),
-                "side": r["side"],
+                "side": units.side_word(r["side"]),
                 "qty": _fixed(r["qty"], se),
-                "backtest_price": _fixed(r["limit_px"], pe),
-                "live_price": _fixed(r["limit_px"], pe),
+                "backtest_price": _price(r["limit_px"], pe),
+                "live_price": _price(r["limit_px"], pe),
                 "placed": _local(r["ts_entry"], tz),
                 "backtest_filled_qty": _fixed(r["sim_filled_qty"], se),
                 "live_filled_qty": _fixed(r["live_filled_qty"], se),
@@ -826,6 +838,7 @@ def compare(
         "path": run.path,
         "data": data_s,
         "window_ns": window_eff,
+        "window": None if window_eff is None else units.format_duration(window_eff),
         "tz": tz,
         "fills": fills,
         "one_sided": one_doc,

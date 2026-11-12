@@ -146,10 +146,10 @@ With `--data` every line has its number:
 83 of the backtest's 101 fills also filled live (82%, 95% CI 74% to 88%, orders counted as independent); live filled 112 order(s) in all.
 Fills only the backtest made: 18 (18 the live order did not fill within the window).
 Fills only live made: 29 (29 the backtest order did not fill within the window).
-P&L gap per order (marked to the dataset's mid): the simulator's P&L is 13.72 USD per order too high (95% CI +4.81 to +23.43) at the 1 s markout, mostly from fills it grants that live did not get (+17.00 USD per order); 200 orders
+P&L gap per order (marked to the dataset's mid): the simulator's P&L is 13.72 USD per order too high (95% CI +4.81 to +23.43) at the 1s markout, mostly from fills it grants that live did not get (+17.00 USD per order); 200 orders
 time to fill: still unfilled after 1s (Kaplan-Meier, cancels censored): live 95% [93%, 98%] vs sim 88% [85%, 91%]; sim minus live -7.5 pp (95% CI -10.8 to -4.4); log-rank p = 0.189 (by instrument, 51 clusters)
 markouts: sim minus live, ticks of mid, orders filled in both (95% CI): 100ms -0.01 [-0.04, +0.02], 1s -0.01 [-0.04, +0.00], 10s +0.00 [-0.02, +0.02]
-latency: median entry latency 0.03 ms (p10 0.03 ms, p90 0.03 ms, 200 orders), exchange ack minus local send, fitted from the live log
+latency: median entry latency 30us (p10 30us, p90 30us, 200 orders), exchange ack minus local send, fitted from the live log
 exact queue: the live orders replayed in the dataset's real queue fill as often as live (95% CI +0.0 to +0.0 pp).
 ```
 
