@@ -335,7 +335,8 @@ def _cell(c: dict[str, Any]) -> Cell:
 def headline_sentence(cells: dict[str, Cell], horizon_ns: int = 1_000_000_000) -> str:
     """'Within 1 s, NautilusTrader's default fill model fills 33.1% of these orders; the exact replay of the real
     queue fills 29.4%: 3.6 pp (1.12x) too many (95% CI +2.6 to +4.8 pp).'"""
-    from queuetruth.eval.leaderboard import NEGLIGIBLE_BIAS, duration_text, pct
+    from queuetruth.eval.leaderboard import NEGLIGIBLE_BIAS, pct
+    from queuetruth.units import format_duration as duration_text
 
     c = cells.get(str(horizon_ns))
     when = duration_text(horizon_ns)

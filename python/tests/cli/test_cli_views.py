@@ -64,23 +64,23 @@ def test_zoo_view_prints_the_leaderboard_sorted_by_bias_at_60s() -> None:
     out = cli.render(["zoo"], doc)
     lines = out.splitlines()
     assert lines[0].startswith("zoo: 200 shadows, 3 models")
-    assert "sorted by |fill-rate bias| at 60s, smallest first" in out
+    assert "sorted by |fill-rate bias| at 1min, smallest first" in out
     table = [ln for ln in lines if ln.startswith(("front_of_queue", "hbt_power3", "hbt_log"))]
     ranked = [e["model_id"] for e in rank_leaderboard(doc["leaderboard"], 60 * 10**9)]
     assert [ln.split()[0] for ln in table] == ranked == ["hbt_log", "hbt_power3[n=2]", "front_of_queue[mode=faithful]"]
     assert "+0.1 " in table[0] + " " and "-0.7*" in table[1] and "+13.3*" in table[2]
-    for h in ("100ms", "1s", "10s", "60s", "5min"):
+    for h in ("100ms", "1s", "10s", "1min", "5min"):
         assert h in next(ln for ln in lines if ln.startswith("model"))
     for e in doc["leaderboard"]:
         assert f"  {bias_sentence(e, 60 * 10**9)}" in lines
     assert (
-        "At 60 s, front_of_queue[mode=faithful] fills 13.3 pp more often than the exact replay (95% CI +10.1 to " in out
+        "At 1min, front_of_queue[mode=faithful] fills 13.3 pp more often than the exact replay (95% CI +10.1 to " in out
     )
-    assert "At 60 s, hbt_power3[n=2] fills 0.7 pp less often than the exact replay" in out
-    assert "At 60 s, hbt_log fills 0.1 pp more often than the exact replay, within noise (95% CI -0.2" in out
+    assert "At 1min, hbt_power3[n=2] fills 0.7 pp less often than the exact replay" in out
+    assert "At 1min, hbt_log fills 0.1 pp more often than the exact replay, within noise (95% CI -0.2" in out
     # The answer first: the closest and the furthest model at the sort horizon.
     assert lines[1] == (
-        "reality gap at 60 s: from +0.1 pp (hbt_log, the closest) to +13.3 pp (front_of_queue[mode=faithful], "
+        "reality gap at 1min: from +0.1 pp (hbt_log, the closest) to +13.3 pp (front_of_queue[mode=faithful], "
         "the furthest), model minus exact fill rate"
     )
     # Another sort horizon on request (`sort_horizon`: the horizon itself when evaluated, else the nearest below).
@@ -181,7 +181,7 @@ def test_score_view_puts_the_pnl_gap_under_the_result_line() -> None:
         "horizon_ns": 1_000_000_000,
         "currency": "USD",
         "direction": "sim_too_high",
-        "headline": "the simulator's P&L is 0.42 USD per order too high (95% CI +0.10 to +0.75) at the 1 s markout",
+        "headline": "the simulator's P&L is 0.42 USD per order too high (95% CI +0.10 to +0.75) at the 1s markout",
     }
     eur = {**gap, "currency": "EUR", "direction": "no_significant_difference", "headline": "no P&L difference found"}
     lines = cli.render(["score"], _score_doc(pnl_gap=[gap, eur])).splitlines()
@@ -230,7 +230,7 @@ def test_score_view_without_cluster_test_reads_score_tests(tmp_path: Path) -> No
     out = cli.render(["score"], doc, args={"out": str(tmp_path)})
     assert "fills 0.5 pp more often than live" in out
     assert "not significant (cluster-robust p = 0.571, 26 clusters)" in out
-    assert "within 60s of entry" in out
+    assert "within 1min of entry" in out
 
 
 def _cal_doc(**kw: Any) -> dict[str, Any]:
@@ -347,7 +347,7 @@ def test_calibration_view_latency() -> None:
     doc = _cal_doc(kind="latency", family="latency", latency={k: q for k in ("entry_ns", "response_ns", "cancel_ns",
                                                                              "amend_ns")})  # fmt: skip
     out = cli.render(["calibrate", "latency"], doc)
-    assert "entry" in out and "200 us" in out and "synchronized clocks" in out
+    assert "entry" in out and "200us" in out and "synchronized clocks" in out
 
 
 # ---- exit codes: never success for nothing ------------------------------------------------------------------------
@@ -619,9 +619,9 @@ def test_human_output_end_to_end(repo_root: Path, tmp_path: Path, capsys: pytest
     assert (
         "leaderboard population: " in out
         and "never-cancel shadows" in out
-        and "sorted by |fill-rate bias| at 60s" in out
+        and "sorted by |fill-rate bias| at 1min" in out
     )
-    assert "in plain words:" in out and "At 60 s, front_of_queue[mode=faithful] " in out
+    assert "in plain words:" in out and "At 1min, front_of_queue[mode=faithful] " in out
     code, out10, _ = run("zoo", "--data", ds, "--shadows", sh, "--out", str(tmp_path / "zoo10"), "--models",
                          "front_of_queue", "--bootstrap-b", "5", "--sort-horizon", "10s", "--verbose")  # fmt: skip
     assert code == 0 and "sorted by |fill-rate bias| at 10s" in out10 and "\nall fields:\nzoo (qt.zoo_summary)" in out10
@@ -649,8 +649,8 @@ def test_human_output_end_to_end(repo_root: Path, tmp_path: Path, capsys: pytest
     assert code == 0, err
     lines = out.splitlines()
     assert lines[0].startswith("score: zoo model hbt_power3") and lines[1].startswith("RESULT: the simulator fills ")
-    assert "within 60s of entry" in lines[1] and "cluster-robust p = " in lines[1]
-    assert lines[2].startswith("P&L: ") and " at the 1 s markout" in lines[2]
+    assert "within 1min of entry" in lines[1] and "cluster-robust p = " in lines[1]
+    assert lines[2].startswith("P&L: ") and " at the 1s markout" in lines[2]
     assert "gates: none set" in out and "Gates passed" not in out and "gates: passed" not in out
     sc2 = str(tmp_path / "sc2")
     code, out, _ = run("score", "--live", live, "--sim-model", "front_of_queue", "--data", ds, "--out", sc2,

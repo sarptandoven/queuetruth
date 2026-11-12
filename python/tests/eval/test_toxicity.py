@@ -383,7 +383,7 @@ def _write_dataset(root: Path, tapes: dict[int, _Tape]) -> Path:
 
 
 def _scenario_tapes() -> tuple[dict[int, _Tape], list[dict[str, Any]], dict[str, str]]:
-    """One instrument per mechanism (plus a declined hidden print); a buy shadow of 10 joins each at T0 + 1 s."""
+    """One instrument per mechanism (plus a declined hidden print); a buy shadow of 10 joins each at T0 + 1s."""
     tapes: dict[int, _Tape] = {}
     shadows: list[dict[str, Any]] = []
     want: dict[str, str] = {}
@@ -577,7 +577,7 @@ def L(k: int) -> int:
 
 
 def _quotes() -> list[dict[str, Any]]:
-    """Per shadow: mid P(1) until L + 1.5 s, P(-1) until L + 30 s, then P(3); s3 has its own (crossed) path."""
+    """Per shadow: mid P(1) until L + 1.5s, P(-1) until L + 30s, then P(3); s3 has its own (crossed) path."""
     q = []
     for k in range(10):
         path = [(0, -2, -1), (1500 * MS, -3, -1), (30 * S, -3, -1)] if k == 3 else [(0, 0, 2), (1500 * MS, -2, 0),
@@ -663,7 +663,7 @@ def _exact_fills() -> pa.Table:
         (5, L(5) + 2 * S, "queue_depleted", 105),
         (6, L(6) + 2 * S, "queue_depleted", 106),
         (8, L(8) + 2 * S, "queue_depleted", 108),
-        (9, L(9) + 3 * S, "queue_depleted", 109),  # differs from the zoo's truth (L + 2 s)
+        (9, L(9) + 3 * S, "queue_depleted", 109),  # differs from the zoo's truth (L + 2s)
     ]
     return make_table(
         "qt.shadow_fills",
@@ -814,7 +814,7 @@ def test_population_exclusions_and_statuses(predictions: Any) -> None:
 
 
 def test_truth_mismatch_is_an_error_unless_allowed(predictions: Any) -> None:
-    """The replay must reproduce the zoo's exact arm: s9's replayed first fill is 1 s after the zoo's."""
+    """The replay must reproduce the zoo's exact arm: s9's replayed first fill is 1s after the zoo's."""
     with pytest.raises(QtError) as e:
         _evaluate(predictions, allow_truth_mismatch=False)
     assert e.value.code == "QT-INPUT-002" and "truth_mismatch: 1 of 6" in e.value.message
@@ -873,7 +873,7 @@ def test_fill_rows_mechanisms_prices_and_window(predictions: Any) -> None:
     res = _evaluate(predictions)
     rows = res.fills.to_pylist()
     key = {(r["arm"], r["shadow_id"], r["fill_seq"]): r for r in rows}
-    # exact rows within the window only (s1's fill at L + 90 s is outside it)
+    # exact rows within the window only (s1's fill at L + 90s is outside it)
     assert [(r["shadow_id"], r["mechanism"]) for r in rows if r["arm"] == "exact"] == [
         ("s0", "queue"),
         ("s2", "swept"),
@@ -898,9 +898,9 @@ def test_fill_rows_mechanisms_prices_and_window(predictions: Any) -> None:
 
 
 def test_decomposition_matches_hand_computation(predictions: Any) -> None:
-    """The front-of-queue model at 1 s, by hand: phantom s1 (fill L + 25 s at P(0), mid P(-1) at L + 26 s: -1 tick),
+    """The front-of-queue model at 1s, by hand: phantom s1 (fill L + 25s at P(0), mid P(-1) at L + 26 s: -1 tick),
     missed s2 (exact fill L + 40 s, mid P(3) at L + 41 s: +3 ticks), confirmed s0 and s4 (model L + 1 s, exact
-    L + 2 s, both -1 tick) over 5 shadows."""
+    L + 2s, both -1 tick) over 5 shadows."""
     doc = _evaluate(predictions).doc
     h1 = _model(doc, FQ)["horizons"][str(S)]
     v = {k: x["value"] for k, x in h1.items() if isinstance(x, dict)}
@@ -912,7 +912,7 @@ def test_decomposition_matches_hand_computation(predictions: Any) -> None:
     assert v["model_pnl_ticks"] == pytest.approx(-3 / 5) and v["exact_pnl_ticks"] == pytest.approx(1 / 5)
     assert v["phantom_mo_ticks"] == pytest.approx(-1.0) and v["missed_mo_ticks"] == pytest.approx(3.0)
     assert v["confirmed_mo_ticks"] == pytest.approx(-1.0) and v["confirmed_exact_mo_ticks"] == pytest.approx(-1.0)
-    # mid-to-mid: the model's L + 1 s fills see P(1) -> P(-1) (-2 ticks), the exact L + 2 s fills see no move
+    # mid-to-mid: the model's L + 1s fills see P(1) -> P(-1) (-2 ticks), the exact L + 2s fills see no move
     assert v["confirmed_mm_ticks"] == pytest.approx(-2.0) and v["confirmed_exact_mm_ticks"] == pytest.approx(0.0)
     assert v["phantom_mm_ticks"] == pytest.approx(0.0) and v["missed_mm_ticks"] == pytest.approx(0.0)
     # bps: one tick is 1 bp of P(0) = 100.00
@@ -970,7 +970,7 @@ def test_by_type_table_and_rankings(predictions: Any) -> None:
     bt = {(e["arm"], e["status"], e["mechanism"]): e for e in doc["by_type"]}
     assert list(bt)[:4] == [("exact", None, "queue"), ("exact", None, "swept"), ("exact", None, "hidden_print"),
                             ("exact", None, "all")]  # fmt: skip
-    # fill-qty weighted: FQ's phantom s1 rows are 4 @ L + 25 s (-1 tick at 1 s) and 6 @ L + 40 s (+3 ticks)
+    # fill-qty weighted: FQ's phantom s1 rows are 4 @ L + 25s (-1 tick at 1s) and 6 @ L + 40s (+3 ticks)
     ph = bt[(FQ, "phantom", "all")]
     assert ph["n_fills"] == 2 and ph["n_shadows"] == 1 and ph["qty"] == 10.0
     assert ph["markouts"][str(S)]["mo_ticks"]["value"] == pytest.approx((4 * -1 + 6 * 3) / 10)
@@ -1038,7 +1038,7 @@ def test_sell_taker_price_and_the_no_quote_fallback(predictions: Any) -> None:
 
 def test_day_blocks_and_multi_day_markouts(predictions: Any) -> None:
     """Five session dates: the bootstrap blocks are days, and each fill is marked out on its own instrument-day's
-    quotes (day d: mid P(1) at the open, P(1 - d) from 1.5 s, so a buy at P(0) 1 s after the open earns 1 - d)."""
+    quotes (day d: mid P(1) at the open, P(1 - d) from 1.5s, so a buy at P(0) 1s after the open earns 1 - d)."""
     days = 5
     cal = [(MIDNIGHT + d * DAY, DAY0 + d, TICK) for d in range(days)]
     live = [T0 + d * DAY for d in range(days)]
@@ -1357,7 +1357,7 @@ def test_cli_zoo_toxicity(zoo_run: Path, capsys: pytest.CaptureFixture[str]) -> 
     # the human view answers first
     assert main([*argv, "--format", "human"]) == 0
     text = capsys.readouterr().out
-    assert text.startswith("zoo-toxicity: ") and "each model's PnL error at the 1 s markout" in text
+    assert text.startswith("zoo-toxicity: ") and "each model's PnL error at the 1s markout" in text
     assert "in plain words:" in text and "trade_through_only" in text
     assert main(["zoo-toxicity", "--zoo", str(zoo_run / "zoo"), "--data", str(FIXTURE), "--out", str(out),
                  "--window", "5s", "--format", "json"]) == 2  # fmt: skip

@@ -1,5 +1,5 @@
 """Schema 1.1 `ReportSpec.leaderboard_sort_horizon_ns` (CLI `report --sort-horizon`): `render` sorts the zoo
-leaderboard at the spec's horizon; the `leaderboard_sort_horizon_ns` keyword overrides it; null keeps 60 s."""
+leaderboard at the spec's horizon; the `leaderboard_sort_horizon_ns` keyword overrides it; null keeps 1min."""
 
 from __future__ import annotations
 
@@ -48,11 +48,11 @@ def test_spec_sort_horizon_is_used_and_the_keyword_wins(tmp_path: Path) -> None:
 
     page = html("spec", leaderboard_sort_horizon_ns=10 * S)
     s = _zoo_section(page)
-    assert "sorted by absolute fill-rate bias at 10 s" in s and _first_row(page) == rc.esc(best(10 * S))
+    assert "sorted by absolute fill-rate bias at 10s" in s and _first_row(page) == rc.esc(best(10 * S))
     s = _zoo_section(html("default"))
-    assert "sorted by absolute fill-rate bias at 60 s" in s
+    assert "sorted by absolute fill-rate bias at 1min" in s
     s = _zoo_section(html("kw", leaderboard_sort_horizon_ns=60 * S, keyword=10 * S))
-    assert "sorted by absolute fill-rate bias at 10 s" in s
+    assert "sorted by absolute fill-rate bias at 10s" in s
     with pytest.raises(QtError) as e:
         html("bad", leaderboard_sort_horizon_ns=0)
     assert e.value.code == "QT-CONFIG-001"

@@ -51,7 +51,7 @@ Builder = Callable[[list[dict[str, Any]]], pa.Table]
 
 
 def _zoo(predictions: Builder, *, n: int = 240, seed: int = 7) -> tuple[pa.Table, pa.Table, dict[str, Any]]:
-    """8 session dates (day blocks); exact first fill ~ Exp(4 s); models:
+    """8 session dates (day blocks); exact first fill ~ Exp(4s); models:
     - `close[a=1]`: the exact time times a lognormal error (sd 0.2); `close[a=2]`: an independent error of the same
       size (statistically tied); `close_copy`: the same forecasts as `close[a=1]` (identical losses);
     - `instant`: fills at entry (front-of-queue-like); `never`: never fills;
@@ -224,7 +224,7 @@ def test_old_summaries_still_validate_and_new_fields_default_empty() -> None:
 
 def test_unbalanced_panels_and_missing_models(predictions: Builder) -> None:
     table, life, _ = _zoo(predictions, n=80)
-    # drop one shadow's 10 s row of one model: the shadow leaves the 10 s panel (counted), 1 s is untouched
+    # drop one shadow's 10s row of one model: the shadow leaves the 10s panel (counted), 1s is untouched
     sid = table.column("shadow_id").to_pylist()
     mid = table.column("model_id").to_pylist()
     hz = table.column("horizon_ns").to_pylist()
@@ -242,7 +242,7 @@ def test_unbalanced_panels_and_missing_models(predictions: Builder) -> None:
     assert float(h1.brier[:, j1].mean()) == pytest.approx(by["never"]["brier"][str(H1)], abs=1e-15)
     _, notes = leaderboard_mcs(cut, life, h_max_ns=HMAX, bootstrap_b=50)
     assert notes == [
-        "mcs: at 10 s, 1 shadow(s) lack a row for some model and are left out of the model confidence set "
+        "mcs: at 10s, 1 shadow(s) lack a row for some model and are left out of the model confidence set "
         "(its Brier means then differ from brier)"
     ]
     # a model without any 10 s row is not in the 10 s set: its fields are null there
@@ -271,7 +271,7 @@ def test_too_few_bootstrap_blocks_give_null_fields_and_a_warning(predictions: Bu
             assert res == {}
             # one note for both horizons (diagnostics stay short, audit 2026-11-12)
             assert notes == [
-                f"mcs: at 1 s, 10 s, {n_dates} bootstrap block(s) (30min) < 5: "
+                f"mcs: at 1s, 10s, {n_dates} bootstrap block(s) (30min) < 5: "
                 "no model confidence set (MCS fields null)"
             ]
             _, board = evaluate_zoo(sub, h_max_ns=HMAX, bootstrap_b=5, seed=0, planned_life=life)
@@ -294,7 +294,7 @@ def test_empty_and_tiny_inputs(predictions: Builder) -> None:
     res, notes = leaderboard_mcs(one, life, h_max_ns=HMAX)
     # one note names both horizons (diagnostics stay short, audit 2026-11-12)
     assert res == {} and notes == [
-        "mcs: at 1 s, 10 s, 1 bootstrap block(s) (30min) < 5: no model confidence set (MCS fields null)"
+        "mcs: at 1s, 10s, 1 bootstrap block(s) (30min) < 5: no model confidence set (MCS fields null)"
     ]
 
 
@@ -422,15 +422,15 @@ def test_mcs_mark_and_the_cli_table() -> None:
     assert [r.rstrip()[-4:] for r in ffe_rows] == ["1.1#", "1.2#", " 3.4"]
     # and one plain-words line at the sort horizon, members by ascending error
     assert lines[-1] == (
-        "  At 60 s, 2 of 3 models are tied for the lowest first-fill error (90% MCS): gamma (1.1%), alpha (1.2%)."
+        "  At 1min, 2 of 3 models are tied for the lowest first-fill error (90% MCS): gamma (1.1%), alpha (1.2%)."
     )
     assert mcs_sentence([a, b], 60 * S) == (
-        "At 60 s, alpha (1.2%) alone has the lowest first-fill error of 2 models (90% MCS)."
+        "At 1min, alpha (1.2%) alone has the lowest first-fill error of 2 models (90% MCS)."
     )
     assert mcs_sentence([ref], 60 * S) is None and mcs_sentence([a], None) is None
     none_here = _entry("delta", 0.0, True, 0.01)
     none_here["mcs_member"][str(S)] = None
-    assert mcs_sentence([none_here], S) == "At 1 s there is no model confidence set (see the mcs warnings)."
+    assert mcs_sentence([none_here], S) == "At 1s there is no model confidence set (see the mcs warnings)."
     legend, rows = mcs_table([a, ref], [60 * S])
     assert rows == [["alpha", "1.2#"]] and len(legend) == 2
     # a summary without MCS fields renders exactly as before (no second table, no marker, no extra sentence)

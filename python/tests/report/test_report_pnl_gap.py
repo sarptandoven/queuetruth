@@ -78,7 +78,7 @@ def test_answer_and_verdict_carry_the_pnl_gap(tmp_path: Path) -> None:
     assert "Does the simulator&#x27;s P&amp;L match live?" in ans and "P&amp;L TOO HIGH" in ans
     assert ans.index("fill like live trading") < ans.index("P&amp;L match live")
     assert (
-        "The simulator&#x27;s P&amp;L is 0.500 USD per order too high (95% CI +0.200 to +0.800) at the 1 s markout, "
+        "The simulator&#x27;s P&amp;L is 0.500 USD per order too high (95% CI +0.200 to +0.800) at the 1s markout, "
         "mostly from fills it grants that live did not get (+0.450 USD per order); 2 orders." in ans
     )
     v = _section(html, "verdict")
@@ -90,7 +90,7 @@ def test_no_difference_found_is_not_a_pass(tmp_path: Path) -> None:
     rc.make_score_dir(root, n=200)
     _edit_summary(root, lambda d: d.update(pnl_gap=_gap(-0.1, 0.9)))
     ans = _section(_render(tmp_path, root), "answer")
-    assert "NO DIFFERENCE FOUND" in ans and "No P&amp;L difference found at the 1 s markout" in ans
+    assert "NO DIFFERENCE FOUND" in ans and "No P&amp;L difference found at the 1s markout" in ans
     assert "TOO HIGH" not in ans and "mostly" not in ans
 
 
@@ -123,7 +123,7 @@ def test_fills_only_scorecard_does_not_state_a_pnl_finding(tmp_path: Path) -> No
     ans = _section(_render(tmp_path, root), "answer")
     li = ans.rfind("<li>", 0, ans.index("P&amp;L match live"))
     q = ans[li : ans.index("</li>", li)]
-    assert "FILLS ONLY" in q and "P&amp;L gap not answerable at the 1 s markout" in q and "TOO HIGH" not in q
+    assert "FILLS ONLY" in q and "P&amp;L gap not answerable at the 1s markout" in q and "TOO HIGH" not in q
 
 
 def test_blocked_scorecard_has_no_pnl_answer(tmp_path: Path) -> None:

@@ -404,12 +404,14 @@ def _dq_block(ctx: Ctx, label: str, dq: DataQuality) -> list[str]:
         rc.append("hl" if dq.source_specific[k] else "")
     out.append(table(["counter", "value"], rows, numeric=(1,), row_cls=rc))
     if dq.feed_gaps:
+        tz = ctx.tz(*{g.instrument_id for g in dq.feed_gaps[:50]})
         gaps = [
-            (g.instrument_id, F.ts(g.ts_start), F.ts(g.ts_end), F.dur(g.ts_end - g.ts_start), g.reason)
+            (g.instrument_id, F.ts(g.ts_start, tz), F.ts(g.ts_end, tz), F.dur(g.ts_end - g.ts_start), g.reason)
             for g in dq.feed_gaps[:50]
         ]
+        zone = F.zone(tz)
         out.append(f"<details><summary>{len(dq.feed_gaps):,} feed gap(s)</summary>")
-        out.append(table(["instrument", "start (UTC)", "end (UTC)", "length", "reason"], gaps, numeric=(0, 3)))
+        out.append(table(["instrument", f"start ({zone})", f"end ({zone})", "length", "reason"], gaps, numeric=(0, 3)))
         out.append("</details>")
     return out
 
@@ -609,7 +611,7 @@ def _tests_table(run: RunDir) -> list[str]:
         (
             r["test_id"],
             r["family"],
-            f"{r['stratum_kind']}={r['stratum']}" if r["stratum_kind"] else r["stratum"],
+            _stratum(r["stratum_kind"], r["stratum"]),
             r["statistic"],
             F.num(r["value"]),
             F.pval(r["p_value"]),
@@ -631,6 +633,18 @@ def _tests_table(run: RunDir) -> list[str]:
         ),
         "</details>",
     ]
+
+
+def _stratum(kind: str | None, value: Any) -> str:
+    """`ref:horizon=mid:1s`: a test's stratum with its horizon parts as durations (the table keeps nanoseconds)."""
+    if not kind:
+        return str(value)
+    ks, vs = str(kind).split(":"), str(value).split(":")
+    if len(ks) == len(vs):
+        vs = [
+            F.dur(int(v)) if k in ("horizon", "horizon_ns") and v.isdigit() else v for k, v in zip(ks, vs, strict=True)
+        ]
+    return f"{kind}={':'.join(vs)}"
 
 
 def two_by_two(ctx: Ctx) -> Raw | None:

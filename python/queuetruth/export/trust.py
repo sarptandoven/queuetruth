@@ -124,7 +124,9 @@ def g6(x: float | None) -> str:
 
 
 def dur(ns: int) -> str:
-    """`100ms`, `1s`, `90s`, `5m` (exact units only; else ns)."""
+    """`100ms`, `1s`, `90s`, `5m` (exact units only; else ns): the form of the `trust:` lines stored in a
+    calibration's warnings, kept so those files keep their bytes. What people read uses
+    `queuetruth.units.format_duration` (`1min`, `5min`), which parses every form this writes."""
     for unit, size in (("h", 3_600_000_000_000), ("m", 60_000_000_000), ("s", 1_000_000_000), ("ms", 1_000_000)):
         if ns >= size and ns % size == 0 and not (unit == "m" and ns < 300_000_000_000):
             return f"{ns // size}{unit}"
@@ -186,13 +188,14 @@ def held_out_verdicts(cal: CalibrationResult) -> tuple[str | None, str | None, l
     return fid, did, out
 
 
-def held_out_summary(t: Trust) -> str:
-    """One line: `beats the default <id> at 1s, 10s; tie at 100ms` / `WORSE than ...` / `not evaluated ...`."""
+def held_out_summary(t: Trust, fmt: Callable[[int], str] = dur) -> str:
+    """One line: `beats the default <id> at 1s, 10s; tie at 100ms` / `WORSE than ...` / `not evaluated ...`. `fmt`
+    writes the horizons (`dur`: the form stored in the calibration's warnings)."""
     if not t.horizons or all(h.label == "n/a" for h in t.horizons):
         return "not evaluated (no held-out metrics for the fitted and the default model)"
     groups: dict[str, list[str]] = {}
     for h in t.horizons:
-        groups.setdefault(h.label, []).append(dur(h.horizon_ns))
+        groups.setdefault(h.label, []).append(fmt(h.horizon_ns))
     parts = []
     for label, word in (
         ("worse", "WORSE at"),
@@ -208,7 +211,7 @@ def held_out_summary(t: Trust) -> str:
     if bad:
         h = bad[0]
         detail = (
-            f" (log loss at {dur(h.horizon_ns)}: fitted {g6(h.fitted_logloss)} vs default {g6(h.default_logloss)}; "
+            f" (log loss at {fmt(h.horizon_ns)}: fitted {g6(h.fitted_logloss)} vs default {g6(h.default_logloss)}; "
             f"Brier {g6(h.fitted_brier)} vs {g6(h.default_brier)})"
         )
     verdict = "beats" if _beats(t.horizons) else "DOES NOT BEAT"
@@ -265,7 +268,7 @@ _TOKEN_TEXT = {
 }
 
 
-def _compute(cal: CalibrationResult) -> Trust:
+def _compute(cal: CalibrationResult, fmt: Callable[[int], str] = dur) -> Trust:
     """Assessment from the `trust:` lines and the numbers (ignores the structured `trust` field)."""
     flags = parse_flags(cal.warnings)
     if not any(k not in OWN_TOKENS for k in flags):
@@ -291,15 +294,17 @@ def _compute(cal: CalibrationResult) -> Trust:
             "the fit is not shown to beat the default out of sample"
         )
     elif not _beats(hs):
-        reasons["not_beating_default"] = held_out_summary(t)
+        reasons["not_beating_default"] = held_out_summary(t, fmt)
     return Trust(flags, hs, fid, did, [(k, reasons[k]) for k in REFUSING if k in reasons])
 
 
-def assess(cal: CalibrationResult) -> Trust:
+def assess(cal: CalibrationResult, fmt: Callable[[int], str] = dur) -> Trust:
     """Exportability of a calibration (see the module doc). The structured `trust` field (schema 1.1) decides when
     present: its `verdict` / `reasons` and `beats_default` labels win, with texts from the `trust:` lines or the
-    recomputed reasons; without it the assessment is computed from the lines and the numbers."""
-    t = _compute(cal)
+    recomputed reasons; without it the assessment is computed from the lines and the numbers. `fmt` writes the
+    horizons in the reason texts (`dur`, the form stored in the calibration's warnings; displays pass
+    `queuetruth.units.format_duration`)."""
+    t = _compute(cal, fmt)
     st = cal.trust
     if st is None:
         return t

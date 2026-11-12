@@ -40,8 +40,10 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
+from queuetruth import units
 from queuetruth.errors import QtError
 from queuetruth.schemas.io import sha256_file
 from queuetruth.schemas.models import QtModel
@@ -497,6 +499,7 @@ LEADERBOARD_SCHEMA = pa.schema(
     [
         ("model_id", pa.string()),
         ("horizon_ns", pa.int64()),
+        ("horizon", pa.string()),
         ("fill_rate_bias", pa.float64()),
         ("ci_lo", pa.float64()),
         ("ci_hi", pa.float64()),
@@ -519,12 +522,12 @@ def leaderboard(zoo: Any, backend: str | None = None) -> Any:
     """The zoo leaderboard as one row per model and horizon (`qt.zoo_summary`: a `ZooSummary`, its dict, a zoo
     output directory or its `summary.json`).
 
-    Columns: `model_id`, `horizon_ns`, `fill_rate_bias` with its 95% CI `ci_lo` / `ci_hi`, `exact_fill_rate`,
-    `model_fill_rate`, `brier`, `logloss`, then the per-model `overfill_bias`, `qty_bias` and McNemar `b`, `c`,
-    `p_exact` repeated on each of the model's rows, and the run's scoring population on every row: `n_leaderboard`
-    (never-cancel shadows with an exact label, the same for every model; null when the summary does not report it)
-    and `n_excluded_hbt_312` (shadows dropped from every model because a faithful hftbacktest model aborted on them
-    at issue #312). Fractions, not percentage points. Models in leaderboard order, horizons ascending; an empty
+    Columns: `model_id`, `horizon_ns` with `horizon` as text (`1s`), `fill_rate_bias` with its 95% CI `ci_lo` / `ci_hi`,
+    `exact_fill_rate`, `model_fill_rate`, `brier`, `logloss`, then the per-model `overfill_bias`, `qty_bias` and McNemar
+    `b`, `c`, `p_exact` repeated on each of the model's rows, and the run's scoring population on every row:
+    `n_leaderboard` (never-cancel shadows with an exact label, the same for every model; null when the summary does not
+    report it) and `n_excluded_hbt_312` (shadows dropped from every model because a faithful hftbacktest model aborted
+    on them at issue #312). Fractions, not percentage points. Models in leaderboard order, horizons ascending; an empty
     leaderboard (a Rust-only run) gives zero rows with these columns."""
     doc = _document(zoo, "qt.zoo_summary")
     n_lb = doc.get("n_leaderboard")
@@ -542,6 +545,7 @@ def leaderboard(zoo: Any, backend: str | None = None) -> Any:
                 {
                     "model_id": e["model_id"],
                     "horizon_ns": int(h),
+                    "horizon": units.horizon_label(h),
                     "fill_rate_bias": _f(ci.get("value")),
                     "ci_lo": _f(ci.get("ci_lo")),
                     "ci_hi": _f(ci.get("ci_hi")),
@@ -566,6 +570,7 @@ HELD_OUT_SCHEMA = pa.schema(
         ("arm", pa.string()),
         ("model_id", pa.string()),
         ("horizon_ns", pa.int64()),
+        ("horizon", pa.string()),
         ("brier", pa.float64()),
         ("logloss", pa.float64()),
         ("fill_rate_bias", pa.float64()),
@@ -578,10 +583,11 @@ def held_out(calibration: Any, backend: str | None = None) -> Any:
     """Held-out metrics of a calibration as one row per arm, model and horizon (`qt.calibration_result`: a
     `CalibrationResult`, its dict, a calibration output directory or its `calibration.json`).
 
-    `arm` is `fitted` (`held_out`) or `default` (`baseline_held_out`, the library default on the same test window);
-    `beats_default` is the trust assessment's per-horizon comparison (`better`, `tie`, `worse`, `mixed`, `n/a`),
-    repeated on both arms, and null when the result carries no trust block. Fitted rows first, models and horizons
-    in sorted order."""
+    Columns: `arm`, `model_id`, `horizon_ns` with `horizon` as text (`1s`), `brier`, `logloss`, `fill_rate_bias`,
+    `beats_default`. `arm` is `fitted` (`held_out`) or `default` (`baseline_held_out`, the library default on the same
+    test window); `beats_default` is the trust assessment's per-horizon comparison (`better`, `tie`, `worse`, `mixed`,
+    `n/a`), repeated on both arms, and null when the result carries no trust block. Fitted rows first, models and
+    horizons in sorted order."""
     doc = _document(calibration, "qt.calibration_result")
     trust = doc.get("trust") or {}
     beats = trust.get("beats_default") or {}
@@ -596,6 +602,7 @@ def held_out(calibration: Any, backend: str | None = None) -> Any:
                         "arm": arm,
                         "model_id": model_id,
                         "horizon_ns": int(hz),
+                        "horizon": units.horizon_label(hz),
                         "brier": _f((h.get("brier") or {}).get(hz)),
                         "logloss": _f((h.get("logloss") or {}).get(hz)),
                         "fill_rate_bias": _f((h.get("fill_rate_bias") or {}).get(hz)),
@@ -732,14 +739,103 @@ def _flatten_rows(items: Sequence[Mapping[str, Any]], what: str) -> list[dict[st
     return [{name: get(r, path) for name, path in names.items()} for r in items]
 
 
-def records(doc: Any, field: str, backend: str | None = None) -> Any:
+#: Integer price columns of summary records (fixed point at `10^price_exp`).
+_PRICE_COLUMNS = ("price", "limit_px", "px", "avg_px", "fill_px")
+
+
+def _instrument_table(instruments: Any, data: Mapping[str, Any]) -> dict[int, dict[str, Any]]:
+    """instrument id -> {symbol, price_exp, tick_size, session_tz}: from `instruments` (a dataset directory, its
+    `instruments.parquet`, an Arrow table or row dicts), else from the dataset the summary's spec names when it is
+    readable here; empty when unknown."""
+    src = instruments
+    if src is None:
+        spec = data.get("spec") if isinstance(data.get("spec"), Mapping) else {}
+        ds = spec.get("dataset") if isinstance(spec, Mapping) else None
+        src = ds.get("path") if isinstance(ds, Mapping) else None
+        if not isinstance(src, str):
+            return {}
+    rows: list[Mapping[str, Any]]
+    if isinstance(src, (str, Path)):
+        p = Path(src)
+        p = p / "instruments.parquet" if p.is_dir() else p
+        if not p.is_file():
+            if instruments is None:
+                return {}
+            raise QtError("QT-INPUT-001", f"{p}: no instruments table")
+        rows = pq.read_table(p).to_pylist()
+    elif isinstance(src, pa.Table):
+        rows = src.to_pylist()
+    elif isinstance(src, Sequence):
+        rows = [r for r in src if isinstance(r, Mapping)]
+    else:
+        raise QtError("QT-INPUT-002", f"instruments: expected a dataset path or rows, got {type(src).__name__}")
+    out: dict[int, dict[str, Any]] = {}
+    for r in rows:
+        if r.get("instrument_id") is not None:
+            out.setdefault(int(r["instrument_id"]), dict(r))
+    return out
+
+
+def _with_human_columns(table: pa.Table, inst: Mapping[int, Mapping[str, Any]]) -> pa.Table:
+    """`table` with human columns added next to the raw ones (none removed or changed): `horizon` (`1s`) after a
+    `horizon_ns`, `symbol` after an `instrument_id` (when the instruments are known), `<name>_local` (a timestamp in
+    the venue's zone, `ts_local` for `ts_ns`) after an integer `ts_*` column, and `<name>_decimal` (an exact decimal)
+    after an integer price column when every row's price exponent is known. Dotted (flattened) names keep their
+    prefix."""
+    names = list(table.column_names)
+    iid_col = table.column("instrument_id").to_pylist() if "instrument_id" in names else None
+    zones = {str(v.get("session_tz")) for v in inst.values() if v.get("session_tz")} if inst else set()
+    if iid_col is not None:
+        zones = {str((inst.get(int(i)) or {}).get("session_tz")) for i in iid_col if i is not None and int(i) in inst}
+        zones.discard("None")
+    tz = zones.pop() if len(zones) == 1 else None
+    exps = (
+        {(inst.get(int(i)) or {}).get("price_exp") if i is not None else None for i in iid_col}
+        if iid_col is not None and inst
+        else set()
+    )
+    exp = exps.pop() if len(exps) == 1 else None
+    for name in list(names):
+        col = table.column(name)
+        prefix, _, leaf = name.rpartition(".")
+        pre = f"{prefix}." if prefix else ""
+        new: tuple[str, pa.Array] | None = None
+        if leaf == "horizon_ns" and pa.types.is_integer(col.type):
+            vals = [None if v is None else units.format_duration(int(v)) for v in col.to_pylist()]
+            new = (f"{pre}horizon", pa.array(vals, pa.string()))
+        elif leaf == "instrument_id" and inst and pa.types.is_integer(col.type):
+            vals = [None if v is None else (inst.get(int(v)) or {}).get("symbol") for v in col.to_pylist()]
+            new = (f"{pre}symbol", pa.array(vals, pa.string()))
+        elif (leaf == "ts" or leaf.startswith("ts_")) and pa.types.is_integer(col.type):
+            local = "ts_local" if leaf == "ts_ns" else f"{leaf}_local"
+            z = units.zone_name(tz)
+            arr = pc.cast(pc.cast(col, pa.int64()), pa.timestamp("ns", tz=z))
+            new = (f"{pre}{local}", arr)
+        elif leaf in _PRICE_COLUMNS and pa.types.is_integer(col.type) and exp is not None:
+            scale = max(0, -int(exp))
+            vals = [None if v is None else units.price_from_ticks(v, int(exp)) for v in col.to_pylist()]
+            new = (f"{pre}{leaf}_decimal", pa.array(vals, pa.decimal128(38, scale)))
+        if new is not None and new[0] not in table.column_names:
+            at = table.column_names.index(name) + 1
+            table = table.add_column(at, new[0], new[1])
+    return table
+
+
+def records(doc: Any, field: str, backend: str | None = None, *, instruments: Any = None, human: bool = True) -> Any:
     """A list-of-objects field of any summary document as a DataFrame, one row per element.
 
     `doc` is a Pydantic summary, a dict, a `RunFrames` or a run directory / summary path; `field` is a top-level
     field holding a list of objects (`markouts`, `by_queue_decile`, `stratified`, ...). Nested objects are
     flattened to dotted column names (`fill_rate_bias.value`); the columns are the union over all elements in
     first-seen order, null where an element lacks the field. Column types are inferred from the values. An absent or
-    null field, or values one column cannot hold together, is `QT-INPUT-002`; an empty list gives an empty frame."""
+    null field, or values one column cannot hold together, is `QT-INPUT-002`; an empty list gives an empty frame.
+
+    Human columns are added next to the raw ones (`human=False` leaves them out): `horizon` (`1s`) after
+    `horizon_ns`, `symbol` after `instrument_id`, `<ts>_local` (venue-local timestamps; `ts_local` for `ts_ns`)
+    after integer `ts_*` columns and `<price>_decimal` after integer prices. Symbols, price exponents and time zones
+    come from `instruments` (a dataset directory, its `instruments.parquet`, an Arrow table or row dicts), else from
+    the dataset the summary's spec names when it is readable; without them times are in UTC and prices stay
+    integers."""
     if isinstance(doc, QtModel):
         data = doc.model_dump(mode="json")
     elif isinstance(doc, RunFrames):
@@ -760,4 +856,7 @@ def records(doc: Any, field: str, backend: str | None = None) -> Any:
     if not all(isinstance(r, Mapping) for r in value):
         raise QtError("QT-INPUT-002", f"records: field {field!r} holds non-object items")
     what = f"records: field {field!r}"
-    return to_frame(_rows_table(_flatten_rows(value, what), what), backend)
+    table = _rows_table(_flatten_rows(value, what), what)
+    if human:
+        table = _with_human_columns(table, _instrument_table(instruments, data))
+    return to_frame(table, backend)

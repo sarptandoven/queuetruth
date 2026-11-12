@@ -16,7 +16,7 @@ import math
 from queuetruth.demo.fetch import is_url
 from queuetruth.demo.sources import file_name
 from queuetruth.demo.summary import Cell, DemoSummary
-from queuetruth.eval.leaderboard import duration_text
+from queuetruth.units import format_duration as duration_text
 
 W, H = 640, 260
 PAD_L, PAD_R, PAD_T, PAD_B = 56, 16, 16, 40

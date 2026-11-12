@@ -26,6 +26,7 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 
+from queuetruth import units
 from queuetruth.errors import QtError
 from queuetruth.report import cols
 from queuetruth.report import fmt as F
@@ -215,11 +216,11 @@ def _score_items(ctx: Ctx, run: RunDir, s: ScorecardSummary, k: int) -> list[Why
             "both": "filled in both arms, time to fill differs",
         }[r["class"]]
         facts = [
-            ("instrument", F.num(iid) if iid is not None else F.DASH),
-            ("side", r["side"]),
+            ("instrument", _instrument(ctx, iid)),
+            ("side", units.side_word(r["side"])),
             ("limit price", F.price(r["limit_px"], ctx.price_exp(iid))),
             ("qty", F.num(r["qty"])),
-            ("entry (UTC)", F.ts(_ns(r["ts_entry"]))),
+            ("entry", F.ts_named(_ns(r["ts_entry"]), ctx.tz(iid))),
             (
                 "queue ahead at entry",
                 f"{F.num(r['queue_ahead_at_entry'])} ({r['queue_ahead_source']}, decile {F.num(r['queue_decile'])})",
@@ -308,9 +309,9 @@ def _zoo_items(ctx: Ctx, run: RunDir, z: ZooSummary, k: int) -> list[WhyItem]:
             why_spec = {"dataset": {"path": ds}, "shadows": {"path": sh}, "shadow_id": s_, "max_events": 5000}
         iid = r["instrument_id"]
         facts = [
-            ("instrument", F.num(iid)),
+            ("instrument", _instrument(ctx, iid)),
             ("qty", F.num(r["qty"])),
-            ("live from (UTC)", F.ts(tl)),
+            ("live from", F.ts_named(tl, ctx.tz(iid))),
             ("exact queue ahead at live", F.num(r["queue_ahead_at_live"])),
             (
                 "visible level qty at live",
@@ -403,10 +404,23 @@ def _model_track(ctx: Ctx, item: WhyItem) -> list[tuple[int, float, int]]:
     return []
 
 
+#: Book side of an add, cancel or fill event (a trade's side is the aggressor's: buy or sell).
+_BOOK_SIDE = {"B": "bid", "A": "ask", "N": "-"}
+
+
+def _instrument(ctx: Ctx, iid: Any) -> str:
+    """`QTAU6 (instrument 1)` when the dataset names the symbol, else the id."""
+    if iid is None:
+        return F.DASH
+    sym = ctx.symbol(int(iid))
+    return f"{sym} (instrument {int(iid)})" if sym else F.num(iid)
+
+
 def _event_table(ctx: Ctx, item: WhyItem, tr: WhyTrace, x: Explained | None = None) -> Raw:
     ev = tr.events
     has_model = x is not None and bool(x.model_ahead)
     exp = ctx.price_exp(tr.instrument_id)
+    tz = ctx.tz(tr.instrument_id)
     idx = list(range(len(ev)))
     gap_at = None
     if len(ev) > MAX_WHY_EVENTS:
@@ -422,10 +436,10 @@ def _event_table(ctx: Ctx, item: WhyItem, tr: WhyTrace, x: Explained | None = No
         e = ev[i]
         rows.append(
             [
-                F.ts(e.ts_event),
+                F.ts(e.ts_event, tz),
                 str(e.sequence),
                 e.action,
-                e.side,
+                units.side_word(e.side) if e.action == "T" else _BOOK_SIDE.get(e.side, e.side),
                 F.price(e.price, exp),
                 F.num(e.size),
                 str(e.order_id),
@@ -450,7 +464,7 @@ def _event_table(ctx: Ctx, item: WhyItem, tr: WhyTrace, x: Explained | None = No
         if len(r) < width:
             r.extend([""] * (width - len(r)))
     heads = [
-        "ts (UTC)",
+        f"time ({F.zone(tz)})",
         "seq",
         "action",
         "side",
@@ -474,11 +488,12 @@ def _event_table(ctx: Ctx, item: WhyItem, tr: WhyTrace, x: Explained | None = No
 
 def _traj_table(ctx: Ctx, rows: list[dict[str, Any]]) -> Raw:
     out, rc = [], []
+    tz = ctx.tz(*{r.get("instrument_id") for r in rows})
     shown = rows if len(rows) <= MAX_WHY_EVENTS else rows[: MAX_WHY_EVENTS * 2 // 3] + rows[-(MAX_WHY_EVENTS // 3) :]
     for r in shown:
         out.append(
             (
-                F.ts(r["ts_event"]),
+                F.ts(r["ts_event"], tz),
                 r["kind"],
                 f"{r['queue_ahead_before']:,} → {r['queue_ahead_after']:,}",
                 f"{r['rank_before']:,} → {r['rank_after']:,}",
@@ -495,7 +510,7 @@ def _traj_table(ctx: Ctx, rows: list[dict[str, Any]]) -> Raw:
         rc.append("fill" if r["kind"] == "end" and r["filled_qty"] else "")
     return table(
         [
-            "ts (UTC)",
+            f"time ({F.zone(tz)})",
             "kind",
             "queue ahead",
             "rank",
@@ -619,12 +634,13 @@ def why_section(ctx: Ctx) -> Raw | None:
             if x.model_ahead and x.first_divergence is not None and x.first_divergence < len(tr.events):
                 e0 = tr.events[x.first_divergence]
                 v0 = x.model_ahead[x.first_divergence]
+                at = F.ts_named(e0.ts_event, ctx.tz(tr.instrument_id))
                 parts.append(
                     kv(
                         [
                             (
                                 "first divergence (model vs exact queue ahead)",
-                                f"event {x.first_divergence + 1} at {F.ts(e0.ts_event)}: {x.model_id} "
+                                f"event {x.first_divergence + 1} at {at}: {x.model_id} "
                                 f"{F.num(v0)} vs exact {F.num(e0.queue_ahead_after)}",
                             )
                         ]

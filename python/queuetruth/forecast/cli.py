@@ -16,9 +16,11 @@ import json
 import math
 import re
 import sys
+import warnings
 from pathlib import Path
 from typing import Any
 
+from queuetruth import units
 from queuetruth.errors import EXIT_ERROR, EXIT_GATE, EXIT_OK, QtError
 
 #: Global flags of the main grammar and whether they take a value.
@@ -31,8 +33,6 @@ GLOBAL_FLAGS = {
     "--quiet": False,
     "--verbose": False,
 }
-_UNITS = {"ns": 1, "us": 1_000, "ms": 1_000_000, "s": 1_000_000_000, "m": 60_000_000_000}
-_UNITS |= {"h": 3_600_000_000_000, "d": 86_400_000_000_000}
 MAX_LISTED = 50
 
 
@@ -82,20 +82,26 @@ def _split_globals(argv: list[str]) -> tuple[dict[str, Any], list[str]]:
     return g, rest
 
 
-def parse_duration(text: str, flag: str) -> int:
-    """`5m`, `1h`, `250ms`, `0` -> ns; a unit-less non-zero number is refused (`QT-USAGE-001`)."""
+def duration(text: str, flag: str) -> int:
+    """`5m`, `1h`, `250ms`, `0` -> ns (`queuetruth.units.parse_duration`); a unit-less non-zero number is refused
+    (`QT-USAGE-001`)."""
     t = text.strip()
-    if t == "0":
-        return 0
-    m = re.fullmatch(r"(\d+(?:\.\d+)?)(ns|us|ms|s|m|h|d)", t)
-    if m is None:
-        if re.fullmatch(r"\d+(?:\.\d+)?", t):
-            raise QtError("QT-USAGE-001", f'{flag}: "{t}" has no unit; write {t}s')
-        raise QtError("QT-USAGE-001", f"{flag}: expected a duration such as 30s, 5m or 1h, got {text!r}")
-    ns = float(m.group(1)) * _UNITS[m.group(2)]
-    if ns != int(ns):
-        raise QtError("QT-USAGE-001", f"{flag}: {text!r} is not a whole number of ns")
-    return int(ns)
+    if re.fullmatch(r"\d+(?:\.\d+)?", t) and t != "0":
+        raise QtError("QT-USAGE-001", f'{flag}: "{t}" has no unit; write {t}s')
+    try:
+        return units.parse_duration(t, what=flag, bare_ns=False)
+    except units.DurationError:
+        raise QtError("QT-USAGE-001", f"{flag}: expected a duration such as 30s, 5m or 1h, got {text!r}") from None
+
+
+def parse_duration(text: str, flag: str) -> int:
+    """Deprecated: use `queuetruth.units.parse_duration` (this name stays, with the forecast CLI's error code)."""
+    warnings.warn(
+        "queuetruth.forecast.cli.parse_duration is deprecated; use queuetruth.units.parse_duration",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return duration(text, flag)
 
 
 class _Parser(argparse.ArgumentParser):
@@ -230,11 +236,11 @@ def _score_spec(a: argparse.Namespace, seed: int | None) -> dict[str, Any]:
     if a.baselines:
         spec["baselines"] = [x.strip() for x in a.baselines.split(",") if x.strip()]
     if a.min_lead is not None:
-        spec["min_lead_ns"] = parse_duration(a.min_lead, "--min-lead")
+        spec["min_lead_ns"] = duration(a.min_lead, "--min-lead")
     if a.allow_declared_clock:
         spec["allow_declared_clock"] = True
     if a.market_max_age is not None:
-        spec["market_max_age_ns"] = parse_duration(a.market_max_age, "--market-max-age")
+        spec["market_max_age_ns"] = duration(a.market_max_age, "--market-max-age")
     if len(a.commitment) != len(a.anchored_at):
         raise QtError("QT-USAGE-001", "each --commitment needs one --anchored-at (in the same order)")
     if a.commitment:
@@ -270,9 +276,9 @@ def _score_spec(a: argparse.Namespace, seed: int | None) -> dict[str, Any]:
         if val is not None:
             pnl[key] = val
     if a.latency is not None:
-        pnl["latency_ns"] = parse_duration(a.latency, "--latency")
+        pnl["latency_ns"] = duration(a.latency, "--latency")
     if a.max_quote_age is not None:
-        pnl["max_quote_age_ns"] = parse_duration(a.max_quote_age, "--max-quote-age")
+        pnl["max_quote_age_ns"] = duration(a.max_quote_age, "--max-quote-age")
     if a.price_at is not None:
         pnl["price_at"] = a.price_at
     fees = {
@@ -545,11 +551,8 @@ def _units(k: Any) -> str:
 
 
 def _dur(ns: int) -> str:
-    """Signed duration in the largest unit of h, min and s that keeps it at least 1."""
-    for unit, size in (("h", 3_600_000_000_000), ("min", 60_000_000_000), ("s", 1_000_000_000)):
-        if abs(ns) >= size or unit == "s":
-            return f"{ns / size:+.1f} {unit}"
-    return f"{ns} ns"  # pragma: no cover
+    """Signed duration to two significant digits (`+1.5h`, `-30s`): `queuetruth.units.format_duration`."""
+    return units.format_duration(int(ns), sig=2, signed=True)
 
 
 def _ts(ns: int) -> str:

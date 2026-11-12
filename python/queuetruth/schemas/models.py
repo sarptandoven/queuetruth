@@ -14,7 +14,9 @@ from __future__ import annotations
 
 from typing import Annotated, Any, ClassVar, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, SerializerFunctionWrapHandler, model_serializer
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, SerializerFunctionWrapHandler, model_serializer
+
+from queuetruth.units import HorizonDict
 
 HEX16 = r"^[0-9a-f]{16}$"
 HEX64 = r"^[0-9a-f]{64}$"
@@ -23,8 +25,11 @@ RunId = Annotated[str, Field(pattern=HEX16)]
 Sha256 = Annotated[str, Field(pattern=HEX64)]
 HorizonKey = Annotated[str, Field(pattern=r"^[0-9]+$")]
 IdKey = Annotated[str, Field(pattern=r"^-?[0-9]+$")]
+#: A `{h: v}` map is a `queuetruth.units.HorizonDict`: its keys stay the ns strings of the JSON document, and
+#: `m["1s"]`, `m[1_000_000_000]` and `m["1000000000"]` all read the same entry.
+_H = AfterValidator(HorizonDict)
 #: `{h: v}` map: horizon in ns (decimal string) -> value (null when undefined).
-HMap = dict[HorizonKey, float | None]
+HMap = Annotated[dict[HorizonKey, float | None], _H]
 Fraction = float | None
 
 
@@ -427,7 +432,7 @@ class LeaderboardEntry(QtModel):
     model_id: str
     brier: HMap
     logloss: HMap
-    fill_rate_bias: dict[HorizonKey, CiValue]
+    fill_rate_bias: Annotated[dict[HorizonKey, CiValue], _H]
     overfill_bias: CiValue
     qty_bias: float | None
     ttf_log_ratio_median: float | None = None
@@ -436,24 +441,24 @@ class LeaderboardEntry(QtModel):
     mcnemar: McNemarSmall
     #: 0.1.1 (additive): exact fill rate by horizon, the truth Aalen-Johansen CIF of the leaderboard population (the
     #: same for every model); `fill_rate_bias = model_fill_rate - exact_fill_rate`.
-    exact_fill_rate: HMap = Field(default_factory=dict)
+    exact_fill_rate: HMap = Field(default_factory=HorizonDict)
     #: 0.1.1 (additive): the model's fill rate by horizon, its mean forecast over the label-eligible rows.
-    model_fill_rate: HMap = Field(default_factory=dict)
+    model_fill_rate: HMap = Field(default_factory=HorizonDict)
     #: additive (selection-stats): mean per-shadow first-fill error by horizon,
     #: `|min(T_model, h) - min(T_exact, h)| / h` with `T = ts_first_fill - ts_live` (null = never), a share of the
     #: horizon, on the leaderboard rows.
-    first_fill_error: HMap = Field(default_factory=dict)
+    first_fill_error: HMap = Field(default_factory=HorizonDict)
     #: additive (selection-stats): in the 90% model confidence set for first-fill error at the horizon (Hansen, Lunde,
     #: Nason 2011, `T_R`, wild cluster bootstrap-t over the leaderboard blocks): statistically tied with the best
     #: model; null where undefined (order-level reference, no rows, or fewer than 5 bootstrap blocks).
-    mcs_member: dict[HorizonKey, bool | None] = Field(default_factory=dict)
+    mcs_member: Annotated[dict[HorizonKey, bool | None], _H] = Field(default_factory=HorizonDict)
     #: additive (selection-stats): the MCS p-value for first-fill error (member iff `mcs_p > 0.10`); resolution
     #: `1 / bootstrap_b`, so 0 means below `1 / bootstrap_b`, not certainty.
-    mcs_p: HMap = Field(default_factory=dict)
+    mcs_p: HMap = Field(default_factory=HorizonDict)
     #: additive (selection-stats): in the 90% model confidence set for the Brier loss at the horizon.
-    mcs_brier_member: dict[HorizonKey, bool | None] = Field(default_factory=dict)
+    mcs_brier_member: Annotated[dict[HorizonKey, bool | None], _H] = Field(default_factory=HorizonDict)
     #: additive (selection-stats): the MCS p-value for the Brier loss (resolution `1 / bootstrap_b`).
-    mcs_brier_p: HMap = Field(default_factory=dict)
+    mcs_brier_p: HMap = Field(default_factory=HorizonDict)
 
 
 class ZooSummary(QtDoc):
@@ -649,7 +654,7 @@ class ToxicityModel(QtModel):
     n_inconsistent: int
     phantom_rate: float | None
     missed_rate: float | None
-    horizons: dict[HorizonKey, ToxicityHorizon]
+    horizons: Annotated[dict[HorizonKey, ToxicityHorizon], _H]
 
 
 class TypeMarkouts(QtModel):
@@ -671,7 +676,7 @@ class FillTypeStats(QtModel):
     n_fills: int
     n_shadows: int
     qty: float
-    markouts: dict[HorizonKey, TypeMarkouts]
+    markouts: Annotated[dict[HorizonKey, TypeMarkouts], _H]
 
 
 class ToxGap(QtModel):
@@ -855,7 +860,7 @@ class CalibrationTrust(QtModel):
     #: Every `trust:` diagnostic token present (`at_grid_edge`, `plateau`, `profile_ci_open`, ...), sorted.
     flags: list[str]
     #: Held-out comparison with the default model per horizon (ns, decimal string).
-    beats_default: dict[HorizonKey, Literal["better", "tie", "worse", "mixed", "n/a"]]
+    beats_default: Annotated[dict[HorizonKey, Literal["better", "tie", "worse", "mixed", "n/a"]], _H]
 
 
 class CalibrationResult(QtDoc):
@@ -970,7 +975,7 @@ class HazardScores(QtModel):
     rcll: float | None
     ipcw_logloss: HMap
     brier: HMap
-    bss_vs_climatology: dict[HorizonKey, CiValue]
+    bss_vs_climatology: Annotated[dict[HorizonKey, CiValue], _H]
     ibs: float | None
     calib_slope: HMap
     calib_intercept: HMap

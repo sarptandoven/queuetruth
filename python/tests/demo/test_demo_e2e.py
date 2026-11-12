@@ -125,7 +125,7 @@ def test_interval_refuses_truncated_labels(first: tuple[DemoSummary, Path], tmp_
     t = pq.read_table(zoo / "zoo_shadows.parquet")
     live = t["ts_live"].cast(pa.int64()).to_pylist()
     admin = t["ts_admin_end"].cast(pa.int64()).to_pylist()
-    admin[0] = live[0] + 2_000_000_000  # one shadow's data ends 2 s after it went live
+    admin[0] = live[0] + 2_000_000_000  # one shadow's data ends 2s after it went live
     col = pa.array(admin, type=pa.int64()).cast(t.schema.field("ts_admin_end").type)
     t = t.set_column(t.schema.get_field_index("ts_admin_end"), t.schema.field("ts_admin_end"), col)
     pq.write_table(t, zoo / "zoo_shadows.parquet")
@@ -249,7 +249,7 @@ def test_cli_over_http_with_confirmation(
     monkeypatch.setattr(dcli, "_ask", lambda _prompt: "y\n")
     assert cli.main(args) == 0
     out = capsys.readouterr()
-    assert "Within 1 s, NautilusTrader's default fill model fills" in out.out
+    assert "Within 1s, NautilusTrader's default fill model fills" in out.out
     assert "MB downloaded" in out.out and "Download now?" not in out.out
     # the cached subset needs no confirmation and no network, also without a terminal
     monkeypatch.setattr(dcli.sys.stdin, "isatty", lambda: False)

@@ -39,12 +39,12 @@ def test_headline_sentence_variants() -> None:
     k = "1000000000"
     s = headline_sentence({k: _c(0.294, 0.331, 0.026, 0.048)})
     assert s == (
-        "Within 1 s, NautilusTrader's default fill model fills 33.1% of these orders; the exact replay of the real "
+        "Within 1s, NautilusTrader's default fill model fills 33.1% of these orders; the exact replay of the real "
         "queue fills 29.4%: 3.7 pp (1.13x) too many (95% CI +2.6 to +4.8 pp)."
     )
     assert headline_sentence({k: _c(0.30, 0.25)}).endswith(": 5.0 pp (0.83x) too few.")
     assert headline_sentence({k: _c(0.30, 0.3001)}).endswith("fills 30.0%: the same.")
     assert headline_sentence({k: _c(0.0, 0.01)}).endswith(": 1.0 pp too many.")
-    assert headline_sentence({}).startswith("No fill-rate bias within 1 s")
+    assert headline_sentence({}).startswith("No fill-rate bias within 1s")
     assert headline_sentence({k: _c(None, 0.2)}).startswith("No fill-rate bias")
-    assert "Within 10 s" in headline_sentence({"10000000000": _c(0.5, 0.6)}, 10_000_000_000)
+    assert "Within 10s" in headline_sentence({"10000000000": _c(0.5, 0.6)}, 10_000_000_000)
