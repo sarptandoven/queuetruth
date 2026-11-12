@@ -3,6 +3,11 @@
 Calibration picks a queue model's parameter from what actually happened in the queue, instead of from guesswork or
 from how well a backtest's PnL matches. There are two kinds:
 
+**The short way:** `queuetruth fit --backtester hftbacktest|nautilus|databento --data DATASET` (or `--live LOG
+--data DATASET`) picks the calibration below that fits your backtester and your input, holds out the end of your
+data, and writes the snippet only when the trust verdict passes. See
+[Fit my backtester's fill model](../how-to/fit-my-backtester.md). This page explains what it runs.
+
 **Deeper notes:** [The learned fill model](learned-model.md), a competing-risk hazard model trained with exact
 labels, and [Conformal fill probabilities](conformal-fill-probability.md), intervals with a coverage guarantee.
 

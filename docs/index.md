@@ -25,6 +25,7 @@ interval +1.45 to +1.55 pp), and NautilusTrader's `queue_position` model is clos
 
 | You use | Start here |
 |---|---|
+| hftbacktest, NautilusTrader or Databento's queue estimator, to fix the fill model | [Fit my backtester's fill model](how-to/fit-my-backtester.md) |
 | hftbacktest | [Calibrate my hftbacktest model](how-to/calibrate-hftbacktest.md), [score and calibrate with the plugin](how-to/score-and-calibrate-hftbacktest.md) |
 | NautilusTrader | [Score my Nautilus backtest against my live fills](how-to/score-nautilus-vs-binance.md) |
 | Freqtrade or Hummingbot | [Reconcile Freqtrade and Hummingbot runs](how-to/reconcile-freqtrade-hummingbot.md) |
