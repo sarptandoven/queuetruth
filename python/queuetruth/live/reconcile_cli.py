@@ -11,9 +11,9 @@ Runs `reconcile_freqtrade` / `reconcile_hummingbot` / `reconcile_backtrader` / `
 writes `<out>/live` and `<out>/sim` (canonical live logs), `<out>/score` (`queuetruth score` with the simulator arm)
 and `<out>/reconcile.json` (`qt.bot_reconcile`) with `reconcile_orders.csv`, and prints the report answer first
 (`--format json`: the `qt.bot_reconcile` document). Options are the importer options of the guides
-(docs/how-to/reconcile-freqtrade-hummingbot.md, docs/how-to/reconcile-backtrader-vectorbt.md,
-docs/how-to/reconcile-lean.md), e.g. `--option timeframe=5m`, `--option dry_run=true`. A Python-only group:
-`queuetruth.cli.main` runs it before the clap grammar, which lists it (crates/cli/gen_python_commands.py).
+(docs/how-to/reconcile-freqtrade-hummingbot.md, docs/how-to/reconcile-backtrader-vectorbt.md), e.g.
+`--option timeframe=5m`, `--option dry_run=true`. A Python-only group: `queuetruth.cli.main` runs it before the clap
+grammar, which lists it (crates/cli/gen_python_commands.py).
 
 Exit codes (SPEC 0.2): 0 success, 2 any error.
 """

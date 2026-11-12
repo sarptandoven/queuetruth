@@ -53,7 +53,7 @@ MANIFEST_VERSION = 1
 #: not reused.
 FILTER_VERSION = 1
 #: Pinned subset content hashes of the default configurations: (source id, symbols, placement tag) -> (sha256 of
-#: the content, kept messages). Recorded from the first real runs on 2026-10-24 (docs/getting-started.md).
+#: the content, kept messages). Recorded from the first real runs on 2026-10-24 (docs/tutorials/see-it-in-a-minute.md).
 PINS: dict[tuple[str, tuple[str, ...], str], tuple[str, int]] = {
     ("nasdaq-2019-12-30", ("AAPL", "MSFT", "SPY", "TSLA"), "0935-5m"): (
         "1f04ab8ec17adf0229151932012b4921269e93ed2e011630f6c62734982803b6",
