@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import random
+import re
 import shutil
 from fractions import Fraction
 from pathlib import Path
@@ -782,7 +783,9 @@ def test_population_exclusions_and_statuses(predictions: Any) -> None:
     }
     assert doc["truth_mismatch_rate"] == pytest.approx(1 / 6)
     assert any(w.startswith("truth_mismatch: 1 of 6 shadow(s)") and "(first s9)" in w for w in res.warnings)
-    assert doc["ci_block"] == "30min" and doc["n_blocks"] == 2 and doc["window_ns"] == W and doc["horizons_ns"] == HZ
+    # 2 half-hours are fewer than 5 blocks: auto falls back to instrument x minute clusters (short captures)
+    assert doc["ci_block"] == "instrument_minute" and doc["window_ns"] == W and doc["horizons_ns"] == HZ
+    assert doc["n_blocks"] == 5  # the 5 population shadows, 10 minutes apart: one cluster each
     assert doc["exact"] == {"n_filled": 3, "n_fills": 3, "fills_by_mechanism": {"queue": 1, "swept": 1,
                                                                                  "hidden_print": 1}}  # fmt: skip
     st = {(r["model_id"], r["shadow_id"]): r["status"] for r in res.shadows.to_pylist()}
@@ -990,10 +993,11 @@ def test_by_type_table_and_rankings(predictions: Any) -> None:
     # s0, s2 and s4: -0.2
     assert [r["model_id"] for r in rk["deny"]] == [FQ, NT, PM, TT, HB]
     assert [r["value"] for r in rk["deny"]] == pytest.approx([-0.6, -0.4, 0.2, -0.2, -0.2])
-    # rank intervals from the shared replicates: a model that grants 0 in every replicate shares its place with the
-    # other zeros and with FQ or TT when one of them draws 0 (only one block drawn)
+    # rank intervals from the shared replicates (5 instrument x minute clusters, one per shadow): a model that grants
+    # 0 in every replicate shares its place with the other zeros, and with FQ and TT in the replicates that draw
+    # neither phantom shadow (s1, s3; (3/5)^5 = 7.8% of draws, above 2.5%), so every place spans 1 to 5
     hb = rk["grant"][4]
-    assert (hb["rank_lo"], hb["rank_hi"]) == (2, 5)
+    assert (hb["rank_lo"], hb["rank_hi"]) == (1, 5)
     assert all(r["rank_lo"] <= r["rank"] <= r["rank_hi"] for name in ("grant", "deny", "bias") for r in rk[name])
     # paired gaps: equal magnitudes are not separated; the last place has no gap
     assert rk["grant"][0]["gap_to_next"]["value"] == pytest.approx(0.0)
@@ -1119,10 +1123,12 @@ def test_render_answer_first_view(predictions: Any) -> None:
 def test_bootstrap_matches_explicit_replicates(predictions: Any) -> None:
     res = _evaluate(predictions)
     got = _model(res.doc, FQ)["horizons"][str(S)]["deny_ticks"]
-    # shadows s0..s4: blocks 0, 0, 0, 1, 1; deny contribution -3 on s2 only
-    counts = block_counts(2, 400, bootstrap_seed(5, BOOTSTRAP_TEST_ID)).astype(float)
-    num = np.array([-3.0, 0.0])
-    den = np.array([3.0, 2.0])
+    # shadows s0..s4, 10 minutes apart on one instrument: 2 half-hour blocks are fewer than 5, so the blocks are
+    # instrument x minute clusters, one per shadow (0..4); deny contribution -3 on s2 only
+    assert (res.doc["ci_block"], res.doc["n_blocks"]) == ("instrument_minute", 5)
+    counts = block_counts(5, 400, bootstrap_seed(5, BOOTSTRAP_TEST_ID)).astype(float)
+    num = np.array([0.0, 0.0, -3.0, 0.0, 0.0])
+    den = np.array([1.0, 1.0, 1.0, 1.0, 1.0])
     reps = (counts @ num) / (counts @ den)
     lo, hi = percentile_ci(np.where(counts @ den > 0, reps, np.nan))
     assert got["ci_lo"] == pytest.approx(lo) and got["ci_hi"] == pytest.approx(hi) and got["n"] == 5
@@ -1506,3 +1512,32 @@ def test_replay_takes_the_zoos_amends_latency_and_exclusions(amended_zoo: Path, 
     ).model_dump(mode="json", by_alias=True)  # fmt: skip
     body = ("n_shadows", "n_excluded", "exact", "models", "by_type", "rankings")
     assert {k: again[k] for k in body} == {k: doc[k] for k in body}
+
+
+def test_fewer_than_five_blocks_give_no_interval_and_no_rank_range(predictions: Any) -> None:
+    # 2 half-hour blocks: a percentile interval over 2 blocks is not an interval (audit 2026-11-12, short captures)
+    res = _evaluate(predictions, bootstrap_block="30min")
+    doc = res.doc
+    assert (doc["ci_block"], doc["n_blocks"]) == ("30min", 2)
+    assert any(
+        w.startswith("ci: 2 bootstrap block(s) (30min) < 5: intervals and significance not available")
+        for w in res.warnings
+    )
+
+    def stats(x: Any) -> list[dict[str, Any]]:
+        if isinstance(x, dict):
+            hit = [x] if {"value", "ci_lo", "ci_hi"} <= set(x) else []
+            return hit + [s for v in x.values() for s in stats(v)]
+        return [s for v in x for s in stats(v)] if isinstance(x, list) else []
+
+    found = stats(doc["models"]) + stats(doc["by_type"]) + stats(doc["rankings"])
+    assert found and any(s["value"] is not None for s in found)
+    assert all(s["ci_lo"] is None and s["ci_hi"] is None for s in found)
+    rows = [r for k in ("grant", "deny", "bias") for r in doc["rankings"][k]]
+    assert rows and all(r["rank_lo"] is None and r["rank_hi"] is None for r in rows)
+    assert all(not r["separated_from_next"] for r in rows)
+    text = render_toxicity(
+        {**doc, "run_id": "x", "zoo_run_id": "z", "zoo_mode": "faithful", "files": [], "warnings": []}
+    )
+    assert text is not None and "no 95% CIs and no * marks" in text
+    assert not re.search(r"\d\*", text), text  # no cell is marked significant

@@ -1157,6 +1157,8 @@ pub fn run_zoo(spec: &ZooSpec) -> QtResult<json::ZooSummary> {
         hbt_312_aborts,
         n_excluded_hbt_312,
         n_leaderboard: None,
+        ci_block: None,
+        n_ci_blocks: None,
     };
     let text = serde_json::to_string_pretty(&summary).map_err(|e| QtError::Engine(format!("summary: {e}")))?;
     std::fs::write(out.join("summary.json"), text + "\n").map_err(QtError::Io)?;

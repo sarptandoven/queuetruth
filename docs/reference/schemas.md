@@ -70,7 +70,7 @@ directory with `orders.parquet` (`qt.live_orders`), `events.parquet` (`qt.live_e
 | [`qt.demo_summary`](#qtdemo_summary) | Summary of `queuetruth demo` (module docstring). |
 | [`qt.doctor`](#qtdoctor) | Result of `doctor`. |
 | [`qt.dq_report`](#qtdq_report) | 1.2: `qt.dq_report` (`queuetruth dq`, `dq_report.json`): `status` = the worst check status (`pass` when every check passed or was skipped); `gate_failed` = the status reached `spec.fail_on`. |
-| [`qt.dq_spec`](#qtdq_spec) | 1.2: `queuetruth dq` spec (`qt.dq_spec`; checks in `queuetruth.dq`). `dataset`: the dataset to check; `out`: output directory for `dq_report.json` and `dq_report.html` (null = return the report, write nothing); `compare`: a second dataset of the same session(s) for the cross-source parity check; `checks`: run only these check ids (null = all); `fail_on`: the CLI exits 1 when any check reaches this status (`warn`: warn or fail; `fail`: fail only; `never`); `max_evidence`: evidence rows kept per table; `stale_ns`: a book with no update for longer than this while trades print is stale; `latency_outlier_ns`: `ts_recv - ts_event` above this is an outlier (null = 10 x p99, at least 1 ms); `session_tolerance_ns`: slack at the session open and close before coverage warns; `replay`: run the exact replay for the book checks (crossed books, prints through the book, trade parity, replay counters); `verify_sources`: re-hash the raw input files recorded in the manifest when they still exist (otherwise only their size is compared); `title`: HTML title. |
+| [`qt.dq_spec`](#qtdq_spec) | 1.2: `queuetruth dq` spec (`qt.dq_spec`; checks in `queuetruth.dq`). `dataset`: the dataset to check; `out`: output directory for `dq_report.json` and `dq_report.html` (null = return the report, write nothing); `compare`: a second dataset of the same session(s) for the cross-source parity check; `checks`: run only these check ids (null = all); `fail_on`: the CLI exits 1 when any check reaches this status (`warn`: warn or fail; `fail`: fail only; `never`, the default: no gate, exit 0 whatever the verdict); `max_evidence`: evidence rows kept per table; `stale_ns`: a book with no update for longer than this while trades print is stale; `latency_outlier_ns`: `ts_recv - ts_event` above this is an outlier (null = 10 x p99, at least 1 ms); `session_tolerance_ns`: slack at the session open and close before coverage warns; `replay`: run the exact replay for the book checks (crossed books, prints through the book, trade parity, replay counters); `verify_sources`: re-hash the raw input files recorded in the manifest when they still exist (otherwise only their size is compared); `title`: HTML title. |
 | [`qt.error`](#qterror) | CLI / API error object (exit code 2). |
 | [`qt.estimate`](#qtestimate) | Cost and time estimate of a job. |
 | [`qt.export_spec`](#qtexport_spec) | `export`: config snippets and npz files. |
@@ -1929,7 +1929,7 @@ One output file: name relative to the output directory, row count for tables, si
 
 File: `schemas/json/qt.dq_spec.schema.json`.
 
-1.2: `queuetruth dq` spec (`qt.dq_spec`; checks in `queuetruth.dq`). `dataset`: the dataset to check; `out`: output directory for `dq_report.json` and `dq_report.html` (null = return the report, write nothing); `compare`: a second dataset of the same session(s) for the cross-source parity check; `checks`: run only these check ids (null = all); `fail_on`: the CLI exits 1 when any check reaches this status (`warn`: warn or fail; `fail`: fail only; `never`); `max_evidence`: evidence rows kept per table; `stale_ns`: a book with no update for longer than this while trades print is stale; `latency_outlier_ns`: `ts_recv - ts_event` above this is an outlier (null = 10 x p99, at least 1 ms); `session_tolerance_ns`: slack at the session open and close before coverage warns; `replay`: run the exact replay for the book checks (crossed books, prints through the book, trade parity, replay counters); `verify_sources`: re-hash the raw input files recorded in the manifest when they still exist (otherwise only their size is compared); `title`: HTML title.
+1.2: `queuetruth dq` spec (`qt.dq_spec`; checks in `queuetruth.dq`). `dataset`: the dataset to check; `out`: output directory for `dq_report.json` and `dq_report.html` (null = return the report, write nothing); `compare`: a second dataset of the same session(s) for the cross-source parity check; `checks`: run only these check ids (null = all); `fail_on`: the CLI exits 1 when any check reaches this status (`warn`: warn or fail; `fail`: fail only; `never`, the default: no gate, exit 0 whatever the verdict); `max_evidence`: evidence rows kept per table; `stale_ns`: a book with no update for longer than this while trades print is stale; `latency_outlier_ns`: `ts_recv - ts_event` above this is an outlier (null = 10 x p99, at least 1 ms); `session_tolerance_ns`: slack at the session open and close before coverage warns; `replay`: run the exact replay for the book checks (crossed books, prints through the book, trade parity, replay counters); `verify_sources`: re-hash the raw input files recorded in the manifest when they still exist (otherwise only their size is compared); `title`: HTML title.
 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
@@ -1937,7 +1937,7 @@ File: `schemas/json/qt.dq_spec.schema.json`.
 | `out` | string or null | no | `null` |  |
 | `compare` | PathRef or null | no | `null` |  |
 | `checks` | array of string or null | no | `null` |  |
-| `fail_on` | one of "warn", "fail", "never" | no | `"warn"` |  |
+| `fail_on` | one of "warn", "fail", "never" | no | `"never"` |  |
 | `max_evidence` | integer | no | `20` |  |
 | `stale_ns` | integer | no | `60000000000` |  |
 | `latency_outlier_ns` | integer or null | no | `null` |  |
@@ -6640,6 +6640,7 @@ File: `schemas/json/qt.shadow_sample_spec.schema.json`.
 | `window_close_s` | integer | no | `600` |  |
 | `lifetime_ns` | integer | no | `300000000000` |  |
 | `latency_ns` | integer | no | `0` |  |
+| `clamp_to_data_end` | boolean | no | `true` |  |
 
 **`DatasetIdRef`** (in `qt.shadow_sample_spec`)
 
@@ -6691,6 +6692,7 @@ Summary of `shadows sample`, `shadows mirror-real` and `shadows from-live`.
 | `by_instrument` | object | yes |  |  |
 | `by_placement` | object | yes |  |  |
 | `files` | array of FileEntry | yes |  |  |
+| `warnings` | array of string | no |  |  |
 
 **`FileEntry`** (in `qt.shadow_sample_summary`)
 
@@ -6966,6 +6968,7 @@ File: `schemas/json/qt.zoo_spec.schema.json`.
 | `write_trajectory` | boolean | no | `false` |  |
 | `threads` | integer | no | `1` |  |
 | `bootstrap_b` | integer | no | `1000` |  |
+| `bootstrap_block` | one of "auto", "day", "30min", "1min", "instrument_minute" | no | `"auto"` |  |
 | `amends` | PathRef or UploadRef or JobFileRef or null | no | `null` |  |
 | `exclude_order_ids` | array of ExcludeOrderId | no |  |  |
 
@@ -7063,6 +7066,8 @@ Summary of `zoo`; the Rust runner leaves `leaderboard` empty (filled by `queuetr
 | `hbt_312_aborts` | map of integer | no |  |  |
 | `n_excluded_hbt_312` | integer | no | `0` |  |
 | `n_leaderboard` | integer or null | no | `null` |  |
+| `ci_block` | string or null | no | `null` |  |
+| `n_ci_blocks` | integer or null | no | `null` |  |
 
 **`CiValue`** (in `qt.zoo_summary`)
 
@@ -7139,7 +7144,7 @@ Summary of `zoo-toxicity`: fill-type tags, markouts and the adverse-selection ra
 | `truth_mismatch_rate` | number or null | yes |  |  |
 | `window_ns` | integer | yes |  |  |
 | `horizons_ns` | array of integer | yes |  |  |
-| `ci_block` | one of "day", "30min" | yes |  |  |
+| `ci_block` | one of "day", "30min", "1min", "instrument_minute" | yes |  |  |
 | `n_blocks` | integer | yes |  |  |
 | `bootstrap_b` | integer | yes |  |  |
 | `exact` | ToxicityExact | yes |  |  |

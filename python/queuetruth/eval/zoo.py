@@ -51,7 +51,10 @@ horizon `<= h_max_ns` and stratum (`all`; `queue_decile` 0..9; `liquidity_bucket
   pairs spanning zero time use the plain mean; non-finite estimates skipped).
 CIs (95% percentile) for the ratio metrics (brier, logloss, fill_rate_bias, qty_bias, overfill_bias) and
 `fill_rate_bias_aj`: block
-bootstrap of shadows with blocks = session dates (>= 5 dates) else 30-minute buckets of `ts_live`; one draw matrix
+bootstrap of shadows with blocks = session dates (>= 5 dates) else 30-minute buckets of `ts_live`, and with fewer than
+5 of those, (instrument, minute of `ts_live`) clusters (`queuetruth.stats.ci_blocks`, `block="auto"`; the spec's
+`bootstrap_block` forces one kind). With fewer than 5 blocks every CI and the cluster-robust discordance p-values
+(`discordance_p_primary`, `discordance_p_bootstrap`) are null: no interval is reported. One draw matrix
 `block_counts(n_blocks, bootstrap_b, stable_seed(seed, [b"bootstrap", "zoo_eval"]))` shared by every model,
 metric and stratum; replicate = `sum_k count_k num_k / sum_k count_k den_k`. The discordance bootstrap uses
 `stable_seed(seed, [b"bootstrap", "zoo_discordance:<metric prefix><model_id>:<stratum_kind>:<stratum>"])`.
@@ -71,10 +74,13 @@ import pyarrow.compute as pc
 from queuetruth.errors import QtError
 from queuetruth.eval import _cols as C
 from queuetruth.stats import (
+    MIN_CI_BLOCKS,
+    CiBlocks,
     aalen_johansen,
     block_counts,
     block_labels,
     bootstrap_seed,
+    ci_blocks,
     clustered_mcnemar,
     percentile_ci,
 )
@@ -164,15 +170,18 @@ def _none(x: float) -> float | None:
 class _Ratio:
     """Ratio-of-sums statistic with its shared-draw block bootstrap."""
 
-    def __init__(self, counts: np.ndarray) -> None:
+    def __init__(self, counts: np.ndarray, with_ci: bool = True) -> None:
         self.counts = counts
         self.nb = counts.shape[1]
+        self.with_ci = with_ci
 
     def __call__(self, num: np.ndarray, den: np.ndarray, blocks: np.ndarray) -> tuple[float, float, float]:
         ns = np.bincount(blocks, weights=num, minlength=self.nb)
         ds = np.bincount(blocks, weights=den, minlength=self.nb)
         total = float(ds.sum())
         value = float(ns.sum()) / total if total > 0 else float("nan")
+        if not self.with_ci:
+            return value, float("nan"), float("nan")
         rn = (self.counts * ns[None, :]).sum(axis=1)
         rd = (self.counts * ds[None, :]).sum(axis=1)
         reps = np.where(rd > 0, rn / np.where(rd > 0, rd, 1.0), np.nan)
@@ -282,10 +291,13 @@ def evaluate_zoo(
     bootstrap_b: int = 1000,
     seed: int = 0,
     planned_life: pa.Table | None = None,
+    block: str = "auto",
 ) -> tuple[pa.Table, list[dict[str, Any]]]:
     """Metrics per model, horizon and stratum (`qt.zoo_errors`) and the leaderboard entries. `planned_life` is
     required (`QT-INPUT-001` without it, `QT-INPUT-002` when a predicted shadow has no row): label eligibility is
-    never inferred from the outcome-flavoured `censored` column (audit ruling A2, E38 OC-7)."""
+    never inferred from the outcome-flavoured `censored` column (audit ruling A2, E38 OC-7). `block` picks the
+    bootstrap blocks (`queuetruth.stats.ci_blocks`; `zoo_ci_blocks` tells which were used): with fewer than 5 the
+    CIs and the cluster-robust discordance p-values are left null."""
     C.require(predictions, _PRED_COLS, "evaluate_zoo")
     if planned_life is None:
         raise QtError(
@@ -321,13 +333,14 @@ def evaluate_zoo(
     ids, first, sid_inv = np.unique(sid, return_index=True, return_inverse=True)
     sid_inv = np.asarray(sid_inv).reshape(-1)
     n_shadows = ids.size
-    labels, _kind = block_labels(date[first], live[first])
-    _, block_of_shadow = np.unique(labels, return_inverse=True)
-    blocks = np.asarray(block_of_shadow).reshape(-1)[sid_inv]
-    n_blocks = int(blocks.max()) + 1
+    cb = _ci_blocks(date[first], live[first], inst[first], block)
+    block_of_shadow = cb.labels
+    blocks = block_of_shadow[sid_inv]
+    n_blocks = cb.n
+    with_ci = cb.available
     counts = block_counts(n_blocks, bootstrap_b, bootstrap_seed(seed, BOOTSTRAP_TEST_ID))
-    ratio = _Ratio(counts.astype(float))
-    shadow_block = np.asarray(block_of_shadow).reshape(-1)
+    ratio = _Ratio(counts.astype(float), with_ci)
+    shadow_block = block_of_shadow
     horizons = np.unique(h[h <= h_max_ns])
 
     # A2: outcome-independent label existence and the per-shadow planned life
@@ -437,12 +450,14 @@ def evaluate_zoo(
                     emit(m, prefix + "overfill_bias", int(hz), kind, stratum, v, lo, hi, n)
                     test_id = f"zoo_discordance:{prefix}{m}:{kind}:{stratum}"
                     cd = clustered_mcnemar(truth, model_filled, bs, b=bootstrap_b, seed=bootstrap_seed(seed, test_id))
-                    emit(m, prefix + "discordance_p_primary", int(hz), kind, stratum, cd.p_primary, nan, nan, n)
+                    if with_ci:  # fewer than 5 blocks: a block-bootstrap p-value would be degenerate
+                        emit(m, prefix + "discordance_p_primary", int(hz), kind, stratum, cd.p_primary, nan, nan, n)
                     if cd.p_obuchowski is not None:
                         emit(
                             m, prefix + "discordance_p_obuchowski", int(hz), kind, stratum, cd.p_obuchowski, nan, nan, n
                         )
-                    emit(m, prefix + "discordance_p_bootstrap", int(hz), kind, stratum, cd.p_bootstrap, nan, nan, n)
+                    if with_ci:
+                        emit(m, prefix + "discordance_p_bootstrap", int(hz), kind, stratum, cd.p_bootstrap, nan, nan, n)
                     emit(m, prefix + "n_clusters", int(hz), kind, stratum, float(cd.n_clusters), nan, nan, n)
                     if cd.n_effective is not None:
                         emit(m, prefix + "n_effective", int(hz), kind, stratum, cd.n_effective, nan, nan, n)
@@ -488,7 +503,7 @@ def evaluate_zoo(
                     ns = np.bincount(blocks[mh], minlength=nb).astype(float)
                     rd = counts @ ns
                     rep_p = np.where(rd > 0, (counts @ ps) / np.where(rd > 0, rd, 1.0), np.nan)
-                    lo, hi = percentile_ci(rep_p - cif_reps[prefix][:, j], 0.05)
+                    lo, hi = percentile_ci(rep_p - cif_reps[prefix][:, j], 0.05) if with_ci else (nan, nan)
                     emit(m, prefix + "fill_rate_bias_aj", int(hz), "all", "all", diff, lo, hi, int(mh.sum()))
                     if lead:
                         # A2 / SPEC 5.6: the leaderboard bias is the AJ figure (truth = AJ CIF, never mean(y))
@@ -519,6 +534,23 @@ def evaluate_zoo(
             entry["qtrack_mae"] = _none(v)
         leaderboard.append(entry)
     return _errors_table(rows), leaderboard
+
+
+def zoo_ci_blocks(predictions: pa.Table, block: str = "auto") -> CiBlocks:
+    """The bootstrap blocks `evaluate_zoo` uses on `predictions` (one label per distinct shadow of the common
+    population, in ascending shadow id order)."""
+    t = common_population(predictions)
+    sid = C.strings(t, "shadow_id")
+    live, _ = C.ints(t, "ts_live")
+    date, _ = C.ints(t, "session_date")
+    inst, _ = C.ints(t, "instrument_id")
+    _, first = np.unique(sid, return_index=True)
+    return _ci_blocks(date[first], live[first], inst[first], block)
+
+
+def _ci_blocks(date: np.ndarray, live: np.ndarray, inst: np.ndarray, block: str) -> CiBlocks:
+    # this module's `block_labels` and `MIN_CI_BLOCKS`, so a test can lower the day threshold in one place
+    return ci_blocks(date, live, inst, block, labeler=block_labels, min_blocks=MIN_CI_BLOCKS)
 
 
 def planned_life_table(

@@ -18,6 +18,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from queuetruth.errors import QtError
+from queuetruth.eval.leaderboard import without_degenerate_cis
 from queuetruth.schemas.arrow import SCHEMAS
 from queuetruth.schemas.io import sha256_file
 from queuetruth.schemas.models import (
@@ -30,6 +31,7 @@ from queuetruth.schemas.models import (
     QtDoc,
     ReplaySummary,
     ScorecardSummary,
+    ZooSummary,
 )
 
 
@@ -206,6 +208,8 @@ def _scan(root: Path, label: str, only: str | None = None) -> RunDir:
                 model = DOC_MODELS[name].model_validate(data)
             except ValueError as e:
                 raise QtError("QT-INPUT-002", f"{_display(label, p.name)}: invalid {name} document: {e}") from e
+            if isinstance(model, ZooSummary):  # no interval rests on fewer than 5 bootstrap blocks
+                model = without_degenerate_cis(model)
             st = p.stat()
             rec = FileRec(_display(label, p.name), name, st.st_size, sha256_file(p))
             run.docs.append(Doc(rec, p.name, model))

@@ -488,7 +488,8 @@ def _id(spec: dict) -> str:
 
 V1_1_SPEC_FIELDS = {
     s.ReplaySpec: {"fill_rule": "exact", "hidden_print_policy": None, "exclude_order_ids": []},
-    s.ZooSpec: {"amends": None, "exclude_order_ids": []},
+    s.ZooSpec: {"amends": None, "exclude_order_ids": [], "bootstrap_block": "auto"},
+    s.ShadowSampleSpec: {"partition_quotas": {}, "clamp_to_data_end": True},
     s.ScorecardSpec: {
         "window_ns": 60_000_000_000,
         "match_window_ns": 1_000_000,
@@ -507,6 +508,7 @@ V1_1_SPEC_FIELDS = {
 MINIMAL = {
     s.ReplaySpec: {"dataset": {"path": "d"}},
     s.ZooSpec: {"dataset": {"path": "d"}, "shadows": {"path": "s"}},
+    s.ShadowSampleSpec: {"dataset": {"path": "d"}, "n": 10},
     s.ScorecardSpec: {"live": {"path": "l"}, "sim": {"kind": "exact"}},
     s.LiveImportSpec: {"venue": "fix44", "inputs": [{"path": "x"}]},
     s.IngestSpec: {"format": "itch", "inputs": [{"path": "x"}], "venue": "nasdaq"},

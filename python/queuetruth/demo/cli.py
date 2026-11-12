@@ -358,8 +358,11 @@ def main(argv: list[str]) -> int:
         else:
             print(render(summary, verbose=ns.verbose))
             if not ns.quiet:
-                for w in summary.warnings:
-                    print(f"warning: {w}", file=sys.stderr)
+                from queuetruth.cli import stderr_lines
+
+                # diagnostics (model confidence set, impact, ...) stay in demo.json; --verbose prints them
+                for line in stderr_lines({"warnings": list(summary.warnings)}, verbose=ns.verbose):
+                    print(line, file=sys.stderr)
         return EXIT_OK
     except _Usage as e:
         err = QtError("QT-USAGE-001", f"demo: {e}", "queuetruth demo --help")

@@ -45,6 +45,23 @@ from queuetruth.schemas.models import ReportSummary
 from queuetruth.schemas.specs import ReportSpec
 
 MAX_BYTES = 10 * 1024 * 1024
+#: Sections that render for any input; a page with nothing else says nothing about the inputs.
+FRAME_SECTIONS = frozenset({"header", "config", "why"})
+#: What the report renders, named in the refusal of inputs it cannot render.
+SUPPORTED_INPUTS = (
+    "zoo (leaderboard and drill-down)",
+    "score (scorecard)",
+    "calibrate or calibrate-live (calibration)",
+    "fit-hazard (learned model)",
+    "referee (referee report)",
+    "replay or ingest (data quality)",
+)
+#: Hints for documents the report reads but does not render: what to do instead.
+_OWN_PAGE = {
+    "qt.demo_summary": "the demo writes its own page (demo.html); for the full report pass its zoo/ subdirectory",
+    "qt.dq_report": "dq writes its own page (dq_report.html next to dq_report.json)",
+    "qt.zoo_toxicity": "zoo-toxicity has no report section; its terminal and JSON outputs are the result",
+}
 
 #: (section id, table-of-contents label, builder): the leaderboard first, then the drill-downs in SPEC 5.9 order. The
 #: header (always present) and the answer block (built last, so it links only to rendered sections) come before them.
@@ -102,6 +119,18 @@ def _sort_horizon(sp: ReportSpec, override: int | None) -> int:
     return int(v)
 
 
+def _unsupported(inputs: Any) -> QtError:
+    """`QT-USAGE-001` for inputs that would give a page with only the header and the configuration."""
+    found = sorted({r.schema for r in inputs.files if r.role != "provenance"})
+    hints = [_OWN_PAGE[f] for f in found if f in _OWN_PAGE]
+    return QtError(
+        "QT-USAGE-001",
+        f"report: nothing to render from {', '.join(inputs.given)} (found {', '.join(found) or 'no documents'}); "
+        f"the report renders the output directories of {'; '.join(SUPPORTED_INPUTS)}",
+        hint="; ".join(hints) if hints else "pass a supported output directory with --in",
+    )
+
+
 def render(spec: ReportSpec | dict[str, Any], *, leaderboard_sort_horizon_ns: int | None = None) -> ReportSummary:
     """Renders the report of SPEC 5.9 to `spec.out` and returns its `qt.report_summary`. The zoo leaderboard is
     sorted by absolute fill-rate bias at the keyword `leaderboard_sort_horizon_ns`, else the spec field of that
@@ -115,6 +144,8 @@ def render(spec: ReportSpec | dict[str, Any], *, leaderboard_sort_horizon_ns: in
     hsort = _sort_horizon(sp, leaderboard_sort_horizon_ns)
     inputs = load_inputs(list(sp.inputs))
     page, sections = _build(Ctx(spec=sp, inputs=inputs, sort_horizon_ns=hsort))
+    if not set(sections) - FRAME_SECTIONS:
+        raise _unsupported(inputs)
     data = page.encode("utf-8")
     if len(data) > MAX_BYTES:
         page, sections = _build(Ctx(spec=sp, inputs=inputs, compact=True, sort_horizon_ns=hsort))

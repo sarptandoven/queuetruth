@@ -663,6 +663,9 @@ pub struct ShadowSampleSummary {
     pub by_placement: IndexMap<String, u64>,
     /// Files.
     pub files: Files,
+    /// Warnings (additive; absent when there are none).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
 }
 doc!(ShadowSampleSummary, "qt.shadow_sample_summary");
 
@@ -775,6 +778,12 @@ pub struct ZooSummary {
     /// model); null from the Rust runner, which does not evaluate.
     #[serde(default)]
     pub n_leaderboard: Option<u64>,
+    /// Kind of the bootstrap blocks behind the leaderboard CIs (Python evaluation; null from the runner).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ci_block: Option<String>,
+    /// Number of those blocks (null from the runner).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub n_ci_blocks: Option<u64>,
 }
 doc!(ZooSummary, "qt.zoo_summary");
 

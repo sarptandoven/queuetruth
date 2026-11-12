@@ -135,6 +135,10 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   sandbox. Test names and oracle ids in task guides moved to a collapsible "Evidence" note at the end of each page.
   Stale facts fixed: `queuetruth --help` lists `demo`; `--fix-delimiter` and `--fix-local-ts-regex` exist; fuzzing
   runs weekly in CI; the venue rule table has `iex` and `nyse` columns; DBN and NYSE status records censor shadows.
+- Diagnostics no longer flood the terminal: the model confidence set, shadow impact, interval-block, self-exclusion,
+  race and cluster lines stay in the summary's `warnings` and print with `--verbose`; by default one plain note
+  counts them. The MCS writes one line for all horizons without a confidence set instead of one per horizon. The
+  demo follows the same rule.
 - `queuetruth export hftbacktest` and `queuetruth_hftbacktest.calibrate` write `.no_partial_fill_exchange()` by
   default, the exchange that runs on the released hftbacktest 2.4.4. With `.partial_fill_exchange()`, 2.4.4 stops the
   backtest with error 14 (hftbacktest #312): on the plugin's synthetic test flow 5 of 187 orders were scored with it,
@@ -175,6 +179,27 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 - `rustix` 1.1.5 to 1.1.6 in `Cargo.lock` (RUSTSEC-2026-0486: its xattr functions marked unwritten bytes as
   initialized when given a zero-length buffer). Reached only through `tempfile`; 1.1.6 was released on 2026-10-27.
+- **Intervals on short captures.** On data that fits in one or a few half-hours (for example 15 minutes of your own
+  ITCH capture), the zoo, its leaderboard, `report` and `zoo-toxicity` bootstrapped over fewer than 5 blocks: every
+  95% CI had zero width (`+0.4 pp (95% CI +0.4 to +0.4 pp)`), every cell was starred and `report` said BIASED. With
+  fewer than 5 day or half-hour blocks they now resample instrument x minute clusters, as the demo does, and with
+  fewer than 5 blocks of any kind they report no interval, no `*`, no cluster-robust discordance p and no BIASED
+  badge. `zoo --bootstrap-block` and `zoo-toxicity --bootstrap-block` (`auto`, `day`, `30min`, `1min`,
+  `instrument-minute`) choose the blocks; the zoo summary's new `ci_block` and `n_ci_blocks` and the terminal output
+  say which were used. Long runs keep their numbers and run ids: on a full synthetic day, `zoo_errors.parquet`, the
+  leaderboard and the zoo-toxicity summary are identical before and after. `report` drops the zero-width intervals
+  of zoo runs made before this fix and says so.
+- **Shadow lives past the end of the data.** `shadows sample` placed shadows until the last record, so on a short
+  capture half of the 5-minute lives ran past the end and the zoo showed several populations (placed, live,
+  leaderboard, `n` at 60 s). It now places each shadow no later than the end of the data minus its latency and
+  lifetime and warns when that shortens the window (`warnings`, new in the summary); `--allow-past-end`
+  (`clamp_to_data_end: false`) keeps the old window. The zoo warns when the shadows it scores end with the data
+  before `h_max`.
+- `report` no longer writes a near-empty page for inputs it cannot render (a demo directory, zoo-toxicity, dq, a
+  sandbox episode, a reconcile root, a pm score): it exits 2 with `QT-USAGE-001`, lists what it renders and, where
+  there is one, names the page that input has.
+- `dq` exits 1 only when you ask for a gate, as the docs say: `--fail-on` now defaults to `never` (it was `warn`,
+  so a capture that "ends early" failed by default).
 - `queuetruth why --live` refused every live log written by Python (`live import`, `reconcile`) with `QT-INPUT-002:
   ... column "client_order_id_chain": expected List(Utf8) ..., found ... List(Utf8, field: 'element')`. pyarrow names
   a Parquet list's child `element`, the Rust reader expected `item`; the reader now takes either name.
