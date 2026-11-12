@@ -188,9 +188,10 @@ def held_out_verdicts(cal: CalibrationResult) -> tuple[str | None, str | None, l
     return fid, did, out
 
 
-def held_out_summary(t: Trust, fmt: Callable[[int], str] = dur) -> str:
+def held_out_summary(t: Trust, fmt: Callable[[int], str] | None = None) -> str:
     """One line: `beats the default <id> at 1s, 10s; tie at 100ms` / `WORSE than ...` / `not evaluated ...`. `fmt`
-    writes the horizons (`dur`: the form stored in the calibration's warnings)."""
+    writes the horizons (default `dur`: the form stored in the calibration's warnings)."""
+    fmt = fmt or dur
     if not t.horizons or all(h.label == "n/a" for h in t.horizons):
         return "not evaluated (no held-out metrics for the fitted and the default model)"
     groups: dict[str, list[str]] = {}
@@ -268,7 +269,7 @@ _TOKEN_TEXT = {
 }
 
 
-def _compute(cal: CalibrationResult, fmt: Callable[[int], str] = dur) -> Trust:
+def _compute(cal: CalibrationResult, fmt: Callable[[int], str] | None = None) -> Trust:
     """Assessment from the `trust:` lines and the numbers (ignores the structured `trust` field)."""
     flags = parse_flags(cal.warnings)
     if not any(k not in OWN_TOKENS for k in flags):
@@ -298,11 +299,11 @@ def _compute(cal: CalibrationResult, fmt: Callable[[int], str] = dur) -> Trust:
     return Trust(flags, hs, fid, did, [(k, reasons[k]) for k in REFUSING if k in reasons])
 
 
-def assess(cal: CalibrationResult, fmt: Callable[[int], str] = dur) -> Trust:
+def assess(cal: CalibrationResult, fmt: Callable[[int], str] | None = None) -> Trust:
     """Exportability of a calibration (see the module doc). The structured `trust` field (schema 1.1) decides when
     present: its `verdict` / `reasons` and `beats_default` labels win, with texts from the `trust:` lines or the
     recomputed reasons; without it the assessment is computed from the lines and the numbers. `fmt` writes the
-    horizons in the reason texts (`dur`, the form stored in the calibration's warnings; displays pass
+    horizons in the reason texts (default `dur`, the form stored in the calibration's warnings; displays pass
     `queuetruth.units.format_duration`)."""
     t = _compute(cal, fmt)
     st = cal.trust
