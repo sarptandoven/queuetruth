@@ -150,3 +150,18 @@ def test_the_real_backtesting_py(tmp_path: Path) -> None:
         assert run.orders[0].placed_ns == int(t["EntryTime"].iloc[0].value)
         fees = sum((f.fee or 0) for o in run.orders for f in o.fills)
         assert abs(float(fees) - float(t["Commission"].sum())) < 1e-6
+
+
+def test_without_data_the_atlas_estimates_the_real_fills(trades: dict[str, Path], tmp_path: Path) -> None:
+    """The table's row as written: `queuetruth check <their result file>`, fed by the atlas touch tables."""
+    from . import synth_atlas as sa
+
+    site = sa.write_atlas(tmp_path / "site", symbols={"QTAU6": "T1_top100"})
+    n = 2 * (len(trades["csv"].read_text().splitlines()) - 1)
+    d = qt.check(trades["csv"], bar="1m", atlas=site, options={"instrument": "QTAU6"}).doc
+    assert d["n_resting"] == d["backtest_filled"] == n
+    assert any("backtesting.py trade records are fills only" in x for x in d["notes"])
+    lo, hi = d["real_fills"]["ci_lo"], d["real_fills"]["ci_hi"]
+    assert 0 <= lo <= d["real_fills"]["expected"] <= hi <= n
+    unnamed = qt.check(trades["json"], bar="1m", tier="ALL", atlas=site).doc  # asset0: the tier says it
+    assert unnamed["n_resting"] == n

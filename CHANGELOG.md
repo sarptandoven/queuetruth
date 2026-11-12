@@ -33,6 +33,26 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 - **Docs blocks that need a framework run where it is installed**: `<!-- check-docs: run needs=MODULE -->` runs a
   block only when the module is importable and skips it with the reason elsewhere. A synthetic atlas data API
   (`tests/fixtures/atlas_synth`, invented numbers) backs the runnable atlas blocks and the plugin tests.
+- **`queuetruth check` without data: an estimate from the atlas touch tables.** `queuetruth check BACKTEST` with no
+  `--data` (and `qt.check(backtest)`) now answers for a bar backtest (Freqtrade, Backtrader, VectorBT, LEAN, and
+  hftbacktest or NautilusTrader on bars): how many of its resting limit orders' fills were touch-only and how many the
+  real queue would have given, with a 95% interval, and how much that overstates P&L per order in ticks. Each
+  symbol's liquidity tier comes from the atlas's symbol lookup (`--tier T1` to `T5` or `ALL` for symbols it does not
+  hold), the bar length from `--bar 1m|5m|1h`, the importer's `timeframe`, a Freqtrade result or the log's own
+  timestamps. The interval simulates from the tables' 95% intervals (Beta draws, all cells moving together, then
+  binomial fills). The answer says what it rests on (IEX DEEP+, one venue, orders like the atlas's shadows) and that
+  `--data` gives the exact answer; a tier, side or bar length the tables do not have stops with the reason, and an
+  atlas without `touch.json` says so. The atlas is downloaded only with consent, as for `queuetruth atlas` (`--yes`,
+  `--atlas DIR_OR_URL`, `--refresh`). `--json` prints `qt.check_estimate`.
+
+- **`queuetruth verify atlas`: check the published atlas without a checkout.** It checks every file of the data API
+  against the sha256 in its manifest, the atlas root against the day roots of `data/atlas_manifest.json`, and with
+  `--day DATE` one day's root, leaves and Merkle proofs (the reduced day is downloaded from the `atlas-days`
+  release, with consent). `--unit ID --rerun` runs one unit again from a checkout at the day's build and compares its
+  leaf; the unit's bucket is streamed from IEX's public file and only that bucket is kept (`iex_split.py
+  --only-bucket`), or given with `--split DIR`. One line per check; exit 1 when a check fails. The hashing and Merkle
+  code moved into `queuetruth.atlas.verify`; `scripts/scale/common.py` and `verify_unit.py` use it and work as before.
+  `qt.atlas.open_source`, `qt.atlas.tier_name` and `qt.atlas.confirm_on_terminal` are public.
 
 - **One guide per backtester for hftbacktest and NautilusTrader.** "Score and calibrate my hftbacktest backtest"
   (`docs/how-to/calibrate-hftbacktest.md`) merges the plugin page and the calibration recipe and starts with the

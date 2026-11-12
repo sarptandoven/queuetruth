@@ -7,6 +7,7 @@ not), how long the fills took, and what that does to P&L.
 
 **You need:** your backtester's output file, and order-level (MBO) data that covers the backtest's days, as a
 queuetruth dataset (`queuetruth ingest`; see [Replay a public IEX DEEP+ day](iex-public-demo.md) for free data).
+Without data, `check` estimates from the public atlas instead ([without order-level data](#without-order-level-data)).
 `check` reads these outputs:
 
 | Backtester | File |
@@ -115,15 +116,62 @@ DataFrame and `result.to_html()` the report page.
 
 ## Without order-level data
 
-The estimate that needs no data (from the atlas touch tables: how many of your fills were touch-only, and how many
-such fills the real queue gives) comes in a later release. Until then `check` without `--data` says what it needs
-and gives no number:
+Most bar backtests have no order-level data for their days. Without `--data`, `check` answers from the
+[Fill-Realism Atlas touch tables](../concepts/touch-tables.md) instead: how many of your backtest's fills were
+touch-only, and how many such fills the real queue gives. It needs nothing but your backtest's output.
 
-<!-- check-docs: run exit=2 -->
+<!-- check-docs: skip (downloads the public atlas, after asking) -->
 ```bash
-echo '{"order_id": 1}' > snapshots.jsonl
-queuetruth check snapshots.jsonl
+queuetruth check backtest-result.zip                 # Freqtrade: the bar length is in the result
+queuetruth check bt_orders.jsonl --bar 5m            # Backtrader: say the bar length when the log does not
+queuetruth check orders_report.csv --bar 1h --tier T2
 ```
+
+It asks before it downloads the atlas data API (a few MB, checked against its manifest and cached, as for
+[`queuetruth atlas`](../reference/cli.md)); `--yes` skips the question and `--atlas DIR` reads a local copy. The
+first line is the answer. With an invented atlas (the numbers below are not measured) it reads:
+
+```text
+Your backtest filled 20 of 40 resting limit orders when a 5m bar touched the limit. In the real queue about 10 of
+those fills would have happened (95% interval 6 to 15), so about 10 (49%) are touch-only. Its P&L is about 0.30 ticks
+per order too high (95% interval 0.21 to 0.41). An estimate from the Fill-Realism Atlas touch tables (IEX DEEP+, one
+venue, 3 days) for orders like the atlas's shadow orders, not an exact replay of yours: pass --data for that.
+```
+
+A table per liquidity tier and side follows, then what the estimate rests on and how it was computed.
+
+How it works:
+
+- **Which fills.** Every resting limit order of the backtest that filled is taken as a fill the bar rule gave it
+  (the price touched the limit within a bar). Market orders are left out.
+- **Tier.** Each symbol's liquidity tier comes from the atlas's symbol lookup. A symbol the atlas does not hold
+  (a future, a crypto pair, a stock not seen on IEX) has no tier there, so `check` stops and asks for `--tier T1`
+  to `T5` (`T1` is the 100 most traded US stocks, `T5` the less traded) or `--tier ALL` (the atlas's average).
+- **Bar length.** From `--bar`, the importer option `timeframe`, a Freqtrade result's `timeframe`, or the log's own
+  timestamps when every order and fill time is on a 1m, 5m or 1h grid. The tables have 1m, 5m and 1h bars only.
+- **Real fills.** Per tier and side, your touch fills times P(real | touch), the share of a touch rule's fills that
+  the real queue also gave within the same bar. The 95% interval comes from 20,000 simulated draws: each table
+  cell's P(real | touch) is drawn from a Beta distribution with the cell's value and the spread of its 95% interval,
+  all cells moving together (their errors come from one bootstrap, so this is the cautious choice), and then the
+  real fills from a binomial over your fills. `--seed` fixes the draws.
+- **P&L.** The tables' P&L overstatement per order placed (the touch rule's markout minus the real queue's, one bar
+  after the fill, in ticks), averaged over your resting orders. It is stated as too high or too low only when its
+  95% interval excludes 0.
+
+What it rests on, and what it is not:
+
+- One venue. The tables come from IEX DEEP+ (about 4 to 5% of US volume), with bars built from IEX's prints; other
+  venues and consolidated candles can differ ([what is approximate](../concepts/touch-tables.md#what-is-approximate)).
+- Orders like the atlas's shadows: small orders joining the back of the queue and resting as day orders. Your orders
+  may be larger, rest shorter, or sit elsewhere in the queue.
+- It is an estimate for orders like these, not an exact replay of your orders. With order-level data of your
+  backtest's days, `--data` gives the exact answer, order by order.
+- `check` never invents a number. A tier, side or bar length the tables do not have, or a cell without an interval,
+  stops with the reason. Until the atlas has touch tables (the kept days are being backfilled), it says so and gives
+  no number.
+
+`--json` prints the `qt.check_estimate` document; the output directory holds `check.json` and `groups.csv` (one row
+per tier and side). From Python: `qt.check("backtest-result.zip", bar="5m", yes=True)`.
 
 ## When the symbols do not match
 

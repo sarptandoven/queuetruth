@@ -111,6 +111,8 @@ section below is the command's own `--help` text.
 | [`queuetruth cert partial-opening`](#queuetruth-cert-partial-opening) | write an opening that opens only some committed items |
 | [`queuetruth reconcile`](#queuetruth-reconcile) | a bot's or backtester's simulated orders against the live run, order by order |
 | [`queuetruth atlas`](#queuetruth-atlas) | how far your backtester's fill model is from the real queue, from the public atlas |
+| [`queuetruth verify`](#queuetruth-verify) | verify a published result: the Fill-Realism Atlas |
+| [`queuetruth verify atlas`](#queuetruth-verify-atlas) | check the published atlas: file hashes, the atlas root, a day's proofs, and re-run one unit |
 | [`queuetruth check`](#queuetruth-check) | how wrong a backtest is: its own limit orders replayed in the real queue |
 | [`queuetruth fit`](#queuetruth-fit) | the parameter that fixes your backtester's fill model, with its verdict |
 
@@ -748,7 +750,7 @@ venue exports -> canonical live log
 Usage: queuetruth live import [OPTIONS] --venue <venue> --in <PATH> --out <VALUE>
 
 Options:
-      --venue <venue>                  venue [possible values: binance, bybit, okx, coinbase, kraken, deribit, hyperliquid, ibkr-flex, fix44, sim-hftbacktest, sim-nautilus, freqtrade, hummingbot, sim-freqtrade, sim-hummingbot, sim-backtrader, sim-vectorbt, sim-lean]
+      --venue <venue>                  venue [possible values: binance, bybit, okx, coinbase, kraken, deribit, hyperliquid, ibkr-flex, fix44, sim-hftbacktest, sim-nautilus, freqtrade, hummingbot, sim-freqtrade, sim-hummingbot, sim-backtrader, sim-vectorbt, sim-lean, sim-backtesting-py]
       --in <PATH>                      input file (repeatable)
       --out <VALUE>                    output live-log directory
       --account <VALUE>                account label
@@ -762,7 +764,7 @@ Options:
       --fix-data-dictionary <VALUE>    QuickFIX data dictionary XML (custom tags and enums; repeatable)
       --fix-session-venue <KEY=VALUE>  SESSION=VENUE: venue of a FIX session (file stem or counterparty CompID; repeatable)
       --fix-instrument-tag <N>         tag holding the instrument instead of Symbol(55), e.g. 107
-      --option <KEY=VALUE>             importer option KEY=VALUE (sim-* venues: venue, size_exp, key_from_client_id; freqtrade, hummingbot: dry_run, log_tz, timeframe, pair_with, ...; sim-backtrader, sim-vectorbt, sim-lean: pair_with, timeframe, instrument, ...)
+      --option <KEY=VALUE>             importer option KEY=VALUE (sim-* venues: venue, size_exp, key_from_client_id; freqtrade, hummingbot: dry_run, log_tz, timeframe, pair_with, ...; sim-backtrader, sim-vectorbt, sim-lean, sim-backtesting-py: pair_with, timeframe, instrument, ...)
   -h, --help                           Print help
       --log-level <log_level>          stderr log level (default warn) [possible values: error, warn, info, debug]
       --output-format <human|json>     output format (also --format human|json) [possible values: human, json]
@@ -2552,10 +2554,95 @@ Options:
           human output: every summary field after the answer; every warning and note on stderr
 ```
 
+## queuetruth verify
+
+```text
+verify a published result: the Fill-Realism Atlas
+
+Usage: queuetruth verify [OPTIONS] <COMMAND>
+
+Commands:
+  atlas  check the published atlas: file hashes, the atlas root, a day's proofs, and re-run one unit
+  help   Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help                        Print help
+      --log-level <log_level>       stderr log level (default warn) [possible values: error, warn, info, debug]
+      --output-format <human|json>  output format (also --format human|json) [possible values: human, json]
+      --quiet                       no progress or warnings on stderr
+      --seed <seed>                 random seed (default 0)
+      --threads <threads>           worker threads (outputs do not depend on it; default 1)
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
+```
+
+## queuetruth verify atlas
+
+```text
+Checks a published Fill-Realism Atlas without a checkout: every file of the data API against the sha256 in its manifest, the atlas root against the day roots, and with --day one day's leaves and Merkle proofs. With --unit and --rerun, runs that unit again and compares its leaf with the published one. Asks before it downloads anything.
+
+Usage: queuetruth verify atlas [OPTIONS]
+
+Options:
+      --from <DIR_OR_URL>
+          a site or atlas/v1 directory, or the URL of a data API (default: the public atlas, cached)
+
+      --atlas-manifest <FILE>
+          the site's data/atlas_manifest.json (default: read next to the API)
+
+      --day <DATE_OR_DIR>
+          one day: a date of the atlas (its reduced day is downloaded from the release), a day directory or file
+
+      --unit <UNIT_ID>
+          one unit of --day, e.g. 10092026-b000-u0001
+
+      --rerun
+          run --unit again and compare its leaf (needs a checkout at the day's build and the unit's bucket)
+
+      --split <DIR>
+          the directory holding the unit's bucket (default: stream the public day file and keep that bucket)
+
+      --checkout <DIR>
+          the queuetruth checkout whose scripts/scale/unit.py re-runs the unit (default: the current one)
+
+  -y, --yes
+          download what the checks need without asking
+
+      --refresh
+          download the newest manifest even when a copy is cached
+
+      --json
+          print the qt.atlas_verify document (same as --format json)
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+      --log-level <log_level>
+          stderr log level (default warn)
+          
+          [possible values: error, warn, info, debug]
+
+      --output-format <human|json>
+          output format (also --format human|json)
+          
+          [possible values: human, json]
+
+      --quiet
+          no progress or warnings on stderr
+
+      --seed <seed>
+          random seed (default 0)
+
+      --threads <threads>
+          worker threads (outputs do not depend on it; default 1)
+
+      --verbose
+          human output: every summary field after the answer; every warning and note on stderr
+```
+
 ## queuetruth check
 
 ```text
-How wrong is my backtest: replays the backtest's own resting limit orders (hftbacktest, NautilusTrader, Backtrader, VectorBT, LEAN or Freqtrade output) in the exact queue of an order-level dataset and compares them order by order: fills, phantom fills, time to fill and the P&L gap.
+How wrong is my backtest: replays the backtest's own resting limit orders (hftbacktest, NautilusTrader, Backtrader, VectorBT, LEAN or Freqtrade output) in the exact queue of an order-level dataset and compares them order by order: fills, phantom fills, time to fill and the P&L gap. Without --data, estimates from the Fill-Realism Atlas touch tables how many of a bar backtest's fills the real queue would give, and how much they overstate P&L.
 
 Usage: queuetruth check [OPTIONS] <BACKTEST>...
 
@@ -2565,12 +2652,12 @@ Arguments:
 
 Options:
       --data <DIR>
-          order-level (MBO) dataset covering the backtest's days
+          order-level (MBO) dataset covering the backtest's days (without it: the atlas estimate)
 
       --backtester <backtester>
           the backtester (default: read from the file)
           
-          [possible values: hftbacktest, nautilus, backtrader, vectorbt, lean, freqtrade]
+          [possible values: hftbacktest, nautilus, backtrader, vectorbt, lean, freqtrade, backtesting_py]
 
       --instrument-map <FILE>
           instrument_map.csv (default: built from the dataset's symbols; needed only when they do not match)
@@ -2586,6 +2673,21 @@ Options:
 
       --option <KEY=VALUE>
           importer option, e.g. timeframe=5m, data_tz=America/New_York, column=LABEL (repeatable)
+
+      --tier <TIER>
+          without --data: liquidity tier of symbols the atlas does not hold, T1 to T5 or ALL
+
+      --bar <BAR>
+          without --data: the backtest's bar length, 1m, 5m or 1h
+
+      --atlas <DIR_OR_URL>
+          without --data: a site or atlas/v1 directory, or a data API URL (default: the public atlas, cached)
+
+  -y, --yes
+          without --data: download the atlas without asking
+
+      --refresh
+          without --data: download the newest atlas manifest
 
       --json
           print the full summary as JSON (as --format json)
