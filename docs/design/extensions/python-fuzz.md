@@ -11,9 +11,9 @@ Integrator notes:
 - `python/queuetruth/live/_common.py` sits outside the workstream's owned paths (`live/importers/` and `dq/`), but
   it holds the decimal, time, CSV and JSON-lines helpers every importer calls, so the fixes live there rather than
   in eleven copies. Review it as code. No other workstream edits it.
-- `dq/data.py` imports the bounded Parquet reader from `live/importers/_parquet.py`, so `dq` and the simulator
-  importers share one expansion policy with the gzip reader. A neutral home (`queuetruth/_io.py`) would be cleaner;
-  it is outside the owned paths.
+- `dq`, the simulator importers and the QuickFIX reader share one expansion policy: the bounded Parquet reader is
+  `queuetruth.dataset.read_parquet_bounded` (it lived in `live/importers/_parquet.py` until the dataset layer gave
+  it a neutral home).
 - The suite registers a `fuzz` marker from its own conftest. A `make fuzz-py` target for nightly runs
   (`QT_FUZZ_PROFILE=deep QT_FUZZ_EXAMPLES=400 QT_FUZZ_STATS=...`), and the marker in `pyproject.toml`, belong to the
   Makefile and `pyproject.toml`, which this workstream does not own.
