@@ -299,6 +299,9 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ### Fixed
 
+- Report charts: an axis whose tick step is below 1e-12 (a range near zero) could get two equal ticks, because tick
+  values were rounded to 12 decimals. They are now rounded relative to the step, and any tick list that is not
+  strictly increasing falls back to the axis ends. The property test that found it failed now and then on any branch.
 - `rustix` 1.1.5 to 1.1.6 in `Cargo.lock` (RUSTSEC-2026-0486: its xattr functions marked unwritten bytes as
   initialized when given a zero-length buffer). Reached only through `tempfile`; 1.1.6 was released on 2026-10-27.
 - The Rust spec mirror rejected the live venues `freqtrade`, `hummingbot`, `sim_freqtrade`, `sim_hummingbot`,
