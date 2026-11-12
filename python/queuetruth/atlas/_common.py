@@ -14,6 +14,8 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from queuetruth import units
+
 #: Library keys of the data API and the CLI -> the library's own name.
 LIBRARY_NAMES = {
     "hftbacktest": "hftbacktest",
@@ -53,8 +55,6 @@ TIER_WORDS = {
     "T4_1501_4000": "the 1,501st to 4,000th most traded symbols",
     "T5_rest": "the less traded symbols",
 }
-
-_NS = (("min", 60_000_000_000), ("s", 1_000_000_000), ("ms", 1_000_000))
 
 
 def parse_id(model_id: str) -> tuple[str, dict[str, str]]:
@@ -134,40 +134,31 @@ def is_default(model_id: str) -> bool:
 
 
 def horizon_label(ns: int) -> str:
-    """`100ms`, `1s`, `1min`: the key of a horizon in the data API and on the command line."""
-    for unit, scale in _NS:
-        if ns >= scale and ns % scale == 0:
-            return f"{ns // scale}{unit}"
-    return f"{ns / 1_000_000:g}ms"
+    """`100ms`, `1s`, `1min`: the key of a horizon in the published data API (`atlas/v1`). This form is frozen so the
+    published files keep their bytes: the largest of `min`, `s` and `ms` that divides it. For the atlas horizons it is
+    what `queuetruth.units.format_duration` writes, and `queuetruth.units.parse_duration` reads every key back."""
+    n = int(ns)
+    for unit, scale in (("min", 60_000_000_000), ("s", 1_000_000_000), ("ms", 1_000_000)):
+        if n >= scale and n % scale == 0:
+            return f"{n // scale}{unit}"
+    return f"{n / 1_000_000:g}ms"
 
 
 def horizon_words(text: str) -> str:
     """`1min` -> `1 minute`, `10s` -> `10 seconds`, `100ms` -> `100 milliseconds`."""
-    ns = parse_horizon(text)
-    for _unit, scale, one, many in (
-        ("min", 60_000_000_000, "minute", "minutes"),
-        ("s", 1_000_000_000, "second", "seconds"),
-        ("ms", 1_000_000, "millisecond", "milliseconds"),
-    ):
-        if ns >= scale and ns % scale == 0:
-            k = ns // scale
-            return f"{k} {one if k == 1 else many}"
-    return text
+    return units.horizon_words(parse_horizon(text))
 
 
 def parse_horizon(text: str) -> int:
-    """`1min`, `1m`, `60s`, `60 s`, `100ms` -> nanoseconds; ValueError otherwise."""
-    t = str(text).strip().lower().replace(" ", "")
-    for unit, scale in (("min", 60_000_000_000), ("ms", 1_000_000), ("m", 60_000_000_000), ("s", 1_000_000_000)):
-        if t.endswith(unit):
-            try:
-                x = float(t[: -len(unit)])
-            except ValueError:
-                break
-            if math.isfinite(x) and x > 0:
-                return round(x * scale)
-            break
-    raise ValueError(f"not a horizon: {text!r} (use e.g. 1s, 10s, 1min)")
+    """`1min`, `1m`, `60s`, `60 s`, `100ms` (or nanoseconds) -> nanoseconds; ValueError when it is not a positive
+    duration (`queuetruth.units.parse_duration`)."""
+    try:
+        ns = units.parse_duration(text, what="horizon")
+    except units.DurationError:
+        raise ValueError(f"not a horizon: {text!r} (use e.g. 1s, 10s, 1min)") from None
+    if ns <= 0:
+        raise ValueError(f"not a horizon: {text!r} (use e.g. 1s, 10s, 1min)")
+    return ns
 
 
 def pp(x: float | None) -> str:

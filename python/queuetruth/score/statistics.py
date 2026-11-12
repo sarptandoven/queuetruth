@@ -47,7 +47,7 @@ from typing import Any
 
 import numpy as np
 
-from queuetruth import stats
+from queuetruth import stats, units
 from queuetruth.score.survival import survival_part
 
 DAY_NS = 86_400_000_000_000
@@ -971,12 +971,13 @@ def _pp_abs(x: float | None) -> str:
 
 
 def duration_text(ns: int) -> str:
-    """`60 s`, `1.5 s`, `500 ms`, `250 us`, `10 ns`."""
-    ns = int(ns)
-    for unit, scale in (("s", 10**9), ("ms", 10**6), ("us", 10**3)):
-        if abs(ns) >= scale:
-            return f"{ns / scale:g} {unit}"
-    return f"{ns} ns"
+    """Deprecated: use `queuetruth.units.format_duration`."""
+    warnings.warn(
+        "queuetruth.score.statistics.duration_text is deprecated; use queuetruth.units.format_duration",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return units.format_duration(int(ns))
 
 
 def gates_configured(gates: Any) -> bool:
@@ -1007,7 +1008,7 @@ def headline(
     independent orders)`; without the clustered test it is `McNemar p = {p}`. `within {H}` names the evaluation
     window (ruling A9) when given; `; no gates configured` ends it when `gates` is False. Fills-only sources get a
     not-computable headline."""
-    win = "" if window_ns is None else f" within {duration_text(window_ns)}"
+    win = "" if window_ns is None else f" within {units.format_duration(window_ns)}"
     tail = "; no gates configured" if gates is False else ""
     if fills_only:
         return f"fill-rate bias and McNemar {NOT_COMPUTABLE} (never-filled orders missing); {n} orders{tail}"

@@ -27,6 +27,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from queuetruth import units
 from queuetruth.eval import leaderboard as lbm
 from queuetruth.report import fmt as F
 from queuetruth.report import scoreinfo as si
@@ -119,7 +120,7 @@ def _zoo(v: ZooView, many: bool) -> list[Answer]:
     h = v.hsort
     if h is None or not v.ordered:
         return []
-    when = lbm.duration_text(h)
+    when = units.format_duration(h)
     tag = _suffix(v.run.label, many)
     q1 = f"Which L2 queue model fills most like the exact replay?{tag}"
     exact = next((r for e in v.ordered if (r := lbm.rates_at(e, h)[1]) is not None), None)

@@ -220,7 +220,7 @@ def test_headline_window_and_gates(tmp_path):
     fr = FakeRunner(bbo=BBO)  # the sim never fills: underfills
     s = build_scorecard(_spec(live, ds), runner=fr)
     h = s.verdict.headline
-    assert "fill rate within 60 s" in h and h.endswith("; no gates configured") and s.verdict.gates_passed is True
+    assert "fill rate within 1min" in h and h.endswith("; no gates configured") and s.verdict.gates_passed is True
     if s.bias.direction == "sim_underfills":
         assert "underfills live by 100.0 pp" in h and "-100.0 pp" not in h
     g = build_scorecard(_spec(live, ds, gates={"max_abs_fill_rate_bias": 0.5}), runner=fr)

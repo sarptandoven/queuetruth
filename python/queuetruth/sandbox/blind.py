@@ -73,8 +73,8 @@ from queuetruth.errors import QtError
 from queuetruth.sandbox._util import (
     config_error,
     digest,
+    duration,
     money,
-    parse_duration,
     parse_time,
     rel_time,
     sha256_text,
@@ -884,7 +884,7 @@ class BlindSandbox:
                     )
                 target = self.transform.t_back(rel)
             if by is not None:
-                parse_duration(by, "by")
+                duration(by, "by")
             try:
                 obs = self.inner.advance(by=by, to=target)
             except QtError as e:

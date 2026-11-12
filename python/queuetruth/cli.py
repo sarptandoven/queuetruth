@@ -24,6 +24,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from queuetruth import units
 from queuetruth.errors import EXIT_GATE, EXIT_OK, QtError
 
 log = logging.getLogger("queuetruth")
@@ -65,8 +66,29 @@ def _short(a: list[Any]) -> str:
     return ", ".join(items) if len(items) == len(a) else f"{len(a)} items"
 
 
+def _ns_field(key: str, v: Any) -> str | None:
+    """A nanosecond field (`*_ns`, `*_ns.<horizon>` or `ts_*`) in human units: a time since the epoch as UTC wall time
+    with the zone named, a duration as `1s`; None when the field is not one."""
+    leaf = key.rsplit(".", 1)[-1]
+    is_ns = leaf.endswith("_ns") or leaf.startswith("ts_") or leaf == "ts"
+    if not is_ns:
+        return None
+
+    def one(x: Any) -> str | None:
+        if isinstance(x, bool) or not isinstance(x, int):
+            return None
+        if leaf.startswith("ts") or abs(x) >= 10**17:
+            return units.local_time(x, None)
+        return units.format_duration(x)
+
+    if isinstance(v, list) and v and len(v) <= 8:
+        items = [one(x) for x in v]
+        return ", ".join(i for i in items if i is not None) if all(i is not None for i in items) else None
+    return one(v)
+
+
 def render_human(path: list[str], doc: Any) -> str:
-    """Terminal rendering of a summary (same layout as the Rust binary)."""
+    """Terminal rendering of a summary (same layout as the Rust binary), with nanosecond fields in human units."""
     if path == ["schema", "show"] or not isinstance(doc, dict):
         return json.dumps(doc, indent=2, ensure_ascii=False)
     if path == ["schema", "list"]:
@@ -77,7 +99,7 @@ def render_human(path: list[str], doc: Any) -> str:
     for k, v in doc.items():
         if k in ("schema", "schema_version", "spec", "warnings", "files"):
             continue
-        sv = _scalar(v)
+        sv = _ns_field(k, v) or _scalar(v)
         if sv is not None:
             lines.append(f"{k}: {sv}")
         elif isinstance(v, list):
@@ -86,7 +108,7 @@ def render_human(path: list[str], doc: Any) -> str:
             for k2, v2 in v.items():
                 if k2 in ("schema", "schema_version"):
                     continue
-                s2 = _scalar(v2)
+                s2 = _ns_field(f"{k}.{k2}", v2) or _scalar(v2)
                 if s2 is None:
                     s2 = _short(v2) if isinstance(v2, list) else f"{len(v2)} fields" if isinstance(v2, dict) else ""
                 lines.append(f"{k}.{k2}: {s2}")
@@ -120,14 +142,8 @@ def _p(x: float | None) -> str:
 
 
 def _hz(ns: int | str | None) -> str:
-    """Horizon label: `100ms`, `1s`, `60s`, `5min`."""
-    if ns is None:
-        return "-"
-    n = int(ns)
-    for unit, size in (("min", 60_000_000_000), ("s", 1_000_000_000), ("ms", 1_000_000), ("us", 1_000)):
-        if n >= size and n % size == 0 and (unit != "min" or n >= 120_000_000_000):
-            return f"{n // size}{unit}"
-    return f"{n}ns"
+    """Horizon label: `100ms`, `1s`, `1min` (`queuetruth.units.format_duration`)."""
+    return "-" if ns is None else units.format_duration(int(ns))
 
 
 def _table(header: list[str], rows: list[list[str]], right: set[int] | None = None) -> list[str]:
@@ -286,7 +302,6 @@ def _render_zoo(doc: Doc, args: Doc, extra: Doc) -> str | None:
 
 
 _SIDE_WORD = {"B": "bid", "A": "ask", "N": "-"}
-_ORDER_SIDE = {"B": "buy", "A": "sell"}
 
 
 def _why_rows(x: Any, verbose: bool) -> list[int | None]:
@@ -312,23 +327,26 @@ def _why_rows(x: Any, verbose: bool) -> list[int | None]:
 
 
 def _render_why(x: Any, verbose: bool) -> str:
-    from queuetruth.api import fmt_scaled, fmt_utc
-
     t = x.trace
+    tz = getattr(x, "session_tz", None)
 
     def px(v: int | None) -> str:
-        return fmt_scaled(v, x.price_exp)
+        return units.format_price(v, x.price_exp, x.tick_size)
 
     def sz(v: float | int | None) -> str:
-        return fmt_scaled(v, x.size_exp)
+        return units.format_scaled(v, x.size_exp)
 
+    def at(v: int | None, date: bool = False) -> str:
+        return units.local_time(v, tz, digits=6, date=date, named=False)
+
+    zone = units.zone_name(tz)
     subj = f"live order {t.subject.order_key}" if t.subject.order_key else f"shadow {t.subject.shadow_id}"
     inst = f"{x.symbol} (instrument {t.instrument_id})" if x.symbol else f"instrument {t.instrument_id}"
-    side = _ORDER_SIDE.get(t.side, t.side)
+    side = units.side_word(t.side)
     lines = [
-        f"why: {subj} | {inst} | {side} {sz(t.qty)} @ {px(t.price)} | live {fmt_utc(t.ts_live, 6, date=True)} UTC",
+        f"why: {subj} | {inst} | {side} {sz(t.qty)} @ {px(t.price)} | live {at(t.ts_live, date=True)} {zone}",
         f"outcome: {t.outcome.end_state}, filled {sz(t.outcome.filled_qty)} of {sz(t.qty)}"
-        + (f", first fill {fmt_utc(t.outcome.ts_first_fill, 6)}" if t.outcome.ts_first_fill is not None else ""),
+        + (f", first fill {at(t.outcome.ts_first_fill)}" if t.outcome.ts_first_fill is not None else ""),
     ]
     if x.excluded_order_ids:
         ids = ", ".join(str(i) for i in x.excluded_order_ids)
@@ -337,7 +355,7 @@ def _render_why(x: Any, verbose: bool) -> str:
     if has_model:
         lines.append(f"model: {x.model_id} (its queue-ahead estimate next to the exact queue)")
     lines.append("")
-    header = ["time (UTC)", "act", "order", "side", "price", "size", "effect", "", "q.ahead", "rank", "level"]
+    header = [f"time ({zone})", "act", "order", "side", "price", "size", "effect", "", "q.ahead", "rank", "level"]
     header += ["fill", *(["model"] if has_model else []), "note"]
     rows: list[list[str]] = []
     for i in _why_rows(x, verbose):
@@ -354,10 +372,10 @@ def _render_why(x: Any, verbose: bool) -> str:
         if i == x.first_divergence:
             marks.append("<< model diverges")
         cells = [
-            fmt_utc(e.ts_event, 6),
+            at(e.ts_event),
             e.action,
             str(e.order_id) if e.order_id else "-",
-            (_ORDER_SIDE if e.action == "T" else _SIDE_WORD).get(e.side, e.side),
+            units.side_word(e.side) if e.action == "T" else _SIDE_WORD.get(e.side, e.side),
             px(e.price),
             sz(e.size),
             e.effect,
@@ -471,7 +489,7 @@ def _practitioner_lines(doc: Doc) -> list[str]:
 
 
 def _dur_ms(ns: float | None) -> str:
-    return "n/a" if ns is None else f"{float(ns) / 1e6:.3g} ms"
+    return "n/a" if ns is None else units.format_duration(float(ns), sig=3)
 
 
 def _pct(x: float | None) -> str:
@@ -816,7 +834,7 @@ def _trust(doc: Doc) -> Any:
         from queuetruth.export.trust import assess
         from queuetruth.schemas.models import CalibrationResult
 
-        return assess(CalibrationResult.model_validate(doc))
+        return assess(CalibrationResult.model_validate(doc), units.format_duration)
     except Exception:  # an older build or a partial document: the view computes its own verdict
         log.debug("trust assessment unavailable", exc_info=True)
         return None
@@ -855,9 +873,7 @@ def _render_dq(doc: Doc, args: Doc) -> str | None:
 
 
 def _dur(ns: Any) -> str:
-    from queuetruth.api import fmt_dur
-
-    return "-" if ns is None else fmt_dur(int(ns))
+    return "-" if ns is None else units.format_duration(int(ns), sig=3)
 
 
 def render(
@@ -966,7 +982,7 @@ def stderr_lines(doc: Any, *, verbose: bool) -> list[str]:
     from queuetruth.eval.leaderboard import ABORT_PREFIX
 
     raw = doc.get("warnings") if isinstance(doc, dict) else None
-    ws = [str(w) for w in raw] if isinstance(raw, list) else []
+    ws = [units.humanize_note(str(w)) for w in raw] if isinstance(raw, list) else []
     if verbose:
         return [w if w.startswith("info: ") else f"warning: {w}" for w in ws]
     aborts = [w for w in ws if ABORT_PREFIX in w]

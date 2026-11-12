@@ -185,9 +185,9 @@ def _confirm_factory(yes: bool, interactive: bool) -> Any:
 
 
 def _hz(ns: str) -> str:
-    from queuetruth.eval.leaderboard import duration_text
+    from queuetruth.units import format_duration
 
-    return duration_text(int(ns))
+    return format_duration(int(ns))
 
 
 def _pp(x: float | None) -> str:

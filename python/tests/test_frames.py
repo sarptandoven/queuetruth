@@ -370,6 +370,46 @@ def test_records_flattens_nested_objects(backend: str) -> None:
 
 
 @pytest.mark.parametrize("backend", BOTH)
+def test_human_columns_next_to_the_raw_ones(backend: str) -> None:
+    """`horizon` next to `horizon_ns` in the flattened summaries; in `records`, `symbol`, `<ts>_local` and
+    `<price>_decimal` next to the integers they read (which stay as they are)."""
+    got = rows(frames.leaderboard(zoo_doc(), backend))
+    assert [(r["horizon_ns"], r["horizon"]) for r in got] == [
+        (1_000_000_000, "1s"),
+        (10_000_000_000, "10s"),
+        (1_000_000_000, "1s"),
+    ]
+    names = frames.LEADERBOARD_SCHEMA.names
+    assert names.index("horizon") == names.index("horizon_ns") + 1
+    assert frames.HELD_OUT_SCHEMA.names.index("horizon") == frames.HELD_OUT_SCHEMA.names.index("horizon_ns") + 1
+    inst = [{"instrument_id": 7, "symbol": "QTAU6", "price_exp": -9, "session_tz": "America/New_York"}]
+    doc = {
+        "schema": "qt.x",
+        "items": [
+            {
+                "instrument_id": 7,
+                "ts_ns": 1_781_533_800_123_456_789,
+                "price": 5_000_250_000_000,
+                "horizon_ns": 60 * 10**9,
+            }
+        ],
+    }
+    df = frames.records(doc, "items", backend, instruments=inst)
+    cols = list(df.columns)
+    assert cols == ["instrument_id", "symbol", "ts_ns", "ts_local", "price", "price_decimal", "horizon_ns", "horizon"]
+    r = rows(df)[0]
+    assert r["instrument_id"] == 7 and r["symbol"] == "QTAU6" and r["price"] == 5_000_250_000_000
+    assert str(r["price_decimal"]) == "5000.250000000" and r["horizon"] == "1min"
+    assert r["ts_ns"] == 1_781_533_800_123_456_789
+    local = df["ts_local"][0]
+    assert str(local).startswith("2026-06-15 10:30:00.123456") and "-04:00" in str(local)
+    plain = frames.records(doc, "items", backend, human=False)
+    assert list(plain.columns) == ["instrument_id", "ts_ns", "price", "horizon_ns"]
+    utc = rows(frames.records(doc, "items", backend))[0]  # no instrument table: UTC times, integer prices
+    assert "symbol" not in utc and "price_decimal" not in utc and str(utc["ts_local"]).startswith("2026-06-15 14:30")
+
+
+@pytest.mark.parametrize("backend", BOTH)
 @pytest.mark.parametrize("reverse", [False, True])
 def test_records_columns_are_the_union_over_rows(backend: str, reverse: bool) -> None:
     """A field that only a later row has, or a nested object that is null in the first row, is never dropped."""
