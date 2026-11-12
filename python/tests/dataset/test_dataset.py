@@ -170,3 +170,23 @@ def test_writer_records_files_written_elsewhere(tmp_path: Path) -> None:
     e = w.record("x.parquet")
     assert e["rows"] == 3 and e["bytes"] == (tmp_path / "d" / "x.parquet").stat().st_size
     assert w.entry("x.parquet") == e
+
+
+def test_old_dataset_id_helpers_are_deprecated_aliases() -> None:
+    from queuetruth.cert.certify import dataset_id as cert_id
+    from queuetruth.data.merge import dataset_id as merge_id
+    from queuetruth.dq.meta import dataset_id as dq_id
+
+    shas = ["b" * 64, "a" * 64]
+    for old in (cert_id, merge_id, dq_id):
+        with pytest.warns(DeprecationWarning, match="queuetruth.dataset.dataset_id"):
+            assert old(shas, "itch") == dataset_id(shas, "itch")
+
+
+def test_bounded_reader_moved_without_changing_its_limits(tmp_path: Path) -> None:
+    from queuetruth.dataset import MAX_RATIO, expansion_limit, read_parquet_bounded
+
+    p = tmp_path / "t.parquet"
+    pq.write_table(pa.table({"a": [1, 2, 3]}), p)
+    assert read_parquet_bounded(p).num_rows == 3
+    assert expansion_limit(1, 0) == MAX_RATIO
