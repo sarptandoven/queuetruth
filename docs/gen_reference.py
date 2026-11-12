@@ -9,8 +9,8 @@ Sources (nothing is hand-copied):
   command and subcommand.
 - reference/python-api.md: `inspect` over `queuetruth` (top-level names) and the `__all__` of its public modules.
 - reference/http-api.md: service/openapi.json.
-- reference/mcp.md: `queuetruth.mcp.tools.TOOLS`, `queuetruth.mcp.server.ZOO_TOOLS` and `RUN_TOOLS`, and
-  `queuetruth.mcp.metrics.METRICS`.
+- reference/mcp.md: `queuetruth.mcp.tools.TOOLS`, `queuetruth.mcp.server.ZOO_TOOLS` and `RUN_TOOLS` (from the
+  operation table), and `queuetruth.mcp.metrics.METRICS`.
 - reference/schemas.md: schemas/json/*.schema.json and schemas/arrow/*.json.
 - reference/importers.md: the importer registry (`queuetruth.live.importers.builtins()`), with each typed options
   model.
@@ -180,6 +180,7 @@ PY_MODULES = [
     "report",
     "frames",
     "client",
+    "runner",
 ]
 
 
@@ -396,10 +397,16 @@ client: [Use queuetruth from an agent](../how-to/use-from-an-agent.md).
 - **Submit tools** are listed only with `--allow-submit`. They return a `qt.job` handle to poll with `qt_get_job`.
 - **Zoo tools** (`qt_get_zoo`, and `qt_submit_zoo` with `--allow-submit`) are listed in remote mode after the
   tools above.
-- **Run tools** are listed in either mode only with `--allow-run` (or `QT_MCP_ALLOW_RUN=1`). They sample shadows and
-  run replays and zoos on local datasets without the service, each in a sandboxed child process, and write only under
-  the run root (`QT_MCP_RUN_ROOT`, default `<QT_MCP_ROOT>/qt-mcp-runs`); inputs must lie under `QT_MCP_ROOT`,
-  `QT_MCP_DATA_ROOTS` or the run root.
+- **Run tools** are listed in either mode only with `--allow-run` (or `QT_MCP_ALLOW_RUN=1`). They come from the
+  operation table (`queuetruth.ops.table`): one tool per operation that has one. They sample shadows and run replays
+  and zoos on local datasets without the service, and run the verbs (`qt_check`, `qt_fit`, `qt_compare`, `qt_data`,
+  `qt_atlas`, `qt_demo`). Each runs in a sandboxed child process through `queuetruth.runner.run`, the runner the
+  service's jobs use, and writes only under the run root (`QT_MCP_RUN_ROOT`, default `<QT_MCP_ROOT>/qt-mcp-runs`);
+  inputs must lie under `QT_MCP_ROOT`, `QT_MCP_DATA_ROOTS` or the run root. A verb writes each run to a new
+  directory, and the first line of its text is the answer.
+- **The network** is off for run tools unless `QT_MCP_ALLOW_NETWORK=1`. Without it, a spec that needs the network
+  is refused: `qt_atlas` without a local `source`, `qt_demo` without `from_file`, `qt_check` without `data` or a
+  local `atlas`.
 - The agent sandbox tools (`qt_sandbox_*`) are an optional module: see
   [Give an agent a realistic exchange](../how-to/agent-sandbox.md).
 - There is no destructive tool: nothing deletes data or manages keys. Large files are returned as `resource_link`
@@ -437,8 +444,7 @@ def gen_mcp() -> str:
             mode = "run, `--allow-run`"
         else:
             mode = "local" if t.local else ("remote, `--allow-submit`" if t.submit else "remote")
-        osch = output_schema(t)
-        oname = osch.get("title", t.output)
+        oname = t.output if t in RUN_TOOLS else output_schema(t).get("title", t.output)
         out.append(
             f"| `{t.name}` | {mode} | {schema_fields(input_schema(t))} | `{md_escape(str(oname))}` | "
             f"{md_escape(t.description)} |"

@@ -1,7 +1,8 @@
-"""Job runners. Child side (`replay`, `zoo`, `calibrate`, `score`, `report`, `ingest`): call the `queuetruth` Python API
-(SPEC 4.3) with a spec whose references were resolved to paths relative to the job's work directory, and return the
-summary document. Archive inputs are unpacked in the child too (`apply_extractions`), inside its memory limit,
-timeout and cancel (security review M2). Parent side helpers: output listing and content types, usage meters.
+"""Job runners. Child side (`replay`, `zoo`, `calibrate`, `score`, `report`, `ingest`): run the operation of that name
+with `queuetruth.runner.run` (the one runner the MCP server uses too) on a spec whose references were resolved to
+paths relative to the job's work directory, and return the summary document. Archive inputs are unpacked in the
+child too (`apply_extractions`), inside its memory limit, timeout and cancel (security review M2). Parent side
+helpers: output listing and content types, usage meters.
 
 Directory inputs (canonical live logs for `ScorecardSpec.live`, `sim.log`, `CalibrationSpec.live`) are uploaded as
 `.zip`, `.tar`, `.tar.gz` or `.tgz` archives and extracted with guards (SPEC 8.10): at most `MAX_MEMBERS` entries of
@@ -55,50 +56,43 @@ def tar_filter_patched(version: tuple[int, ...] | None = None) -> bool:
 # ---- child side -------------------------------------------------------------------------------------------------
 
 
-def _dump(doc: Any) -> dict[str, Any]:
-    return doc.model_dump(mode="json", by_alias=True) if hasattr(doc, "model_dump") else dict(doc)
+def run_operation(name: str, spec: dict[str, Any]) -> dict[str, Any]:
+    """Runs the operation `name` through `queuetruth.runner.run` with the job's work directory (the child's working
+    directory, which holds every input and output) as the only allowed root; returns its document."""
+    from queuetruth.runner import RunContext, run
+
+    ctx = RunContext(roots=[Path.cwd()])
+    return run(name, spec, context=ctx).document
 
 
 def replay(spec: dict[str, Any]) -> dict[str, Any]:
     """`queuetruth.replay`."""
-    from queuetruth import api
-
-    return _dump(api.replay(spec))
+    return run_operation("replay", spec)
 
 
 def zoo(spec: dict[str, Any]) -> dict[str, Any]:
     """`queuetruth.run_zoo` (the Rust run plus the `queuetruth.eval` leaderboard; writes `summary.json`)."""
-    from queuetruth import api
-
-    return _dump(api.run_zoo(spec))
+    return run_operation("zoo", spec)
 
 
 def calibrate(spec: dict[str, Any]) -> dict[str, Any]:
     """`queuetruth.calibrate`."""
-    from queuetruth import api
-
-    return _dump(api.calibrate(spec))
+    return run_operation("calibrate", spec)
 
 
 def score(spec: dict[str, Any]) -> dict[str, Any]:
     """`queuetruth.score`."""
-    from queuetruth import api
-
-    return _dump(api.score(spec))
+    return run_operation("score", spec)
 
 
 def report(spec: dict[str, Any]) -> dict[str, Any]:
     """`queuetruth.report`."""
-    from queuetruth import api
-
-    return _dump(api.report(spec))
+    return run_operation("report", spec)
 
 
 def ingest(spec: dict[str, Any]) -> dict[str, Any]:
     """`queuetruth.ingest` (dataset validation jobs)."""
-    from queuetruth import api
-
-    return _dump(api.ingest(spec))
+    return run_operation("ingest", spec)
 
 
 #: job kind -> child target.

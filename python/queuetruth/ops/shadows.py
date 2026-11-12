@@ -7,6 +7,7 @@ from typing import Any
 
 from queuetruth.ledger import recorded as _ledger_recorded
 from queuetruth.ops._call import _native, _validate
+from queuetruth.ops.table import OperationDef
 from queuetruth.schemas import models as m
 from queuetruth.schemas import specs as s
 from queuetruth.schemas.arrow import SCHEMAS
@@ -52,3 +53,26 @@ def shadows_from_live(
         by_placement=dict(sorted(by_place.items(), key=lambda kv: int(kv[0]))),
         files=files,
     )
+
+
+OPERATIONS = (
+    OperationDef(
+        "shadows",
+        s.ShadowSampleSpec,
+        sample_shadows,
+        m.ShadowSampleSummary,
+        "Seeded random shadow orders on a local dataset; writes shadows.parquet and returns qt.shadow_sample_summary.",
+        out_name="shadows.parquet",
+        run_id=True,
+        tool="qt_local_sample_shadows",
+        title="Sample shadows locally",
+    ),
+    OperationDef(
+        "shadows_mirror",
+        s.MirrorSpec,
+        mirror_real_orders,
+        m.ShadowSampleSummary,
+        "Shadow orders that mirror the real orders of a dataset; returns qt.shadow_sample_summary.",
+        out_name="shadows.parquet",
+    ),
+)

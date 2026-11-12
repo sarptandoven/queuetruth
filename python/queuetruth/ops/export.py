@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from queuetruth.errors import QtError
 from queuetruth.ops._call import _native, _validate
+from queuetruth.ops.table import OperationDef
 from queuetruth.schemas import models as m
 from queuetruth.schemas import specs as s
 
@@ -92,3 +93,14 @@ def export_replay_schedule(
     files = [m.FileEntry(name=p.name, bytes=p.stat().st_size, sha256=sha256_file(p))] if p.is_file() else []
     text = res if isinstance(res, str) and not Path(res).exists() else None
     return m.ExportSummary(target=target, files=files, text=text)  # type: ignore[arg-type]
+
+
+OPERATIONS = (
+    OperationDef(
+        "export",
+        s.ExportSpec,
+        export,
+        m.ExportSummary,
+        "Exports for a backtester: the L2 npz, the calibration snippets, the latency npz.",
+    ),
+)
