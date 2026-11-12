@@ -89,6 +89,143 @@ fn zoo_families() -> String {
     qt_zoo::families_json().to_string()
 }
 
+/// The prediction-market family registry (`qt_zoo::pm::PM_FAMILIES`) as a JSON list, in canonical order.
+#[pyfunction]
+fn pm_families() -> String {
+    qt_zoo::pm::pm_families_json().to_string()
+}
+
+/// One order of `pm_queue_run`, read from a `queuetruth.pm.queue.SimOrder` by attribute.
+#[derive(FromPyObject)]
+struct PmOrderArg {
+    key: String,
+    side: i64,
+    price: i64,
+    qty: f64,
+    ts_live: Option<i64>,
+    entry_seq: Option<i64>,
+    inside: bool,
+    ts_end: Option<i64>,
+    end_seq: Option<i64>,
+    end_inside: bool,
+    post_only: bool,
+    amends: Vec<(i64, f64)>,
+    samples: Vec<i64>,
+    probes: Vec<i64>,
+}
+
+/// `int64` values from native-endian bytes.
+fn i64s(b: &[u8], what: &str) -> PyResult<Vec<i64>> {
+    if !b.len().is_multiple_of(8) {
+        return Err(core_err(&QtError::Config(format!(
+            "{what}: {} bytes is not a whole number of int64",
+            b.len()
+        ))));
+    }
+    Ok(b.chunks_exact(8)
+        .map(|c| i64::from_ne_bytes(c.try_into().expect("8 bytes")))
+        .collect())
+}
+
+/// One per-order result of `pm_queue_run`: (activated_ts, activated_seq, visible_at_live, end, end_ts, fills per
+/// model, samples, probes, samples_before_live, samples_after_end).
+type PmResultTuple = (
+    Option<i64>,
+    Option<i64>,
+    Option<f64>,
+    &'static str,
+    Option<i64>,
+    Vec<Vec<qt_zoo::pm::Fill>>,
+    Vec<(i64, Vec<f64>)>,
+    Vec<(i64, Vec<f64>)>,
+    usize,
+    usize,
+);
+
+/// Runs the prediction-market queue engine (`qt_zoo::pm::run`): `models` as (family, n, atomic), `columns` the
+/// int64 bytes of ts_event, ts_recv, event_id, sequence, kind, side, price, new_qty, trade_qty, flags, part;
+/// `orders` the `SimOrder`s. Returns one `PmResultTuple` per order.
+#[pyfunction]
+#[pyo3(signature = (models, lot, columns, orders, gaps, end_ts=None))]
+fn pm_queue_run(
+    py: Python<'_>,
+    models: Vec<(String, Option<f64>, bool)>,
+    lot: f64,
+    columns: Vec<Bound<'_, PyBytes>>,
+    orders: Vec<PmOrderArg>,
+    gaps: Vec<(i64, i64)>,
+    end_ts: Option<i64>,
+) -> PyResult<Vec<PmResultTuple>> {
+    let models = to_py(
+        models
+            .iter()
+            .map(|(f, n, a)| qt_zoo::pm::Model::new(f, *n, *a))
+            .collect::<QtResult<Vec<_>>>(),
+    )?;
+    if columns.len() != 11 {
+        return Err(core_err(&QtError::Config(format!(
+            "pm_queue_run: 11 columns expected, got {}",
+            columns.len()
+        ))));
+    }
+    let mut cols = Vec::with_capacity(11);
+    for c in &columns {
+        cols.push(i64s(c.as_bytes(), "pm_queue_run")?);
+    }
+    let mut it = cols.into_iter();
+    let mut next = || it.next().unwrap_or_default();
+    let rows = qt_zoo::pm::Rows {
+        ts_event: next(),
+        ts_recv: next(),
+        event_id: next(),
+        sequence: next(),
+        kind: next(),
+        side: next(),
+        price: next(),
+        new_qty: next(),
+        trade_qty: next(),
+        flags: next(),
+        part: next(),
+    };
+    let orders: Vec<qt_zoo::pm::SimOrder> = orders
+        .into_iter()
+        .map(|o| qt_zoo::pm::SimOrder {
+            key: o.key,
+            side: o.side,
+            price: o.price,
+            qty: o.qty,
+            ts_live: o.ts_live,
+            entry_seq: o.entry_seq,
+            inside: o.inside,
+            ts_end: o.ts_end,
+            end_seq: o.end_seq,
+            end_inside: o.end_inside,
+            post_only: o.post_only,
+            amends: o.amends,
+            samples: o.samples,
+            probes: o.probes,
+        })
+        .collect();
+    let res = to_py(py.detach(|| qt_zoo::pm::run(&models, lot, &rows, &orders, &gaps, end_ts)))?;
+    Ok(res
+        .into_iter()
+        .map(|r| {
+            (
+                r.activated_ts,
+                r.activated_seq,
+                r.visible_at_live,
+                r.end,
+                r.end_ts,
+                r.fills,
+                r.samples,
+                r.probes,
+                r.samples_before_live,
+                r.samples_after_end,
+            )
+        })
+        .collect())
+}
+
 /// Parses argv with the shared clap grammar; returns the `CliCommand` JSON or raises `CliExit`.
 #[pyfunction]
 fn cli_parse(py: Python<'_>, argv: Vec<String>) -> PyResult<String> {
@@ -652,6 +789,8 @@ fn qt_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(formats, m)?)?;
     m.add_function(wrap_pyfunction!(table_schema, m)?)?;
     m.add_function(wrap_pyfunction!(zoo_families, m)?)?;
+    m.add_function(wrap_pyfunction!(pm_families, m)?)?;
+    m.add_function(wrap_pyfunction!(pm_queue_run, m)?)?;
     m.add_function(wrap_pyfunction!(cli_parse, m)?)?;
     m.add_function(wrap_pyfunction!(cli_run_native, m)?)?;
     m.add_function(wrap_pyfunction!(ingest, m)?)?;

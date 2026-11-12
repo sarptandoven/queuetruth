@@ -13,6 +13,7 @@ pub mod l3;
 pub mod model_id;
 pub mod models;
 pub mod pair;
+pub mod pm;
 pub mod prob;
 pub mod runner;
 pub mod sim;
