@@ -3,13 +3,17 @@
     queuetruth compare --backtest PATH [--backtest PATH ...] --live PATH [--live PATH ...] [--data DIR]
         [--backtester NAME] [--venue V] [--out DIR] [--instrument-map FILE] [--window DURATION] [--account NAME]
         [--option KEY=VALUE ...] [--max-rows N] [--json] [--html]
+        [--watch [--interval DURATION] | --once] [--alert-pp PP] [--alert-ticks TICKS] [--alert-pnl AMOUNT]
 
 Runs `queuetruth.compare.compare` and prints the answer first, then the orders that differ. `--json` (or `--format
 json`) prints the `qt.compare` document instead; `--html` also writes `<out>/compare.html`. Notes (importer and
 scorer caveats) go to stderr with `--verbose`. A Python-only command: `queuetruth.cli.main` runs it before the clap
 grammar, which lists it (crates/cli/gen_python_commands.py).
 
-Exit codes (SPEC 0.2): 0 success, 2 any error.
+`--watch` runs the comparison again whenever new live records arrive (`queuetruth.compare.watch`) and prints one
+line per check with the drift since the baseline window; `--once` runs a single check (cron, CI).
+
+Exit codes (SPEC 0.2): 0 success, 2 any error. With `--watch` or `--once` (as `fit`): 0 no alert, 1 alert, 2 error.
 """
 
 from __future__ import annotations
@@ -95,6 +99,35 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--max-rows", type=int, default=10, metavar="N", help="differing orders printed (default 10)")
     p.add_argument("--json", action="store_true", help="print the full summary as JSON (as --format json)")
     p.add_argument("--html", action="store_true", help="also write a self-contained report to <out>/compare.html")
+    w = p.add_argument_group("watch for drift (no network, no notifications: lines and the exit code)")
+    w.add_argument(
+        "--watch",
+        action="store_true",
+        help="compare again whenever new live records arrive; print the drift since the baseline window (state in "
+        "<out>/watch.json); exit 1 after an alert",
+    )
+    w.add_argument("--once", action="store_true", help="one watch check, then exit 0 (no alert), 1 (alert) or 2")
+    w.add_argument("--interval", metavar="DURATION", default="60s", help="how often --watch checks (default 60s)")
+    w.add_argument(
+        "--alert-pp",
+        type=float,
+        default=2.0,
+        metavar="PP",
+        help="alert when the fill-share gap moved at least this many percentage points (default 2)",
+    )
+    w.add_argument(
+        "--alert-ticks",
+        type=float,
+        default=0.25,
+        metavar="TICKS",
+        help="alert when the 1s markout gap moved at least this many ticks (default 0.25)",
+    )
+    w.add_argument(
+        "--alert-pnl",
+        type=float,
+        metavar="AMOUNT",
+        help="alert when the P&L gap per order moved at least this much, in the P&L currency (default: no alert)",
+    )
     return root
 
 
@@ -122,6 +155,8 @@ def main(argv: list[str]) -> int:
     except SystemExit as e:  # --help
         return int(e.code or 0)
     json_out = args.format == "json" or args.json
+    if args.watch or args.once:
+        return _watch(args, json_out)
     try:
         from queuetruth.compare.run import compare, write_doc
 
@@ -164,6 +199,41 @@ def main(argv: list[str]) -> int:
         else:
             print(f"{len(notes)} note(s) in {res.doc['files']['compare']} (--verbose prints them)", file=sys.stderr)
     return EXIT_OK
+
+
+def _watch(args: argparse.Namespace, json_out: bool) -> int:
+    """`--watch` / `--once`: `queuetruth.compare.watch.watch`, one printed line per check."""
+    if json_out:
+        return _emit_error(
+            QtError("QT-USAGE-001", "compare --watch prints one line per check", "read <out>/watch.json instead"),
+            True,
+        )
+    from queuetruth.compare.watch import watch
+
+    def echo(line: str) -> None:
+        print(line, flush=True)
+
+    try:
+        return watch(
+            args.backtest,
+            args.live,
+            out=args.out,
+            interval=args.interval,
+            once=args.once,
+            echo=echo,
+            alert_pp=args.alert_pp,
+            alert_ticks=args.alert_ticks,
+            alert_pnl=args.alert_pnl,
+            data=args.data,
+            backtester=args.backtester,
+            venue=args.venue,
+            instrument_map=args.instrument_map,
+            window=args.window,
+            account=args.account,
+            options=_options(args.option),
+        )
+    except QtError as e:
+        return _emit_error(e, False)
 
 
 def _emit_error(e: QtError, json_out: bool) -> int:

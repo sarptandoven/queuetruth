@@ -166,6 +166,11 @@ def corpus(tmp_path_factory: pytest.TempPathFactory) -> dict[str, str]:
     nt = ss.write_nautilus(tmp / "nt", sims)
     run("compare", "compare", "--backtest", str(nt[0]), "--backtest", str(nt[1]), "--live", str(LIVE), "--out",
         str(tmp / "compare_nt"))  # fmt: skip
+    grow = ss.part_log(LIVE, tmp / "live_growing", 100)
+    watch = ["compare", "--backtest", str(hbt), "--live", str(grow), "--data", ds, "--out", str(tmp / "cw"), "--once"]
+    run("compare --once baseline", *watch)
+    ss.part_log(LIVE, grow, 200)
+    run("compare --once drift", *watch, "--alert-pp", "0", "--alert-ticks", "0", ok=lambda c: c in (0, 1))
     run("data add", "data", "add", str(raw), "--out", str(tmp / "ds_added"), "--quiet")
     return capsys_out
 

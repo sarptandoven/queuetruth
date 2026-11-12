@@ -10,9 +10,12 @@ from __future__ import annotations
 
 import csv
 import json
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
+import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
 S = 1_000_000_000
@@ -114,3 +117,27 @@ def write_hftbacktest(path: Path, os_: list[SimOrder], tick: float = 0.25) -> Pa
         lines.append({**base, **end, "local_timestamp": end["exch_timestamp"]})
     path.write_text("".join(json.dumps(x) + "\n" for x in lines))
     return path
+
+
+def part_log(live: str | Path, dst: Path, n: int) -> Path:
+    """The first `n` orders (by first exchange event time) of a canonical live log, written as a canonical live log
+    to `dst` (replaced): the same live run seen before its later orders arrived (`compare --watch`)."""
+    live = Path(live)
+    ev = pq.read_table(live / "events.parquet")
+    first: dict[str, int] = {}
+    for k, t in zip(ev.column("order_key").to_pylist(), ev.column("ts_exchange").to_pylist(), strict=True):
+        if t is not None:
+            first[k] = min(first.get(k, t.value), t.value)
+    keep = pa.array(sorted(first, key=lambda k: (first[k], k))[:n], type=pa.string())
+    if dst.exists():
+        shutil.rmtree(dst)
+    dst.mkdir(parents=True)
+    od = pq.read_table(live / "orders.parquet")
+    od = od.filter(pc.is_in(od.column("order_key"), value_set=keep))
+    ev = ev.filter(pc.is_in(ev.column("order_key"), value_set=keep))
+    pq.write_table(od, dst / "orders.parquet")
+    pq.write_table(ev, dst / "events.parquet")
+    man = json.loads((live / "manifest.json").read_text())
+    man.update({"n_orders": od.num_rows, "n_events": ev.num_rows})
+    (dst / "manifest.json").write_text(json.dumps(man, indent=2) + "\n")
+    return dst

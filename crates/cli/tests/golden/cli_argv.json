@@ -2082,5 +2082,35 @@
     "--instrument-map",
     "instrument_map.csv",
     "--html"
+  ],
+  [
+    "queuetruth",
+    "compare",
+    "--backtest",
+    "hbt.jsonl",
+    "--live",
+    "live",
+    "--data",
+    "synth",
+    "--out",
+    "qt-compare",
+    "--watch",
+    "--interval",
+    "5min",
+    "--alert-pp",
+    "1.5",
+    "--alert-ticks",
+    "0.5",
+    "--alert-pnl",
+    "2"
+  ],
+  [
+    "queuetruth",
+    "compare",
+    "--backtest",
+    "hbt.jsonl",
+    "--live",
+    "live",
+    "--once"
   ]
 ]
