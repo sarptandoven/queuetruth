@@ -172,18 +172,18 @@ def _ask(prompt: str) -> str:
     return sys.stdin.readline()
 
 
-def _confirm(interactive: bool, what: str = "atlas", local: str = "--from DIR") -> Any:
+def _confirm(interactive: bool, what: str = "atlas", local: str = "--from DIR", size: str = "a few MB") -> Any:
     def confirm(url: str) -> bool:
         if not interactive:
             raise QtError(
                 "QT-USAGE-001",
-                f"{what}: needs to download the atlas data API (a few MB) from {url.rsplit('/', 1)[0]}/",
+                f"{what}: needs to download the atlas data API ({size}) from {url.rsplit('/', 1)[0]}/",
                 f"rerun with --yes to confirm the download, or {local} for a local copy",
             )
         from queuetruth.demo.cache import user_cache_dir
 
         print(
-            f"queuetruth {what} reads the public Fill-Realism Atlas: {url.rsplit('/', 1)[0]}/ (a few MB, checked "
+            f"queuetruth {what} reads the public Fill-Realism Atlas: {url.rsplit('/', 1)[0]}/ ({size}, checked "
             f"against its manifest, cached in {user_cache_dir() / 'atlas'}).",
             file=sys.stderr,
         )
@@ -245,6 +245,30 @@ def _json_wanted(argv: list[str]) -> bool:
     )
 
 
+def _verify_confirm(interactive: bool) -> Any:
+    """Consent for each download of `verify atlas`, naming what it is: the data API, a reduced day, or a day's
+    public IEX file (streamed for a unit re-run)."""
+
+    def what(url: str) -> str:
+        if url.endswith(".pcap.gz"):
+            return f"the day's public IEX file {url} (about 9 GB, streamed and never stored; one bucket is kept)"
+        if url.endswith(".tar.gz"):
+            return f"the reduced day {url} (tens of MB; its manifest and plan are kept in the cache)"
+        return f"the atlas data API at {url.rsplit('/', 1)[0]}/ (every file, tens of MB, kept in the cache)"
+
+    def confirm(url: str) -> bool:
+        if not interactive:
+            raise QtError(
+                "QT-USAGE-001",
+                f"verify: needs to download {what(url)}",
+                "rerun with --yes to confirm the download, or --from DIR / --day DIR for local copies",
+            )
+        print(f"queuetruth verify atlas reads {what(url)}.", file=sys.stderr)
+        return _ask("Download now? [y/N] ").strip().lower() in ("y", "yes")
+
+    return confirm
+
+
 def verify_main(argv: list[str]) -> int:
     """Runs `queuetruth verify atlas`; returns the exit code (1 when a check fails)."""
     from queuetruth.errors import EXIT_GATE
@@ -270,7 +294,7 @@ def verify_main(argv: list[str]) -> int:
             checkout=args.checkout,
             atlas_manifest=args.atlas_manifest,
             yes=args.yes,
-            confirm=_confirm(interactive, "verify", "--from DIR"),
+            confirm=_verify_confirm(interactive),
             refresh=args.refresh,
             threads=args.threads or 1,
         )

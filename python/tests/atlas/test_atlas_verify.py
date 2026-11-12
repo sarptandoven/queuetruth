@@ -277,3 +277,16 @@ def test_cli(run: Any, site: Path, day: tuple[Path, dict[str, Any]]) -> None:
     assert code == 0 and out.startswith("usage: queuetruth verify atlas")
     code, out, _ = run("--help")
     assert any(line.split()[:1] == ["verify"] for line in out.splitlines())
+
+
+def test_cli_asks_and_names_each_download(run: Any, tmp_path: Path, monkeypatch: Any) -> None:
+    from queuetruth.atlas import _cli
+
+    monkeypatch.setenv("QT_CACHE_DIR", str(tmp_path / "cache"))
+    code, out, err = run("verify", "atlas", "--from", "https://example.org/atlas/v1/")
+    assert code == 2 and out == "" and "the atlas data API at https://example.org/atlas/v1/" in err
+    confirm = _cli._verify_confirm(interactive=False)
+    with pytest.raises(QtError, match="about 9 GB"):
+        confirm("https://example.org/20261109_IEXTP1_DPLS1.0.pcap.gz")
+    with pytest.raises(QtError, match="the reduced day"):
+        confirm("https://example.org/day-2026-11-09.tar.gz")
