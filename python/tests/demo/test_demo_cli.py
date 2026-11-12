@@ -318,7 +318,7 @@ def test_backtester_picks_the_headline_model_and_keeps_the_default() -> None:
     assert "--backtester" in (e.value.hint or "")
     with pytest.raises(QtError):
         R.resolve(R.DemoOptions(backtester="zipline"))
-    assert R.headline_sentence({}) == "No fill-rate bias within 1 s: no order has an exact label at that horizon."
+    assert R.headline_sentence({}) == "No fill-rate bias within 1s: no order has an exact label at that horizon."
 
 
 def test_backtester_flag(capsys: pytest.CaptureFixture[str]) -> None:

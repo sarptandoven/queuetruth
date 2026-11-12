@@ -45,6 +45,7 @@ from pathlib import Path
 from typing import Any
 
 import pyarrow as pa
+from pydantic import Field
 
 from queuetruth.errors import QtError
 from queuetruth.live._common import (
@@ -65,7 +66,7 @@ from queuetruth.live._common import (
     valid_id,
 )
 from queuetruth.live.builder import ImportResult, LogBuilder
-from queuetruth.live.importers._base import ImportOptions, side_of
+from queuetruth.live.importers._base import Flag, ImporterDef, ImporterOptions, ImportOptions, Int, Text, side_of
 from queuetruth.live.importers._parquet import read_parquet
 
 HBT = "sim:hftbacktest"
@@ -445,3 +446,47 @@ def import_nautilus(paths: list[str], opts: ImportOptions) -> ImportResult:
         )
         b.warn(f"{NT}: fills derived from order reports where no per-fill rows were given")
     return b.finish()
+
+
+# ---- registry entry (queuetruth.live.importers.registry()) ------------------------------------------------------
+
+
+class SimOptions(ImporterOptions):
+    """Options of the hftbacktest and NautilusTrader importers."""
+
+    venue: Text = Field(None, description="live venue whose instrument-map rows apply")
+    map_venue: Text = Field(None, description="venue of the instrument-map rows when it differs from venue")
+    size_exp: Int = Field(None, description="decimal exponent of sizes, -18..18 (default -8)")
+    key_from_client_id: Flag = Field(None, description="use a client id of the form venue:account:id as the order key")
+
+
+class HftbacktestOptions(SimOptions):
+    """`SimOptions` and the hftbacktest order-key map."""
+
+    order_key_map: dict[str, Any] | None = Field(None, description="{hftbacktest order_id: live order_key}")
+
+
+IMPORTERS = (
+    ImporterDef(
+        name="hftbacktest",
+        kind="sim",
+        run=import_hftbacktest,
+        options=HftbacktestOptions,
+        formats=("order snapshots of hftbacktest 2.4.4 (Parquet, CSV or JSON lines)",),
+        patterns=("*.parquet", "*.csv", "*.jsonl"),
+        description="hftbacktest: the simulator's orders and fills (log venue sim:hftbacktest)",
+        docs="how-to/import-live-logs.md#simulator-output-hftbacktest-nautilus",
+        rank=100,
+    ),
+    ImporterDef(
+        name="nautilus",
+        kind="sim",
+        run=import_nautilus,
+        options=SimOptions,
+        formats=("NautilusTrader backtest reports and order events (Parquet, CSV or JSON lines)",),
+        patterns=("*.parquet", "*.csv", "*.jsonl"),
+        description="NautilusTrader: the backtest's orders and fills (log venue sim:nautilus)",
+        docs="how-to/import-live-logs.md#simulator-output-hftbacktest-nautilus",
+        rank=110,
+    ),
+)

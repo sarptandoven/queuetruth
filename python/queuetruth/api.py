@@ -713,14 +713,17 @@ def import_live(
     zone of venue-local times (IBKR Flex). `options` go to the simulator or bot importer (`venue` = live venue of the
     instrument-map rows, `size_exp`, `key_from_client_id`, `order_key_map`; for bots `dry_run`, `log_tz`,
     `timeframe`, `pair_with`, ...; for backtesters `pair_with` = a canonical live-log directory, `timeframe`,
-    `instrument`, ...)."""
+    `instrument`, ...); for a venue whose importer has options of its own (`ibkr_flex`: `flex_date_order`), those.
+    Each importer's options are a typed model (`queuetruth.live.importers.by_venue(venue).options`); a wrong or
+    unknown one fails `QT-CONFIG-001`. A venue registered by a plugin (`queuetruth.importers`) works the same."""
     from queuetruth import live as qlive
 
-    sp = _validate(s.LiveImportSpec, spec)
+    sp = qlive.live_import_spec(spec) if _plugin_venue(spec) else _validate(s.LiveImportSpec, spec)
     tz = tz if tz is not None else sp.tz
-    if sp.venue in qlive.BOT_VENUES:
+    kind = qlive.importers.by_venue(sp.venue).kind
+    if kind == "bot":
         return qlive.import_bot(sp, tz=tz, **options)
-    if sp.venue.startswith("sim_") and sp.venue not in qlive.IMPORTERS:
+    if kind == "sim":
         if not sp.out:
             raise QtError("QT-CONFIG-001", "out: an output directory is required")
         if tz is not None:
@@ -728,7 +731,7 @@ def import_live(
         inputs = [_path_of(r, "inputs") for r in sp.inputs]
         imap = _path_of(sp.instrument_map, "instrument_map") if sp.instrument_map is not None else None
         return qlive.import_sim(
-            sp.venue.removeprefix("sim_"),
+            qlive.importers.by_venue(sp.venue).name,
             inputs,
             sp.out,
             account=sp.account,
@@ -736,12 +739,15 @@ def import_live(
             append=sp.append,
             **options,
         )
-    if options:
-        raise QtError(
-            "QT-CONFIG-001",
-            f"options {sorted(options)}: apply to simulator imports (sim_*) and trading bots (freqtrade, hummingbot)",
-        )
-    return qlive.import_venue(sp, tz=tz)
+    return qlive.import_venue(sp, tz=tz, **options)
+
+
+def _plugin_venue(spec: Any) -> bool:
+    """Whether a spec dict names a venue that only a plugin importer registers (not in `LiveImportSpec.venue`)."""
+    from queuetruth.live import importers
+
+    venue = spec.get("venue") if isinstance(spec, dict) else None
+    return isinstance(venue, str) and venue not in importers.live_venues(builtin=True) and venue in importers.registry()
 
 
 def validate_live(path: str) -> list[str]:

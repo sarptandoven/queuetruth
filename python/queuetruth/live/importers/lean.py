@@ -72,9 +72,9 @@ from typing import Any
 from queuetruth.errors import QtError
 from queuetruth.live._common import Record, dec, dump_raw, input_error, read_csv_rows, read_json_records, read_text
 from queuetruth.live.builder import ImportResult
-from queuetruth.live.importers._base import ImportOptions
+from queuetruth.live.importers._base import ImporterDef, ImportOptions
 from queuetruth.live.importers.backtest import (
-    COMMON_OPTIONS,
+    BarOptions,
     SimFill,
     SimOrder,
     SimRun,
@@ -100,8 +100,14 @@ from queuetruth.schemas.io import sha256_file
 LEAN_SIM = "sim:lean"
 #: LEAN release (git tag of github.com/QuantConnect/Lean) the format notes were read from.
 LEAN_VERSION = "18241"
+
+
 #: LEAN reports every time in UTC, so `data_tz` does not apply.
-LEAN_OPTIONS = COMMON_OPTIONS - {"data_tz"}
+class LeanOptions(BarOptions):
+    """`BarOptions` (no `data_tz`: LEAN reports every time in UTC)."""
+
+
+LEAN_OPTIONS = LeanOptions.option_names()
 _NS = 1_000_000_000
 
 #: `OrderType` (numbers and names, lowercased) -> (canonical order type, uses `limitPrice`, LEAN name).
@@ -847,3 +853,17 @@ __all__ = [
     "read_lean",
     "reconcile_lean",
 ]
+
+# ---- registry entry (queuetruth.live.importers.registry()) ------------------------------------------------------
+
+IMPORTER = ImporterDef(
+    name="lean",
+    kind="sim",
+    run=import_lean_sim,
+    options=LeanOptions,
+    formats=("backtest result JSON (orders)", "order-events JSON"),
+    patterns=("*.json", "*-order-events.json"),
+    description="QuantConnect LEAN backtest: orders and order events (log venue sim:lean)",
+    docs="how-to/reconcile-backtrader-vectorbt.md#7-quantconnect-lean",
+    rank=180,
+)

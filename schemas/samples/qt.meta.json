@@ -18,6 +18,9 @@
     "formats": [
       "x"
     ],
-    "zero_egress": true
+    "zero_egress": true,
+    "live_venues": [
+      "x"
+    ]
   }
 }

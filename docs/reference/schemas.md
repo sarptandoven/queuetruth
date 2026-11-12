@@ -3980,6 +3980,7 @@ Service metadata.
 | `limits` | Limits | yes |  |  |
 | `formats` | array of string | yes |  |  |
 | `zero_egress` | boolean | yes |  |  |
+| `live_venues` | array of string | no |  |  |
 
 **`Limits`** (in `qt.meta`)
 

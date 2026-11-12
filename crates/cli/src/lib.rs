@@ -12,6 +12,7 @@ mod bench;
 pub mod formats;
 mod grammar;
 mod human;
+mod live_importers;
 mod native;
 pub mod ops;
 mod python_commands;
