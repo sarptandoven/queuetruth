@@ -28,6 +28,7 @@ from zoneinfo import ZoneInfo
 
 from queuetruth.data.infer import NEEDS_DATE, TITLES, Detected, detect
 from queuetruth.data.merge import merge
+from queuetruth.dataset import MANIFEST_FILE, DatasetWriter, open_dataset
 from queuetruth.errors import QtError
 
 SCHEMA = "qt.data_add"
@@ -89,7 +90,7 @@ def _clock(ns: int | None, tz: str) -> str | None:
 
 
 def _is_dataset(p: Path) -> bool:
-    return (p / "manifest.json").is_file()
+    return (p / MANIFEST_FILE).is_file()
 
 
 def _plan(found: list[Detected], date: str | None, symbols: list[str] | None) -> list[dict[str, Any]]:
@@ -127,14 +128,13 @@ def _plan(found: list[Detected], date: str | None, symbols: list[str] | None) ->
 
 
 def _with_attribution(root: Path, attribution: list[dict[str, Any]]) -> None:
-    p = root / "manifest.json"
-    man = json.loads(p.read_text(encoding="utf-8"))
+    man = open_dataset(root).manifest.to_dict()
     have = man.get("attribution") or []
     for a in attribution:
         if a not in have:
             have.append(a)
     man["attribution"] = have
-    p.write_text(json.dumps(man, indent=1) + "\n", encoding="utf-8")
+    DatasetWriter(root).finalize(man, indent=1)
 
 
 def add(
@@ -229,7 +229,7 @@ def describe(
     """The `qt.data_add` document of the dataset at `out` after `add` (module docstring)."""
     import pyarrow.parquet as pq
 
-    man = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+    man = open_dataset(out).manifest.to_dict()
     dq_counts = json.loads((out / "data_quality.json").read_text(encoding="utf-8"))
     inst = pq.read_table(out / "instruments.parquet", columns=["instrument_id", "session_date", "symbol", "session_tz"])
     names: dict[tuple[int, int], tuple[str, str]] = {}

@@ -51,9 +51,7 @@ MBO self-exclusion does); such orders are counted (`overlapping_orders`) and war
 
 from __future__ import annotations
 
-import hashlib
 import json
-import shutil
 from collections.abc import Iterable, Sequence
 from dataclasses import asdict, dataclass, field
 from fractions import Fraction
@@ -66,10 +64,10 @@ import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
+from queuetruth.dataset import DatasetWriter, open_dataset
 from queuetruth.errors import QtError
 from queuetruth.schemas.arrow import SCHEMAS
-from queuetruth.schemas.io import sha256_file, write_table
-from queuetruth.score._io import Row, read_live_log, read_manifest
+from queuetruth.score._io import Row, read_live_log
 from queuetruth.score.outcomes import log_outcomes
 
 DEFAULT_MATCH_WINDOW_NS = 1_000_000
@@ -690,7 +688,7 @@ def own_free_l2_dataset(
         raise _config(f"own_fill_prints must be 'keep' or 'remove', got {own_fill_prints!r}")
     if not (src / "manifest.json").exists():
         raise QtError("QT-INPUT-001", f"{src / 'manifest.json'}: dataset manifest not found")
-    manifest = read_manifest(src)
+    manifest = open_dataset(src).manifest.to_dict()
     if str(manifest.get("kind", "mbo")) != "l2":
         raise _config(
             f"{src}: own-order removal from the L2 depth needs an L2-only dataset (kind {manifest.get('kind')!r})",
@@ -703,14 +701,13 @@ def own_free_l2_dataset(
     by_inst: dict[int, list[OwnOrder]] = {}
     for o in orders:
         by_inst.setdefault(o.instrument_id, []).append(o)
-    dst.mkdir(parents=True, exist_ok=True)
+    w = DatasetWriter(dst)
     for name in ("instruments.parquet", "data_quality.json"):
         if (src / name).exists():
-            shutil.copy2(src / name, dst / name)
+            w.copy(src / name, name)
     if (src / "trades_source").exists():
-        shutil.copytree(src / "trades_source", dst / "trades_source", dirs_exist_ok=True)
+        w.copy_tree(src / "trades_source", "trades_source")
     matched: set[int] = set()
-    shas: list[str] = []
     part_iids = set()
     for p in manifest.get("partitions", []) or []:
         iid = int(p["instrument_id"])
@@ -726,21 +723,17 @@ def own_free_l2_dataset(
             done = done.drop_columns(["__file"])
             for i, f in enumerate(files):
                 part = done.filter(pa.array(fidx == i))
-                write_table(part, dst / f["path"], SCHEMAS["qt.l2"])
-                f["rows"] = part.num_rows
+                f["rows"] = w.write_table(f["path"], part, SCHEMAS["qt.l2"])["rows"]
         else:
             for f in files:
-                (dst / f["path"]).parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(src / f["path"], dst / f["path"])
+                w.copy(src / f["path"], f["path"])
         for f in files:
-            f["sha256"] = sha256_file(dst / f["path"])
-            shas.append(f["sha256"])
+            f["sha256"] = w.entry(f["path"])["sha256"]
         p["rows"] = sum(int(f.get("rows") or 0) for f in files)
     st.orders_matched = len(matched)
-    ident = "\n".join(sorted(shas)) + "\n" + str(manifest.get("source_format", ""))
     source_id = str(manifest.get("dataset_id", ""))
-    manifest["dataset_id"] = hashlib.sha256(ident.encode()).hexdigest()
-    (dst / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    manifest["dataset_id"] = DatasetWriter.dataset_id(manifest)
+    w.finalize(manifest)
     warnings = _warnings(st, match_window_ns, own_fill_prints, sorted(set(by_inst) - part_iids))
     res = OwnFreeResult(dst, manifest["dataset_id"], st, warnings, match_window_ns, own_fill_prints)
     side = {**res.to_dict(), "source_dataset_id": source_id, "drop_noop_rows": drop_noop_rows}

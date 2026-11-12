@@ -36,7 +36,7 @@ OTHER_ROOTS = ("service", "tools", "scripts", "integrations", "benches", "action
 #: itself (the root `__init__.py`, which re-exports `api`) is an interface.
 LAYERS: dict[str, tuple[str, ...]] = {
     "contracts": ("_version", "errors", "schemas", "stats"),
-    "data adapters": ("live", "frames", "backtesters"),
+    "data adapters": ("dataset", "live", "frames", "backtesters"),
     "engine": ("_core",),
     "models": ("model",),
     "evaluation": ("eval", "score", "report", "dq"),

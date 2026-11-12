@@ -8,6 +8,19 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ### Added
 
+- **`queuetruth.dataset`: one way to open, read, check and write a dataset.** `open_dataset(path)` opens an
+  order-level (MBO) or L2 dataset, a prediction-market dataset, or a live or simulator log and returns a `Dataset`:
+  `.kind`, `.manifest` (the document as read, key order and unknown fields kept, every field readers use checked),
+  `.instruments` and `.sessions` (symbol, `price_exp`, `size_exp`, `tick_size`, session times), `.days`,
+  `.table(name, columns=None, filter=None)` (each file's `qt.schema` metadata checked) and `.verify()` (the files
+  against the sha256 and row counts the manifest records, and the `dataset_id`). `DatasetWriter` writes the tables,
+  records their hashes and writes the manifest last, through a temporary name and a rename. The scorer, `dq`, the
+  sandbox, `pm`, `data add`, the certificates, the ledger, MCP, `check` and the live-log writer use it; the files
+  they write keep their bytes. Errors are `QT-INPUT-001` and `QT-INPUT-002` with the path and a hint. A manifest
+  that does not parse now fails with `QT-INPUT-002` where some readers used to treat it as absent.
+  `queuetruth.data.merge.dataset_id`, `queuetruth.cert.certify.dataset_id` and `queuetruth.dq.meta.dataset_id` are
+  deprecated aliases of `queuetruth.dataset.dataset_id`.
+
 - **`queuetruth check` without data: an estimate from the atlas touch tables.** `queuetruth check BACKTEST` with no
   `--data` (and `qt.check(backtest)`) now answers for a bar backtest (Freqtrade, Backtrader, VectorBT, LEAN, and
   hftbacktest or NautilusTrader on bars): how many of its resting limit orders' fills were touch-only and how many the

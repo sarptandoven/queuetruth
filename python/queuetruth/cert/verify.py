@@ -81,6 +81,7 @@ from queuetruth.cert.runs import (
     spec_refs,
 )
 from queuetruth.cert.tolerance import equivalent, json_close
+from queuetruth.dataset import read_manifest_doc
 from queuetruth.errors import QtError
 from queuetruth.schemas.runid import canonical_json, spec_echo
 
@@ -142,14 +143,10 @@ def _sizes(want: list[tuple[str, int]], got: dict[str, int]) -> list[str]:
 
 
 def _read_manifest(d: Path) -> dict[str, Any] | None:
-    mp = d / "manifest.json"
-    if not mp.is_file():
-        return None
     try:
-        doc = json.loads(mp.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, ValueError):
+        return read_manifest_doc(d, missing_ok=True)
+    except QtError:
         return None
-    return doc if isinstance(doc, dict) else None
 
 
 def check_input(ctx: _Ctx, inp: CertInput, prefix: str) -> None:

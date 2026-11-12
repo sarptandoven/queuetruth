@@ -28,10 +28,11 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from queuetruth._version import __version__
+from queuetruth.dataset import DatasetWriter
 from queuetruth.errors import QtError
 from queuetruth.live._common import input_error, read_text
 from queuetruth.schemas.arrow import DICT_VALUES, FULL_SCHEMAS, SCHEMAS, conform, upgrade
-from queuetruth.schemas.io import sha256_file, write_table
+from queuetruth.schemas.io import sha256_file
 from queuetruth.schemas.models import LiveCoverage, LiveManifest
 
 ORDERS = "qt.live_orders"
@@ -212,9 +213,7 @@ def write_manifest(
         coverage=cov,
         entry_fallback_share=share,
     )
-    p = out / MANIFEST_FILE
-    p.write_text(json.dumps(doc.model_dump(), indent=2, sort_keys=False) + "\n", encoding="utf-8")
-    return {"name": MANIFEST_FILE, "rows": None, "bytes": p.stat().st_size, "sha256": sha256_file(p)}
+    return DatasetWriter(out).finalize(doc.model_dump())
 
 
 def scales_from_rows(orows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -266,13 +265,13 @@ def write_log(
     """Writes a canonical live-log directory in the 1.1 layout (v0.1 tables are upgraded; `orders.parquet` carries
     the instrument-scale metadata); returns the `Files` entries (orders, events, manifest)."""
     p = Path(out)
-    p.mkdir(parents=True, exist_ok=True)
+    w = DatasetWriter(p)
     orders, events = upgrade(orders, ORDERS), upgrade(events, EVENTS)
     scales = json.dumps(scales_from_rows(table_rows(orders)), separators=(",", ":"), sort_keys=True)
     order_schema = FULL_SCHEMAS[ORDERS].with_metadata({**(FULL_SCHEMAS[ORDERS].metadata or {}), SCALES_KEY: scales})
     files = [
-        write_table(orders, p / ORDERS_FILE, order_schema),
-        write_table(events, p / EVENTS_FILE, FULL_SCHEMAS[EVENTS]),
+        w.write_table(ORDERS_FILE, orders, order_schema),
+        w.write_table(EVENTS_FILE, events, FULL_SCHEMAS[EVENTS]),
     ]
     files.append(write_manifest(p, orders, events, instrument_map_sha256=instrument_map_sha256))
     return files

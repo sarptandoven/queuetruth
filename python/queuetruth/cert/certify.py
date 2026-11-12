@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import re
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -66,6 +67,8 @@ from queuetruth.cert.runs import (
     spec_refs,
 )
 from queuetruth.cert.util import environment, now_ns
+from queuetruth.dataset import MANIFEST_FILE, read_manifest_doc
+from queuetruth.dataset import dataset_id as _dataset_id
 from queuetruth.errors import QtError
 from queuetruth.schemas.runid import canonical_json
 
@@ -82,9 +85,13 @@ def certificate_body(doc: dict[str, Any]) -> dict[str, Any]:
 
 
 def dataset_id(shas: list[str], source_format: str) -> str:
-    """SPEC 3.10 `dataset_id`: sha256 of the sorted partition file hashes, newline-joined, then a newline and the
-    source format."""
-    return sha256_bytes(("\n".join(sorted(shas)) + "\n" + source_format).encode())
+    """Deprecated: use `queuetruth.dataset.dataset_id`."""
+    warnings.warn(
+        "queuetruth.cert.certify.dataset_id is deprecated; use queuetruth.dataset.dataset_id",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return _dataset_id(shas, source_format)
 
 
 def _rel(path: Path, base: Path) -> str:
@@ -99,13 +106,12 @@ def _rel(path: Path, base: Path) -> str:
 
 
 def _manifest(files: dict[str, str], root: Path) -> dict[str, Any] | None:
-    if "manifest.json" not in files:
+    if MANIFEST_FILE not in files:
         return None
     try:
-        doc = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, ValueError):
+        return read_manifest_doc(root)
+    except QtError:
         return None
-    return doc if isinstance(doc, dict) else None
 
 
 def dataset_facts(files: dict[str, str], manifest: dict[str, Any]) -> tuple[bool, list[str], int | None, int | None]:
@@ -130,7 +136,7 @@ def dataset_facts(files: dict[str, str], manifest: dict[str, Any]) -> tuple[bool
                 problems.append(f"{f.get('path')}: listed in manifest.json but missing")
             elif got != want:
                 problems.append(f"{f.get('path')}: sha256 differs from manifest.json")
-    recomputed = dataset_id(shas, str(manifest.get("source_format") or ""))
+    recomputed = _dataset_id(shas, str(manifest.get("source_format") or ""))
     if recomputed != manifest.get("dataset_id"):
         problems.append(f"dataset_id {manifest.get('dataset_id')} does not re-derive (got {recomputed})")
     return not problems, problems, ts_min, ts_max
