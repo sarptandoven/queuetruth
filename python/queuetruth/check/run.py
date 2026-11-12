@@ -58,7 +58,7 @@ _RESTING = ("gtc", "day", "post_only", "gtx", "gtd")
 _FILLS_ONLY = {"vectorbt": "VectorBT", "backtesting_py": "backtesting.py trade"}
 
 
-@dataclass
+@dataclass(repr=False)
 class CheckResult(Result):
     """The answer of `check`: `summary` is the one-line answer, `doc` the full `qt.check` document, `orders` one
     row per checked order in human units, `out` the output directory. Without data `doc` is the atlas estimate

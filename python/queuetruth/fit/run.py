@@ -73,7 +73,7 @@ HALF_HOUR_NS = 1_800_000_000_000
 DEFAULT_N_SHADOWS = 1000
 
 
-@dataclass
+@dataclass(repr=False)
 class FitResult(Result):
     """The answer of `fit` and of `qt.atlas.calibration`: `summary` is the one-line answer, `doc` the `qt.fit`
     document, `calibration` the `qt.calibration_result` behind it (None for a setting read from the atlas),

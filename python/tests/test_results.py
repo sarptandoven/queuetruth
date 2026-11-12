@@ -8,6 +8,7 @@ from __future__ import annotations
 import datetime as dt
 import functools
 import http.server
+import importlib.util
 import inspect
 import json
 import sys
@@ -23,11 +24,22 @@ import queuetruth as qt
 from queuetruth.errors import QtError
 from queuetruth.results import Result
 
-sys.path.insert(0, str(Path(__file__).resolve().parent / "demo"))
+HERE = Path(__file__).resolve().parent
 
-import demo_fixtures as F
-from atlas.test_atlas_lookup import _write_api
-from check import synth_backtests as sb
+
+def _load(rel: str) -> Any:
+    """A helper module of another test directory, by its path (the directory names are not unique packages)."""
+    spec = importlib.util.spec_from_file_location(f"qt_results_{Path(rel).stem}", HERE / rel)
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod  # dataclasses look their module up there
+    spec.loader.exec_module(mod)
+    return mod
+
+
+F = _load("demo/demo_fixtures.py")
+sb = _load("check/synth_backtests.py")
+_write_api = _load("atlas/test_atlas_lookup.py")._write_api
 
 pytestmark = pytest.mark.requires_core
 

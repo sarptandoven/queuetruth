@@ -39,7 +39,7 @@ EPOCH = dt.date(1970, 1, 1)
 Say = Callable[[str], None]
 
 
-@dataclass
+@dataclass(repr=False)
 class DataResult(Result):
     """The answer of `data add` / `data fetch iex`: `summary` is the one-line answer, `doc` the full document, `rows`
     one row per session date and symbol in human units. The shared result shape (`queuetruth.results.Result`):

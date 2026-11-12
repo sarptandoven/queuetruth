@@ -47,6 +47,19 @@ def _cell(v: Any) -> str:
     return str(v)
 
 
+def flat(row: dict[str, Any]) -> dict[str, Any]:
+    """A row with nested objects spread into columns: `{"p": {"value": 0.5, "ci_lo": 0.4}}` becomes `p` and
+    `p_ci_lo` (a nested `value` keeps the parent's name)."""
+    out: dict[str, Any] = {}
+    for k, v in row.items():
+        if isinstance(v, dict):
+            for sub, x in flat(v).items():
+                out[k if sub == "value" else f"{k}_{sub}"] = x
+        else:
+            out[k] = v
+    return out
+
+
 def html_table(rows: list[dict[str, Any]], limit: int) -> str:
     """A plain `<table>` of the first `limit` row dicts (columns are the union of their keys, in order)."""
     cols: list[str] = []
@@ -80,11 +93,14 @@ class Result:
         """The main table as row dicts in human units."""
         return []
 
+    def _flat_rows(self) -> list[dict[str, Any]]:
+        return [flat(r) for r in self._rows()]
+
     def table(self, backend: str | None = None) -> Any:
         """The main table as a DataFrame (pandas by default; `backend="polars"` or `QT_FRAMES_BACKEND`)."""
         from queuetruth import frames
 
-        rows = self._rows()
+        rows = self._flat_rows()
         if not rows:
             import pyarrow as pa
 
@@ -107,7 +123,7 @@ class Result:
         """A self-contained HTML page: the answer, the interval, the main table and the notes."""
         from queuetruth.report.page import Raw, section, shell, ul
 
-        rows = self._rows()
+        rows = self._flat_rows()
         body = [f'<header><h1>{_esc(self.title)}</h1><p class="lead" id="answer">{_esc(self.summary)}</p>']
         if self.interval:
             body.append(f"<p class='note'>{_esc(self.interval)}</p>")
@@ -123,7 +139,7 @@ class Result:
 
     def _repr_html_(self) -> str:
         """The compact notebook view: the answer, the interval and the head of the main table."""
-        rows = self._rows()
+        rows = self._flat_rows()
         parts = [f'<div class="qt-result"><p><strong>{_esc(self.summary)}</strong></p>']
         if self.interval:
             parts.append(f"<p>{_esc(self.interval)}</p>")
@@ -145,7 +161,7 @@ class Result:
         elif suffix == ".csv":
             import csv
 
-            rows = self._rows()
+            rows = self._flat_rows()
             cols: list[str] = []
             for r in rows:
                 cols += [k for k in r if k not in cols]
@@ -163,3 +179,7 @@ class Result:
 
     def __str__(self) -> str:
         return self.text()
+
+    def __repr__(self) -> str:
+        first = self.summary.splitlines()[0] if self.summary else ""
+        return f"{type(self).__name__}({first!r})"

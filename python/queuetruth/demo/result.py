@@ -87,9 +87,6 @@ class DemoResult(Result):
 
         return render(self.summary_model)
 
-    def __repr__(self) -> str:
-        return f"DemoResult({self.summary!r})"
-
 
 def _minutes(v: int | str) -> int:
     if isinstance(v, bool):
