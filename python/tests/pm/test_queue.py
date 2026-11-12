@@ -325,3 +325,32 @@ def test_engine_reproduces_the_rust_zoo_corrected_mode(
             assert mine == zoo.get((fam, o.key), []), (zid, o.key)
             n_fills += len(mine)
     assert n_fills > 100
+
+
+def test_family_lists_come_from_the_rust_registry(tmp_path: Path) -> None:
+    """`queuetruth.pm.queue`'s family lists read `qt_zoo::pm::PM_FAMILIES`; the calibration set is inside it."""
+    from queuetruth.pm import queue
+    from queuetruth.pm.models import FAMILIES
+
+    assert queue.ALL_FAMILIES == (
+        "front_of_queue",
+        "trade_through_only",
+        "risk_adverse",
+        "power",
+        "power2",
+        "power3",
+        "log",
+        "log2",
+        "cancels_ahead",
+    )
+    assert queue.BOUND_FAMILIES == ("front_of_queue", "trade_through_only")
+    assert queue.ATOMIC_FAMILIES == ("power", "power2", "power3", "log", "log2")
+    assert set(queue.QUEUE_FAMILIES) == {"risk_adverse", *queue.PROB_FAMILIES}
+    assert set(FAMILIES) <= set(queue.ALL_FAMILIES)
+    for d in queue.families():
+        if d["zoo_family"] and d["name"] != "cancels_ahead" and not d["param_keys"]:
+            assert Model(d["name"]).zoo_id.split("[")[0] == d["zoo_family"]
+    rows = l2_dataset(tmp_path, [resync(T, [(BID, 4900, 10), (ASK, 5100, 10)])])
+    with pytest.raises(QtError) as e:
+        Engine([Model("risk_adverse")]).run(rows, [SimOrder("o", BID, 4900, 1.0, ts_live=T, samples=[T + 2, T + 1])])
+    assert e.value.code == "QT-CONFIG-001" and "sorted" in e.value.message

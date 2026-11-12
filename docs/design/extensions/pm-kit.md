@@ -168,7 +168,8 @@ had (`OrdersMatched`: a BUY of YES or a SELL of NO buys YES); `chain.prints_side
 ## 5. Queue engine
 
 `queuetruth.pm.queue.Engine` replays one instrument's `qt.l2` rows and moves every live order's queue estimate under
-several models at once, with the dispatch of the zoo's corrected mode (SPEC 5.3.2, 5.3.3): activation at the first
+several models at once (in Rust: the engine is `qt_zoo::pm::run` and the families are the registry
+`qt_zoo::pm::PM_FAMILIES`, a sibling of the zoo's `FamilyDef` table, read through `_core.pm_families()`), with the dispatch of the zoo's corrected mode (SPEC 5.3.2, 5.3.3): activation at the first
 batch with `ts_event > ts_live` (or the first batch after a known entry point), `F` = visible size before that batch;
 prints at the price consume `F` first; trade-through fills the leaves; the hftbacktest probability families update
 `F` on depth changes; a crossed book fills as a taker on arrival (capped at the visible opposite size, priced at its

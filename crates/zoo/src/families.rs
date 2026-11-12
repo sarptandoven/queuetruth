@@ -90,7 +90,7 @@ pub struct FamilyDef {
     pub library_default: Option<ParamSet>,
 }
 
-const N: ParamDef = ParamDef {
+pub(crate) const N: ParamDef = ParamDef {
     key: "n",
     default: None,
     min: 0.0,
