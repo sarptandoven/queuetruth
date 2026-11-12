@@ -205,7 +205,7 @@ queuetruth why --data "$C/dataset" --shadows "$C/schedule.parquet" --shadow-id x
 
 ## 4. Put it in CI
 
-The `referee` GitHub Action does steps 1 to 3 for every class: it installs queuetruth in its own virtual
+The `referee` GitHub Action (since 0.3.0) does steps 1 to 3 for every class: it installs queuetruth in its own virtual
 environment, writes the fixtures, runs your command once per class, referees the fills, and writes a table to the
 job summary. Your command reads `$QT_DATASET` and `$QT_SCHEDULE` and writes its fills to `$QT_FILLS`; `$QT_CLASS`
 names the class and `$QT_WORK` is a scratch directory.

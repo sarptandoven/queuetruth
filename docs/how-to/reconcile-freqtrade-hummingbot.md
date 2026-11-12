@@ -10,7 +10,7 @@ only one of the two runs. Then measure how far Freqtrade's candle-fill rule is f
 (`data/<config>.sqlite`) of a live bot and of a paper-trade bot that ran the same strategy at the same time. Nothing
 else: no market data and no exchange account.
 
-**From the command line or Python.** `queuetruth reconcile --kind freqtrade|hummingbot` runs the whole comparison
+**From the command line or Python.** Since 0.3.0, `queuetruth reconcile --kind freqtrade|hummingbot` runs the whole comparison
 below, and `queuetruth live import --venue freqtrade | hummingbot | sim-freqtrade | sim-hummingbot` writes one arm as
 a canonical live log (importer options with `--option KEY=VALUE`, e.g. `--option dry_run=true`); the Python API is
 `queuetruth.live.importers.freqtrade` and `queuetruth.live.importers.hummingbot`. Every file format
@@ -43,6 +43,10 @@ Two more facts shape what can be compared:
 The fixtures are one strategy (`SampleStrategy`, 5m candles, BTC/USDT and ETH/USDT on Binance, stop-loss on the
 exchange) run three times over the same four hours: a backtest result zip, a dry-run bot's database (as SQL text,
 built into SQLite below) and log, and a live bot's database.
+
+`$QT_FIXTURES` is the `tests/fixtures` directory of a queuetruth source checkout: after `git clone
+https://github.com/sarptandoven/queuetruth`, run `export QT_FIXTURES=$PWD/queuetruth/tests/fixtures`. The docs check
+sets it for you.
 
 <!-- check-docs: run -->
 ```python
@@ -101,8 +105,8 @@ queuetruth reconcile --kind freqtrade --sim "$FX/backtest-result-2024-03-01_14-0
     --instrument-map "$FX/instrument_map.csv" --max-rows 3
 ```
 
-Every number above is asserted in `test_reconcile_freqtrade_end_to_end` (`python/tests/live/test_freqtrade.py`); the
-command line gives the same report (`python/tests/cli/test_cli_bots.py`).
+Every number above is asserted in `test_reconcile_freqtrade_end_to_end`; the
+command line gives the same report.
 Six of the dry-run's limit orders have a backtest twin and the backtest filled all six; the dry-run filled four.
 The two it did not fill are the 10:15 ETH entry (the bot's log shows it timed out after 10 minutes; the database
 does not have it) and the 13:40 BTC exit (timed out, then replaced at a lower price). Both are candle-rule fills:
@@ -202,7 +206,7 @@ same role (entry or exit; a filled stop-loss order counts as an exit) placed lat
 order's candle (its placement candle for the first entry, its fill candle otherwise), else the earliest one placed
 within the tolerance after it. That is why the 13:45 backtest exit pairs with the dry-run's 13:40 exit order, which
 timed out, and not with the 13:50 replacement. Trades are bucketed by pair and direction, so a run of any length
-pairs in about a second per 25,000 trades (`test_pair_runs_scales_linearly`).
+pairs in about a second per 25,000 trades.
 
 A paired backtest order takes the bot's `order_key`, so `score` matches them. Its fill time is the candle's open;
 when that is before the bot's order existed, the fill time is clamped to the bot order's entry time (the scorer's
@@ -313,8 +317,8 @@ reconciliation pairs 8 of the 9 orders (same symbol and side, equal price, creat
 1000, of each other) and finds: the paper bot filled two orders the live bot cancelled unfilled (`missed_fill`), one
 order filled 0.001 on paper and 0.0004 live (`partial_fill`), two fills came 7.2 s and 2.3 s apart (`timing`), and
 the paper bot rejected a sell (insufficient paper balance) that filled live (`extra_live_fill`). The score: both 3,
-neither 2, live_only 1, sim_only 2, marked not interpretable (8 orders in one 30-minute cluster)
-(`test_reconcile_hummingbot_end_to_end` in `python/tests/live/test_hummingbot.py`). Set `window_ns` to your
+neither 2, live_only 1, sim_only 2, marked not interpretable (8 orders in one 30-minute cluster).
+Set `window_ns` to your
 `order_refresh_time`. Passing the live bot first fails `QT-CONFIG-001` (a paper live arm against a non-paper
 simulator arm), unless `arms_as_given=True`.
 
@@ -329,8 +333,7 @@ orders), so an arm without its database fails `QT-CONFIG-001`. Times are the bot
 its fee recomputed and counted in a warning. The building blocks are `import_hummingbot_live(...)` and
 `live.import_sim("hummingbot", [paper db], out, pair_with=[live db])`; options `market` (the live market, in both
 entry points; the paper arm is `<market>_PaperTrade`), `pair_window_ms`, `pair_price_tol`, `venue`, `price_exp`,
-`size_exp`. Pairing buckets orders by symbol and side, so 50,000 orders per arm pair in about two seconds
-(`test_pair_orders_scales_linearly`).
+`size_exp`. Pairing buckets orders by symbol and side, so 50,000 orders per arm pair in about two seconds.
 
 ## Part 3: how wrong is the candle-fill rule?
 
@@ -454,7 +457,7 @@ captures (10 minutes of Bitstamp and Bitfinex) cannot serve as truth here: their
 so exact queue outcomes are not established on them ([Results](../RESULTS.md), RD-12). For your own strategy,
 reconcile your backtest against your own live fills (Part 1). The measurement script is the block above; the
 per-case logic is covered by `test_candle_fill_audit_cases`, `test_candle_fill_audit_placement_clamp_lag_and_reasons`
-and `test_candle_fill_audit_on_an_exact_replay` (`python/tests/live/test_freqtrade.py`).
+and `test_candle_fill_audit_on_an_exact_replay`.
 
 ## Caveats
 
@@ -472,3 +475,17 @@ and `test_candle_fill_audit_on_an_exact_replay` (`python/tests/live/test_freqtra
 - The score's p-values assume enough orders and clusters: below 10 matched orders or 2 clusters the report marks
   the score not interpretable.
 - Everything runs locally; nothing is uploaded.
+
+<details>
+<summary>Evidence: the tests behind this page</summary>
+
+<ul>
+<li>1. Run the reconciliation on the fixtures: <code>python/tests/live/test_freqtrade.py</code></li>
+<li>1. Run the reconciliation on the fixtures: <code>python/tests/cli/test_cli_bots.py</code></li>
+<li>5. How orders are paired: <code>test_pair_runs_scales_linearly</code></li>
+<li>Part 2: Hummingbot paper trading vs live: <code>test_reconcile_hummingbot_end_to_end</code> in <code>python/tests/live/test_hummingbot.py</code></li>
+<li>Part 2: Hummingbot paper trading vs live: <code>test_pair_orders_scales_linearly</code></li>
+<li>On Nasdaq ITCH (measured): <code>python/tests/live/test_freqtrade.py</code></li>
+</ul>
+
+</details>

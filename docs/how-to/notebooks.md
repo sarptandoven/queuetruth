@@ -4,8 +4,8 @@
 DataFrames, starting from one of four executed example notebooks.
 
 **You need:** `pip install queuetruth` plus pandas (or polars) and, for the plots, matplotlib. Colab has pandas,
-polars and matplotlib preinstalled; the setup cell installs queuetruth. `queuetruth.frames` ships in the release after 0.1.1; with 0.1.1 the notebooks stop at their setup
-cell with a message saying so.
+polars and matplotlib preinstalled; the setup cell installs queuetruth. `queuetruth.frames` needs queuetruth 0.2.0 or
+later; with an older release the notebooks stop at their setup cell with a message saying so.
 
 ## The example notebooks
 
@@ -23,7 +23,8 @@ queuetruth from PyPI when it is missing.
 What the stored outputs show, measured when they were executed:
 
 - Notebook 02, 3,000 shadows per Nasdaq day: NautilusTrader's default touch model (`nt_prob_touch[p=1]`)
-  overfills by +3.13 pp at 1 s on 2019-12-30 (95% CI +2.63 to +3.64) and by +2.80 pp on 2020-01-30 (+2.15 to
+  overfills by +3.13 pp at 1 s on 2019-12-30 (block-bootstrap 95% CI +2.63 to +3.64; the same number with the
+  real engine's interval is [the headline number](../RESULTS.md#the-headline-number)) and by +2.80 pp on 2020-01-30 (+2.15 to
   +3.55), the same figures and intervals as the faithful-mode table in [Results](../RESULTS.md). `nt_queue_l2`
   stays within 0.77 pp of exact at 1, 10 and 60 s on both days. Every model is scored on all 3,000 shadows of its
   day: the notebook runs no hftbacktest model next to the NautilusTrader ones, because a faithful hftbacktest abort

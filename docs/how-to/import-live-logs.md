@@ -52,15 +52,18 @@ queuetruth live import --venue binance --account main --instrument-map instrumen
 `sim-backtrader`, `sim-vectorbt` and `sim-lean` (their options go in
 `--option KEY=VALUE`). FIX logs take the `--fix-*` flags ([Score my QuickFIX-driven strategy](score-quickfix-strategy.md)). `--in` repeats; every input of one run goes into the same log and fills seen in more than one input are
 deduplicated. `--append` adds to an existing log: orders with an existing `order_key` keep their row, events already
-present (same fill id, or an identical lifecycle event) are dropped and counted, and events are renumbered
-(`test_import_venue_append_dedupes`). `--tz` is the account time zone of venue-local times (IBKR Flex). The output is a
+present (same fill id, or an identical lifecycle event) are dropped and counted, and events are renumbered.
+`--tz` is the account time zone of venue-local times (IBKR Flex). The output is a
 `qt.live_import_summary`: `n_orders`, `n_events`, `n_fills`, `dedupe_dropped`, `unmatched_fills`, `warnings`,
 `validation_status` and the written files. The import validates the log before writing it and fails on any
 validation error (see "Validate" below).
 
 The same import from Python is `qt.import_live({"venue": ..., "inputs": [{"path": ...}], "out": ..., "account":
 ..., "instrument_map": {"path": ...}, "append": False, "fix": {...}}, tz=None)`. The `fix` options
-(`delimiter`, `local_ts_regex`) have no CLI flag in v0.1; set them through the Python API or a `jobs submit` spec.
+(`delimiter`, `local_ts_regex`) are also CLI flags: `--fix-delimiter` and `--fix-local-ts-regex`.
+
+`$QT_SRC` is the root of a queuetruth source checkout: after `git clone https://github.com/sarptandoven/queuetruth`,
+run `export QT_SRC=$PWD/queuetruth`. The docs check sets it for you.
 
 Try it on a synthetic fixture from the repository (written from Binance's public documentation, fake account):
 
@@ -112,8 +115,8 @@ These come from `python/queuetruth/live/builder.py` and apply to all venues.
 - **Nothing is dropped silently.** Records that cannot be mapped (no side, instrument or quantity) are excluded,
   counted and named in the warnings; messages without a canonical event are counted per reason.
 - **Validation label.** Every importer is tested against synthetic fixtures written from the venue's public
-  documentation (O-LIVE-1, `python/tests/live/test_importers.py`), not against real account exports, so every
-  imported log has `validation_status = fixture_only` in v0.1. Check the import summary against your own records
+  documentation, not against real account exports, so every
+  imported log has `validation_status = fixture_only` (see [What is validated](../validated.md)). Check the import summary against your own records
   the first time.
 - **Entry time.** The summary always has a line `entry_fallback_share=...`: the share of resting limit orders whose
   first `ack` has no `match_time` or `gateway_time` exchange time. Those orders cannot use the default entry rule
@@ -139,7 +142,7 @@ and leaves `instrument_id` null, and such orders cannot be scheduled.
 Every price and size is parsed from the venue's decimal text (JSON numbers keep their token text, never a binary
 float) and converted with `value * 10^-exp`. A value that is not an exact integer at the exponent fails the whole
 import with `QT-INPUT-004`; nothing is rounded. Fees are stored as float64 in `fee`. Here a Deribit fixture is imported with `price_exp = 0`, so
-its fractional prices cannot be represented (`test_inexact_decimal_fails_qt_input_004`):
+its fractional prices cannot be represented:
 
 <!-- check-docs: run exit=2 -->
 ```sh
@@ -195,8 +198,7 @@ All importer facts below are from the code in `python/queuetruth/live/importers/
 - **Quirks:** OKX reports a charged fee as negative, so the canonical fee is `-fillFee` (per update, never the
   cumulative `fee`) or `-fee` on REST fills. `amendResult = 0` -> `amend_ack` (priority null), `-1` ->
   `amend_reject`. `canceled` with `cancelSource` 1 -> `cancel_ack`, 31 -> `post_only_reject`, anything else ->
-  `expire`. `tag` -> `strategy_tag`. REST fills alone are a fills-only source
-  (`test_fills_only_coverage_flag`).
+  `expire`. `tag` -> `strategy_tag`. REST fills alone are a fills-only source.
 
 ### coinbase
 
@@ -255,7 +257,7 @@ All importer facts below are from the code in `python/queuetruth/live/importers/
 - **Fill id:** `ibExecID` (fallback `tradeID`). Order id `ibOrderID`, client id `orderReference`.
 - **Exchange time:** `dateTime` (or `tradeDate` + `tradeTime`) in the account's statement time zone, given with
   `--tz` (IANA name; default UTC with a warning; an explicit UTC offset in the value wins). Precision `s`, kind
-  `match_time` (`test_ibkr_tz_argument_and_default`).
+  `match_time`.
 - **Maker/taker:** none in Flex; `liquidity = unknown`. Fee = `-ibCommission` (IBKR reports commissions as negative).
 - **Quirks:** Flex has no order records, so every order is rebuilt from its executions (`limit_px` null): an IBKR
   log is always **fills-only** (see below). `BUY (Ca.)` / `SELL (Ca.)` or `transactionType = TradeCancel` ->
@@ -321,8 +323,7 @@ names the live venue whose instrument-map rows apply.
 - **nautilus:** order report, fill report and order event rows; the columns are listed in
   [Score my Nautilus backtest](score-nautilus-vs-binance.md#5-import-the-backtest-output).
 
-Tests: `test_hftbacktest_snapshots_jsonl_and_csv`, `test_nautilus_reports_and_events`
-(`python/tests/live/test_import_api.py`).
+Tests: `test_hftbacktest_snapshots_jsonl_and_csv`, `test_nautilus_reports_and_events`.
 
 ## Validate
 
@@ -373,7 +374,7 @@ alone) has no never-filled orders. The import warns `coverage=fills_only for N o
 fills_only_keys}`. The scorer detects such a log by its events (every event is a fill, bust or correction) and
 refuses the statistics that need unfilled orders: fill-rate bias, McNemar, the strata tests, equivalence and the CIF
 tests are null and the headline says `not computable: fills-only source`; markouts and the time to fill conditional
-on fill are still computed (`test_fills_only_source`, `test_fills_only_not_computable_but_ttf_and_markouts_computed`).
+on fill are still computed.
 To score fill rates, import the order history or the order stream as well.
 
 ## Writing a canonical log from your own OMS or simulator
@@ -440,3 +441,18 @@ queuetruth live validate --live bn-live
 ```
 
 Live logs never leave your machine unless you upload them to a queuetruth service yourself.
+
+<details>
+<summary>Evidence: the tests behind this page</summary>
+
+<ul>
+<li>Import: <code>test_import_venue_append_dedupes</code></li>
+<li>Rules shared by every importer: O-LIVE-1, <code>python/tests/live/test_importers.py</code></li>
+<li>Instrument map and exact decimals: <code>test_inexact_decimal_fails_qt_input_004</code></li>
+<li>okx: <code>test_fills_only_coverage_flag</code></li>
+<li>ibkr-flex: <code>test_ibkr_tz_argument_and_default</code></li>
+<li>Simulator output (hftbacktest, Nautilus): <code>python/tests/live/test_import_api.py</code></li>
+<li>Fills-only logs: <code>test_fills_only_source</code>, <code>test_fills_only_not_computable_but_ttf_and_markouts_computed</code></li>
+</ul>
+
+</details>

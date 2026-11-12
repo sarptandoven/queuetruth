@@ -453,7 +453,7 @@ def import_sim(
     `lean`) -> canonical live-log directory for the scorer's external arm. `venue` names the live venue whose
     instrument-map rows apply; other options go to the importer (`order_key_map`, `key_from_client_id`, `size_exp`;
     for `backtrader`, `vectorbt` and `lean` `pair_with` = a canonical live-log directory, `timeframe`, ...). The
-    log is marked `venue = sim:<kind>`, `source = sim`, `validation_status = simulated` (schema 1.1; v0.1 used
+    log is marked `venue = sim:<kind>`, `source = sim`, `validation_status = simulated` (schema 1.1; 0.1.0 used
     synthetic / fixture_only)."""
     if kind not in SIM_IMPORTERS:
         raise QtError("QT-CONFIG-001", f"simulator kind must be one of {sorted(SIM_IMPORTERS)}, got {kind!r}")

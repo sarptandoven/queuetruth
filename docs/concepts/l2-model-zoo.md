@@ -220,7 +220,7 @@ library by `scripts/nt_crosscheck`): hidden prints (no aggressor) at the price d
 book size updates never shrink `F` (only at-price trades do; a level delete, including one that only scrolled out of
 view, or a snapshot row resets it to 0), and a trade-through or cross does not fill while `F > 0`. Corrected:
 `F = min(F, new)` on size updates, `OUT_OF_VIEW` leaves `F` unchanged, hidden trades are ignored and there is no
-queue gate. (The specification extends the out-of-view correction to every corrected family; in v0.1 only
+queue gate. (The specification extends the out-of-view correction to every corrected family; so far only
 `nt_queue_l2` has it.)
 
 NautilusTrader 1.231.0 resets `queue_position` whenever an `OrderBookDepth10` arrives, so on a depth-10 feed its

@@ -8,6 +8,16 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ### Added
 
+- **Docs: one "What is validated" page and three front doors.** `docs/validated.toml` is the single source of what is
+  checked on real data, against the real library, or on fixtures only; `docs/gen_validated.py` writes
+  `docs/validated.md` and the README status block from it, and `make check-docs` fails when either is stale. It
+  replaces the three tables that disagreed (IEX DEEP+ is now listed on its 22 atlas days, not 1). The docs home
+  opens with the atlas headline and three doors: see it in a minute (the demo), read the atlas, and check my
+  backtester (one guide per framework). The navigation is regrouped into tutorials, framework guides, bring your
+  data, prove it, automate, other kits, explanation, reference, evidence and project (design notes leave the user
+  menu). The README links the Fill-Realism Atlas from its first screen. `docs/RESULTS.md` has one canonical block
+  for the headline Nasdaq number that other pages link. `docs/check_docs.py` flags stale version wording ("v0.1",
+  "after release", "next release", "new after 0.1") outside the changelog, design notes and launch drafts.
 - **Atlas backfill** (`.github/workflows/atlas-backfill.yml`, ROADMAP W1): a manual run fills the atlas window at once.
   `scripts/scale/iex_latest.py --count N --kept FILE` lists the N newest published IEX sessions the `atlas-days`
   release does not hold yet (`--rebuild` keeps them in) as a job matrix; each day runs on its own runner, up to
@@ -18,6 +28,13 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ### Changed
 
+- **Docs pages moved and merged.** `getting-started.md` is now "Your first leaderboard" (its demo section moved to
+  `docs/tutorials/see-it-in-a-minute.md`, its Nasdaq full-day section to "A real day from free IEX data",
+  `how-to/iex-public-demo.md`). The LEAN guide is section 7 of `how-to/reconcile-backtrader-vectorbt.md`;
+  `how-to/reconcile-lean.md` points there. `how-to/use-from-an-agent.md` introduces both the MCP server and the agent
+  sandbox. Test names and oracle ids in task guides moved to a collapsible "Evidence" note at the end of each page.
+  Stale facts fixed: `queuetruth --help` lists `demo`; `--fix-delimiter` and `--fix-local-ts-regex` exist; fuzzing
+  runs weekly in CI; the venue rule table has `iex` and `nyse` columns; DBN and NYSE status records censor shadows.
 - `scripts/scale/iex_split.py` splits an IEX DEEP+ day 10 to 14 times as fast. The capture is read, routed and
   renumbered in Rust (`queuetruth._core.IexSplit`, a port of the Python reader in `crates/ingest/src/iex/split.rs`)
   with the GIL released; a reader thread downloads, hashes and inflates the input, and writer threads (`--threads`,

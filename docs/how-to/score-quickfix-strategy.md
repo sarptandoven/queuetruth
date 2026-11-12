@@ -9,8 +9,8 @@ order-level data (Nasdaq ITCH, Databento DBN MBO) for the exact arm, or L2 data 
 
 queuetruth reads the logs that QuickFIX C++ (including the `quickfix` Python package), QuickFIX/J, QuickFIX/n and
 QuickFIX/Go write, for FIX 4.2, 4.4 and 5.0SP2, through the `fix44` importer (`queuetruth.live.import_quickfix` in
-Python). Like every importer in v0.1 it is tested on fixtures written from the engines' sources and the FIX
-specification with invented values (O-LIVE-1), not on a real trading log; compare the import summary with your own
+Python). Like every importer it is tested on fixtures written from the engines' sources and the FIX
+specification with invented values, not on a real trading log; compare the import summary with your own
 records the first time.
 
 ## 1. What to point it at
@@ -243,3 +243,12 @@ equivalence margin; 2 means the check could not run.
   report counts live orders that overlapped another of yours at the same price and side.
 - Your FIX log is confidential: the `raw` column of the canonical log keeps every original message. Drop it before
   sharing ([Import fills from my venue or broker](import-live-logs.md#privacy)).
+
+<details>
+<summary>Evidence: the tests behind this page</summary>
+
+<ul>
+<li>Score my QuickFIX-driven strategy: O-LIVE-1</li>
+</ul>
+
+</details>

@@ -5,6 +5,9 @@ than it is: some of its lead is luck that will not repeat. `queuetruth.stats.sel
 and the zoo leaderboard uses one of them (the model confidence set) to say which fill models are statistically tied
 for best at each horizon.
 
+**Deeper note:** [Trial ledger](trial-ledger.md), the local record of how many trials were run, which these
+statistics need.
+
 | Question | Method | Function |
 |---|---|---|
 | Is this Sharpe ratio above a benchmark, given its skew, fat tails and track record length? | Probabilistic Sharpe ratio (PSR) | `probabilistic_sharpe_ratio`, `psr_from_returns`, `min_track_record_length` |

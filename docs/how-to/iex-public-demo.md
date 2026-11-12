@@ -1,7 +1,8 @@
-# Replay a public IEX DEEP+ day
+# A real day from free IEX data
 
 **Goal:** run queuetruth's exact replay on real, current, order-by-order US equities data that anyone can download
-for free and that may be redistributed: IEX's DEEP+ feed from IEX HIST.
+for free and that may be redistributed: IEX's DEEP+ feed from IEX HIST. The last section does the same on a public
+Nasdaq TotalView-ITCH sample day.
 
 **You need:** about 10 GB of download bandwidth (the raw file is streamed and filtered, never stored), under 300 MB
 of free disk for the subset, and queuetruth built from this repository.
@@ -121,7 +122,8 @@ Day `20261009_IEXTP1_DPLS1.0.pcap.gz` (9,383,598,955 bytes, sha256
 | Control | replaying the same records as if the 1,742 same-price reset-priority modifies had kept priority puts 33 executions behind the head of their queue: the priority bit is what makes the ranks exact |
 | Time | stream and filter 30 min (5.2 MB/s, CPU bound in the stdlib-only script); ingest 8.0 s and replay 10.2 s in debug builds |
 
-The `iex` rule set is labelled `real_data` on the strength of this run.
+The `iex` rule set is labelled `real_data` on the strength of this run and of the atlas days
+([What is validated](../validated.md)).
 
 ## Limits
 
@@ -132,3 +134,51 @@ The `iex` rule set is labelled `real_data` on the strength of this run.
   sequences per channel, but no `DPLC` day has been run through it yet.
 - A maintain-priority Order Modify that changes the price or raises the size cannot keep priority in queuetruth
   records; it is counted (`iex_modify_maintain_unrepresentable`) and replayed as a priority loss.
+
+## The same on a Nasdaq sample day
+
+Nasdaq publishes full-day TotalView-ITCH 5.0 sample files at
+[emi.nasdaq.com/ITCH/Nasdaq ITCH/](https://emi.nasdaq.com/ITCH/Nasdaq%20ITCH/). They are order-level, so the exact
+replay is ground truth for displayed liquidity. Each file is several GB compressed. queuetruth does not mirror them,
+and apart from the prefix `queuetruth demo` streams after you confirm, it never downloads them for you: read Nasdaq's
+terms (see [Data and licensing](../data-and-licensing.md)) and download a file yourself.
+
+<!-- check-docs: skip (needs a downloaded ITCH file) -->
+```sh
+queuetruth ingest --format itch --in 01302020.NASDAQ_ITCH50.gz --venue nasdaq --date 2020-01-30 \
+    --symbols AAPL,MSFT,SPY,TSLA --out nasdaq-20200130
+queuetruth replay --data nasdaq-20200130 --out replay-20200130 --rank-oracle --parity-trades
+```
+
+Read `replay-20200130/summary.json` before anything else:
+
+- `invariants`: eight counters (cancels larger than the resting order, fills of unknown orders, books crossed after
+  a complete event, and so on). On a clean day all are zero.
+- `parity`: trades derived by the replay compared with the file's own execution prints. `pass` should be `true`.
+- `rank_oracle.rank0_share_sweep_adjusted`: the share of real executions where the executed order was at the head
+  of its price level in our book, after grouping multi-level sweeps. This is the direct check that the FIFO book
+  matches the matching engine.
+- `data_quality.verdict`: `clean`, `warnings` or `unusable`. Every later summary repeats it.
+
+Then the same analysis as [Your first leaderboard](../getting-started.md), on real orders:
+
+<!-- check-docs: skip (needs a downloaded ITCH file) -->
+```sh
+queuetruth shadows sample --data nasdaq-20200130 --n 3000 --out shadows.parquet
+queuetruth shadows mirror-real --data nasdaq-20200130 --n 3000 --out mirror.parquet
+queuetruth zoo --data nasdaq-20200130 --shadows shadows.parquet --out zoo --threads 4
+queuetruth calibrate alloc --family power3 --data nasdaq-20200130 --shadows shadows.parquet \
+    --train blocks:0-3/5 --test blocks:4/5 --out cal-power3
+queuetruth report --in zoo --in cal-power3 --out nasdaq-20200130.html
+```
+
+`shadows mirror-real` places each shadow directly behind a real order at the moment that order arrived, with the
+real order's cancel time. It gives a population that follows real traders' placement; its results are reported
+separately from never-cancel shadows (see [Rules from the independent audit](../concepts/audit-rules.md)).
+
+On an Apple M1 Pro (8 cores) the zoo step for the 16 models of `--models all` and 3,000 shadows took 11.4 to 11.7 s
+(faithful) and 7.7 s (corrected) for 2019-12-30 and 15.2 s and 11.7 to 11.8 s for 2020-01-30 at 4 threads, measured
+while other builds were running ([Results](../RESULTS.md), section 4). To reproduce the published real-data numbers from the public Nasdaq files alone, run `make reproduce`
+(`scripts/repro/reproduce.py`; it streams both day files, keeps the four symbols and reruns ingest, replay, the
+leaderboard, calibration, the learned model and the oracle) and `make reproduce-breadth` (`scripts/repro/breadth.py`,
+the 36-symbol breadth study); see [Results](../RESULTS.md), section 8.

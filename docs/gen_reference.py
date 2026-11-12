@@ -148,7 +148,7 @@ input, any object implementing `__arrow_c_stream__` works (Polars, DuckDB result
 `QT-*` error raises `qt.QtError` (`.code`, `.message`, `.hint`); HTTP API errors raise `qt.QtApiError` (code
 `QT-REMOTE-001`, `.problem`).
 
-Names marked **SPEC 4.3** are the binding public API of v0.1 (SemVer applies to them). Other exported names are
+Names marked **SPEC 4.3** are the binding public API (SemVer applies to them). Other exported names are
 listed because their modules export them, but they may change between minor versions. `queuetruth._core` is
 internal.
 

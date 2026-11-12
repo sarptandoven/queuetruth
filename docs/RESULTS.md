@@ -19,6 +19,26 @@ script and format names: its `mbo.csv`, `trades.csv`, `instruments.csv`, ingeste
 etcsv`). The CSV merges hidden and cross prints into one side-`N` print, so the hidden-print rule (audit A3) is not
 verified by the CSV runs.
 
+## The headline number
+
+This is the one block every other page quotes for the headline Nasdaq result. Use these numbers and link here.
+
+| | |
+|---|---|
+| Claim | NautilusTrader's default touch fill model (`FillModel(prob_fill_on_limit=1)`) overfills small resting orders |
+| Result | fills 14.17% of orders within 1 s where the exact replay of the real queue fills 11.03%: **+3.13 pp, 95% CI +2.53 to +3.77** |
+| Second day | +2.80 pp, 95% CI +2.23 to +3.37 (2020-01-30) |
+| Population | 3,000 never-cancel shadow orders at or near the touch, placed from 300 s after the open, of AAPL, MSFT, SPY and TSLA on the public Nasdaq TotalView-ITCH day 2019-12-30; all 3,000 scored |
+| Engine | nautilus_trader 1.231.0's own `BacktestEngine`, fed the L2 view as `OrderBookDelta`s; 2.0.0rc7 fills the same orders, and queuetruth's faithful `nt_prob_touch[p=1]` fills the same orders at 1 s, 10 s and 60 s |
+| Interval | order-level bootstrap over the 3,000 orders |
+| Source | the [NautilusTrader cross-check](#nautilustrader-cross-check) in section 4 |
+
+Other numbers for the same model are other populations or intervals, not other results. The zoo's own run of
+`nt_prob_touch[p=1]` on the same 3,000 orders gives +3.13 pp with a 30-minute block bootstrap interval of +2.63 to
++3.64 (section 4). In the full zoo, orders on which a faithful hftbacktest model stops (its issue #312) are left out
+of every model, so the same model shows +3.08 pp on 2,529 orders. The demo's +3.6 pp is a 5-minute window, not the
+session.
+
 ## Provenance
 
 | Artifact | sha256 (first 16 hex) | Written by | When (UTC) |

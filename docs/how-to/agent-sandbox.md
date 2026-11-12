@@ -36,6 +36,10 @@ including what is exact and what is not, is in [the sandbox design note](../desi
 
 ## Run an episode
 
+`$QT_FIXTURES` is the `tests/fixtures` directory of a queuetruth source checkout: after `git clone
+https://github.com/sarptandoven/queuetruth`, run `export QT_FIXTURES=$PWD/queuetruth/tests/fixtures`. The docs check
+sets it for you.
+
 On the synthetic fixture (instrument 1 on 2026-06-15, a CME-style book with a 0.25 tick and a multiplier of 50):
 
 <!-- check-docs: run -->
@@ -86,7 +90,7 @@ refused). Prices in documents are integers in fixed-point units; `sb.to_price(ra
 
 ## Stepping: session or replay
 
-`Sandbox.open(spec, stepping=...)` chooses how each step brings your orders to the visible cut. The outputs are the
+Since 0.3.0. `Sandbox.open(spec, stepping=...)` chooses how each step brings your orders to the visible cut. The outputs are the
 same: the same agent receives byte-identical observations, acks and rejections, commits the same order log (entry
 hashes and root) and gets the same scorecard on both (`python/tests/sandbox/test_stepping.py` runs seeded random
 agents on both synthetic fixtures and scripted agents on hand-made edge cases through both and compares everything).
@@ -360,7 +364,7 @@ keep the agent from knowing which day it plays, play the episode blind (next sec
 
 ## Blind episodes
 
-In a blind episode the agent cannot tell which instrument or day it is on, so it cannot recall how the day went.
+Since 0.3.0. In a blind episode the agent cannot tell which instrument or day it is on, so it cannot recall how the day went.
 The operator pins the episode; the agent starts it by an opaque id and sees only blind values.
 
 | What the agent sees | How |

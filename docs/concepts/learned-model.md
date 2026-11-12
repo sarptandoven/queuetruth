@@ -78,7 +78,7 @@ On the test split, proper scoring rules first:
 | `ipcw_logloss(tau)` (primary) | `-mean[ 1{e <= tau, fill} ln F_fill(tau) / G(e) + 1{e <= tau, cancel} ln F_cancel(tau) / G(e) + 1{e > tau} ln S(tau) / G(tau) ]` |
 | IPCW Brier, `ibs` | `BS(tau) = mean w (1{e <= tau, fill} - F_fill(tau))^2` with `w = 1/G(e)` for an event by `tau`, `1/G(tau)` if still resting, 0 if censored before `tau`; `ibs` integrates over the grid. |
 | `bss_vs_climatology` | `1 - BS_model / BS_clim`, where climatology is the training-window Aalen-Johansen fill curve by instrument x side x distance bucket x 30-minute bucket. CI by day-block bootstrap of test orders. |
-| Calibration | slope, intercept, Spiegelhalter z, Hosmer-Lemeshow p (10 bins; v0.1 uses 8 degrees of freedom), reliability diagrams with Wilson intervals. |
+| Calibration | slope, intercept, Spiegelhalter z, Hosmer-Lemeshow p (10 bins; 8 degrees of freedom), reliability diagrams with Wilson intervals. |
 | Discrimination | Uno's C at 10 s and AUC per horizon, labelled improper and never used for model selection. |
 
 Model selection uses only `rcll` and `ipcw_logloss`. When zoo predictions for the same shadows are supplied
@@ -114,7 +114,7 @@ damaged file, is `QT-INPUT-002`. Without `sha256` the load succeeds, but whoever
 the model and its card together, so the model's `warnings` then say it is not authenticated. A model fitted under
 another scikit-learn version than the installed one says so in its `warnings` too.
 
-A v0.1 directory holds `model.pkl` instead, and unpickling runs code: it is refused with `QT-CONFIG-001` unless you
+A directory written by queuetruth 0.1 holds `model.pkl` instead, and unpickling runs code: it is refused with `QT-CONFIG-001` unless you
 pass `allow_pickle=True`, and then it still needs its trusted `sha256` or `trusted=True` for a directory only you can
 write. Convert such a directory once, after checking its digest:
 `python -m queuetruth.model.migrate DIR --allow-pickle --sha256 <digest>`. Never load a model directory you received

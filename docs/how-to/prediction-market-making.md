@@ -173,7 +173,7 @@ estimate in between is never exactly right, and the median-seeking mean absolute
 models that put every ambiguous cancel on one side: a queue that is short or long on average, and fills that come
 early or late.
 
-How well this works on more data, with the same simulator (`python/tests/pm/test_generated_captures.py`):
+How well this works on more data, with the same simulator:
 
 - **A 19-minute capture** (8,000 exchange events, 358 of your orders, 1,487 official positions): every official
   position lies between the bounds, and the fitted `power[n=0.22313;atomic]` has a test RMSE of 8.35 contracts
@@ -411,8 +411,7 @@ spelling (`hbt_power3[exch=partial;mode=corrected;n=1]`).
 
 The datasets are ordinary queuetruth L2 datasets, so the zoo runs on them, with shadow prices and sizes in the
 dataset's units (4400 is $0.44, 1500 is 15 contracts). On an L2 dataset it has no exact truth to score against, but
-it writes every model's fills (`zoo_fills.parquet`); the kit's replay gives the same fills for the same orders
-(`test_engine_reproduces_the_rust_zoo_corrected_mode`).
+it writes every model's fills (`zoo_fills.parquet`); the kit's replay gives the same fills for the same orders.
 
 <!-- check-docs: run -->
 ```sh
@@ -483,3 +482,13 @@ exact. The `run_id` of every document depends on the bytes of your captures, not
 - **Rewards are expectations.** Both programs sample the book at random moments; the kit computes the expected
   payout of your capture's part of a period, not what the venue's draw paid. The other makers' Polymarket scores are
   bounded, not known.
+
+<details>
+<summary>Evidence: the tests behind this page</summary>
+
+<ul>
+<li>Kalshi: calibrate: <code>python/tests/pm/test_generated_captures.py</code></li>
+<li>Run the zoo on the book: <code>test_engine_reproduces_the_rust_zoo_corrected_mode</code></li>
+</ul>
+
+</details>

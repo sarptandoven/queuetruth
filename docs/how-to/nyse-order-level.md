@@ -146,6 +146,10 @@ at 25.02: an odd lot of 50 from the book (order 1010), then 500 from a Floor bro
 round lot to the Book Participant (1010 and 1012), one to the DMM (1013) and one more to the Book (1012). By time it
 would have been 1010, 1011 and 250 of 1012.
 
+`$QT_FIXTURES` is the `tests/fixtures` directory of a queuetruth source checkout: after `git clone
+https://github.com/sarptandoven/queuetruth`, run `export QT_FIXTURES=$PWD/queuetruth/tests/fixtures`. The docs check
+sets it for you.
+
 <!-- check-docs: run -->
 ```sh
 queuetruth ingest --format nyse-ibf --venue nyse \

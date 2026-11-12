@@ -272,7 +272,7 @@ amend latencies under `latency`, and `calibrate latency` also writes `cal-latenc
 assume synchronized clocks (`clock_sync_assumed: true`). `order_latency.npz` has hftbacktest's `IntpOrderLatency`
 layout (`req_ts`, `exch_ts`, `resp_ts`, `_padding`), one row per submitted order, sorted by `req_ts`.
 
-A queue-model calibration and a latency calibration are separate results; v0.1 has no flag that merges them. The
+A queue-model calibration and a latency calibration are separate results; no flag merges them. The
 snippet from `cal-power3` therefore has no latency line. Add `.intp_order_latency("order_latency.npz")` to the
 chain yourself, or take that line from `export hftbacktest --calibration cal-latency/calibration.json`; the path in that line is
 the bare file name `latency.npz`, so point it at `cal-latency/latency.npz`.
