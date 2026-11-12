@@ -35,7 +35,7 @@ OTHER_ROOTS = ("service", "tools", "scripts", "integrations", "benches", "action
 #: The layers from the bottom, and the top-level modules or subpackages of `queuetruth` in each. `queuetruth`
 #: itself (the root `__init__.py`, which re-exports `api`) is an interface.
 LAYERS: dict[str, tuple[str, ...]] = {
-    "contracts": ("_version", "errors", "schemas", "stats", "units"),
+    "contracts": ("_version", "errors", "integrity", "schemas", "stats", "units"),
     "data adapters": ("live", "frames", "backtesters"),
     "engine": ("_core",),
     "models": ("model",),

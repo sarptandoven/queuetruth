@@ -1,7 +1,7 @@
 """Forecast ledger: an append-only, hash-chained JSON Lines file of forecasts and resolutions (timing truth).
 
-Each line is one `qt.forecast_entry` in canonical JSON (`canonical_json`, byte-identical to
-`queuetruth.schemas.runid.canonical_json`): RFC 8785 (keys sorted by UTF-16 code units, no whitespace, floats in
+Each line is one `qt.forecast_entry` in canonical JSON (`canonical_json`, which is
+`queuetruth.integrity.canonical_json`): RFC 8785 (keys sorted by UTF-16 code units, no whitespace, floats in
 ECMAScript form) except that integers are written exactly as decimal digits. RFC 8785 reads every number as an
 IEEE double, and `recorded_at_ns` (about 1.8e18) is above 2^53, so a stock JCS library would round it and compute
 other hashes; a third-party verifier must keep integers exact (Python's `json` does; in JavaScript use a BigInt-aware
@@ -26,7 +26,6 @@ entries up to that head in time; `check_commitment` later shows that the ledger 
 from __future__ import annotations
 
 import contextlib
-import hashlib
 import json
 import math
 import os
@@ -49,9 +48,10 @@ from queuetruth.forecast.schemas import (
     LedgerProblem,
     ResolutionPayload,
 )
-from queuetruth.schemas.runid import _format_float, _utf16_key
+from queuetruth.integrity import GENESIS_ZERO, canonical_json, sha256_text
+from queuetruth.integrity import entry_digest as entry_digest_without
 
-GENESIS = "0" * 64
+GENESIS = GENESIS_ZERO
 CHAIN_RULE = (
     "entry_sha256 = sha256(canonical_json(entry - entry_sha256)); prev_sha256 = entry_sha256 of seq - 1 "
     "(64 zeros for seq 0); payload_sha256 = sha256(canonical_json(payload)); canonical_json = RFC 8785 with "
@@ -63,39 +63,8 @@ NORMALISE_TOL = 1e-3
 Payload = ForecastPayload | ResolutionPayload
 
 
-_encode_str = json.encoder.encode_basestring  # escapes exactly as RFC 8785 (checked against runid in the tests)
-
-
-def canonical_json(value: Any) -> str:
-    """RFC 8785 canonical JSON, identical to `queuetruth.schemas.runid.canonical_json` (sorted keys by UTF-16 code
-    units, no whitespace, ECMAScript numbers) with strings escaped by the C JSON encoder; ledgers hash every entry
-    twice, so this is on the hot path."""
-    if isinstance(value, str):
-        return _encode_str(value)
-    if value is None:
-        return "null"
-    if value is True:
-        return "true"
-    if value is False:
-        return "false"
-    if isinstance(value, int):
-        return str(value)
-    if isinstance(value, float):
-        return _format_float(value)
-    if isinstance(value, dict):
-        for k in value:
-            if not isinstance(k, str):
-                raise TypeError(f"object keys must be strings, got {k!r}")
-        items = sorted(value.items(), key=lambda kv: _utf16_key(kv[0]))
-        return "{" + ",".join(_encode_str(k) + ":" + canonical_json(v) for k, v in items) + "}"
-    if isinstance(value, (list, tuple)):
-        return "[" + ",".join(canonical_json(v) for v in value) + "]"
-    raise TypeError(f"value of type {type(value).__name__} is not JSON")
-
-
-def sha256_hex(text: str) -> str:
-    """sha256 of the UTF-8 text, as hex."""
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+#: sha256 of the UTF-8 text, as hex (`queuetruth.integrity.sha256_text`).
+sha256_hex = sha256_text
 
 
 def payload_digest(payload: Payload | dict[str, Any]) -> str:
@@ -106,7 +75,7 @@ def payload_digest(payload: Payload | dict[str, Any]) -> str:
 
 def entry_digest(entry: dict[str, Any]) -> str:
     """`entry_sha256` of an entry document (its own `entry_sha256` key, if present, is ignored)."""
-    return sha256_hex(canonical_json({k: v for k, v in entry.items() if k != "entry_sha256"}))
+    return entry_digest_without(entry, "entry_sha256")
 
 
 # ---- input normalisation ------------------------------------------------------------------------------------------

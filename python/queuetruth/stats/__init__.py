@@ -5,6 +5,8 @@ Semantics of each family are stated in its submodule:
 - `paired`: McNemar, exact binomial, Wilcoxon, paired permutation.
 - `clustered`: cluster-robust primary discordance test (Obuchowski, block bootstrap; audit ruling A10).
 - `survival`: Kaplan-Meier, Aalen-Johansen, log-rank, Gray.
+- `intervals`: Wilson and Clopper-Pearson intervals for proportions, percentile bootstrap intervals and the
+  ratio-of-sums replicates every block bootstrap shares; the one home for interval estimators.
 - `resampling`: block bootstrap. `multiplicity`: Holm, BH, BY. `equivalence`: TOST.
 - `calibration`: Brier, log loss, Murphy, reliability, HL, Spiegelhalter, calibration slope/intercept.
 - `discrimination`: Uno C, time-dependent AUC (improper).
@@ -29,6 +31,15 @@ from queuetruth.stats.calibration import (
 from queuetruth.stats.clustered import ClusteredDiscordance, clustered_mcnemar, obuchowski
 from queuetruth.stats.discrimination import auc_at, uno_c_index
 from queuetruth.stats.equivalence import tost_from_ci, tost_p, tost_p_bootstrap
+from queuetruth.stats.intervals import (
+    Z95,
+    block_counts_chunks,
+    clopper_pearson,
+    percentile_ci,
+    ratio_replicates,
+    wilson,
+    wilson_arrays,
+)
 from queuetruth.stats.multiplicity import adjust, benjamini_hochberg, benjamini_yekutieli, holm
 from queuetruth.stats.paired import binom_exact_two_sided, mcnemar, paired_permutation, wilcoxon_signed_rank
 from queuetruth.stats.resampling import (
@@ -44,7 +55,6 @@ from queuetruth.stats.resampling import (
     bootstrap_seed,
     ci_blocks,
     day_block_bootstrap,
-    percentile_ci,
 )
 from queuetruth.stats.selection import (
     McsResult,
@@ -72,6 +82,7 @@ __all__ = [
     "CI",
     "CI_BLOCK_CHOICES",
     "MIN_CI_BLOCKS",
+    "Z95",
     "CiBlocks",
     "ClusteredDiscordance",
     "McNemarResult",
@@ -90,6 +101,7 @@ __all__ = [
     "binom_exact_two_sided",
     "bins",
     "block_counts",
+    "block_counts_chunks",
     "block_labels",
     "block_replicates",
     "bootstrap_indices",
@@ -100,6 +112,7 @@ __all__ = [
     "brier",
     "calibration_slope_intercept",
     "ci_blocks",
+    "clopper_pearson",
     "clustered_mcnemar",
     "day_block_bootstrap",
     "deflated_sharpe_ratio",
@@ -121,6 +134,7 @@ __all__ = [
     "probabilistic_sharpe_ratio",
     "probability_of_backtest_overfitting",
     "psr_from_returns",
+    "ratio_replicates",
     "reliability_table",
     "sharpe_moments",
     "sharpe_ratio",
@@ -135,4 +149,6 @@ __all__ = [
     "tost_p_bootstrap",
     "uno_c_index",
     "wilcoxon_signed_rank",
+    "wilson",
+    "wilson_arrays",
 ]

@@ -58,6 +58,7 @@ from queuetruth.stats import (
     bootstrap_seed,
     mcnemar,
     percentile_ci,
+    ratio_replicates,
 )
 from queuetruth.stats.resampling import HALF_HOUR_NS, MIN_DAY_BLOCKS
 
@@ -463,9 +464,7 @@ def evaluate_blocks(
                 num, den = num_f(per_block), den_f(per_block)
                 total = float(den.sum())
                 value = float(num.sum()) / total if total > 0 else float("nan")
-                rn, rd = counts @ num, counts @ den
-                reps = np.where(rd > 0, rn / np.where(rd > 0, rd, 1.0), np.nan)
-                lo, hi = percentile_ci(reps, 0.05)
+                lo, hi = percentile_ci(ratio_replicates(counts, num, den), 0.05)
                 out.append(_row(model_id, pop + metric, int(hz), skind, stratum, value, lo, hi, n))
             if int(hz) == h_max_ns:
                 b, c = round(per_block["b"].sum()), round(per_block["c"].sum())

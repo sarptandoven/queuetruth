@@ -89,6 +89,7 @@ from queuetruth.forecast.scores import (
     crps_samples,
 )
 from queuetruth.forecast.tables import BASELINES, BETS, ELIGIBILITY, METRICS, SCORES, write_table
+from queuetruth.integrity import sha256_file
 from queuetruth.schemas.models import CiValue, FileEntry
 from queuetruth.schemas.runid import run_id, spec_echo
 from queuetruth.stats import holm
@@ -495,7 +496,7 @@ def _file_sha(path: str) -> str:
     p = Path(path)
     if not p.is_file():
         raise QtError("QT-INPUT-001", f"{p}: no such file")
-    return hashlib.sha256(p.read_bytes()).hexdigest()
+    return sha256_file(p)
 
 
 def _file_entry(path: Path, rows: int | None) -> FileEntry:

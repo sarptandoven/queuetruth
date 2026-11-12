@@ -18,6 +18,7 @@ import pyarrow as pa
 from pydantic import ValidationError
 
 from queuetruth.errors import QtError
+from queuetruth.integrity import canonical_json
 from queuetruth.ledger import _series
 from queuetruth.ledger._capture import as_ledger
 from queuetruth.ledger._store import Ledger, Scan
@@ -463,7 +464,7 @@ def _series_data(led: Ledger, sel: list[tuple[LedgerRecord, str]]) -> dict[str, 
 
 def _rows(sel: list[tuple[LedgerRecord, str]], data: Mapping[str, SeriesData]) -> pa.Table:
     def js(v: Any) -> str | None:
-        return None if v is None else json.dumps(v, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+        return None if v is None else canonical_json(v, "compact")
 
     cols: dict[str, list[Any]] = {f.name: [] for f in LEDGER_TABLE}
     for r, h in sel:

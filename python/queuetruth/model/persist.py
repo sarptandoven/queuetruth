@@ -31,7 +31,6 @@ pickle's sha256 is authenticated; it emits `LegacyPickleWarning`.
 
 from __future__ import annotations
 
-import hashlib
 import io
 import json
 import math
@@ -44,6 +43,7 @@ from typing import Any
 import numpy as np
 
 from queuetruth.errors import QtError
+from queuetruth.integrity import sha256_bytes
 from queuetruth.model._common import input_error
 
 MODEL_NAME = "model.npz"
@@ -414,9 +414,8 @@ def validate_isotonic(arrays: dict[str, np.ndarray], j: int, what: str) -> None:
     )
 
 
-def sha256_hex(blob: bytes) -> str:
-    """Lower-case hex sha256 of bytes."""
-    return hashlib.sha256(blob).hexdigest()
+#: Lower-case hex sha256 of bytes (`queuetruth.integrity.sha256_bytes`).
+sha256_hex = sha256_bytes
 
 
 def load_legacy_pickle(blob: bytes) -> dict[str, Any]:

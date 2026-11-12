@@ -29,6 +29,7 @@ from queuetruth.forecast.schemas import Calibration, ReliabilityBin
 from queuetruth.schemas.models import CiValue
 from queuetruth.stats import bootstrap_seed, murphy, percentile_ci, stable_seed
 from queuetruth.stats.calibration import Z975
+from queuetruth.stats.intervals import wilson_arrays
 
 
 def bins(p: np.ndarray, n_bins: int) -> np.ndarray:
@@ -50,10 +51,8 @@ def ece(p: np.ndarray, y: np.ndarray, n_bins: int = 10, weights: np.ndarray | No
 
 
 def _wilson(rate: float, n: int) -> tuple[float, float]:
-    z2 = Z975 * Z975
-    centre = (rate + z2 / (2 * n)) / (1 + z2 / n)
-    half = Z975 * np.sqrt(rate * (1 - rate) / n + z2 / (4 * n * n)) / (1 + z2 / n)
-    return float(centre - half), float(centre + half)
+    lo, hi = wilson_arrays(np.float64(rate), np.float64(n), z=Z975)
+    return float(lo), float(hi)
 
 
 def _f(x: float) -> float | None:
