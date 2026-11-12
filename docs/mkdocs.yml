@@ -51,6 +51,7 @@ nav:
       - Freqtrade and Hummingbot: how-to/reconcile-freqtrade-hummingbot.md
       - Backtrader, VectorBT and LEAN: how-to/reconcile-backtrader-vectorbt.md
       - Any simulator against my live fills: how-to/decompose-the-sim-live-gap.md
+      - Validate a backtest against live fills: how-to/validate-against-live.md
       - A QuickFIX-driven strategy: how-to/score-quickfix-strategy.md
       - My own simulator (referee in CI): how-to/referee-your-simulator.md
   - Bring your data:

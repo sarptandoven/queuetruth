@@ -1356,6 +1356,44 @@
   {
     "argv": [
       "queuetruth",
+      "calibrate-live",
+      "--data",
+      "ds",
+      "--live",
+      "live",
+      "--family",
+      "power3",
+      "--latency-from-log"
+    ],
+    "command": {
+      "path": [
+        "calibrate-live"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "dataset": {
+          "path": "ds"
+        },
+        "live": {
+          "path": "live"
+        },
+        "family": "power3",
+        "_cli": {
+          "latency_from_log": true
+        }
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
       "features",
       "--data",
       "ds",

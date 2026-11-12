@@ -15,7 +15,9 @@ quantities are converted to the dataset's units first (`score.units`, review F4)
 runner's `build_schedule` (keep-priority venues as in the scorer).
 
 Likelihood (discrete-time, censored; the C2 form of SPEC 5.4): horizons `tau_1 < ... < tau_J` = the spec horizons
-below H plus H. Live truth per order: `K_i` = interval of the first fill in W (`delta_i = 1`), else the last
+below H plus H, counted from the time the model's shadow is live (`ts_submit` plus the leg's and the spec's latency,
+jitter left out), as the zoo counts them; a live fill before that time counts at 0. Live truth per order: `K_i` =
+interval of the first fill in W (`delta_i = 1`), else the last
 interval fully observed before the end of W (`delta_i = 0`; orders with no fully observed interval carry no
 information and are skipped). Model survival `S_ij = 1 - p_fill(tau_j)` smoothed as `(S N + 0.5) / (N + 1)` with
 `N` = particles for `databento_mc`, 1000 for the analytic NT touch families and 1 for deterministic models;
@@ -192,19 +194,68 @@ def _profile_ci(theta: list[float], ll: np.ndarray, i_max: int) -> tuple[float |
     return (None if lo == 0 else theta[lo]), (None if hi == len(theta) - 1 else theta[hi])
 
 
+#: Fields of `qt.calibration_result.latency` (`queuetruth.live.latency_stats` returns more).
+LATENCY_KEYS = ("entry_ns", "response_ns", "cancel_ns", "amend_ns", "clock_sync_assumed")
+
+
+def latency_first(live_dir: Path, s: LiveCalibrationSpec) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Step 1 of the #332 recipe: the live log's latency distribution and the spec fields that use its median
+    entry latency (`entry = send_plus_latency`, `latency.gateway_ns`; jitter kept). `QT-INPUT-002` when no order has
+    both a local send time and an exchange ack time."""
+    from queuetruth import live as qlive
+
+    fit = qlive.latency_stats(str(live_dir))
+    med = (fit.get("entry_ns") or {}).get("p50")
+    if med is None:
+        raise QtError(
+            "QT-INPUT-002",
+            "calibrate-live --latency-from-log: no order has both a submit_sent local time and an exchange ack time",
+            "log ts_local_send on submit_sent and ts_exchange on ack, or pass --latency-ns instead",
+        )
+    jitter = 0 if s.latency is None else int(s.latency.jitter_ns)
+    lat = {"feed_ns": 0, "decision_ns": 0, "gateway_ns": round(float(med)), "jitter_ns": jitter}
+    return fit, {"entry": "send_plus_latency", "latency": lat}
+
+
+def latency_line(fit: dict[str, Any]) -> str:
+    """`latency_first:` line: the median entry latency with its spread, in plain units."""
+    e = fit["entry_ns"]
+
+    def ms(v: Any) -> str:
+        return "n/a" if v is None else f"{float(v) / 1e6:.3g} ms"
+
+    return (
+        f"latency_first: entry latency fitted on the live log first: median {ms(e['p50'])} (p10 {ms(e['p10'])}, "
+        f"p90 {ms(e['p90'])}, {e['n']} orders); the queue parameter was fitted with it (send time plus latency)"
+    )
+
+
 def calibrate_live(
     spec: LiveCalibrationSpec | dict[str, Any],
     *,
     runner: ScoreRunner | None = None,
     self_exclude: bool | None = None,
     match_window_ns: int | None = None,
+    latency_from_log: bool = False,
 ) -> CalibrationResult:
     """Fits the family parameter to live outcomes; writes `calibration.json` (+ `live_calibration_test.json`,
     `live_orders_truth.parquet`-free) to `spec.out` when set. Self-exclusion follows the spec's `self_exclude` and
     `match_window_ns` (schema 1.1; defaults true and 1 ms); the keyword arguments, when given, override them and
-    are recorded in the spec (echo and `run_id`)."""
+    are recorded in the spec (echo and `run_id`).
+
+    `latency_from_log` (hftbacktest #332: latency first, then the queue): the entry latency is measured on the live
+    log first (`queuetruth.live.latency_stats`, `entry_ns` = exchange ack time minus local send time), the spec is
+    set to `entry = send_plus_latency` with `latency.gateway_ns` = its median, and only then is the queue parameter
+    fitted. The result carries the latency distribution in `latency` and a `latency_first:` warning line; the
+    effective spec is the one echoed (and hashed into `run_id`)."""
     s = LiveCalibrationSpec.model_validate(spec) if isinstance(spec, dict) else spec
-    over = {k: v for k, v in (("self_exclude", self_exclude), ("match_window_ns", match_window_ns)) if v is not None}
+    over: dict[str, Any] = {
+        k: v for k, v in (("self_exclude", self_exclude), ("match_window_ns", match_window_ns)) if v is not None
+    }
+    lat_fit: dict[str, Any] | None = None
+    if latency_from_log:
+        lat_fit, lat_over = latency_first(ref_path(s.live, "live"), s)
+        over.update(lat_over)
     if over:
         s = LiveCalibrationSpec.model_validate({**s.model_dump(mode="json"), **over})
     self_exclude, match_window_ns = s.self_exclude, s.match_window_ns
@@ -215,6 +266,8 @@ def calibrate_live(
     ds = DatasetView(ref_path(s.dataset, "dataset"))
     warnings = [f"live: {w}" for w in rn.validate(str(live_dir))]
     warnings.append("fitted against live outcomes (calibrate-live), not exact queue truth")
+    if lat_fit is not None:
+        warnings.append(latency_line(lat_fit))
     orders, events = read_live_log(live_dir)
     # Units (review F4): live prices and quantities in the dataset's fixed-point units, as the scorer does.
     raw_exps = live_scales(live_dir, orders)
@@ -253,6 +306,9 @@ def calibrate_live(
     taus = sorted({int(h) for h in s.horizons_ns if int(h) < s.window_ns} | {int(s.window_ns)})
     truth: dict[str, dict[str, Any]] = {}
     n_taker_first = 0
+    act_ns = 0
+    if use_lat and s.latency is not None:
+        act_ns = int(s.latency.feed_ns) + int(s.latency.decision_ns) + int(s.latency.gateway_ns)
     for key, lg in sorted(legs.items()):
         first = lg[0]
         t0, iid = int(first["ts_submit"]), int(first["instrument_id"])
@@ -264,6 +320,11 @@ def calibrate_live(
         ff = min((f.ts for f in (*maker, *taker)), default=None)
         if ff is not None and not any(f.ts == ff for f in maker):
             n_taker_first += 1
+        # The zoo's horizons start when the shadow is live (`ts_submit` plus its latency, jitter left out), so the
+        # live truth is measured from the same time; a live fill before it counts at 0.
+        t_act = t0 + int(first.get("latency_ns") or 0) + act_ns
+        t_fill = None if ff is None else max(ff - t_act, 0)
+        t_censor = max(w_end - t_act, 0)
         truth[key] = {
             "sid": str(first["shadow_id"]),
             "t0": t0,
@@ -271,11 +332,11 @@ def calibrate_live(
             "session_date": sdate,
             "local_ns": t0 - midnight,
             "ts_entry": t0,
-            "t_fill": None if ff is None else ff - t0,
-            "t_censor": w_end - t0,
+            "t_fill": t_fill,
+            "t_censor": t_censor,
             "cut": cut,
             "filled": ff is not None,
-            "interval": _truth_interval(None if ff is None else ff - t0, w_end - t0, taus),
+            "interval": _truth_interval(t_fill, t_censor, taus),
         }
 
     # ---- split ---------------------------------------------------------------------------------------------------
@@ -525,13 +586,23 @@ def calibrate_live(
         "baseline_held_out": baseline,
         "stratified": [],
         "held_out_discordance": disc,
-        "latency": None,
+        "latency": None if lat_fit is None else {k: lat_fit[k] for k in LATENCY_KEYS},
         "exports": {},
         "data_sources": [ds.data_source()],
         "warnings": warnings,
     }
     cal = qtrust.annotate(CalibrationResult.model_validate(doc))
-    cal = cal.model_copy(update={"exports": export_snippets(cal)})
+    npz: str | None = None
+    if lat_fit is not None and s.out:  # the latency step's hftbacktest file, as `calibrate latency` writes it
+        from queuetruth.export import write_latency_npz
+
+        Path(s.out).mkdir(parents=True, exist_ok=True)
+        try:
+            write_latency_npz(str(live_dir), str(Path(s.out) / "latency.npz"))
+            npz = "latency.npz"
+        except QtError as e:
+            cal = cal.model_copy(update={"warnings": [*cal.warnings, f"latency_npz: not written ({e})"]})
+    cal = cal.model_copy(update={"exports": export_snippets(cal, npz)})
     if s.out:
         out = Path(s.out)
         out.mkdir(parents=True, exist_ok=True)

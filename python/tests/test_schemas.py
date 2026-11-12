@@ -610,7 +610,15 @@ def test_v1_1_documents_accept_v0_1() -> None:
         ("qt.live_manifest", ["coverage", "entry_fallback_share"]),
         (
             "qt.scorecard_summary",
-            ["n_twin_unmatched", "twin_match_rate", "discordance_clustered", "n_taker_fills", "fills_only", "pnl_gap"],
+            [
+                "n_twin_unmatched",
+                "twin_match_rate",
+                "discordance_clustered",
+                "n_taker_fills",
+                "fills_only",
+                "pnl_gap",
+                "ttf_survival",
+            ],
         ),
         ("qt.dataset_manifest", ["rule_set", "source_vintage"]),
         (

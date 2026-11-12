@@ -674,6 +674,12 @@ pub(crate) const COMMANDS: &[Cmd] = &[
             f("entry", Kind::Enum(ENTRY), "entry", "entry time rule"),
             LATENCY,
             JITTER,
+            f(
+                "latency-from-log",
+                Kind::Flag,
+                "_cli.latency_from_log",
+                "fit the entry latency on the live log first (median send to ack), then the queue",
+            ),
             MODE_F,
             EXCH_F,
             L2_DEPTH,

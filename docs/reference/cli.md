@@ -608,6 +608,8 @@ Options:
           shadow latency FEED,DECISION,GATEWAY (durations)
       --jitter-ns <DURATION>
           maximum uniform latency jitter [default: 0]
+      --latency-from-log
+          fit the entry latency on the live log first (median send to ack), then the queue
       --mode <mode>
           zoo mode [default: faithful] [possible values: faithful, corrected]
       --exchange <exchange>

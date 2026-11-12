@@ -45,6 +45,21 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   `--data` it says what it needs and exits 2; the estimate from the atlas comes later. Guide:
   docs/how-to/check-my-backtest.md.
 
+- **The statistics practitioners ask for, in `score`** (hftbacktest discussion #332; new how-to
+  [Validate my backtest against live fills](docs/how-to/validate-against-live.md)):
+  - Time-to-fill survival curves: summary field `ttf_survival` (schema 1.3) holds a Kaplan-Meier curve per arm on the
+    same orders (cancels, taker fills and the window end censor), the share still unfilled at each time-to-fill
+    horizon with a block-bootstrap interval, the median time to fill and the difference sim minus live. The test is a
+    log-rank stratified by instrument with a cluster-robust variance, so the two arms of an order are not treated as
+    independent (`ttf_logrank_clustered` in `score_tests.parquet`). The report draws the curves; the terminal answer
+    gives one `time to fill:` line.
+  - The terminal answer of `score` gives a `markouts:` line: sim minus live at 100 ms, 1 s and 10 s with intervals.
+    The sim-only vs live-only markout rows add the number of fills and an interval for each mean (`n_sim_only`,
+    `sim_only_ci_lo`, ...), also in the report.
+  - `calibrate-live --latency-from-log` (Python: `calibrate_live(..., latency_from_log=True)`): fits the entry latency
+    on the live log first (median send to ack), then the queue parameter with it, and reports both: the result's
+    `latency` field, a `latency` line in the terminal and, with `--out`, `latency.npz` in the hftbacktest snippet.
+
 - **Atlas backfill** (`.github/workflows/atlas-backfill.yml`, ROADMAP W1): a manual run fills the atlas window at once.
   `scripts/scale/iex_latest.py --count N --kept FILE` lists the N newest published IEX sessions the `atlas-days`
   release does not hold yet (`--rebuild` keeps them in) as a job matrix; each day runs on its own runner, up to
@@ -128,6 +143,12 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 - The queuetruth-nautilus test kit runs a `BacktestNode` on 2.0.0rc9, whose `BacktestDataConfig` takes a
   `DataCatalogConfig` instead of `catalog_path` (`test_venue_config_runs_in_node` and
   `test_node_without_fee_model_fails_on_2x` failed there).
+
+- `calibrate-live` with `--entry send-plus-latency` and a latency counted a live order's time to fill from its send
+  time, while the model's horizons start when its shadow is live (send time plus latency). The live times are now
+  counted from that same time, so the latency is no longer folded into the fitted queue parameter. `exchange_ack`
+  fits are unchanged.
+
 - `atlas.py combine` no longer runs out of memory on a full window. It read every day's cells and P&L cells into
   one table: about 1.2 GB per IEX day, so 20 days needed about 25 GB, and the first site rebuild after the backfill
   stopped the 16 GB runner two minutes in. It now reads the days one (mode, shadow population) slice at a time, with

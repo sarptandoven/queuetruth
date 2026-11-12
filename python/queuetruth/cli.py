@@ -397,6 +397,71 @@ def _score_clusters(doc: Doc, out: str | None) -> tuple[float | None, int | None
     return None, None, None
 
 
+#: Markout horizons of the terminal answer (hftbacktest discussion #332): 100 ms, 1 s, 10 s.
+PRACTITIONER_HORIZONS_NS = (100_000_000, 1_000_000_000, 10_000_000_000)
+
+
+def _practitioner_lines(doc: Doc) -> list[str]:
+    """The time-to-fill line (Kaplan-Meier share still unfilled at 1 s, else the first scored horizon, with the
+    clustered log-rank) and the markout line (sim minus live first-fill markout at 100 ms, 1 s and 10 s)."""
+    out: list[str] = []
+    sv = doc.get("ttf_survival")
+    if isinstance(sv, dict) and sv.get("arms"):
+        hs = list(sv.get("horizons_ns") or [])
+        if hs:
+            j = hs.index(1_000_000_000) if 1_000_000_000 in hs else 0
+            arms = sv["arms"]
+
+            def at(arm: str) -> str:
+                a = (arms.get(arm) or {}).get("at") or []
+                x = a[j] if j < len(a) else {}
+                if x.get("survival") is None:
+                    return f"{arm} n/a"
+                ci = (
+                    f" [{_pct(x['ci_lo'])}, {_pct(x['ci_hi'])}]"
+                    if x.get("ci_lo") is not None and x.get("ci_hi") is not None
+                    else ""
+                )
+                return f"{arm} {_pct(x['survival'])}{ci}"
+
+            lr = sv.get("logrank") or {}
+            d = (sv.get("diff") or [{}] * (j + 1))[j]
+            diff = ""
+            if d.get("diff") is not None:
+                diff = f"; sim minus live {_pp(d['diff'])} pp"
+                if d.get("ci_lo") is not None and d.get("ci_hi") is not None:
+                    diff += f" (95% CI {_pp(d['ci_lo'])} to {_pp(d['ci_hi'])})"
+            out.append(
+                f"time to fill: still unfilled after {_hz(hs[j])} (Kaplan-Meier, cancels censored): {at('live')} vs "
+                f"{at('sim')}{diff}; log-rank p = {_p(lr.get('p_value'))} (by instrument, "
+                f"{lr.get('n_clusters')} clusters)"
+            )
+    diffs = {
+        int(r["horizon_ns"]): r
+        for r in doc.get("markout_diff") or []
+        if isinstance(r, dict) and r.get("ref") == "mid" and r.get("mean_diff_ticks") is not None
+    }
+    parts = []
+    for h in PRACTITIONER_HORIZONS_NS:
+        r = diffs.get(h)
+        if r is None:
+            continue
+        has_ci = r.get("ci_lo") is not None and r.get("ci_hi") is not None
+        ci = f" [{r['ci_lo']:+.2f}, {r['ci_hi']:+.2f}]" if has_ci else ""
+        parts.append(f"{_hz(h)} {r['mean_diff_ticks']:+.2f}{ci}")
+    if parts:
+        out.append("markouts: sim minus live, ticks of mid, orders filled in both (95% CI): " + ", ".join(parts))
+    return out
+
+
+def _dur_ms(ns: float | None) -> str:
+    return "n/a" if ns is None else f"{float(ns) / 1e6:.3g} ms"
+
+
+def _pct(x: float | None) -> str:
+    return "n/a" if x is None or not math.isfinite(x) else f"{x * 100:.0f}%"
+
+
 def _render_score(doc: Doc, args: Doc, extra: Doc) -> str | None:
     bias = doc.get("bias")
     tbt = doc.get("two_by_two")
@@ -439,6 +504,7 @@ def _render_score(doc: Doc, args: Doc, extra: Doc) -> str | None:
     for g in [] if blocked else doc.get("pnl_gap") or []:  # a blocked arm's P&L describes nothing (as the report)
         if isinstance(g, dict) and g.get("headline"):
             lines.append(f"P&L: {g['headline']}")
+    lines += _practitioner_lines(doc)
     eq = doc.get("equivalence") or {}
     if eq.get("fill_rate_margin") is not None and v is not None and not doc.get("fills_only"):
         m = _pp(eq.get("fill_rate_margin"), signed=False)
@@ -600,6 +666,13 @@ def _render_calibration(doc: Doc, args: Doc, path: list[str]) -> str | None:
     if isinstance(doc.get("ci_bootstrap"), list | tuple):
         lo, hi = doc["ci_bootstrap"]
         cis.append(f"bootstrap {_num(lo)} to {_num(hi)}")
+    lat = ((doc.get("latency") or {}).get("entry_ns") or {}) if doc.get("kind") == "live" else {}
+    if lat.get("p50") is not None:  # calibrate-live --latency-from-log: step 1 of 2 (hftbacktest #332)
+        lines.append(
+            f"latency (fitted first, on the live log): median entry latency {_dur_ms(lat['p50'])} "
+            f"(p10 {_dur_ms(lat.get('p10'))}, p90 {_dur_ms(lat.get('p90'))}, {lat.get('n')} orders); "
+            "the queue below was fitted with it"
+        )
     lines.append(
         f"fitted: {pn} = {_num(est)}"
         + (f" ({'; '.join(cis)})" if cis else "")
@@ -1105,7 +1178,11 @@ def _dispatch(cmd: Doc, ctx: Doc | None = None) -> tuple[Doc | None, bool]:
 
         return _plain(run_zoo_toxicity(args)), False
     if key[0] == "calibrate" or key == ("calibrate-live",):
-        cal = _plain(api.calibrate(args) if key[0] == "calibrate" else api.calibrate_live(args))
+        if key[0] == "calibrate":
+            cal = _plain(api.calibrate(args))
+        else:  # --latency-from-log: latency first, then the queue (hftbacktest #332)
+            lat_first = {"latency_from_log": True} if extra.get("latency_from_log") else {}
+            cal = _plain(api.calibrate_live(args, **lat_first))
         err = _calibration_refused(cal)
         if err is not None:
             raise err

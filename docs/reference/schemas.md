@@ -5843,6 +5843,7 @@ Summary of `score` (SPEC 5.7).
 | `n_taker_fills` | ArmCounts or null | no | `null` |  |
 | `fills_only` | boolean or null | no | `null` |  |
 | `pnl_gap` | array of PnlGap or null | no | `null` |  |
+| `ttf_survival` | TtfSurvival or null | no | `null` |  |
 
 **`ArmCounts`** (in `qt.scorecard_summary`)
 
@@ -5867,6 +5868,18 @@ Signed fill-rate and quantity bias (sim minus live).
 | `qty_bias_ci_lo` | number or null | yes |  |  |
 | `qty_bias_ci_hi` | number or null | yes |  |  |
 | `direction` | one of "sim_overfills", "sim_underfills", "no_significant_bias" | yes |  |  |
+
+**`ClusteredLogrank`** (in `qt.scorecard_summary`)
+
+Log-rank on the fill hazard, stratified by instrument, cluster-robust variance.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `statistic` | number or null | yes |  |  |
+| `p_value` | number or null | yes |  |  |
+| `method` | string | yes |  |  |
+| `n_clusters` | integer | yes |  |  |
+| `n_strata` | integer | yes |  |  |
 
 **`DataQuality`** (in `qt.scorecard_summary`)
 
@@ -5938,6 +5951,12 @@ Markouts of sim-only vs live-only fills.
 | `diff` | number or null | yes |  |  |
 | `ci_lo` | number or null | yes |  |  |
 | `ci_hi` | number or null | yes |  |  |
+| `n_sim_only` | integer or null | no | `null` |  |
+| `n_live_only` | integer or null | no | `null` |  |
+| `sim_only_ci_lo` | number or null | no | `null` |  |
+| `sim_only_ci_hi` | number or null | no | `null` |  |
+| `live_only_ci_lo` | number or null | no | `null` |  |
+| `live_only_ci_hi` | number or null | no | `null` |  |
 
 **`Equivalence`** (in `qt.scorecard_summary`)
 
@@ -6085,6 +6104,43 @@ Which simulator arm was scored.
 | `model_id` | string or null | no | `null` |  |
 | `path` | string or null | no | `null` |  |
 
+**`SurvivalArm`** (in `qt.scorecard_summary`)
+
+Kaplan-Meier time-to-fill curve of one arm (`queuetruth.score.survival`).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `n_filled` | integer | yes |  |  |
+| `n_censored` | integer | yes |  |  |
+| `median_ns` | number or null | no | `null` |  |
+| `median_ci_lo` | number or null | no | `null` |  |
+| `median_ci_hi` | number or null | no | `null` |  |
+| `at` | array of SurvivalAt | yes |  |  |
+| `curve` | array of array of number | yes |  |  |
+| `curve_exact` | boolean | yes |  |  |
+
+**`SurvivalAt`** (in `qt.scorecard_summary`)
+
+Kaplan-Meier survival (share of orders still unfilled) of one arm at one horizon, 95% block-bootstrap CI.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `horizon_ns` | integer | yes |  |  |
+| `survival` | number or null | yes |  |  |
+| `ci_lo` | number or null | no | `null` |  |
+| `ci_hi` | number or null | no | `null` |  |
+
+**`SurvivalDiffAt`** (in `qt.scorecard_summary`)
+
+`S_sim(h) - S_live(h)` at one horizon, 95% block-bootstrap CI (negative: the simulator fills sooner).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `horizon_ns` | integer | yes |  |  |
+| `diff` | number or null | yes |  |  |
+| `ci_lo` | number or null | no | `null` |  |
+| `ci_hi` | number or null | no | `null` |  |
+
 **`TradingHaltSpan`** (in `qt.scorecard_summary`)
 
 A span `[ts_start, ts_end)` in which one instrument was not in continuous trading as its feed reported it (SPEC 1.2, halt censoring): replay, `why`, the zoo, calibration and features censor shadows there.
@@ -6112,6 +6168,18 @@ Time-to-fill comparison.
 | `logrank_p` | number or null | no | `null` |  |
 | `gray_p` | number or null | no | `null` |  |
 | `cif_fill` | map of object | yes |  |  |
+
+**`TtfSurvival`** (in `qt.scorecard_summary`)
+
+1.3: time-to-fill survival curves (first maker fill; cancels, taker fills and the window end censor).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `n` | integer | yes |  |  |
+| `horizons_ns` | array of integer | yes |  |  |
+| `arms` | map of SurvivalArm | yes |  |  |
+| `diff` | array of SurvivalDiffAt | yes |  |  |
+| `logrank` | ClusteredLogrank | yes |  |  |
 
 **`TwoByTwo`** (in `qt.scorecard_summary`)
 
