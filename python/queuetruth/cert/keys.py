@@ -17,7 +17,7 @@ from typing import Any
 
 from queuetruth.cert.models import Signature
 from queuetruth.errors import QtError
-from queuetruth.schemas.runid import canonical_json
+from queuetruth.integrity import canonical_json
 
 PASSPHRASE_ENV = "QT_CERT_KEY_PASSPHRASE"
 CERT_DOMAIN = "queuetruth.certificate.v1"

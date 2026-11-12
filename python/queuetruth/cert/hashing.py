@@ -1,6 +1,6 @@
 """File and tree hashing, normalized (determinism) digests and JSON pointers for certificates.
 
-- `sha256_file`: streaming sha256 of a file's bytes.
+- `sha256_file`: streaming sha256 of a file's bytes (`queuetruth.integrity`), with input errors as `QT-INPUT-001`.
 - `tree_files`: every regular file under a directory, sorted by POSIX relative path, hashed. Symbolic links are
   refused (a certificate names bytes, not where a link happens to point today).
 - `normalized_sha256`: what `verify-cert --rerun` compares (SPEC 7.2): a JSON file canonicalised (RFC 8785) without
@@ -15,36 +15,28 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import math
 import re
 from pathlib import Path
 from typing import Any
 
+from queuetruth import integrity
 from queuetruth.errors import QtError
-from queuetruth.schemas.runid import EXECUTION_ONLY, canonical_json
+from queuetruth.integrity import CHUNK, canonical_json, sha256_bytes
+from queuetruth.integrity import value_text as canonical_value_text
+from queuetruth.schemas.runid import EXECUTION_ONLY
 
-CHUNK = 1 << 20
 #: Keys dropped at any depth before a JSON output is compared (SPEC 7.2: wall-clock values live only there).
 VOLATILE_KEYS = ("timings",)
 
 
-def sha256_bytes(data: bytes) -> str:
-    """Hex sha256 of `data`."""
-    return hashlib.sha256(data).hexdigest()
-
-
 def sha256_file(path: Path) -> str:
-    """Hex sha256 of a file's bytes (read in 1 MiB chunks)."""
-    h = hashlib.sha256()
+    """Hex sha256 of a file's bytes (`queuetruth.integrity.sha256_file`); `QT-INPUT-001` when it cannot be read."""
     try:
-        with path.open("rb") as f:
-            while chunk := f.read(CHUNK):
-                h.update(chunk)
+        return integrity.sha256_file(path, CHUNK)
     except OSError as e:
         raise QtError("QT-INPUT-001", f"{path}: {e.strerror or e}") from None
-    return h.hexdigest()
 
 
 def tree_files(root: Path) -> list[tuple[str, int, str]]:
@@ -195,8 +187,20 @@ def escape_token(token: str) -> str:
     return token.replace("~", "~0").replace("/", "~1")
 
 
-def canonical_value_text(value: Any) -> str:
-    """A result value as it is printed inside a rendered claim: strings verbatim, everything else canonical JSON."""
-    if isinstance(value, str):
-        return value
-    return canonical_json(value)
+__all__ = [
+    "CHUNK",
+    "VOLATILE_KEYS",
+    "canonical_value_text",
+    "escape_token",
+    "json_pointer",
+    "load_json_file",
+    "map_bytes",
+    "map_path",
+    "map_strings",
+    "normalized_sha256",
+    "pointer_tokens",
+    "sha256_bytes",
+    "sha256_file",
+    "strip_volatile",
+    "tree_files",
+]

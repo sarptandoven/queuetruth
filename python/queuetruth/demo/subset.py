@@ -46,6 +46,7 @@ from queuetruth.demo.iex import CaptureError, IexCutFilter
 from queuetruth.demo.itch import ItchCutFilter
 from queuetruth.demo.sources import SOURCES, DemoWindow, Source, sniff_format
 from queuetruth.errors import QtError
+from queuetruth.integrity import sha256_file
 
 MANIFEST_SCHEMA = "queuetruth.demo_subset"
 MANIFEST_VERSION = 1
@@ -95,11 +96,7 @@ def subset_name(source: Source) -> str:
 
 
 def _sha256_file(p: Path) -> str:
-    h = hashlib.sha256()
-    with open(p, "rb") as f:
-        for b in iter(lambda: f.read(1 << 22), b""):
-            h.update(b)
-    return h.hexdigest()
+    return sha256_file(p, 1 << 22)
 
 
 def pinned_source(source: Source, symbols: list[str], window: DemoWindow, content_sha256: str, kept: int) -> str | None:

@@ -85,6 +85,7 @@ from queuetruth.stats import (
     ci_blocks,
     clustered_mcnemar,
     percentile_ci,
+    ratio_replicates,
 )
 
 DECILE_LEVELS = np.array([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9])
@@ -222,9 +223,8 @@ class _Ratio:
         value = float(ns.sum()) / total if total > 0 else float("nan")
         if not self.with_ci:
             return value, float("nan"), float("nan")
-        rn = (self.counts * ns[None, :]).sum(axis=1)
-        rd = (self.counts * ds[None, :]).sum(axis=1)
-        reps = np.where(rd > 0, rn / np.where(rd > 0, rd, 1.0), np.nan)
+        # elementwise sums: the zoo's published intervals predate the shared matmul form (stats.intervals)
+        reps = ratio_replicates(self.counts, ns, ds, summation="elementwise")
         lo, hi = percentile_ci(reps, 0.05)
         return value, lo, hi
 

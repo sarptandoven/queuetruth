@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from queuetruth.sandbox._util import digest, sha256_text
+from queuetruth.integrity import entry_digest, sha256_text
 from queuetruth.sandbox.models import LogEntry, SandboxOrderLog
 
 #: `prev` of the first entry.
@@ -22,7 +22,7 @@ GENESIS = sha256_text("queuetruth.sandbox.order_log.v1")
 
 def entry_hash(entry: dict[str, Any]) -> str:
     """Hash of an entry (every field but `hash`)."""
-    return digest({k: v for k, v in entry.items() if k != "hash"})
+    return entry_digest(entry, "hash")
 
 
 class CommitLog:

@@ -22,15 +22,13 @@ The hashing rules (shared with the pipeline, `scripts/scale/common.py`): `canoni
 JSON as UTF-8 with no NaN; a leaf is `sha256(0x00 + canonical_json(leaf))`; an inner node is
 `sha256(0x01 + left + right)`; an odd node is carried up unchanged; the root of no leaves is `sha256("")`.
 
-Standard library only; the engine is never imported.
+Standard library only (the hashing is `queuetruth.integrity`, which is too); the engine is never imported.
 """
 
 from __future__ import annotations
 
-import hashlib
 import io
 import json
-import math
 import re
 import subprocess
 import sys
@@ -39,12 +37,14 @@ import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from queuetruth.errors import QtError
+from queuetruth.integrity import canonical_bytes, leaf_hash, merkle_proof, merkle_root, verify_proof
+from queuetruth.integrity import sha256_bytes as sha256_hex
 
 #: Where the reduced days are kept: the release tag and the file prefix of each venue.
 REPO_URL = "https://github.com/sarptandoven/queuetruth"
@@ -52,75 +52,12 @@ DAY_RELEASES = {"iex": ("atlas-days", "day-"), "nasdaq": ("atlas-days-nasdaq", "
 #: Largest day file downloaded (a reduced day is tens of MB).
 MAX_DAY_BYTES = 1 << 30
 
-# ---- hashing and the Merkle tree (the pipeline's rules; scripts/scale/common.py re-exports these) ----------------
+# ---- hashing and the Merkle tree: `queuetruth.integrity` (scripts/scale/common.py re-exports these) ---------------
 
 
 def canonical_json(obj: Any) -> bytes:
-    """Sorted-key compact JSON as UTF-8; NaN and infinities are refused."""
-
-    def check(x: Any) -> None:
-        if isinstance(x, float) and not math.isfinite(x):
-            raise ValueError("canonical_json: NaN / inf are not allowed")
-        if isinstance(x, dict):
-            for v in x.values():
-                check(v)
-        elif isinstance(x, list | tuple):
-            for v in x:
-                check(v)
-
-    check(obj)
-    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
-
-
-def sha256_hex(b: bytes) -> str:
-    return hashlib.sha256(b).hexdigest()
-
-
-def leaf_hash(leaf_doc: dict[str, Any]) -> str:
-    return sha256_hex(b"\x00" + canonical_json(leaf_doc))
-
-
-def _level_up(level: list[bytes]) -> list[bytes]:
-    nxt = []
-    for i in range(0, len(level), 2):
-        if i + 1 < len(level):
-            nxt.append(hashlib.sha256(b"\x01" + level[i] + level[i + 1]).digest())
-        else:
-            nxt.append(level[i])
-    return nxt
-
-
-def merkle_root(leaves: Sequence[str]) -> str:
-    """The root over hex leaf hashes, in the order given."""
-    if not leaves:
-        return sha256_hex(b"")
-    level = [bytes.fromhex(x) for x in leaves]
-    while len(level) > 1:
-        level = _level_up(level)
-    return level[0].hex()
-
-
-def merkle_proof(leaves: Sequence[str], index: int) -> list[list[str]]:
-    """Sibling path of leaf `index`: `[["L" or "R", sibling hex], ...]` from the leaf up (carried nodes skipped)."""
-    level = [bytes.fromhex(x) for x in leaves]
-    path: list[list[str]] = []
-    i = index
-    while len(level) > 1:
-        sib = i ^ 1
-        if sib < len(level):
-            path.append(["L" if sib < i else "R", level[sib].hex()])
-        level = _level_up(level)
-        i //= 2
-    return path
-
-
-def verify_proof(leaf: str, proof: Sequence[Sequence[str]], root: str) -> bool:
-    """Whether `proof` takes `leaf` to `root`."""
-    h = bytes.fromhex(leaf)
-    for side, sib in proof:
-        s = bytes.fromhex(sib)
-        h = hashlib.sha256(b"\x01" + (s + h if side == "L" else h + s)).digest()
-    return h.hex() == root
+    """Sorted-key compact JSON as UTF-8; NaN and infinities are refused (`canonical_bytes(obj, "atlas-v1")`)."""
+    return canonical_bytes(obj, "atlas-v1")
 
 
 def diff_fields(a: object, b: object, path: str = "") -> list[str]:

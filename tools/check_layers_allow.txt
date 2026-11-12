@@ -62,8 +62,6 @@ queuetruth.fit.run -> queuetruth.score._dataset.DatasetView  # private
 queuetruth.fit.run -> queuetruth.score._io.read_live_log  # private
 queuetruth.fit.split -> queuetruth.export._text.window_text  # private
 queuetruth.fit.split -> queuetruth.score._dataset.DatasetView  # private
-queuetruth.forecast.ledger -> queuetruth.schemas.runid._format_float  # private
-queuetruth.forecast.ledger -> queuetruth.schemas.runid._utf16_key  # private
 queuetruth.forecast.schemas -> queuetruth.schemas.models._tag  # private
 queuetruth.frames -> queuetruth.api  # layer
 queuetruth.ledger._capture -> queuetruth.api  # cycle

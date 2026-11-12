@@ -33,6 +33,20 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 - **Docs blocks that need a framework run where it is installed**: `<!-- check-docs: run needs=MODULE -->` runs a
   block only when the module is importable and skips it with the reason elsewhere. A synthetic atlas data API
   (`tests/fixtures/atlas_synth`, invented numbers) backs the runnable atlas blocks and the plugin tests.
+- **`queuetruth.integrity`: one implementation of each integrity primitive.** Canonical JSON in each byte form
+  that is already published (`canonical_json(obj)` is RFC 8785; `form="compact"`, `"atlas-v1"`, `"compact-ascii"`
+  and `"sorted"` keep the other forms), sha256 of bytes, text, files and streams, the hash-chain digests of the run
+  ledger, forecast ledger and sandbox log, and the atlas Merkle tree. Run ids, certificates, ledgers, the sandbox
+  log, the test client and the atlas pipeline (`scripts/scale`) all use it; known-answer tests pin every run id,
+  certificate, ledger entry, day root and atlas root form, and nothing published changes.
+  `queuetruth.schemas.canonical_json` and `queuetruth.schemas.runid.canonical_json` still work and warn that they
+  moved.
+- **One home for interval estimators in `queuetruth.stats`.** `wilson` (with the `exact`, `clip` and `none` edge
+  rules the report, the candle audit and forecast calibration each publish), `wilson_arrays`, `clopper_pearson`,
+  `percentile_ci`, `ratio_replicates` (the ratio-of-sums block bootstrap, in the shared and the zoo's own summation
+  order) and `block_counts_chunks`. The report, zoo, toxicity, model card, shortfall, demo, freqtrade audit, forecast
+  and conformal intervals use them, with the same numbers bit for bit. `queuetruth.model.conformal.clopper_pearson`
+  still works and warns that it moved.
 - **Human units in every output** (`queuetruth.units`, plan principle 7). One module reads and writes durations
   (`parse_duration` takes `1s`, `250ms`, `1min`, `1m`, `60 s`, `1.5s`, `100us` or nanoseconds; `format_duration`
   writes the shortest exact form, `1.5s`, `1min`, and every form it writes parses back to the same nanoseconds),
@@ -324,6 +338,9 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ### Fixed
 
+- Report charts: an axis whose tick step is below 1e-12 (a range near zero) could get two equal ticks, because tick
+  values were rounded to 12 decimals. They are now rounded relative to the step, and any tick list that is not
+  strictly increasing falls back to the axis ends. The property test that found it failed now and then on any branch.
 - `rustix` 1.1.5 to 1.1.6 in `Cargo.lock` (RUSTSEC-2026-0486: its xattr functions marked unwritten bytes as
   initialized when given a zero-length buffer). Reached only through `tempfile`; 1.1.6 was released on 2026-10-27.
 - The Rust spec mirror rejected the live venues `freqtrade`, `hummingbot`, `sim_freqtrade`, `sim_hummingbot`,

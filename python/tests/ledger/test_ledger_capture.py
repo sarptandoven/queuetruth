@@ -15,9 +15,10 @@ import pytest
 from queuetruth import api
 from queuetruth import ledger as L
 from queuetruth.errors import QtError
+from queuetruth.integrity import canonical_json
 from queuetruth.ledger import _capture as cap
 from queuetruth.schemas import models as m
-from queuetruth.schemas.runid import canonical_json, run_id
+from queuetruth.schemas.runid import run_id
 
 
 def _records() -> list[L.LedgerRecord]:

@@ -14,7 +14,7 @@ from queuetruth.cert.certify import certify, dataset_id
 from queuetruth.cert.commit import commit, write_pair
 from queuetruth.cert.hashing import sha256_bytes, sha256_file
 from queuetruth.errors import QtError
-from queuetruth.schemas.runid import canonical_json
+from queuetruth.integrity import canonical_json
 
 pytestmark = pytest.mark.requires_core
 

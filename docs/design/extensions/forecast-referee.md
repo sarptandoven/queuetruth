@@ -11,8 +11,8 @@ and its edge is converted into fractional-Kelly taker bets against quotes with s
 
 ## Ledger (`queuetruth.forecast.ledger`)
 
-- File: JSON Lines, one `qt.forecast_entry` per line, canonical JSON (`ledger.canonical_json`, byte-identical to
-  `queuetruth.schemas.runid.canonical_json`; strings escaped by the C JSON encoder for speed): RFC 8785 except that
+- File: JSON Lines, one `qt.forecast_entry` per line, canonical JSON (`ledger.canonical_json`, which is
+  `queuetruth.integrity.canonical_json`; strings escaped by the C JSON encoder for speed): RFC 8785 except that
   integers are written exactly (RFC 8785 numbers are IEEE doubles, and `recorded_at_ns` is above 2^53). A
   third-party verifier must parse integers exactly; `forecast verify` is the reference verifier. Lines are parsed
   with NaN and Infinity refused; a non-finite number, an overflowing literal or a payload that fails its model is a

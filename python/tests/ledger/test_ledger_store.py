@@ -14,11 +14,11 @@ from pathlib import Path
 import pytest
 
 from queuetruth.errors import QtError
+from queuetruth.integrity import canonical_json
 from queuetruth.ledger import Ledger, LedgerRecord, register_variant, verify_chain
 from queuetruth.ledger._capture import variant_record
 from queuetruth.ledger._lock import exclusive, lock_timeout_s
 from queuetruth.ledger._store import GENESIS_PREV, encode_line, parse_anchor
-from queuetruth.schemas.runid import canonical_json
 
 BODY_AT = len('{"hash":"') + 64 + len('","record":')
 
