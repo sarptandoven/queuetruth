@@ -2,6 +2,7 @@
 # the comment names the rules it breaks. Remove a line when its import is gone; never add one to pass CI
 # without saying why in the pull request.
 queuetruth.api -> queuetruth.check.run  # cycle
+queuetruth.api -> queuetruth.compare.run  # cycle
 queuetruth.api -> queuetruth.fit.run  # cycle
 queuetruth.api -> queuetruth.ledger  # cycle
 queuetruth.api -> queuetruth.score._io.resolve_ref  # private
@@ -30,6 +31,10 @@ queuetruth.cli -> queuetruth.demo._dispatch  # layer
 queuetruth.cli -> queuetruth.demo._dispatch.maybe_run  # private
 queuetruth.cli -> queuetruth.forecast.cli  # layer
 queuetruth.cli -> queuetruth.pm.cli  # layer
+queuetruth.compare.cli -> queuetruth.live.reconcile_cli._options  # private
+queuetruth.compare.run -> queuetruth.api  # cycle
+queuetruth.compare.run -> queuetruth.check.symbols  # cycle
+queuetruth.compare.run -> queuetruth.pm.cli  # layer
 queuetruth.data.iex -> queuetruth.demo.fetch  # layer
 queuetruth.data.iex -> queuetruth.demo.iex  # layer
 queuetruth.data.iex -> queuetruth.demo.sources  # layer

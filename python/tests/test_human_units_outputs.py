@@ -154,6 +154,18 @@ def corpus(tmp_path_factory: pytest.TempPathFactory) -> dict[str, str]:
 
     raw = tmp / "12302019.NASDAQ_ITCH50.gz"
     df.write_gz(raw, df.itch_day(["AAPL", "MSFT"], df.book_events(["AAPL", "MSFT"], df.hms(9, 30), df.hms(9, 35))))
+    from compare import synth_sims as ss
+
+    sims = ss.sim_orders(LIVE)
+    hbt = ss.write_hftbacktest(tmp / "hbt.jsonl", sims)
+    cmp_out = tmp / "compare"
+    run("compare --data", "compare", "--backtest", str(hbt), "--live", str(LIVE), "--data", ds, "--out", str(cmp_out),
+        "--html")  # fmt: skip
+    capsys_out["compare.html"] = _html_text(cmp_out / "compare.html")
+    capsys_out["compare orders.csv"] = (cmp_out / "orders.csv").read_text()
+    nt = ss.write_nautilus(tmp / "nt", sims)
+    run("compare", "compare", "--backtest", str(nt[0]), "--backtest", str(nt[1]), "--live", str(LIVE), "--out",
+        str(tmp / "compare_nt"))  # fmt: skip
     run("data add", "data", "add", str(raw), "--out", str(tmp / "ds_added"), "--quiet")
     return capsys_out
 

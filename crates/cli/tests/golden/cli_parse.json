@@ -5442,5 +5442,110 @@
       },
       "implementation": "python"
     }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "compare",
+      "--backtest",
+      "backtest-result.zip",
+      "--live",
+      "tradesv3.sqlite",
+      "--live",
+      "freqtrade.log",
+      "--backtester",
+      "freqtrade",
+      "--venue",
+      "freqtrade",
+      "--out",
+      "qt-compare",
+      "--window",
+      "1h",
+      "--account",
+      "main",
+      "--option",
+      "timeframe=5m",
+      "--max-rows",
+      "20",
+      "--json"
+    ],
+    "command": {
+      "path": [
+        "compare"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "backtest": [
+            "backtest-result.zip"
+          ],
+          "live": [
+            "tradesv3.sqlite",
+            "freqtrade.log"
+          ],
+          "backtester": "freqtrade",
+          "venue": "freqtrade",
+          "out": "qt-compare",
+          "window": "1h",
+          "account": "main",
+          "option": [
+            "timeframe=5m"
+          ],
+          "max_rows": 20,
+          "json": true
+        }
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "compare",
+      "--backtest",
+      "orders_report.csv",
+      "--backtest",
+      "fills_report.csv",
+      "--live",
+      "live",
+      "--data",
+      "synth",
+      "--instrument-map",
+      "instrument_map.csv",
+      "--html"
+    ],
+    "command": {
+      "path": [
+        "compare"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "backtest": [
+            "orders_report.csv",
+            "fills_report.csv"
+          ],
+          "live": [
+            "live"
+          ],
+          "data": "synth",
+          "instrument_map": "instrument_map.csv",
+          "html": true
+        }
+      },
+      "implementation": "python"
+    }
   }
 ]
