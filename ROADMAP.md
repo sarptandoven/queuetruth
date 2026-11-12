@@ -1,74 +1,74 @@
 # Roadmap
 
-queuetruth's aim is to be the neutral, open referee for trading simulation: every claim a backtest, a paper-trading
-run or a trading agent makes about fills, checked against the exact queue and reported with an interval, a reason
-and a fix. The engine stays Apache-2.0, runs locally, ships no market data and sends nothing anywhere.
+queuetruth's aim is to be the reality check every backtest runs before money does: for any trader, in under a
+minute and inside the tool they already use, how wrong the backtest is, why, and what fixes it, each with an interval
+and a way to check it. The engine stays Apache-2.0, runs locally, ships no market data and sends nothing anywhere.
 
-This page lists what is being worked on and in what order. Items move when evidence or users say they should; open
-an issue to argue for one. Ids (`W1`, ...) are referenced from code and scripts.
+The full plan, with the evidence behind it, is [the next phase](docs/design/next-phase.md). This page is its short
+form. Items move when evidence or users say they should; open an issue to argue for one. Ids (`W1`, `M1`, ...) are
+referenced from code and scripts.
 
-## Now
+## M0: Unblock (now)
 
-- **Halts censor shadows end to end (F2).** Done after 0.2.0: ingest records Nasdaq ITCH, IEX DEEP+, DBN `status`
-  and NYSE Security Status trading halts and every engine censors shadows there
-  ([halt censoring](docs/design/extensions/halt-censoring.md)). Next: check the DBN and NYSE mappings on real files.
-- **First real own-account fills.** Score a simulator against real fills from a real account (Bitstamp via
-  `tools/livefill`, then Hyperliquid), and publish the scorecard. Every live-log importer is still checked on
-  fixtures only; this is the most important missing proof.
-- **Upstream fixes.** Submit the prepared hftbacktest #312 fix (`integrations/hftbacktest/upstream/`) and the
-  NautilusTrader documentation change (`integrations/nautilus/UPSTREAM.md`); publish `queuetruth-nautilus` to PyPI.
-- **Freqtrade and Hummingbot from the CLI.** Done after 0.2.0: `live import --venue freqtrade | hummingbot` and
-  `queuetruth reconcile` ([design](docs/design/extensions/freqtrade-hummingbot.md)). Next: real bot exports.
-- **Untrusted-input hardening.** The `dbn` decoder faults are kept out by our reader and the fuzz targets run weekly
-  in CI (done after 0.2.0); the Parquet and Arrow panics in `fuzz/known-crashes/parquet/` are still open.
+- Release 0.3.0 to PyPI and turn on GitHub Pages, so `pip install queuetruth` gives every documented command and the
+  Fill-Realism Atlas (W1) has a public URL.
+- Valid intervals on short captures: with fewer than five bootstrap blocks, `zoo`, `report` and `zoo-toxicity` no
+  longer print zero-width intervals or mark every model significant.
+- A truth sweep of README and the docs: the atlas linked from the first screen, one table of what is validated
+  (IEX DEEP+ now covers 22 days), no stale version labels.
+- Integrations that run as documented: the hftbacktest export defaults to an exchange that runs on the released
+  hftbacktest; the NautilusTrader replay strategy works on 2.x; the plugin suites run in CI against real releases.
 
-## Next
+## M1: Answer in a minute (0.4.0)
 
-- **W1: the Fill-Realism Atlas.** A public, nightly-rebuilt site answering "how wrong is my backtester on this
-  venue, and which parameter fixes it?": bias by simulator, venue, liquidity tier and horizon with intervals,
-  calibrated parameters to paste with their trust verdict, Merkle roots and a verify command on every table. Built
-  only on data that may be republished: IEX DEEP+ (with IEX's attribution), on-chain venues, and aggregate
-  statistics. The pipeline (`scripts/scale/`), the site generator (`scripts/scale/atlas_site.py`) and the IEX DEEP+
-  splitter (`scripts/scale/iex_split.py`; `local_day.py --source iex --site` runs a day from capture to site) exist,
-  and `.github/workflows/atlas.yml` runs each new IEX day and publishes the site over the newest 20 days with
-  GitHub Pages. The P&L error is computed next to the fill-rate bias (done after 0.2.0). A manual run of the same
-  workflow runs one Nasdaq TotalView-ITCH sample day on a runner, on a per-tier symbol sample when the whole day
-  does not fit, and the site can show it next to IEX with a venue switch (done after 0.2.0; off until the terms of
-  Nasdaq's sample files are settled). Next are turning Pages on, the first Nasdaq day and the cloud run over the 19
-  public Nasdaq days.
-- **Upstream compatibility dashboard.** `scripts/nightly` made public: every new hftbacktest and NautilusTrader
-  release checked against the exact queue within a day. `.github/workflows/compat.yml` runs the engine checks daily
-  on the synthetic day against the newest release of each major line and the pinned versions, keeps each result on
-  the `compat-results` release and publishes `compat.html` with the atlas site
-  ([how it works](docs/how-to/nightly-checks.md#upstream-compatibility-on-github)). Next are turning Pages on and
-  the first month of results.
-- **`referee` as a GitHub Action**: done after 0.2.0 (`actions/referee`); next is getting simulator maintainers to
-  run it and show the badge.
-- **Plugins for more backtesters**: hftbacktest packaged like the NautilusTrader plugin, then Hummingbot, Freqtrade,
-  LEAN, VectorBT and Backtrader adapters. Backtrader and VectorBT exports import as simulator logs and reconcile
-  against a live log (done after 0.2.0, [guide](docs/how-to/reconcile-backtrader-vectorbt.md)), and so do LEAN
-  backtests (done after 0.2.0, [guide](docs/how-to/reconcile-lean.md)); next: real exports from users.
-- **A one-line "reality gap"** in every report: how much a simulator overstates fills and P&L, in plain words, first.
-  In fill rates it is there (the `zoo` view's first line, `score`'s RESULT line, the report's answer block, the
-  atlas headline), and in P&L in the atlas (`pnl_by_tier`, `zoo-toxicity`'s `bias_ticks`) and in `score` and its
-  report (the `P&L:` line, `pnl_gap`, the answer block; both done after 0.2.0). Next: the sandbox on the one-pass
-  sessions.
+- **Atlas v2**: chart first and in plain words, a lookup by symbol, a versioned data API next to the site, and
+  touch tables for bar-based backtests (how often a limit order the price touched really fills, by tier and bar
+  length).
+- **`queuetruth atlas`** and **`queuetruth check`**: the atlas answer for your library from the terminal, and how
+  wrong your backtest is in one command, from the atlas when you have no data and exactly when you do.
+- Human units in every output (symbols, decimal prices, local times, durations such as `1s`).
+- Docs with three doors (see it, read the atlas, check my backtester) on the same Pages site.
+- Explain the gap between hftbacktest's L3 FIFO model and the exact queue on IEX.
+
+## M2: Fix it in your tool (0.5.0)
+
+- A `Backtester` plugin interface; NautilusTrader and hftbacktest plugins on PyPI; a Backtrader filler and order
+  log; a LEAN fill model; `check` for Freqtrade, VectorBT and backtesting.py results.
+- `queuetruth fit` (the parameter that fixes it, written only when it passes) and `queuetruth compare` (backtest
+  against live, order by order).
+
+## M3: One way to do everything (0.6.0)
+
+- Registries for formats, live-log venues, queue models and backtesters: adding one is one file.
+- One dataset layer, contracts with a single source (Rust specs generated from the JSON Schemas), operations split
+  out of `api.py`, one CLI parser with six everyday verbs, a typed Python API.
+- Import-linter layers and drift tests in CI.
+
+## M4: Proof everywhere (0.7.0)
+
+- Real-data validation of one crypto order-level venue and of CME through Databento MBO; the first real
+  own-account scorecard (Bitstamp, then Hyperliquid); real exports for each importer.
+- The statistics practitioners ask for in `compare`: McNemar on discordant fills, markouts at 100 ms, 1 s and 10 s,
+  time-to-fill survival curves, latency fitted before the queue.
+- Live drift alerts (`compare --watch`).
+- Upstream: the hftbacktest #312 fix and the NautilusTrader documentation change.
+
+## M5: 1.0
+
+- Prediction markets, forecasts and the agent sandbox as their own packages; scikit-learn as an extra; one runner and
+  one MCP server for the service and agents.
+- Stability tiers on every public name and an API freeze.
+- The launch: the atlas headline where traders are, a notebook per framework.
 
 ## Later
 
-- **Agent arena.** The agent sandbox as a repeatable, look-ahead-free benchmark for trading agents: the sandbox on
-  the one-pass sessions that take orders (done after 0.2.0: `stepping="session"`, the default, is linear rather than
-  quadratic in episode length and gives the same outputs as the per-step prefix replay), a blind mode that hides
-  instrument and date (done: operator-pinned episodes with times since the open and rebased prices,
-  `queuetruth.sandbox.blind`), event-driven wake-ups (now cheap: a step no longer replays the prefix), multi-instrument
-  episodes and certified results on days after the agents' training data.
 - **Hosted service.** Accounts, a web interface and a hosted MCP endpoint on top of the existing multi-tenant
   service, with the same rules as the self-hosted one: customers' data only, no pooling, no vendor credentials.
-- **Verified results.** Public verification pages for certificates, commitments anchored with a timestamp
-  authority or transparency log, and key revocation.
+- **Verified results.** Public verification pages for certificates, commitments anchored with a timestamp authority
+  or transparency log, and key revocation.
 - **Engine frontier.** Your own orders' effect on the queue, pro-rata and allocation matching (CME), auctions and
-  halt crosses, hidden and iceberg liquidity, real-data validation for DBN/CME, NYSE and the crypto L3 sources.
-- **An open fill-realism report format** and conformance suite (the `qt.*` schemas and referee fixtures), and a
-  model registry so anyone can add a queue model to the zoo.
-- **Live drift monitoring.** Streaming ingest and shadows that run next to production orders, with alerts when live
-  fills drift from the calibrated model.
+  halt crosses, hidden and iceberg liquidity.
+- **Agent arena.** The sandbox as a repeatable, look-ahead-free benchmark for trading agents on days after their
+  training data.
+- **An open fill-realism report format** and conformance suite, and a model registry so anyone can add a queue model
+  to the zoo.
