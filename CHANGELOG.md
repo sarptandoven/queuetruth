@@ -8,6 +8,18 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ### Added
 
+- **Touch tables for bar-based backtests** (docs/concepts/touch-tables.md). For the atlas's shadow orders resting
+  until the close, the atlas now measures what a candle backtester's fill rule says against the exact replay of the
+  real queue: the `touch` rule (the bar's low reaches a buy's limit, or its high a sell's) and `penetrate_1`,
+  `penetrate_2` (one or two ticks through), on 1-minute, 5-minute and 1-hour bars built from the day's prints. Per
+  liquidity tier, side and bar length: the real and the rule's fill rates, the share of the rule's fills that were
+  real by the end of the same bar and the share of real fills the rule catches, the markouts of both kinds of fills
+  one bar later and how much the rule overstates P&L per order, each with a 95% interval from the atlas's bootstrap
+  over dates and symbols. Units write `touch_stats.parquet` (one more exact replay per unit), `atlas.py reduce-day`
+  keeps `touch_cells.parquet`, `atlas.py combine` writes `touch_by_tier.parquet` from the days that have them and
+  lists them as `touch_days`, and the site gets a short section and `atlas/v1/touch.json`
+  (`queuetruth.atlas.touch.TouchTables`). `plan.py --no-touch` leaves them out. Every existing table is unchanged;
+  days kept before this need a rebuild to get the new table.
 - **Docs: one "What is validated" page and three front doors.** `docs/validated.toml` is the single source of what is
   checked on real data, against the real library, or on fixtures only; `docs/gen_validated.py` writes
   `docs/validated.md` and the README status block from it, and `make check-docs` fails when either is stale. It
