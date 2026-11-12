@@ -8,6 +8,14 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ### Added
 
+- **One guide per backtester for hftbacktest and NautilusTrader.** "Score and calibrate my hftbacktest backtest"
+  (`docs/how-to/calibrate-hftbacktest.md`) merges the plugin page and the calibration recipe and starts with the
+  `queuetruth-hftbacktest` plugin; the old plugin page points to its sections, and the plugin README keeps a short
+  example and links the guide. "Check and calibrate my NautilusTrader backtest" (`docs/how-to/nautilustrader.md`)
+  picks a setting from the atlas, fits `prob_fill_on_limit` with `calibrate nt-touch` (runnable on the synthetic
+  dataset), passes it to `add_venue` with `**qtn.venue_options(cal)` from the `queuetruth-nautilus` plugin, and
+  scores the backtest against live fills. The docs menu lists one page for each.
+
 - **Touch tables for bar-based backtests** (docs/concepts/touch-tables.md). For the atlas's shadow orders resting
   until the close, the atlas now measures what a candle backtester's fill rule says against the exact replay of the
   real queue: the `touch` rule (the bar's low reaches a buy's limit, or its high a sell's) and `penetrate_1`,

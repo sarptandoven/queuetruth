@@ -42,7 +42,7 @@ under it: the atlas does not rank those by closeness. Next to it is the config t
 
 - hftbacktest: the queue model and exchange calls of your `BacktestAsset()` chain, for example
   `.power_prob_queue_model2(2).partial_fill_exchange()`, built from the same builder and exchange tables as
-  `queuetruth export hftbacktest` ([Calibrate my hftbacktest queue model](../how-to/calibrate-hftbacktest.md)). The
+  `queuetruth export hftbacktest` ([Score and calibrate my hftbacktest backtest](../how-to/calibrate-hftbacktest.md)). The
   exchange follows the model id's `exch` (`partial` or `no_partial`).
 - NautilusTrader: the `BacktestEngine.add_venue` keywords, for example
   `fill_model=FillModel(prob_fill_on_limit=1), book_type=BookType.L2_MBP, trade_execution=True, queue_position=True`
