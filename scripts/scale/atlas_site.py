@@ -1007,6 +1007,11 @@ def build(
         parts.append(page)
         shown += s
         shown_pnl += sp
+    import atlas_touch  # touch tables for bar backtests: a section and atlas/v1/touch.json when the atlas has them
+
+    touch = atlas_touch.section(atlas, out, population=population, source=source, docs=DOCS,
+                                attribution=IEX_ATTRIBUTION if source == "iex" else None)  # fmt: skip
+    parts += [touch] if touch else []
     parts.append(
         "<h2>Check your own backtester</h2><ul>"
         f"<li>See it in a minute: <code>pipx run queuetruth demo --yes</code> places small orders in the real queue "
