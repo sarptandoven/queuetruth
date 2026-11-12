@@ -93,7 +93,7 @@
     "spec"
    ],
    "idempotent": true,
-   "input_sha256": "0625d3f83e4aa62d7564d1b62e71820b94a6c8162b08d6f2f1ac1124c9d8e062",
+   "input_sha256": "e3d0b0569330a9265bce1c1c7304e8c4e71977bd40731852b5d177fc8b98bf2f",
    "name": "qt_local_sample_shadows",
    "output_sha256": "8efa1de5c6964afa9dfd4b9354ea2ca413c5caadc81c1b9c3ed444b24916ed1e",
    "read_only": false,
@@ -177,7 +177,7 @@
     "spec"
    ],
    "idempotent": true,
-   "input_sha256": "0625d3f83e4aa62d7564d1b62e71820b94a6c8162b08d6f2f1ac1124c9d8e062",
+   "input_sha256": "e3d0b0569330a9265bce1c1c7304e8c4e71977bd40731852b5d177fc8b98bf2f",
    "name": "qt_local_sample_shadows",
    "output_sha256": "8efa1de5c6964afa9dfd4b9354ea2ca413c5caadc81c1b9c3ed444b24916ed1e",
    "read_only": false,
@@ -1046,7 +1046,7 @@
     "spec"
    ],
    "idempotent": true,
-   "input_sha256": "0625d3f83e4aa62d7564d1b62e71820b94a6c8162b08d6f2f1ac1124c9d8e062",
+   "input_sha256": "e3d0b0569330a9265bce1c1c7304e8c4e71977bd40731852b5d177fc8b98bf2f",
    "name": "qt_local_sample_shadows",
    "output_sha256": "8efa1de5c6964afa9dfd4b9354ea2ca413c5caadc81c1b9c3ed444b24916ed1e",
    "read_only": false,
