@@ -19,7 +19,8 @@ DATA = ROOT / "docs" / "validated.toml"
 PAGE = ROOT / "docs" / "validated.md"
 README = ROOT / "README.md"
 START, END = "<!-- validated:start -->", "<!-- validated:end -->"
-SITE = "https://github.com/sarptandoven/queuetruth/blob/main/docs/"
+#: The published docs site (.github/workflows/atlas.yml builds it); the README links pages there.
+SITE = "https://sarptandoven.github.io/queuetruth/docs/"
 
 STATUS = {
     "real_data": "Validated on real data",
@@ -72,7 +73,7 @@ def readme_block(rows: list[dict]) -> str:
     out = [START, "", "| Area | Status |", "|---|---|"]
     for r in rows:
         out.append(f"| {r['short']} | {STATUS[r['status']]} |")
-    out += ["", f"Details and evidence for every row: [What is validated]({SITE}validated.md).", "", END]
+    out += ["", f"Details and evidence for every row: [What is validated]({SITE}validated/).", "", END]
     return "\n".join(out)
 
 

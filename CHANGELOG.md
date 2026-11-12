@@ -20,6 +20,17 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   lists them as `touch_days`, and the site gets a short section and `atlas/v1/touch.json`
   (`queuetruth.atlas.touch.TouchTables`). `plan.py --no-touch` leaves them out. Every existing table is unchanged;
   days kept before this need a rebuild to get the new table.
+
+- **The docs are on GitHub Pages, next to the atlas:** https://sarptandoven.github.io/queuetruth/docs/. The atlas
+  workflow builds them with `make docs-build` (strict) into the same Pages site on every deploy, `site_only` runs
+  included, and a docs build error fails the run. README, the docs home and the package's `Documentation` URL link
+  there; `make check-docs` checks that every README link into the site names a page and heading that exist.
+
+- **The hftbacktest L3 FIFO gap is explained where readers meet it.** README's atlas paragraph and the model zoo page
+  say why hftbacktest's L3 FIFO model fills fewer orders than the exact queue (it skips hidden executions and counts
+  a trade-through only through the feed's best price; the released hftbacktest gives the same first fills) and link
+  the findings page. The launch drafts carry the 20-day atlas numbers, `queuetruth check` and this explanation.
+
 - **Docs: one "What is validated" page and three front doors.** `docs/validated.toml` is the single source of what is
   checked on real data, against the real library, or on fixtures only; `docs/gen_validated.py` writes
   `docs/validated.md` and the README status block from it, and `make check-docs` fails when either is stale. It

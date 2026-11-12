@@ -22,6 +22,8 @@ Checks, over every Markdown file under docs/ (and examples/README.md):
 8. No stale version wording ("v0.1", "after release", "next release", "new after 0.1") in README.md, docs/ and
    examples/, outside docs/design/ and docs/launch/ (CHANGELOG.md is not checked). Name the version a feature
    needs instead ("since 0.3.0").
+9. Links from README.md and docs/launch/ into the published docs site (`DOCS_SITE`, built by
+   .github/workflows/atlas.yml) name a page of the site, and their `#anchor` a heading of that page.
 
 Runnable blocks and the generated-reference check need the compiled extension (`queuetruth._core`, `make develop`);
 without it they are skipped with a reason unless `--require-core` is given. Exit 0 when every check passed, 1
@@ -56,6 +58,8 @@ SHELL = {"sh", "bash", "console", "shell", "zsh"}
 BLOCK_TIMEOUT_S = 600
 STALE_VERSION = re.compile(r"\bv0\.1\b|\bafter release\b|\bnext release\b|\bnew after 0\.1\b", re.IGNORECASE)
 STALE_EXEMPT = ("docs/design/", "docs/launch/")
+#: The published docs site: mkdocs serves docs/x/y.md at DOCS_SITE + "x/y/".
+DOCS_SITE = "https://sarptandoven.github.io/queuetruth/docs/"
 
 
 @dataclass
@@ -186,6 +190,21 @@ def check_links(page: Path, res: Result) -> None:
             res.fail(f"{where}: broken link {target}")
             continue
         if frag and dest.suffix == ".md" and frag not in anchors(dest):
+            res.fail(f"{where}: missing anchor #{frag} in {rel(dest)}")
+
+
+def check_site_links(path: Path, res: Result) -> None:
+    """Links into the published docs site resolve to a page of it (not a launch draft) and a heading of that page."""
+    text = strip_code(path.read_text(encoding="utf-8"))
+    for m in re.finditer(re.escape(DOCS_SITE) + r"([^)\s#>]*)(?:#([^)\s>]*))?", text):
+        page_path, frag = m.group(1).strip("/"), m.group(2)
+        where = f"{rel(path)}:{text[: m.start()].count(chr(10)) + 1}"
+        candidates = [DOCS / "index.md"] if not page_path else [DOCS / f"{page_path}.md", DOCS / page_path / "index.md"]
+        dest = next((c for c in candidates if c.is_file()), None)
+        if dest is None or rel(dest).startswith("docs/launch/"):
+            res.fail(f"{where}: {m.group(0)} is not a page of the docs site")
+            continue
+        if frag and frag not in anchors(dest):
             res.fail(f"{where}: missing anchor #{frag} in {rel(dest)}")
 
 
@@ -391,6 +410,8 @@ def main(argv: list[str] | None = None) -> int:
                 check_dashes(path, res)
         check_stale_versions(ROOT / "README.md", res)
         check_dashes(ROOT / "README.md", res)
+        for path in [ROOT / "README.md", *sorted((DOCS / "launch").glob("*.md"))]:
+            check_site_links(path, res)
         check_nav(res)
         check_validated(res)
         check_generated(res, have_core, why)
