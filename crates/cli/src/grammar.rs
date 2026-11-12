@@ -1315,6 +1315,34 @@ pub(crate) const COMMANDS: &[Cmd] = &[
         hidden: false,
     },
     Cmd {
+        path: &["run"],
+        imp: Implementation::Hybrid,
+        about: "run any operation from a JSON spec (run --list names them)",
+        flags: &[
+            f(
+                "spec",
+                Kind::Str,
+                "spec",
+                "JSON spec file of the operation, or - for standard input",
+            ),
+            f(
+                "out",
+                Kind::Str,
+                "out",
+                "output directory (replaces the spec's output field)",
+            ),
+            f(
+                "list",
+                Kind::Flag,
+                "list",
+                "list the operations: name, description, spec schema",
+            ),
+        ],
+        positional: &[("operation", "operation", false)],
+        globals: Globals::None,
+        hidden: false,
+    },
+    Cmd {
         path: &["mcp", "serve"],
         imp: Implementation::Python,
         about: "MCP stdio server",
@@ -1647,6 +1675,13 @@ pub(crate) fn lists_models(cmd: &Cmd, m: &ArgMatches) -> bool {
     cmd.flags.iter().any(|fl| fl.to == LIST_MODELS && m.get_flag(fl.long))
 }
 
+/// Help of the positional arguments of `COMMANDS`: (command path, argument name, help).
+const POSITIONAL_HELP: &[(&[&str], &str, &str)] = &[(
+    &["run"],
+    "operation",
+    "operation name, as `run --list` prints it (replay, shadows, score, ...)",
+)];
+
 /// The long `--help` description of a command path, when it has one.
 fn long_about(path: &[&str]) -> Option<&'static str> {
     PYTHON_LONG_ABOUT.iter().find(|(p, _)| *p == path).map(|(_, d)| *d)
@@ -1680,6 +1715,7 @@ fn leaf(cmd: &Cmd, name: &'static str) -> Command {
     for (pname, _, req) in cmd.positional {
         let help = PYTHON_POSITIONAL_HELP
             .iter()
+            .chain(POSITIONAL_HELP)
             .find(|(p, n, _)| *p == cmd.path && n == pname)
             .map(|(_, _, h)| *h);
         c = c.arg(
@@ -1826,7 +1862,7 @@ CMD exactly as before; the old top-level spelling `queuetruth CMD ...` still wor
 stderr (hidden by --quiet or QT_NO_DEPRECATION=1).";
 /// Advanced commands that keep their top-level spelling without a deprecation line: `doctor` (asked for in bug
 /// reports), `mcp` (written into MCP client configurations) and `bench` (never listed). No verb replaces them.
-pub(crate) const UNDEPRECATED: &[&str] = &["doctor", "mcp", "bench"];
+pub(crate) const UNDEPRECATED: &[&str] = &["doctor", "mcp", "bench", "run"];
 /// The verb (or new spelling) that does the job of an advanced command, by command-path prefix; the longest prefix
 /// wins (plan section 4.1).
 pub(crate) const REPLACED_BY: &[(&[&str], &str)] = &[
@@ -2329,6 +2365,16 @@ pub(crate) fn build_args(
                     "--option applies to the venues whose importer has options: {}",
                     cli(OPTION_VENUES)
                 ));
+            }
+        }
+        ["run"] => {
+            let listing = args.get("list").and_then(Value::as_bool).unwrap_or(false);
+            if listing {
+                if args.contains_key("operation") || args.contains_key("spec") || args.contains_key("out") {
+                    return Err("--list takes no operation, --spec or --out".into());
+                }
+            } else if !args.contains_key("operation") || !args.contains_key("spec") {
+                return Err("give OPERATION and --spec FILE (- for standard input), or --list".into());
             }
         }
         ["export", "replay-schedule"] => {

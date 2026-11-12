@@ -826,6 +826,8 @@ def render(
             text = _render_score(doc, args, extra)
         elif isinstance(doc, dict) and (key[0] == "calibrate" or key == ("calibrate-live",)):
             text = _render_calibration(doc, args, path)
+        elif isinstance(doc, dict) and key == ("run",):
+            text = _render_operations(doc)
         elif isinstance(doc, dict) and key == ("dq",):
             text = _render_dq(doc, args)
         elif isinstance(doc, dict) and key == ("zoo-toxicity",):
@@ -957,6 +959,61 @@ def _split_cli(args: Doc) -> tuple[Doc, Doc]:
     a = dict(args)
     extra = a.pop("_cli", {}) or {}
     return a, extra
+
+
+def _read_spec(path: str) -> Any:
+    """The JSON spec of `run --spec PATH` (`-` is standard input)."""
+    try:
+        text = sys.stdin.read() if path == "-" else Path(path).read_text(encoding="utf-8")
+    except OSError as e:
+        raise QtError("QT-INPUT-001", f"--spec {path}: {e.strerror or e}") from None
+    try:
+        return json.loads(text)
+    except ValueError as e:
+        raise QtError("QT-USAGE-001", f"--spec {path}: invalid JSON: {e}") from None
+
+
+def _run_operation(cmd: Doc, args: Doc) -> Doc:
+    """`advanced run OP --spec FILE [--out DIR]`: the operation through `queuetruth.runner.run` (the network allowed,
+    as for the verbs run here); `--list`: the operation table, with `native` for the ones `queuetruth-core run` runs
+    without Python."""
+    if args.get("list"):
+        from queuetruth.ops.table import table
+        from queuetruth.schemas.specs import SPEC_MODELS
+
+        schema_of = {model: name for name, model in SPEC_MODELS.items()}
+        native = {r["name"] for r in _native(cmd)[0].get("operations", []) if r.get("native")}
+        return {
+            "operations": [
+                {
+                    "name": op.name,
+                    "description": op.description,
+                    "spec_schema": schema_of.get(op.spec),
+                    "native": op.name in native,
+                }
+                for op in table().values()
+            ]
+        }
+    from queuetruth.runner import RunContext, run
+
+    res = run(args["operation"], _read_spec(args["spec"]), out=args.get("out"), context=RunContext(allow_network=True))
+    for w in res.warnings:
+        warnings.warn(w, stacklevel=1)
+    return res.document
+
+
+def _render_operations(doc: Doc) -> str:
+    """`run --list` (the layout of the Rust binary)."""
+    rows = doc.get("operations", [])
+    names = [r["name"] + ("*" if r.get("native") else "") for r in rows]
+    schemas = [r.get("spec_schema") or "-" for r in rows]
+    w1 = max((len(n) for n in names), default=0)
+    w2 = max((len(x) for x in schemas), default=0)
+    lines = ["operations (queuetruth advanced run NAME --spec FILE; * also runs in queuetruth-core):"]
+    lines += [
+        f"  {n:<{w1}}  {x:<{w2}}  {r['description']}".rstrip() for n, x, r in zip(names, schemas, rows, strict=True)
+    ]
+    return "\n".join(lines)
 
 
 def _doctor(cmd: Doc) -> tuple[Doc, bool]:
@@ -1157,6 +1214,8 @@ def _dispatch(cmd: Doc, ctx: Doc | None = None) -> tuple[Doc | None, bool]:
         return run_native(cmd, _native)
     if key == ("doctor",):
         return _doctor(cmd)
+    if key == ("run",):
+        return _run_operation(cmd, args), False
     if key == ("shadows", "from-live"):
         return _plain(
             api.shadows_from_live(
@@ -1409,7 +1468,8 @@ def _main(args: list[str]) -> int:
     if plugin_venue is not None:
         cmd["args"]["venue"] = plugin_venue
     g = cmd["global"]
-    json_out = g["format"] == "json"
+    # `run OP` prints the operation's document, and its errors, as JSON (`run --list` follows --format)
+    json_out = g["format"] == "json" or (cmd["path"] == ["run"] and not cmd["args"].get("list"))
     quiet = bool(g.get("quiet"))
     level = getattr(logging, str(g.get("log_level", "warn")).upper().replace("WARN", "WARNING"), logging.WARNING)
     logging.basicConfig(stream=sys.stderr, level=logging.ERROR if quiet else level, format="%(levelname)s %(message)s")
