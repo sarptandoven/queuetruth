@@ -26,16 +26,19 @@ from queuetruth.report.svg import (
 
 
 def test_format_helpers() -> None:
-    assert F.dur(100_000_000) == "100 ms"
-    assert F.dur(1_000_000_000) == "1 s"
-    assert F.dur(300_000_000_000) == "5 min"
-    assert F.dur(15_000_000_000) == "15 s"
-    assert F.dur(250_000) == "250 µs"
-    assert F.dur(1_000_000_000_000) == "1000 s"
+    assert F.dur(100_000_000) == "100ms"
+    assert F.dur(1_000_000_000) == "1s"
+    assert F.dur(300_000_000_000) == "5min"
+    assert F.dur(15_000_000_000) == "15s"
+    assert F.dur(250_000) == "250us"
+    assert F.dur(1_000_000_000_000) == "1000s"
+    assert F.dur(1_234_567) == "1.23ms"
     assert F.dur(None) == F.DASH
     assert F.ts(1_577_716_200_123_456_789) == "2019-12-30 14:30:00.123456789"
     assert F.price(100_250_000_000, -9) == "100.25"
-    assert F.price(100_250_000_000, None) == "100250000000"
+    assert F.price(100_250_000_000, None) == "100250000000 (price units, scale unknown)"
+    assert F.ts(1_577_716_200_123_456_789, "America/New_York") == "2019-12-30 09:30:00.123456789"
+    assert F.ts_named(1_577_716_200_123_456_789) == "2019-12-30 14:30:00.123456789 UTC"
     assert F.pp(0.031) == "+3.1 pp" and F.pp(-0.0) == "+0.0 pp"
     assert F.pval(3e-6) == "3.0e-06" and F.pval(0.04) == "0.040"
     assert F.num(1234567) == "1,234,567" and F.num(0.012345) == "0.01235" and F.num(float("nan")) == F.DASH

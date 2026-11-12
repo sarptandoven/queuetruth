@@ -41,12 +41,14 @@ from __future__ import annotations
 
 import math
 import re
+import warnings
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
 import pyarrow as pa
 import pyarrow.compute as pc
 
+from queuetruth import units
 from queuetruth.score._io import rows as _rows
 from queuetruth.score.shortfall import block_mean_cis, bootstrap_args, stream_id
 from queuetruth.score.statistics import block_labels
@@ -76,11 +78,13 @@ def pick_horizon(horizons: Iterable[int], target: int) -> int | None:
 
 
 def duration_text(ns: int) -> str:
-    """`1 s`, `50 ms`, `5 min` (the scorer's wording of a horizon)."""
-    for unit, scale in (("min", 60 * 10**9), ("s", 10**9), ("ms", 10**6), ("us", 10**3)):
-        if ns >= scale and (unit != "min" or ns % scale == 0):
-            return f"{ns / scale:g} {unit}"
-    return f"{ns} ns"
+    """Deprecated: use `queuetruth.units.format_duration`."""
+    warnings.warn(
+        "queuetruth.score.pnl_gap.duration_text is deprecated; use queuetruth.units.format_duration",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return units.format_duration(int(ns))
 
 
 def decimals(x: float | None) -> int:
@@ -146,7 +150,7 @@ def _reasons(unvalued: Sequence[Mapping[str, Any]]) -> str:
 
 def headline(g: Mapping[str, Any]) -> str:
     """The plain sentence of one `pnl_gap` entry (also its `headline` field, without a `BLOCKED:` prefix)."""
-    at = f"at the {duration_text(int(g['horizon_ns']))} markout"
+    at = f"at the {units.format_duration(int(g['horizon_ns']))} markout"
     cur = f" {g['currency']}" if g.get("currency") else ""
     n, nu = int(g.get("n_valued") or 0), int(g.get("n_unvalued") or 0)
     left = f"; {nu:,} unvalued order(s) left out" if nu else ""

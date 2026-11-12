@@ -8,8 +8,9 @@ from __future__ import annotations
 import html
 import math
 import time
-from decimal import Decimal
 from typing import Any
+
+from queuetruth import units
 
 DASH = "–"
 
@@ -96,18 +97,16 @@ def ci(lo: Any, hi: Any, f: Any = num) -> str:
 
 
 def dur(ns: Any) -> str:
-    """Duration in ns as a short human string (`250 µs`, `100 ms`, `1 s`, `5 min`)."""
+    """Duration in ns as a short human string (`250us`, `100ms`, `1s`, `5min`; `queuetruth.units`): exact when it
+    is a whole number of its unit, else to 3 significant digits."""
     if not is_num(ns):
         return DASH
     v = float(ns)
-    sign = "-" if v < 0 else ""
-    a = abs(v)
-    if a == 0:
-        return "0"
-    for unit, scale in (("h", 3.6e12), ("min", 6e10), ("s", 1e9), ("ms", 1e6), ("µs", 1e3)):
-        if a >= scale and (unit not in ("h", "min") or a % scale == 0):
-            return f"{sign}{num(a / scale, 3).replace(',', '')} {unit}"
-    return f"{sign}{num(a, 3).replace(',', '')} ns"
+    if v == int(v) and abs(v) < 2**63:
+        exact = units.format_duration(int(v))
+        if len(exact) <= 7:
+            return exact
+    return units.format_duration(v, sig=3)
 
 
 def dur_axis(ns: float) -> str:
@@ -115,22 +114,31 @@ def dur_axis(ns: float) -> str:
     return dur(ns).replace(" ", "")
 
 
-def ts(ns: Any) -> str:
-    """UTC timestamp in ns as `YYYY-MM-DD HH:MM:SS.nnnnnnnnn`."""
+def ts(ns: Any, tz: str | None = None) -> str:
+    """Timestamp in ns as venue-local `YYYY-MM-DD HH:MM:SS.nnnnnnnnn` in zone `tz` (UTC when unknown); the table
+    header or the text around it names the zone (`zone(tz)`)."""
     if not is_num(ns):
         return DASH
-    n = int(ns)
-    sec, frac = divmod(n, 1_000_000_000)
-    return time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(sec)) + f".{frac:09d}"
+    return units.local_time(int(ns), tz, digits=9, named=False)
 
 
-def ts_short(ns: Any) -> str:
-    """UTC time of day `HH:MM:SS.mmm` (axis and compact tables)."""
+def ts_named(ns: Any, tz: str | None = None) -> str:
+    """`ts` with the zone named after it, for running text."""
     if not is_num(ns):
         return DASH
-    n = int(ns)
-    sec, frac = divmod(n, 1_000_000_000)
-    return time.strftime("%H:%M:%S", time.gmtime(sec)) + f".{frac // 1_000_000:03d}"
+    return units.local_time(int(ns), tz, digits=9)
+
+
+def zone(tz: str | None = None) -> str:
+    """The zone name `ts` writes in: the IANA name, or `UTC`."""
+    return units.zone_name(tz)
+
+
+def ts_short(ns: Any, tz: str | None = None) -> str:
+    """Venue-local time of day `HH:MM:SS.mmm` (axis and compact tables; UTC when `tz` is unknown)."""
+    if not is_num(ns):
+        return DASH
+    return units.local_time(int(ns), tz, digits=3, date=False, named=False)
 
 
 def date_of(days: Any) -> str:
@@ -141,14 +149,11 @@ def date_of(days: Any) -> str:
 
 
 def price(px: Any, exp: int | None) -> str:
-    """Fixed-point price as an exact decimal when `exp` is known, else the raw integer."""
+    """Fixed-point price as an exact decimal when `exp` is known, else the raw integer with its unit
+    (`queuetruth.units.format_price`)."""
     if not is_num(px):
         return DASH
-    if exp is None:
-        return str(int(px))
-    d = Decimal(int(px)).scaleb(int(exp))
-    s = format(d.normalize(), "f")
-    return s
+    return units.format_price(int(px), None if exp is None else int(exp))
 
 
 def bytes_h(n: Any) -> str:
@@ -172,5 +177,5 @@ def coord(x: float) -> str:
 
 
 def horizon_key(h: int) -> str:
-    """`{h: v}` map key of a horizon (decimal ns string)."""
-    return str(int(h))
+    """`{h: v}` map key of a horizon (decimal ns string; `queuetruth.units.horizon_key`)."""
+    return units.horizon_key(int(h))

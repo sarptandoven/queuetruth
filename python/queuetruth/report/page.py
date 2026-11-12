@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
+from queuetruth import units
 from queuetruth.report.fmt import esc
 
 
@@ -128,9 +129,14 @@ def code_block(text: str, label: str = "") -> Raw:
     return Raw(f'<div class="codewrap">{head}<pre class="code"><code>{esc(text)}</code></pre></div>')
 
 
+def _note(v: object) -> object:
+    """A plain-text list item (a warning, a note) with its raw integers in human units (`units.humanize_note`)."""
+    return units.humanize_note(v) if isinstance(v, str) and not isinstance(v, Raw) else v
+
+
 def ul(items: Iterable[object], cls: str = "") -> Raw:
     """Bulleted list."""
-    li = "".join(f"<li>{cell(i)}</li>" for i in items)
+    li = "".join(f"<li>{cell(_note(i))}</li>" for i in items)
     return Raw(f'<ul class="{cls}">{li}</ul>' if cls else f"<ul>{li}</ul>")
 
 

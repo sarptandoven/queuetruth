@@ -195,16 +195,16 @@ def test_section_zoo(tmp_path: Path) -> None:
     ranked = sorted(doc["leaderboard"], key=key)
     # the compact table: the exact fill rate (the base rate of every bias, 0.1.1), then every model in rank order
     assert pp.leaderboard_rows(html) == ["exact fill rate (truth)", *(rc.esc(e["model_id"]) for e in ranked)]
-    assert "sorted by absolute fill-rate bias at 60 s" in lb
-    assert '<th scope="col" class="n">fill-rate bias 60 s (95% CI)</th>' in lb
+    assert "sorted by absolute fill-rate bias at 1min" in lb
+    assert '<th scope="col" class="n">fill-rate bias 1min (95% CI)</th>' in lb
     # the full table (collapsed under the compact one) keeps every horizon with its CI
     full = lb.split("<summary>Full leaderboard", 1)[1]
     for h in [*rc.HORIZONS, rc.H_MAX]:
         assert f'<th scope="col" class="n">fill-rate bias {F.dur(h)}</th>' in full
     assert pp.first_table_rows(full)[0] == "exact fill rate (truth)"
-    sentences = re.findall(r"<li>(At 60 s, [^<]+)</li>", lb)
+    sentences = re.findall(r"<li>(At 1min, [^<]+)</li>", lb)
     assert len(sentences) == len(rc.MODELS)
-    assert sentences[0].startswith(f"At 60 s, {rc.esc(ranked[0]['model_id'])} ")
+    assert sentences[0].startswith(f"At 1min, {rc.esc(ranked[0]['model_id'])} ")
     v0 = ranked[0]["fill_rate_bias"][h60]
     word = "more" if v0["value"] > 0 else "less"
     assert f"pp {word} often" in sentences[0] or "as often as" in sentences[0]
@@ -213,14 +213,14 @@ def test_section_zoo(tmp_path: Path) -> None:
     assert s.count("Signed fill-rate bias by model at") == nh + 1  # never-cancel per horizon + cancel-bearing
     assert s.count('class="chart rel"') == len(rc.MODELS) * nh
     assert s.count("Fill-rate bias by queue decile at") == nh
-    assert "horizon 1 s · n = " in s
+    assert "horizon 1s · n = " in s
     assert "qt.zoo_errors (block-bootstrap CIs in the tooltips; blocks are session days, or 30-minute blocks" in s
     # drill-downs: the chart at the sort horizon is open, the other horizons are one collapsed block each
     shown, rest = s.split("<summary>Signed fill-rate bias at the other horizons", 1)
-    assert "Signed fill-rate bias by model at 1 min" in shown and "at 1 min" not in rest.split("</details>", 1)[0]
+    assert "Signed fill-rate bias by model at 1min" in shown and "at 1min" not in rest.split("</details>", 1)[0]
     assert f"{nh - 1} chart(s)" in rest
     shown, rest = s.split("<summary>Queue-decile heatmaps at the other horizons", 1)
-    assert "Fill-rate bias by queue decile at 1 min" in shown.split("<h3>Fill-rate bias by queue decile</h3>")[1]
+    assert "Fill-rate bias by queue decile at 1min" in shown.split("<h3>Fill-rate bias by queue decile</h3>")[1]
     # reliability: one collapsible block per model, in leaderboard order, the first one open
     rel = s.split("<h3>Reliability diagrams</h3>", 1)[1].split("<h3>Fill-rate bias by queue decile</h3>")[0]
     blocks = re.findall(r'<details class="item"( open)?><summary><h4>([^<]+)</h4>', rel)

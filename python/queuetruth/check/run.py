@@ -35,6 +35,7 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from queuetruth import units
 from queuetruth.check.detect import BACKTESTERS, detect_all
 from queuetruth.check.symbols import (
     Instrument,
@@ -458,6 +459,7 @@ def _result(
                 "price": _dec(r["limit_px"], r.get("price_exp")),
                 "qty": _dec(r["qty"], r.get("size_exp")),
                 "entry": _local(ts, tz),
+                "entry_local": units.local_time(ts, tz, digits=3),
                 "backtest_filled": bool(r["live_filled"]),
                 "backtest_fill_after_s": _seconds(r.get("ttf_live_ns")),
                 "real_filled": bool(r["sim_filled"]),
@@ -541,6 +543,7 @@ def _result(
                 "side": o["side"],
                 "price": o["price"],
                 "entry": o["entry"],
+                "entry_local": o["entry_local"],
                 "outcome": o["outcome"],
                 "why": why_suggestion(str(root), live=str(log_dir), order_key=o["order"]),
             }
@@ -568,11 +571,8 @@ def _result(
 
 
 def human_duration(ns: int) -> str:
-    """`1h`, `90s`, `1min`, `500ms`: the largest unit that divides `ns`."""
-    for unit, size in (("h", 3_600 * 10**9), ("min", 60 * 10**9), ("s", 10**9), ("ms", 10**6), ("us", 10**3)):
-        if ns >= size and ns % size == 0:
-            return f"{ns // size}{unit}"
-    return f"{ns}ns"
+    """`1h`, `90s`, `1min`, `500ms` (`queuetruth.units.format_duration`)."""
+    return units.format_duration(int(ns))
 
 
 def _neg(x: float | None) -> float | None:

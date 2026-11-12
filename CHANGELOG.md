@@ -8,6 +8,18 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ### Added
 
+- **Human units in every output** (`queuetruth.units`, plan principle 7). One module reads and writes durations
+  (`parse_duration` takes `1s`, `250ms`, `1min`, `1m`, `60 s`, `1.5s`, `100us` or nanoseconds; `format_duration`
+  writes the shortest exact form, `1.5s`, `1min`, and every form it writes parses back to the same nanoseconds),
+  horizon keys (`horizon_key`, `horizon_label`), decimal prices and sizes (`price_from_ticks`, `format_price`,
+  `format_scaled`), an instrument's scales and zone (`instrument_units`), venue-local times with the zone named
+  (`local_time`) and side words (`side_word`). Result maps keyed by horizon answer the human key:
+  `row.fill_rate_bias["1s"]` reads the same entry as `["1000000000"]`; the JSON files keep their nanosecond keys.
+  `qt.atlas.lookup(horizon=...)` and `queuetruth atlas --horizon` take any duration form. The `queuetruth.frames`
+  tables add `horizon` next to `horizon_ns`, and `records` adds `symbol`, `<ts>_local` and `<price>_decimal` next to
+  the integers (no column is removed). `why`, `check` and the HTML reports show times in the venue's zone with the
+  zone named, prices as decimals and sides as buy or sell; warnings print their timestamps and horizon keys in human
+  units at display.
 - **One registry of importers; a new live venue is one Python file** (docs/reference/importers.md). Each venue,
   simulator and trading-bot importer declares an `ImporterDef` next to its code (name, kind `venue` / `sim` / `bot`,
   a typed Pydantic options model with `account` and the instrument map inherited, the formats and file patterns it
@@ -228,6 +240,15 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 - `make test-nautilus QT_NT_PYTHON=PY1:PY2` runs the queuetruth-nautilus suite once in each named interpreter.
 
 ### Changed
+
+- **Durations read the same everywhere.** Text output, report pages and the sentences in summaries write horizons and
+  spans with the one formatter: `1min` instead of `60 s` or `60s`, `5min` instead of `5m`, `250ms` instead of
+  `250 ms`, `1.5s` instead of `1500ms`. The old parsers and formatters keep their names with a deprecation warning
+  (`queuetruth.api.fmt_dur`, `fmt_utc`, `fmt_scaled`, `queuetruth.eval.leaderboard.duration_text`,
+  `queuetruth.score.statistics.duration_text`, `queuetruth.score.pnl_gap.duration_text`,
+  `queuetruth.forecast.cli.parse_duration`, `queuetruth.sandbox._util.parse_duration`). The sandbox still takes
+  only whole-number durations, so logged instructions replay the same. Machine-read lines keep their form
+  (`trust: beats_default: <ns>=...`, the atlas data API keys, `fit.json` `horizon`).
 
 - **Docs pages moved and merged.** `getting-started.md` is now "Your first leaderboard" (its demo section moved to
   `docs/tutorials/see-it-in-a-minute.md`, its Nasdaq full-day section to "A real day from free IEX data",

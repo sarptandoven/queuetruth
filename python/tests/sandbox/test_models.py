@@ -270,12 +270,12 @@ def test_wire_forms_and_price_helpers() -> None:
     assert wire(np.int64(7)) == 7 and type(wire(np.int64(7))) is int and type(wire(np.float32(0.5))) is float
     assert wire(np.bool_(True)) == repr(np.bool_(True)) and wire([1]) == "[1]"
     assert [fmt_duration(x) for x in (0, 1, 1_000, 250_000, 10**6, 1_500_000, 5 * 10**9, 60 * 10**9)] == [
-        "0",
+        "0s",
         "1ns",
         "1us",
         "250us",
         "1ms",
-        "1500us",
+        "1.5ms",
         "5s",
-        "1m",
+        "1min",
     ]

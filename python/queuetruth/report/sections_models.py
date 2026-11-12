@@ -14,6 +14,7 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from queuetruth import units
 from queuetruth.eval import leaderboard as lbm
 from queuetruth.report import cols
 from queuetruth.report import fmt as F
@@ -428,7 +429,7 @@ def zoo_view(ctx: Ctx, run: RunDir, z: ZooSummary) -> ZooView:
 
 
 def _sorted_by(v: ZooView) -> str:
-    return F.esc(lbm.duration_text(v.hsort) if v.hsort else F.DASH)
+    return F.esc(units.format_duration(v.hsort) if v.hsort else F.DASH)
 
 
 def _excluded_312(z: ZooSummary) -> str:
@@ -598,7 +599,7 @@ def _lb_full(v: ZooView) -> list[str]:
         details(
             "One sentence per model",
             [ul([lbm.bias_sentence(e, hsort) for e in ordered], "sentences")],
-            note=f"{len(ordered)} models at {lbm.duration_text(hsort) if hsort else F.DASH}",
+            note=f"{len(ordered)} models at {units.format_duration(hsort) if hsort else F.DASH}",
         ),
         details(
             "Full leaderboard",
@@ -1094,8 +1095,8 @@ def trust_assessment(c: CalibrationResult) -> tuple[Any, str | None]:
     try:
         from queuetruth.export.trust import assess, held_out_summary
 
-        t = assess(c)
-        return t, held_out_summary(t)
+        t = assess(c, units.format_duration)
+        return t, held_out_summary(t, units.format_duration)
     except Exception:
         return None, None
 
