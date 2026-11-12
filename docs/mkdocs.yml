@@ -94,6 +94,7 @@ nav:
       - HTTP API: reference/http-api.md
       - MCP tools: reference/mcp.md
       - Schemas: reference/schemas.md
+      - Importers: reference/importers.md
       - Error codes: reference/errors.md
       - Venue semantics: venue-semantics.md
       - Glossary: concepts/glossary.md

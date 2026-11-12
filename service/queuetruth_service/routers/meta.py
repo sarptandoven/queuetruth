@@ -8,6 +8,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from queuetruth._version import __version__ as engine_version
+from queuetruth.live import importers
 from queuetruth.schemas import models as m
 from queuetruth.schemas.models import DOC_MODELS
 from queuetruth_service import __version__ as service_version
@@ -77,6 +78,7 @@ def meta(request: Request, auth: ReadAuth) -> Any:
             "rate_limits": {b: {"per_minute": v[0], "burst": v[1]} for b, v in sorted(s.rate_limits.items())},
         },
         "formats": list(INGEST_FORMATS),
+        "live_venues": list(importers.live_venues()),
         "zero_egress": bool(s.zero_egress or (t or {}).get("zero_egress")),
     }
 

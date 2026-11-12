@@ -46,6 +46,8 @@ from queuetruth.live._common import (
 )
 from queuetruth.live.builder import ImportResult, LogBuilder
 from queuetruth.live.importers._base import (
+    ImporterDef,
+    ImporterOptions,
     ImportOptions,
     json_records,
     list_field,
@@ -504,3 +506,18 @@ def import_coinbase(paths: list[str], opts: ImportOptions) -> ImportResult:
         _emit_fill(b, h, m, rec, etype, ref, ex)
     _warn_excluded(b, ex)
     return b.finish()
+
+
+# ---- registry entry (queuetruth.live.importers.registry()) ------------------------------------------------------
+
+IMPORTER = ImporterDef(
+    name="coinbase",
+    kind="venue",
+    run=import_coinbase,
+    options=ImporterOptions,
+    formats=("WebSocket user channel (JSON lines)", "REST List Fills and List Orders JSON"),
+    patterns=("*.jsonl", "*.json"),
+    description="Coinbase Advanced Trade: orders and fills of your own account",
+    docs="how-to/import-live-logs.md#coinbase",
+    rank=40,
+)

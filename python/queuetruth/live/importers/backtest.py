@@ -42,6 +42,8 @@ from decimal import ROUND_HALF_EVEN, Decimal
 from pathlib import Path
 from typing import Any
 
+from pydantic import Field
+
 from queuetruth.errors import QtError
 from queuetruth.live._common import (
     Record,
@@ -54,7 +56,7 @@ from queuetruth.live._common import (
 )
 from queuetruth.live.builder import ImportResult, LogBuilder
 from queuetruth.live.imap import InstrumentEntry, InstrumentMap, load_instrument_map
-from queuetruth.live.importers._base import ImportOptions
+from queuetruth.live.importers._base import ImporterOptions, ImportOptions, Int, Paths, Text
 from queuetruth.live.importers.freqtrade import (
     OrderView,
     ReconcileReport,
@@ -73,22 +75,31 @@ from queuetruth.live.importers.freqtrade import (
 from queuetruth.schemas.io import sha256_file
 
 _NS = 1_000_000_000
+
+
+class BarOptions(ImporterOptions):
+    """Options every backtest importer reads (LEAN takes these; the others add `data_tz`)."""
+
+    venue: Text = Field(None, description="live venue whose instrument-map rows apply (e.g. binance)")
+    map_venue: Text = Field(None, description="venue of the instrument-map rows when it differs from venue")
+    pair_with: Paths = Field(None, description="canonical live-log directory: paired orders take its order_key")
+    pair_window_ms: Int = Field(None, description="pairing window in milliseconds")
+    timeframe: Text = Field(None, description="bar length, e.g. 5m")
+    fill_delay_bars: Int = Field(None, description="fills k bars after their timestamp (default 0)")
+    instrument: Text = Field(None, description="one live instrument name for every order")
+    instruments: Text | dict[str, str] = Field(None, description="LABEL:NAME[,LABEL:NAME...] per data feed or column")
+    price_exp: Int = Field(None, description="decimal exponent of prices (default -9)")
+    size_exp: Int = Field(None, description="decimal exponent of sizes (default -8)")
+
+
+class BacktestOptions(BarOptions):
+    """`BarOptions` and the zone of naive timestamps."""
+
+    data_tz: Text = Field(None, description="IANA zone of naive timestamps (default UTC)")
+
+
 #: Options every backtest importer reads.
-COMMON_OPTIONS = frozenset(
-    {
-        "venue",
-        "map_venue",
-        "pair_with",
-        "pair_window_ms",
-        "timeframe",
-        "fill_delay_bars",
-        "data_tz",
-        "instrument",
-        "instruments",
-        "price_exp",
-        "size_exp",
-    }
-)
+COMMON_OPTIONS = BacktestOptions.option_names()
 _TERMINAL = {"cancel_ack": "cancelled", "expire": "expired", "reject": "rejected"}
 
 
@@ -849,6 +860,8 @@ def key_hint(v: Any) -> str | None:
 
 __all__ = [
     "COMMON_OPTIONS",
+    "BacktestOptions",
+    "BarOptions",
     "LiveArm",
     "LiveOrder",
     "SimFill",

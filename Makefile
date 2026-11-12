@@ -32,7 +32,8 @@ ET_ROOT ?= $(QT_ET_ROOT)
 .PHONY: help env-check venv lock sync develop fmt lint test-rust test-py test-service test-e2e test schemas \
 	schemas-check fixtures openapi gate-0 gate-1 gate-2 gate-3 realdata bench bench-check compose-config \
 	lint-py test-extra test-nautilus test-hftbacktest-plugin hftbacktest-plugin-wheel fuzz-py fuzz-rust nightly nightly-reduced \
-	hbt-crosscheck clean-realdata check-placeholders check-docs docs-build examples wheel-smoke release-check compose-smoke dbn-samples bench-real bench-baseline bench-et test-bench reproduce reproduce-breadth
+	hbt-crosscheck clean-realdata check-placeholders check-docs docs-build examples wheel-smoke release-check compose-smoke dbn-samples bench-real bench-baseline bench-et test-bench reproduce reproduce-breadth \
+	generate generate-check
 
 help: ## list targets
 	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | sed 's/:.*## /\t/' | sort
@@ -145,6 +146,12 @@ nightly: ## local nightly cross-checks, full mode (hbt, NT, repro, bench; venvs 
 
 nightly-reduced: ## the nightly cross-checks in reduced mode (fewer shadows, one repro day, two bench cases)
 	bash scripts/nightly/nightly.sh run --mode reduced $(NIGHTLY_ARGS)
+
+generate: ## regenerate every generated file in dependency order (tools/generate.py --list names the steps)
+	$(RUN) python tools/generate.py
+
+generate-check: ## fail, listing the files and the command that fixes them, when a committed generated file is stale
+	$(RUN) python tools/generate.py --check
 
 schemas: ## regenerate schemas/json, schemas/arrow, schemas/samples, schemas/run_id_kat.json
 	$(RUN) python scripts/gen_schemas.py
