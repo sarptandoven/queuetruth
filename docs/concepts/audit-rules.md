@@ -128,8 +128,8 @@ the synthetic fixtures. See [How queuetruth is tested](../testing.md#the-indepen
 
 ## Smaller corrections
 
-The audit's minor findings are applied as written unless a rule above overrides them. Verified in the v0.1 code: the
+The audit's minor findings are applied as written unless a rule above overrides them. Verified in the 0.1.0 code: the
 amend delay uses the amend's own jitter draw; `ambiguous_race` also covers fills just before a cancel takes effect;
 a removal that arrives after an unpaired fill raises a data-quality warning (`removal_after_unpaired_fill`). Not yet
-applied in v0.1: the Hosmer-Lemeshow test of the learned model still uses `g - 2` degrees of freedom on held-out data
+applied: the Hosmer-Lemeshow test of the learned model still uses `g - 2` degrees of freedom on held-out data
 (the audit recommends `g`).

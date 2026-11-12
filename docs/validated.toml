@@ -1,0 +1,146 @@
+# What is validated: the single source for every "what is validated" table in the docs.
+#
+# docs/gen_validated.py turns this file into docs/validated.md and the "Status" block of README.md;
+# docs/check_docs.py fails when either is stale. Edit this file, then run:
+#     uv run --frozen --no-sync python docs/gen_validated.py
+#
+# status is one of:
+#   real_data       checked on real public market data
+#   real_library    checked order by order against the real library or a transliteration of its source
+#   documented      re-implemented from public documentation; not checked against the original code
+#   fixtures_only   tested on fixtures written from public format documents, or on synthetic data, only
+#
+# Keep each claim to what a named check shows. `short` is the README wording; `detail` and `evidence` are for
+# docs/validated.md. Links in `evidence` are relative to docs/.
+
+[[row]]
+area = "Nasdaq TotalView-ITCH 5.0: exact book, shadow orders and scorer"
+status = "real_data"
+short = "Nasdaq TotalView-ITCH: exact book, shadow orders and scorer on 2 public days"
+detail = """2 public days (2019-12-30 and 2020-01-30; AAPL, MSFT, SPY, TSLA) read from the raw ITCH bytes: 0 book \
+invariant violations over 16,754,562 records and 0 trade-parity mismatches over 633,287 printed executions. An \
+independent matching-engine oracle agrees with the exact fill rule on 3,000 of 3,000 shadow orders on both days. \
+3,000 real orders per day used as a live log are reproduced exactly by the scorer's exact arm."""
+evidence = [
+  ["Results", "RESULTS.md#the-headline-number"],
+  ["Real-data checks", "testing.md#real-data-checks"],
+]
+
+[[row]]
+area = "IEX DEEP+: exact book on every atlas day"
+status = "real_data"
+short = "IEX DEEP+: exact book on 22 public days, in the atlas"
+detail = """22 public days replayed by the Fill-Realism Atlas pipeline; the published 20-day window is 2026-10-09 to \
+2026-11-06 (265,402 symbol-days, 12,440 symbols). Every symbol-day's replay is checked for the eight book \
+invariants, price priority and trade parity, and a symbol-day with any non-zero check is left out of the published \
+numbers. On one day (2026-10-09; SPY, AAPL, NVDA, TSLA; 4,435,281 records) all 21,301 displayed executions were also \
+at FIFO rank 0 of their price level."""
+evidence = [
+  ["The Fill-Realism Atlas", "concepts/fill-realism-atlas.md"],
+  ["A real day from free IEX data", "how-to/iex-public-demo.md"],
+]
+
+[[row]]
+area = "Calibration and the learned fill model"
+status = "real_data"
+short = "Calibration and the learned fill model, scored on a held-out Nasdaq day"
+detail = """Fitted on one public Nasdaq day and scored on the other: `p = 0.29` for NautilusTrader's touch model cuts \
+the held-out day's 1 s overfill from +2.8 pp to +0.4 pp. Exports refuse a fit that does not beat the library \
+default on held-out data."""
+evidence = [
+  ["Results", "RESULTS.md#the-headline-number"],
+  ["Calibration", "concepts/calibration.md"],
+]
+
+[[row]]
+area = "NautilusTrader fill models"
+status = "real_library"
+short = "NautilusTrader fill models, against the real engine"
+detail = """The faithful `nt_prob_touch`, `nt_queue_l2` and `nt_queue_l2_prob_touch` agree with nautilus_trader \
+1.231.0's `BacktestEngine` (fed `OrderBookDelta`s) on 100% of orders at 1 s, 10 s and 60 s on both Nasdaq days and \
+the synthetic fixture. On 2.0.0rc7 the touch model fills the same orders and `nt_queue_l2` agrees on 99.60% to 100% \
+of orders per day and horizon. Fed `OrderBookDepth10` snapshots, 1.231.0 behaves differently (see Results)."""
+evidence = [
+  ["NautilusTrader cross-check", "RESULTS.md#nautilustrader-cross-check"],
+  ["How it is tested", "testing.md#real-data-checks"],
+]
+
+[[row]]
+area = "hftbacktest queue models"
+status = "real_library"
+short = "hftbacktest queue models, against a transliteration of its source"
+detail = """The faithful models are bit-exact against a line-by-line transliteration of hftbacktest's source; the \
+transliteration matches hftbacktest 2.4.4 on every recorded queue-model call."""
+evidence = [
+  ["The L2 model zoo", "concepts/l2-model-zoo.md"],
+  ["Oracle list", "testing.md#oracle-list"],
+]
+
+[[row]]
+area = "Databento queue-position model"
+status = "documented"
+short = "Databento's queue-position model, from its public tutorial only"
+detail = """Re-implemented from Databento's public tutorial; not checked against Databento's own code."""
+evidence = [["The L2 model zoo", "concepts/l2-model-zoo.md"]]
+
+[[row]]
+area = "Databento DBN and CME"
+status = "fixtures_only"
+short = "Databento DBN and CME semantics"
+detail = """Synthetic data only. The reader also reads Databento's public DBN test files, which checks decoding, not \
+CME queue semantics."""
+evidence = [
+  ["Venue semantics", "venue-semantics.md"],
+  ["Databento MBO", "how-to/databento-mbo.md"],
+]
+
+[[row]]
+area = "Crypto order-level readers"
+status = "fixtures_only"
+short = "Crypto order-level readers (Coinbase, Kraken, Hyperliquid, Bitstamp, Bitfinex)"
+detail = """Rules assumed from venue documentation. Bitstamp and Bitfinex: one 10-minute capture each replays with \
+every invariant 0 (counters only, not fill fidelity). Coinbase, Kraken and Hyperliquid: fixtures only."""
+evidence = [
+  ["Crypto order-level feeds", "how-to/crypto-l3-sources.md"],
+  ["Venue semantics", "venue-semantics.md"],
+]
+
+[[row]]
+area = "NYSE TAQ Integrated Feed"
+status = "fixtures_only"
+short = "NYSE TAQ Integrated Feed reader"
+detail = """Hand-written and generated files only; no real NYSE file has been replayed."""
+evidence = [["NYSE order-by-order data", "how-to/nyse-order-level.md"]]
+
+[[row]]
+area = "Trading halts outside ITCH and IEX"
+status = "fixtures_only"
+short = "Trading-halt spans from DBN and NYSE status records"
+detail = """Halts are recorded from Nasdaq ITCH and IEX DEEP+ on real data. The DBN `status` and NYSE Security Status \
+readers (since 0.3.0) are tested on fixtures only; crypto sources record no halts."""
+evidence = [["Venue semantics", "venue-semantics.md"]]
+
+[[row]]
+area = "Live-log importers and backtest importers"
+status = "fixtures_only"
+short = "Every live-log importer, and the backtest importers and `reconcile`"
+detail = """Every venue and broker importer (Binance, Bybit, OKX, Coinbase, Kraken, Deribit, Hyperliquid, IBKR Flex, \
+FIX drop copies, QuickFIX logs) and every backtest importer (hftbacktest, NautilusTrader, Freqtrade, Hummingbot, \
+Backtrader, VectorBT, LEAN) is tested on fixtures written from public format documents and the engines' sources. \
+No real account export has been imported."""
+evidence = [["Import fills from my venue or broker", "how-to/import-live-logs.md"]]
+
+[[row]]
+area = "Prediction-market kit"
+status = "fixtures_only"
+short = "The prediction-market kit"
+detail = """Kalshi and Polymarket readers and queue models tested on invented captures in the documented message \
+formats only; no real venue capture has been replayed."""
+evidence = [["Prediction-market making", "how-to/prediction-market-making.md"]]
+
+[[row]]
+area = "Forecast referee"
+status = "fixtures_only"
+short = "The forecast referee"
+detail = """Tested on synthetic worlds in which the right answer is known; no real forecasts."""
+evidence = [["Score forecasts", "how-to/score-forecasts.md"]]

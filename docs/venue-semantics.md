@@ -15,29 +15,30 @@ algorithm documentation.
 
 ## The rule table
 
-| Rule | What it controls | `nasdaq` | `cme` | `coinbase` | `generic` |
-|---|---|---|---|---|---|
-| `modify_records_present` | Whether `M` records are legal (otherwise counted as `unexpected_modifies` and ignored). | no | yes | yes | yes |
-| `modify_priority` | When a modify keeps queue priority. | never | size decrease at the same price only | size decrease | size decrease |
-| `snapshot_begins_with_clear` | Files must start with an `R` and a snapshot (otherwise an anomaly). | no | yes | no | no |
-| `snapshot_records_flagged` | A duplicate add inside a flagged snapshot is not an anomaly. | no | yes | no | yes |
-| `trades_have_aggressor` | `T.side` is the aggressor side. | yes | yes | yes | no |
-| `supports_hidden_orders` | A `T` with side `N` is a hidden execution that consumes no displayed queue. | yes | no | no | yes |
-| `fill_removal_shares_sequence` | An `F` is paired with its removing `C` by `sequence` (else within the event). | yes | no | yes | yes |
-| `utc_midnight_snapshot` | The source inserts a snapshot at 00:00 UTC. | no | yes | no | no |
-| `sequence_meaningful` | Sequence gaps and regressions are counted. | yes | yes | yes | no |
-| validation | How the rules were validated. | real data | synthetic only | assumed | assumed |
+| Rule | What it controls | `nasdaq` | `iex` | `nyse` | `cme` | `coinbase` | `generic` |
+|---|---|---|---|---|---|---|---|
+| `modify_records_present` | Whether `M` records are legal (otherwise counted as `unexpected_modifies` and ignored). | no | no | no | yes | yes | yes |
+| `modify_priority` | When a modify keeps queue priority. | never | never | never | size decrease at the same price only | size decrease | size decrease |
+| `snapshot_begins_with_clear` | Files must start with an `R` and a snapshot (otherwise an anomaly). | no | no | no | yes | no | no |
+| `snapshot_records_flagged` | A duplicate add inside a flagged snapshot is not an anomaly. | no | no | no | yes | no | yes |
+| `trades_have_aggressor` | `T.side` is the aggressor side. | yes | yes | yes | yes | yes | no |
+| `supports_hidden_orders` | A `T` with side `N` is a hidden execution that consumes no displayed queue. | yes | yes | yes | no | no | yes |
+| `fill_removal_shares_sequence` | An `F` is paired with its removing `C` by `sequence` (else within the event). | yes | yes | yes | no | yes | yes |
+| `utc_midnight_snapshot` | The source inserts a snapshot at 00:00 UTC. | no | no | no | yes | no | no |
+| `sequence_meaningful` | Sequence gaps and regressions are counted. | yes | yes | no | yes | yes | no |
+| validation | How the rules were validated. | real data | real data | synthetic only | synthetic only | assumed | assumed |
 
 `real data` means the rules were checked against real files of that venue (for Nasdaq: two public ITCH days, with
 invariants, trade parity and the rank oracle; see [How queuetruth is tested](testing.md#real-data-checks)).
 `synthetic only` means the reader and rules are tested on generated data but no real file has been replayed with
 parity checks yet. `assumed` means the rules follow documentation and the predecessor engine's captures, without a
-parity run. Every output that depends on a rule set carries its label.
+parity run. Every output that depends on a rule set carries its label. Which days and checks stand behind each
+label: [What is validated](validated.md).
 
-Two more named rule sets reuse these columns. `crypto_l3` is `generic` without hidden orders (a side-`N` trade
+One more named rule set reuses these columns. `crypto_l3` is `generic` without hidden orders (a side-`N` trade
 consumes displayed queue); `--venue generic` resolves to it for every crypto order-level format, and the dataset
-manifest records it (`rule_set`). `iex` has the `nasdaq` values and runs on Nasdaq record semantics; it is
-validated on real data (one public day, below).
+manifest records it (`rule_set`). `iex` and `nyse` run on Nasdaq record semantics (no `M` records: a modify becomes a
+partial `C` or a `C` plus `A`).
 
 ## Nasdaq TotalView-ITCH 5.0 (`--format itch`, venue `nasdaq`)
 
@@ -114,9 +115,10 @@ a Trade between non-displayed orders becomes a side-`N` hidden print; Clear Book
 IEX-TP message sequence number, so gaps are real feed gaps, and A/B duplicates are dropped per channel. DEEP+ does not
 show non-displayed orders or the hidden parts of reserve orders, and routed executions are not reported.
 
-- **Validation: real data.** One public day (2026-10-09; SPY, AAPL, NVDA, TSLA; 4,435,281 records) from the raw
-  pcap: verdict clean, every replay invariant 0, and all 21,301 displayed executions at FIFO rank 0 of their price
-  level. Steps and the full result table: [Replay a public IEX DEEP+ day](how-to/iex-public-demo.md).
+- **Validation: real data.** 22 public days in the Fill-Realism Atlas, every symbol-day checked for the book
+  invariants, price priority and trade parity; on one day (2026-10-09; SPY, AAPL, NVDA, TSLA; 4,435,281 records)
+  also all 21,301 displayed executions at FIFO rank 0 of their price level ([What is validated](validated.md)).
+  Steps and the one-day result table: [A real day from free IEX data](how-to/iex-public-demo.md).
 
 ## Crypto order-level captures (venue `generic` or `coinbase`)
 
@@ -166,7 +168,7 @@ are skipped and counted. Trade rows come first in their batch, with the aggresso
 
 ## The et CSV and normalized Parquet formats
 
-`--format etcsv` reads the predecessor engine's `mbo.csv`, `trades.csv` and `instruments.csv`; the v0.1 checks
+`--format etcsv` reads the predecessor engine's `mbo.csv`, `trades.csv` and `instruments.csv`; the checks
 against the predecessor (`make realdata`) replay the two public Nasdaq days from it, while the public reproduction
 (`make reproduce`) ingests the raw ITCH bytes (`--format itch`). `--format parquet` reads queuetruth's own normalized
 `qt.mbo` tables.

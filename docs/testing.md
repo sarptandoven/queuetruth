@@ -243,16 +243,18 @@ in [Results](RESULTS.md), section 7; a quiet-machine baseline for the regression
 
 ## What is not tested yet
 
-- DBN and CME semantics on real data (synthetic only).
-- Importers on real account exports (fixtures only).
+What is validated, and on which data, is one generated table: [What is validated](validated.md). It lists every
+area that is checked on fixtures or synthetic data only. Gaps in the test suite itself:
+
 - The ITCH reader on more than the two raw public days and four symbols above.
 - Three parser faults that fuzzing found are known and not fixed: the pinned `dbn` 0.71.0 decoder panics on a DBN
   prelude announcing 100 to 103 metadata bytes and allocates the announced metadata length (up to 256 MiB) before
   reading it, and the Parquet reader panics on corrupt file metadata with a negative column chunk range (one site in
   `parquet` 60.0.0; arrow 60 fixed the four `arrow-ipc` sites). A panic surfaces as a Python `PanicException` or a service job's `QT-ENGINE-001` instead of
   `QT-INPUT-002`. The reproducers are in `fuzz/known-crashes/`.
-- The Rust fuzz harness tests (`make fuzz-rust`) run in the local gate (`make gate-3`), not in CI; the libFuzzer
-  campaigns themselves (`fuzz/run.sh`, nightly toolchain) are run by hand.
+- Fuzzing runs in `.github/workflows/fuzz.yml`, not on every pull request: the seeds, regressions and known crashes
+  (`make fuzz-rust`) replay on every change to a parser and weekly, and a libFuzzer campaign of each target (600 s
+  by default, nightly toolchain, as `fuzz/run.sh` does locally) runs weekly and on demand.
 - Docker Compose end to end in CI: `make compose-config` validates the file, and the compose smoke test runs only
   when a Docker daemon is available.
 - The optional hftbacktest cross-check (O-ZOO-3) runs only in its separate venv (`make hbt-crosscheck`); the
@@ -264,7 +266,7 @@ in [Results](RESULTS.md), section 7; a quiet-machine baseline for the regression
 ## Run the tests yourself
 
 ```sh
-make venv sync develop
+uv venv .venv && make sync develop
 make test          # lint, Rust tests, Python tests, service tests (ephemeral Postgres)
 make test-e2e      # cross-interface parity and determinism
 make realdata      # needs the predecessor engine's artifacts; writes only to .realdata/

@@ -332,9 +332,9 @@ def _read_parquet(path: Path, name: str) -> pa.Table:
 
 
 def read_log(path: str | Path) -> tuple[pa.Table, pa.Table]:
-    """(`orders`, `events`) of a canonical live-log directory: `orders.parquet` + `events.parquet` (v0.1 or 1.1
-    layout), or the same columns as `orders.csv` + `events.csv` (timestamps as integer ns, lists as JSON arrays;
-    1.1 columns optional). Tables are returned in the full 1.1 layout."""
+    """(`orders`, `events`) of a canonical live-log directory: `orders.parquet` + `events.parquet` (the 0.1.0 layout
+    or the 1.1 layout), or the same columns as `orders.csv` + `events.csv` (timestamps as integer ns, lists as JSON
+    arrays; 1.1 columns optional). Tables are returned in the full 1.1 layout."""
     p = Path(path)
     if not p.is_dir():
         raise QtError("QT-INPUT-001", f"{p}: live-log directory not found")

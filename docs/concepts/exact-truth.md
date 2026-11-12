@@ -47,8 +47,9 @@ Per-venue behaviour comes from a rule table (`qt_types::rules`, SPEC 3.2):
 | validation | real data | synthetic only | assumed | assumed |
 
 On CME a modify with unchanged price and size (an iceberg refresh or an account change) loses priority. The
-`validation` label is printed on every output that depends on it. In v0.1 only `nasdaq` is validated on real data;
-see [Venue semantics](../venue-semantics.md) for the per-venue details and their sources.
+`validation` label is printed on every output that depends on it. `nasdaq` and `iex` are validated on real data;
+[What is validated](../validated.md) says on which days, and [Venue semantics](../venue-semantics.md) gives the
+per-venue details and their sources.
 
 ## Events: the book is only consistent at event boundaries
 
