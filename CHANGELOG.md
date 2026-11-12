@@ -8,6 +8,13 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ### Added
 
+- **One guide per backtester for hftbacktest and NautilusTrader.** "Score and calibrate my hftbacktest backtest"
+  (`docs/how-to/calibrate-hftbacktest.md`) merges the plugin page and the calibration recipe and starts with the
+  `queuetruth-hftbacktest` plugin; the old plugin page points to its sections, and the plugin README keeps a short
+  example and links the guide. "Check and calibrate my NautilusTrader backtest" (`docs/how-to/nautilustrader.md`)
+  picks a setting from the atlas, fits `prob_fill_on_limit` with `queuetruth fit --backtester nautilus` (runnable on
+  the synthetic dataset), passes it to `add_venue` with `**qtn.venue_options(cal)` from the `queuetruth-nautilus` plugin, and
+  scores the backtest against live fills. The docs menu lists one page for each.
 - **Realistic fills in Backtrader and LEAN, one line each** (docs/how-to/realistic-fills-backtrader-lean.md).
   `cerebro.broker.set_filler(qt.backtrader.QueueFiller(table="touch.json", tier="T1"))` and
   `security.set_fill_model(qt.lean.QueueFillModel(table="touch.json", tier="T1"))` keep the framework's own limit
