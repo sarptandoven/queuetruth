@@ -517,6 +517,17 @@
   ],
   [
     "queuetruth",
+    "calibrate-live",
+    "--data",
+    "ds",
+    "--live",
+    "live",
+    "--family",
+    "power3",
+    "--latency-from-log"
+  ],
+  [
+    "queuetruth",
     "features",
     "--data",
     "ds",
