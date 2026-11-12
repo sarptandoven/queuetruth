@@ -86,7 +86,7 @@ def verify_parser() -> argparse.ArgumentParser:
     root.add_argument("--threads", type=int, metavar="N")
     root.add_argument("--seed", type=int, metavar="N")
     sub = root.add_subparsers(dest="command", required=True, parser_class=_Parser)
-    v = sub.add_parser("verify", help="verify a published result: the Fill-Realism Atlas")
+    v = sub.add_parser("verify", help="verify a published result: the Fill-Realism Atlas or a certificate")
     vs = v.add_subparsers(dest="what", required=True, parser_class=_Parser)
     p = vs.add_parser(
         "atlas",
@@ -131,6 +131,9 @@ def verify_parser() -> argparse.ArgumentParser:
     p.add_argument("--yes", "-y", action="store_true", help="download what the checks need without asking")
     p.add_argument("--refresh", action="store_true", help="download the newest manifest even when a copy is cached")
     p.add_argument("--json", action="store_true", help="print the qt.atlas_verify document (same as --format json)")
+    from queuetruth.cert.cli import VERIFY_CERT_HELP, verify_cert_arguments
+
+    verify_cert_arguments(vs.add_parser("cert", help=VERIFY_CERT_HELP))
     return root
 
 
@@ -154,8 +157,8 @@ def maybe_main(argv: list[str]) -> int | None:
     word = command_word(argv)
     if word == "help":
         rest = [a for a in argv[argv.index("help") + 1 :] if not a.startswith("-")]
-        if rest[:2] == ["verify", "atlas"]:
-            return verify_main(["verify", "atlas", "--help"])
+        if rest[:2] in (["verify", "atlas"], ["verify", "cert"]):
+            return verify_main([*rest[:2], "--help"])
         if rest[:1] == ["verify"]:
             return verify_main(["verify", "--help"])
         return main(["atlas", "--help"]) if rest[:1] == ["atlas"] else None
@@ -270,8 +273,16 @@ def _verify_confirm(interactive: bool) -> Any:
 
 
 def verify_main(argv: list[str]) -> int:
-    """Runs `queuetruth verify atlas`; returns the exit code (1 when a check fails)."""
+    """Runs `queuetruth verify atlas` or `queuetruth verify cert` (the `verify-cert` command); returns the exit code
+    (1 when a check fails)."""
     from queuetruth.errors import EXIT_GATE
+
+    words = [(i, a) for i, a in enumerate(argv) if not a.startswith("-")][:2]
+    if [a for _, a in words] == ["verify", "cert"] and not {"-h", "--help"} & set(argv):
+        from queuetruth.cert.cli import main as cert_main
+
+        (i, _), (j, _) = words
+        return cert_main([*argv[:i], "verify-cert", *argv[i + 1 : j], *argv[j + 1 :]])
 
     json_out = _json_wanted(argv)
     try:

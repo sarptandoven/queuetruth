@@ -4,12 +4,12 @@
 order and in total, in the buckets a desk reports: fill timing (delay), spread paid, missed passive fills, adverse
 selection on fills, partial fills, and fees or rebates. The buckets add up exactly to the gap.
 
-**You need:** what `queuetruth score` needs (a canonical live log, a simulator arm and a dataset with quotes for
-markouts). Every `queuetruth score --out DIR` run writes the decomposition to `DIR/score_shortfall.parquet` (table
+**You need:** what `queuetruth advanced score` needs (a canonical live log, a simulator arm and a dataset with quotes for
+markouts). Every `queuetruth advanced score --out DIR` run writes the decomposition to `DIR/score_shortfall.parquet` (table
 `qt.score_shortfall`) next to the other scorecard files; there is nothing extra to switch on. Without a dataset the
 table is still written, with every order unvalued (there are no quotes to mark fills with).
 
-`queuetruth score` also prints the gap in one line, `P&L:`, under its `RESULT:` line: the per-order mean of
+`queuetruth advanced score` also prints the gap in one line, `P&L:`, under its `RESULT:` line: the per-order mean of
 `total_ccy` with its 95% interval at the markout equivalence horizon (1 s by default), stated as a difference only
 when the interval excludes 0, and the part it mostly comes from when one part clearly dominates. See [the P&L gap](../concepts/scorecard.md#the-pl-gap).
 
@@ -86,8 +86,8 @@ This uses the synthetic dataset and its 200 order lives of [Getting started](../
 
 <!-- check-docs: run -->
 ```sh
-queuetruth fixtures synth --out synth
-queuetruth score --live synth/own_orders/live --sim-model "hbt_power3[n=2]" --data synth --out sc
+queuetruth advanced fixtures synth --out synth
+queuetruth advanced score --live synth/own_orders/live --sim-model "hbt_power3[n=2]" --data synth --out sc
 ```
 
 Read the totals at the 1 s horizon and check the identity on every order:

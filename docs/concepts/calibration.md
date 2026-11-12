@@ -158,7 +158,7 @@ and exit 1 with `QT-CALIB-001`, writing nothing. `--force` writes the snippet an
 header that lists the reasons; use it to inspect a fit, not to paste it. The Nautilus snippet emits only what was
 fitted (a power-family fit gives no `FillModel` line, a fit without latency no `LatencyModel`).
 
-`queuetruth export hftbacktest --calibration cal/calibration.json` prints a block to paste into an existing
+`queuetruth advanced export hftbacktest --calibration cal/calibration.json` prints a block to paste into an existing
 `BacktestAsset` chain:
 
 ```python
@@ -184,7 +184,7 @@ The exchange line follows the fit's exchange. A `.intp_order_latency("...")` lin
 calibration exists. The notes always mention hftbacktest's partial-fill accounting issues (#316, #312) and that a
 parameter fitted on an unconflated L2 view may need re-checking on a conflated feed.
 
-`queuetruth export nautilus --calibration cal/calibration.json` prints a `FillModel(prob_fill_on_limit=...)` and
+`queuetruth advanced export nautilus --calibration cal/calibration.json` prints a `FillModel(prob_fill_on_limit=...)` and
 `LatencyModel(...)` block written against NautilusTrader's documented API at a pinned commit, with a note to verify
 the names for your version. `export latency-npz --live DIR` writes hftbacktest's `IntpOrderLatency` layout
 (`req_ts, exch_ts, resp_ts`), one row per submitted order.

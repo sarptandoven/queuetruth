@@ -3,7 +3,7 @@
 `queuetruth.score`, `queuetruth.report`, `queuetruth.export`, `queuetruth.check`, `queuetruth.fit` and
 `queuetruth.compare` are both subpackages and API functions (`qt.score(spec)`, `qt.report(spec)`, `qt.export(spec)`,
 `qt.check(backtest, data=...)`, `qt.fit(backtester, data=...)`, `qt.compare(backtest, live)`): the subpackage
-modules are callable and delegate to the `queuetruth.api` function of the same name, so `import queuetruth.score as
+modules are callable and delegate to the operation of the same name (`queuetruth.ops`), so `import queuetruth.score as
 s` and `qt.score(spec)` both work.
 `qt.HazardModel` is imported on first use (it needs scikit-learn), and so are `qt.backtesters` (the backtester plugin
 registry), `qt.backtrader` and `qt.lean` (fill models and logs for those frameworks, which stay optional),
@@ -68,10 +68,12 @@ def __dir__() -> list[str]:
 
 
 _CALLABLE_NAMES = ("score", "report", "export", "check", "fit", "compare", "demo")
-#: The function a callable subpackage runs, where it is not the `queuetruth.api` function of the same name (`demo`
-#: is a product, above `queuetruth.api`), and the function whose typed signature it shows (`qt.check`, `qt.fit`,
-#: `qt.compare`: the `queuetruth.api` functions forward `**kwargs`).
+#: The function each callable subpackage runs, and whose typed signature it shows: the operation itself
+#: (`queuetruth.ops`, or the verb's own module; `demo` is a product).
 _TARGETS = {
+    "score": "queuetruth.ops.score:score",
+    "report": "queuetruth.ops.report:report",
+    "export": "queuetruth.ops.export:export",
     "check": "queuetruth.check.run:check",
     "fit": "queuetruth.fit.run:fit",
     "compare": "queuetruth.compare.run:compare",
@@ -80,16 +82,13 @@ _TARGETS = {
 
 
 def _target(name: str) -> Any:
-    where = _TARGETS.get(name)
-    if where is None:
-        return getattr(importlib.import_module("queuetruth.api"), name)
-    mod, _, attr = where.partition(":")
+    mod, _, attr = _TARGETS[name].partition(":")
     return getattr(importlib.import_module(mod), attr)
 
 
 class _CallableModule(types.ModuleType):
-    """A subpackage that is also the `queuetruth.api` function of the same name (`demo`: `queuetruth.demo.result`).
-    `inspect.signature(qt.check)` is the function's typed signature."""
+    """A subpackage that is also the operation of the same name (`_TARGETS`). `inspect.signature(qt.check)` is the
+    operation's typed signature."""
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         return _target(self.__name__.rsplit(".", 1)[-1])(*args, **kwargs)

@@ -19,7 +19,8 @@ from queuetruth.dq import DqReport, DqSpec
 
 def _golden_dq() -> list[dict[str, Any]]:
     cases = json.loads((REPO / "crates" / "cli" / "tests" / "golden" / "cli_parse.json").read_text())
-    return [c for c in cases if c["command"]["path"] == ["dq"]]
+    # the top-level spellings; `advanced dq` parses to the same commands (crates/cli/tests/cli_parse.rs)
+    return [c for c in cases if c["command"]["path"] == ["dq"] and c["argv"][1] != "advanced"]
 
 
 def _cmd(args: dict[str, Any], fmt: str = "human") -> dict[str, Any]:

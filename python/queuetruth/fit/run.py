@@ -296,7 +296,8 @@ def fit(
     `live` (with its market data `data`), compares it with the library default on held-out data and writes the
     paste-ready snippet only when it passes. `split` (`"70%"`, the default) or `test_after` (`"09:42"`, venue-local)
     choose the held-out window; `train` / `test` (dates or `blocks:I-J/N`) are the expert form."""
-    from queuetruth import api
+    from queuetruth.ops.calibrate import calibrate, calibrate_live
+    from queuetruth.ops.shadows import sample_shadows
 
     fam = _family(backtester, family)
     if data is None:
@@ -327,7 +328,7 @@ def fit(
         what = "shadows"
         if shadows is None:
             sampled = outp / "shadows.parquet"
-            api.sample_shadows({"dataset": {"path": str(data)}, "n": int(n_shadows), "seed": seed, "out": str(sampled)})
+            sample_shadows({"dataset": {"path": str(data)}, "n": int(n_shadows), "seed": seed, "out": str(sampled)})
             shadows = sampled
         orders = _shadow_orders(Path(shadows))
     s = _windows(ds, orders, split=split, test_after=test_after, train=train, test=test, what=what)
@@ -337,7 +338,7 @@ def fit(
     windows = {"train": s.train.model_dump(mode="json"), "test": s.test.model_dump(mode="json")}
     if live is not None:
         command = "calibrate-live"
-        cal = api.calibrate_live(
+        cal = calibrate_live(
             {
                 "dataset": {"path": str(data)},
                 "live": {"path": str(live)},
@@ -350,7 +351,7 @@ def fit(
         )
     else:
         command = f"calibrate {KIND[fam].replace('_', '-')}"
-        cal = api.calibrate(
+        cal = calibrate(
             {
                 "kind": KIND[fam],
                 "family": fam,

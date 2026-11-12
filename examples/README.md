@@ -40,13 +40,13 @@ uv run --frozen --no-sync python examples/06_learned_model.py
 With a pip install of the wheel (no checkout), write the dataset first and point the examples at it:
 
 ```sh
-queuetruth fixtures synth --out data
+queuetruth advanced fixtures synth --out data
 QT_EXAMPLE_DATA=data python examples/01_replay_shadows.py
 ```
 
 Dataset lookup, in order: env `QT_EXAMPLE_DATA`; `tests/fixtures/synth_small` next to this directory (a checkout);
 else `./qt-example-data`, written once with `queuetruth.api.fixtures_synth` (the same generator as
-`queuetruth fixtures synth`).
+`queuetruth advanced fixtures synth`).
 
 Outputs go to `./qt-examples-out/<script name>/` (relative to the current directory), or to
 `$QT_EXAMPLE_OUT/<script name>/` when `QT_EXAMPLE_OUT` is set. A script empties its own output directory before it

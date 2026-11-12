@@ -7,7 +7,7 @@ applied where you only have L2.
 
 ## Population and labels
 
-`queuetruth features` builds one row per (order, landmark):
+`queuetruth advanced features` builds one row per (order, landmark):
 
 - **Orders.** Either shadows (`--shadows`; life starts at `ts_live`) or real resting orders from the MBO data
   (`--population real-orders`; life starts at the real add; orders inside a snapshot are excluded because their

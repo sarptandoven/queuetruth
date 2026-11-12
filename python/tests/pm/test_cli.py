@@ -116,7 +116,7 @@ def test_full_pipeline_in_json(capsys: pytest.CaptureFixture[str], tmp_path: Pat
 
 def test_human_output_answers_first(capsys: pytest.CaptureFixture[str], kalshi_run: Any, tmp_path: Path) -> None:
     rc, out, err = run(
-        capsys, "pm", "score", "--pm", str(kalshi_run.pm), "--out", str(tmp_path / "s"), "--model", "log"
+        capsys, "advanced", "pm", "score", "--pm", str(kalshi_run.pm), "--out", str(tmp_path / "s"), "--model", "log"
     )
     lines = out.splitlines()
     assert rc == 0 and lines[0].startswith("pm score (kalshi, live, model log): total PnL $")

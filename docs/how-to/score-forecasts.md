@@ -9,7 +9,7 @@ and the displayed depth when it is bet with fractional Kelly (edge truth).
 predictive distribution for a number. Quotes are optional; without them you get every number except the market
 baseline and the PnL.
 
-The commands are `queuetruth forecast commit | resolve | verify | score`, plus `power` and `simulate`. They run in
+The commands are `queuetruth advanced forecast commit | resolve | verify | score`, plus `power` and `simulate`. They run in
 Python only (no Rust engine, no market data download).
 
 ## 1. A world with a known edge
@@ -21,7 +21,7 @@ the market price plus noise, so it has none.
 
 <!-- check-docs: run -->
 ```sh
-queuetruth forecast simulate --out ex
+queuetruth advanced forecast simulate --out ex
 head -3 ex/forecasts.csv ex/resolutions.csv ex/quotes.csv
 ```
 
@@ -50,7 +50,7 @@ before. Each quote has a 2-cent spread and 500 contracts a side. Every value, no
 
 <!-- check-docs: run -->
 ```sh
-queuetruth forecast commit --forecasts ex/forecasts.csv --ledger ledger.jsonl --commitment-out commitment.json
+queuetruth advanced forecast commit --forecasts ex/forecasts.csv --ledger ledger.jsonl --commitment-out commitment.json
 ```
 
 ```text
@@ -67,7 +67,7 @@ Canonical JSON here is RFC 8785 (keys sorted by UTF-16 code units, no whitespace
 one exception: integers are written exactly. RFC 8785 reads every number as an IEEE double, and `recorded_at_ns`
 (about 1.8e18) is above 2^53, so a stock JCS library rounds it and computes different hashes. To verify a ledger
 yourself, parse integers exactly (Python's `json` does; in JavaScript use a BigInt-aware parser), or run
-`queuetruth forecast verify`, which is the reference verifier.
+`queuetruth advanced forecast verify`, which is the reference verifier.
 
 - `payload_sha256` is the sha256 of the payload's canonical JSON, `entry_sha256` the sha256 of the entry without
   itself, and `prev_sha256` the previous entry's hash. Changing, dropping, reordering or inserting any entry breaks
@@ -136,7 +136,7 @@ rewritten ledger that re-chains cleanly still fails against the earlier commitme
 `score` can make the anchor part of the verdict, so timing truth no longer rests on the writer's clock:
 
 ```sh
-queuetruth forecast score --ledger ledger.jsonl --out score \
+queuetruth advanced forecast score --ledger ledger.jsonl --out score \
   --commitment commitment.json --anchored-at 2026-10-24T18:20:00Z --require-anchor
 ```
 
@@ -151,9 +151,9 @@ the market baseline. Without `--require-anchor` the anchors are checked and coun
 
 <!-- check-docs: run -->
 ```sh
-queuetruth forecast resolve --resolutions ex/resolutions.csv --ledger ledger.jsonl
-queuetruth forecast commit --forecasts ex/late.csv --ledger ledger.jsonl
-queuetruth forecast verify --ledger ledger.jsonl --commitment commitment.json
+queuetruth advanced forecast resolve --resolutions ex/resolutions.csv --ledger ledger.jsonl
+queuetruth advanced forecast commit --forecasts ex/late.csv --ledger ledger.jsonl
+queuetruth advanced forecast verify --ledger ledger.jsonl --commitment commitment.json
 ```
 
 | Column | Meaning |
@@ -186,7 +186,7 @@ resolutions are on the ledger. `score` must not count any of it.
 
 <!-- check-docs: run -->
 ```sh
-queuetruth forecast score --ledger ledger.jsonl --market ex/quotes.csv \
+queuetruth advanced forecast score --ledger ledger.jsonl --market ex/quotes.csv \
   --fee-quadratic 0.07 --fee-round-up-to 0.01 --out score
 ```
 
@@ -354,7 +354,7 @@ the next one. The same calculation stands alone:
 
 <!-- check-docs: run -->
 ```sh
-queuetruth forecast power --edge 0.01 --sd 0.1 --n 400
+queuetruth advanced forecast power --edge 0.01 --sd 0.1 --n 400
 ```
 
 ```text

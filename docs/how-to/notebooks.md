@@ -52,15 +52,15 @@ The real-data notebook publishes only aggregate statistics (fill rates, biases, 
 prices or order-level rows, and names its source, as [Data and licensing](../data-and-licensing.md) requires. Point
 it at your own data with the `QT_NB_DATASET` environment variable: an order-level dataset directory with at least
 two session dates. In a running Jupyter or Colab kernel, run `%env QT_NB_DATASET=/path/to/dataset` before the
-first code cell. `queuetruth ingest` writes one session date per run, so build a two-day dataset from two ingests
+first code cell. `queuetruth advanced ingest` writes one session date per run, so build a two-day dataset from two ingests
 with the repository's `scripts/realdata/merge_datasets.py`. For the two public Nasdaq sample days (files from
 [emi.nasdaq.com/ITCH](https://emi.nasdaq.com/ITCH/Nasdaq%20ITCH/)):
 
 <!-- check-docs: skip (needs the two Nasdaq ITCH sample files and a repository checkout) -->
 ```sh
-queuetruth ingest --format itch --in 12302019.NASDAQ_ITCH50.gz --venue nasdaq --date 2019-12-30 \
+queuetruth advanced ingest --format itch --in 12302019.NASDAQ_ITCH50.gz --venue nasdaq --date 2019-12-30 \
     --symbols AAPL,MSFT,SPY,TSLA --out nasdaq-20191230
-queuetruth ingest --format itch --in 01302020.NASDAQ_ITCH50.gz --venue nasdaq --date 2020-01-30 \
+queuetruth advanced ingest --format itch --in 01302020.NASDAQ_ITCH50.gz --venue nasdaq --date 2020-01-30 \
     --symbols AAPL,MSFT,SPY,TSLA --out nasdaq-20200130
 python scripts/realdata/merge_datasets.py --out nasdaq-2d nasdaq-20191230 nasdaq-20200130
 ```
@@ -112,9 +112,9 @@ or polars, whichever is installed (pandas first). Make a small zoo run to work w
 
 <!-- check-docs: run -->
 ```sh
-queuetruth fixtures synth --out synth
-queuetruth shadows sample --data synth --n 300 --out shadows.parquet
-queuetruth zoo --data synth --shadows shadows.parquet --out zoo --models "hbt_power3[n=2],nt_prob_touch[p=1]"
+queuetruth advanced fixtures synth --out synth
+queuetruth advanced shadows sample --data synth --n 300 --out shadows.parquet
+queuetruth advanced zoo --data synth --shadows shadows.parquet --out zoo --models "hbt_power3[n=2],nt_prob_touch[p=1]"
 ```
 
 `frames.load_run` opens a run directory. The result is a read-only mapping from table name to DataFrame, read on

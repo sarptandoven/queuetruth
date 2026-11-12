@@ -6,7 +6,7 @@ them order by order: which fills were real, which were phantom (the backtest fil
 not), how long the fills took, and what that does to P&L.
 
 **You need:** your backtester's output file, and order-level (MBO) data that covers the backtest's days, as a
-queuetruth dataset (`queuetruth ingest`; see [Replay a public IEX DEEP+ day](iex-public-demo.md) for free data).
+queuetruth dataset (`queuetruth data add`; see [Replay a public IEX DEEP+ day](iex-public-demo.md) for free data).
 Without data, `check` estimates from the public atlas instead ([without order-level data](#without-order-level-data)).
 `check` reads these outputs:
 
@@ -33,7 +33,7 @@ which the backtest says filled 5 seconds after they were placed.
 
 <!-- check-docs: run -->
 ```bash
-queuetruth fixtures synth --out synth > /dev/null
+queuetruth advanced fixtures synth --out synth > /dev/null
 cat > orders_report.csv <<'EOF'
 client_order_id,venue_order_id,instrument_id,side,type,quantity,price,time_in_force,post_only,reduce_only,status,filled_qty,avg_px,ts_init,ts_last
 O-1,V-1,QTBU6.XCME,SELL,LIMIT,1,5008.50,GTC,False,False,FILLED,1,5008.50,1781620722000000000,1781620727000000000
@@ -81,7 +81,7 @@ What the numbers mean:
 - **Phantom fill.** The backtest filled the order and the real queue did not within the window.
 - **P&L gap.** Each side's fills marked to the mid `--markout` later (default `1min`), net of the backtest's fees,
   backtest minus real, per order. A gap is stated as "too high" or "too low" only when its 95% interval excludes 0.
-- **Intervals.** 95% block-bootstrap intervals from `queuetruth score`, which `check` runs with your backtest in
+- **Intervals.** 95% block-bootstrap intervals from `queuetruth advanced score`, which `check` runs with your backtest in
   the place of the live log.
 
 `--json` prints the whole summary (`qt.check`) instead; the output directory holds `check.json`, `orders.csv` (one
@@ -231,7 +231,7 @@ symbol needs nothing). On the synthetic dataset, with a few trades written by ha
 
 <!-- check-docs: run -->
 ```bash
-queuetruth fixtures synth --out synth > /dev/null
+queuetruth advanced fixtures synth --out synth > /dev/null
 cat > trades.csv <<'EOF'
 ,Size,EntryBar,ExitBar,EntryPrice,ExitPrice,SL,TP,PnL,Commission,ReturnPct,EntryTime,ExitTime,Duration,Tag
 0,-1,0,1,5001.5,5002.5,,,-1.02,0.02,-0.0002,2026-06-15 15:06:40,2026-06-15 15:39:26,0 days 00:32:46,
@@ -254,7 +254,7 @@ queuetruth check trades.csv --bar 1h --tier T2
 
 Naive times are read as UTC; `--option data_tz=America/New_York` reads them in another zone. A backtest on data
 without a `DatetimeIndex` has bar numbers instead of times, which `check` cannot place on the tape: give the data a
-time index. `queuetruth live import --venue sim-backtesting-py` imports the same files as a simulator log.
+time index. `queuetruth advanced live import --venue sim-backtesting-py` imports the same files as a simulator log.
 
 ## Limits
 

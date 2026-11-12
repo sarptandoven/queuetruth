@@ -12,6 +12,7 @@ from __future__ import annotations
 import datetime
 import functools
 import hashlib
+import json
 import logging
 import math
 import os
@@ -736,9 +737,9 @@ def _recompute_run_id(kind: str, doc: dict[str, Any], inputs: Mapping[str, str])
     it runs, else by `queuetruth.schemas.runid.run_id` with the inputs already resolved; None when that fails."""
     if _resolver(kind, doc) is resolve_core:
         try:
-            from queuetruth import api
+            from queuetruth import _core
 
-            rid = str(api.run_id(doc))
+            rid = str(_core.run_id(json.dumps(doc)))
         except Exception:  # no compiled core, or the core cannot resolve the echo: unknown, never guessed
             return None
         return rid if _HEX16.match(rid) else None

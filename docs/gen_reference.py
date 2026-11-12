@@ -54,6 +54,15 @@ The console script `queuetruth` parses its arguments with the same clap grammar 
 `queuetruth-core`. Native commands run in Rust; Python and hybrid commands run in the `queuetruth` package. Each
 section below is the command's own `--help` text.
 
+## The verbs first
+
+`queuetruth --help` lists six verbs (`demo`, `atlas`, `check`, `fit`, `compare`, `data`), the helpers `why` (also
+spelled `explain`), `report` and `verify`, and `advanced`. Every other command is `queuetruth advanced CMD ...`
+(`queuetruth help advanced` lists them). The old top-level spelling `queuetruth CMD ...` still works, with the same
+output and exit code, and prints one deprecation line on stderr naming the new spelling and the verb that does the
+job, where one does; `--quiet` or `QT_NO_DEPRECATION=1` hides it. `doctor` and `mcp` keep their top-level spelling
+without the line. `queuetruth help VERB` shows a verb's help.
+
 ## Conventions
 
 - Global flags work before or after the subcommand: `--format human|json` (alias `--output-format`),

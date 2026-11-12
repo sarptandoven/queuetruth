@@ -117,7 +117,7 @@ For every real execution, the rank of the executed order within its price level 
 
 Per partition and for the dataset: `clean`, `warnings` (an anomaly counter is non-zero) or `unusable` (bad-book flags,
 or more than 0.1% crossed books or unknown references). Every analysis summary carries it; `--strict` turns
-`unusable` into `QT-DATA-001`. `queuetruth dq` writes a fuller data-quality report (`qt.dq_report`) for any dataset.
+`unusable` into `QT-DATA-001`. `queuetruth advanced dq` writes a fuller data-quality report (`qt.dq_report`) for any dataset.
 See [Exact FIFO truth](exact-truth.md#data-quality) and [Check a feed before you trust it](../how-to/check-a-feed.md).
 
 ### Hidden print
@@ -227,7 +227,7 @@ re-implemented from its tutorial). See [The L2 model zoo](l2-model-zoo.md#the-mo
 
 ### Zoo
 
-`queuetruth zoo`: the experiment that runs a set of queue models on the [L2 view](#l2-view) of a dataset while the
+`queuetruth advanced zoo`: the experiment that runs a set of queue models on the [L2 view](#l2-view) of a dataset while the
 exact engine replays the same dataset at order level, with the same shadow orders and the same lives, and scores each
 model against the exact answer. `--models all` runs 16: 14 queue-model configurations plus the 2
 [bounds](#bounds). `hbt_power[n=1]` equals `hbt_power3[n=1]` in every cell, so since 0.1.1 it runs only when named.
@@ -236,7 +236,7 @@ model against the exact answer. `--models all` runs 16: 14 queue-model configura
 
 The canonical name of one model configuration, with sorted keys, for example
 `hbt_power3[exch=partial;mode=faithful;n=2]`. On the command line keys at their default may be left out:
-`hbt_power3[n=2]`, `nt_prob_touch[p=0.3]`. `queuetruth zoo --list-models` lists them.
+`hbt_power3[n=2]`, `nt_prob_touch[p=0.3]`. `queuetruth advanced zoo --list-models` lists them.
 
 ### Particles
 
@@ -377,7 +377,7 @@ library default on log loss or Brier score at any held-out horizon, and strictly
 
 ### Calibration export
 
-`queuetruth export hftbacktest` and `export nautilus`: turn a calibration into a block of Python to paste into your
+`queuetruth advanced export hftbacktest` and `export nautilus`: turn a calibration into a block of Python to paste into your
 backtest configuration, with a header naming the run, the data, the fit and the held-out result. Fail-safe: a
 `refused` calibration exits 1 with `QT-CALIB-001` and writes nothing, unless `--force`, which writes it under a
 `# !! NOT VALIDATED` header. See [Calibration](calibration.md#export).
@@ -404,7 +404,7 @@ model beats that lookup table; its CI is a day-block bootstrap of test orders. S
 
 ### Scorer
 
-`queuetruth score`: replays the orders you sent live, at the same times, through a simulator and compares fills
+`queuetruth advanced score`: replays the orders you sent live, at the same times, through a simulator and compares fills
 order by order, not in aggregate, because a model can produce the right number of fills and still pick the wrong
 orders. Its output is a **scorecard** (`qt.scorecard_summary`). See [Scorecard statistics](scorecard.md).
 
@@ -495,7 +495,7 @@ conditional on a fill are still computed.
 
 ### Referee
 
-An exact-FIFO regression oracle for other simulators: `queuetruth referee fixtures` writes 16 small bug-class
+An exact-FIFO regression oracle for other simulators: `queuetruth advanced referee fixtures` writes 16 small bug-class
 fixtures (one order each, with the exact engine's expected fills), and `referee run` compares your simulator's fills
 with them order by order. Each class is a queue or fill-logic bug: classes 1 to 11 are the list in section 5.8 of the
 [design specification](../design/spec.md), several of them reported in widely used engines, and classes 12 to 16
@@ -534,7 +534,7 @@ data-quality verdict, the files written and every warning. Each kind has a publi
 Every JSON document and Arrow table queuetruth writes has a published schema named `qt.<name>`. Arrow tables carry
 the metadata `qt.schema_version = "1.1"` and JSON documents the integer `schema_version: 1`. The design
 specification's "schema 1.2" (section 3.12) only adds formats, rule sets and `qt.dq_report`, and does not change
-those markers. `queuetruth schema list` lists them. See
+those markers. `queuetruth advanced schema list` lists them. See
 [Schemas](../reference/schemas.md).
 
 ### QT error codes
@@ -611,7 +611,7 @@ exactness against the prototype (RD-1 to RD-7) to the zoo leaderboard (RD-8), ca
 | cancel-bearing | [Never-cancel shadow](#never-cancel-shadow) |
 | canonical live log | [Canonical live log](#canonical-live-log) |
 | common population | [hftbacktest #312](#hftbacktest-312) |
-| data-quality verdict, `queuetruth dq` | [Data-quality verdict](#data-quality-verdict) |
+| data-quality verdict, `queuetruth advanced dq` | [Data-quality verdict](#data-quality-verdict) |
 | dataset, `dataset_id` | [Dataset](#dataset) |
 | day-block bootstrap | [Day-block bootstrap](#day-block-bootstrap) |
 | determinism | [Determinism](#determinism) |

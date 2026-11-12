@@ -1,7 +1,7 @@
 # Validate my backtest against live fills
 
 **Goal:** answer the question of hftbacktest discussion #332, "how are people validating the queue penalty against
-live?", with numbers and intervals. The discussion proposes four checks. `queuetruth score` and `calibrate-live`
+live?", with numbers and intervals. The discussion proposes four checks. `queuetruth advanced score` and `calibrate-live`
 give each of them:
 
 | Check from #332 | Where it is |
@@ -13,7 +13,7 @@ give each of them:
 
 **You need:** `pip install queuetruth`, a live log of your orders (see
 [Import fills from my venue or broker](import-live-logs.md)) and the market data of the same days. The blocks below
-run on the synthetic fixture that `queuetruth fixtures synth` writes, so you can try them first. They use no real
+run on the synthetic fixture that `queuetruth advanced fixtures synth` writes, so you can try them first. They use no real
 market data.
 
 **The everyday path.** To compare your own backtest with your own live run, `queuetruth compare --backtest
@@ -26,14 +26,14 @@ comes from and how to read it from the scorecard files.
 
 <!-- check-docs: run -->
 ```sh
-queuetruth fixtures synth --out synth
-queuetruth score --live synth/own_orders/live --data synth --sim-model "hbt_power3[n=2]" --out sc
+queuetruth advanced fixtures synth --out synth
+queuetruth advanced score --live synth/own_orders/live --data synth --sim-model "hbt_power3[n=2]" --out sc
 ```
 
 `score` turns every live order into a fixed schedule (same instrument, side, price, size, entry and cancel times),
 runs the simulator on it, and compares the two arms order by order. Here the simulator is hftbacktest's
 `PowerProbQueueFunc3` with `n = 2` as the zoo runs it. For your own backtest, import its fills with
-`queuetruth live import --venue sim_hftbacktest` and pass `--sim-log` instead of `--sim-model` (see
+`queuetruth advanced live import --venue sim_hftbacktest` and pass `--sim-log` instead of `--sim-model` (see
 [Score and calibrate hftbacktest with the plugin](score-and-calibrate-hftbacktest.md)).
 
 The first lines of the terminal answer each check in plain words: the fill-rate difference with its interval and
@@ -116,8 +116,8 @@ about. Measure the latency on the live log first, then fit the queue with it:
 
 <!-- check-docs: run -->
 ```sh
-queuetruth calibrate latency --live synth/own_orders/live --out lat
-queuetruth calibrate-live --data synth --live synth/own_orders/live --family power3 --latency-from-log --out fit
+queuetruth advanced calibrate latency --live synth/own_orders/live --out lat
+queuetruth advanced calibrate-live --data synth --live synth/own_orders/live --family power3 --latency-from-log --out fit
 ```
 
 `calibrate latency` prints the latency distribution (entry, response, cancel; one-way values assume synchronized
@@ -138,8 +138,8 @@ print("hftbacktest latency file:", c["exports"]["latency_npz"])
 ```
 
 On this one-day synthetic fixture the fit lands at the edge of the grid, so its verdict is `refused` and
-`queuetruth export` will not write it. A real log of several days usually gives a usable fit; when it does,
-`queuetruth export hftbacktest --calibration fit/calibration.json` writes a snippet with both the latency file and
+`queuetruth advanced export` will not write it. A real log of several days usually gives a usable fit; when it does,
+`queuetruth advanced export hftbacktest --calibration fit/calibration.json` writes a snippet with both the latency file and
 the queue model.
 
 When your log has exchange ack times, the default entry rule (`exchange_ack`) already starts each order when the
@@ -159,7 +159,7 @@ Score the fitted model on held-out days and read the same four checks:
 <!-- check-docs: skip (needs an accepted fit on your own live log and data) -->
 ```sh
 N=$(python -c 'import json; print(json.load(open("fit/calibration.json"))["estimate"])')
-queuetruth score --live live_test --data data --sim-model "hbt_power3[n=$N]" --out sc_fitted
+queuetruth advanced score --live live_test --data data --sim-model "hbt_power3[n=$N]" --out sc_fitted
 ```
 
 ## What these numbers do not tell you

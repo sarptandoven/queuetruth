@@ -134,10 +134,10 @@ gives the same dataset.
 
 <!-- check-docs: skip (needs Databento files the reader downloaded) -->
 ```bash
-queuetruth ingest --format dbn --venue cme \
+queuetruth advanced ingest --format dbn --venue cme \
   --in glbx-esz6-20261020.mbo.dbn.zst --in glbx-esz6-20261020.definition.dbn.zst \
   --in glbx-esz6-20261020.status.dbn.zst --out ds/esz6-20261020
-queuetruth ingest --format dbn --venue nasdaq \
+queuetruth advanced ingest --format dbn --venue nasdaq \
   --in xnas-aapl-msft-20260114.mbo.dbn.zst --in xnas-aapl-msft-20260114.definition.dbn.zst \
   --in xnas-aapl-msft-20260114.status.dbn.zst --symbols AAPL,MSFT --out ds/xnas-20260114
 ```
@@ -179,7 +179,7 @@ parent request and `--symbols ESZ6` keeps one.
 
 ## 5. Read the warnings, errors and counters
 
-`queuetruth ingest` prints warnings on stderr and keeps them in `data_quality.json` (`reasons`, prefixed
+`queuetruth advanced ingest` prints warnings on stderr and keeps them in `data_quality.json` (`reasons`, prefixed
 `warning:`), and the counters in `data_quality.source_specific`. An error stops the ingest before it writes
 `manifest.json` and removes what it wrote to `--out` (an `--out` that was not empty is refused up front and never
 touched), so you can fix the inputs and rerun with the same `--out`. Those specific to Databento input:
@@ -205,7 +205,7 @@ Then run the data-quality checks on the dataset ([Check a feed](check-a-feed.md)
 
 <!-- check-docs: skip (needs a dataset ingested from the reader's Databento files) -->
 ```bash
-queuetruth dq --data ds/esz6-20261020 --out dq/esz6-20261020
+queuetruth advanced dq --data ds/esz6-20261020 --out dq/esz6-20261020
 ```
 
 ## 6. Nasdaq `XNAS.ITCH` and the 2026-10-31 re-issue
@@ -237,15 +237,15 @@ What to do:
   are the new one. Keep them in separate folders, never in one ingest or one comparison, and re-run calibrations on
   the new files. This matters most for `ALL_SYMBOLS` downloads, whose MBO metadata cannot confirm the vintage.
 - To see what changed on a day you already hold, ingest both vintages separately and compare them:
-  `queuetruth dq --data ds/old --compare ds/new --out dq/old-vs-new`. Until 2026-10-31 Databento serves the re-issued
+  `queuetruth advanced dq --data ds/old --compare ds/new --out dq/old-vs-new`. Until 2026-10-31 Databento serves the re-issued
   data from a preview gateway (`db.Historical(gateway="hist-preview.databento.com")`), billed like the normal one, so
   estimate its cost first as in step 2. On an EST date expect the new vintage to have the session's 19:00 to 20:00 ET
   hour and the midnight snapshots that the old one lacks; with whole-UTC-day files, expect also a one-hour partition
   of the previous session date in the new vintage only. Neither is an error.
 - To check Databento's copy against the exchange's own bytes, use one of the two free Nasdaq ITCH days:
-  `queuetruth ingest --format itch --in 12302019.NASDAQ_ITCH50.gz --venue nasdaq --symbols AAPL,MSFT --out itch`,
+  `queuetruth data add 12302019.NASDAQ_ITCH50.gz --input-format itch --venue nasdaq --symbols AAPL,MSFT --out itch`,
   ingest the Databento MBO of 2019-12-30 downloaded with the EST window of step 1 for the same symbols as `dbn`, then
-  `queuetruth dq --data itch --compare dbn --out dq-itch-vs-dbn`. A whole-UTC-day file of 2019-12-30 would show
+  `queuetruth advanced dq --data itch --compare dbn --out dq-itch-vs-dbn`. A whole-UTC-day file of 2019-12-30 would show
   the 19:00 to 20:00 ET hour as missing and a partition of 2019-12-27 as extra.
 
 ## 7. CME `GLBX.MDP3` notes

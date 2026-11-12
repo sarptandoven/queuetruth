@@ -1,6 +1,6 @@
 # Scorecard statistics
 
-`queuetruth score` answers one question: if my simulator had received exactly the orders I sent live, at the same
+`queuetruth advanced score` answers one question: if my simulator had received exactly the orders I sent live, at the same
 times, would it have filled the same ones? It compares order by order, not in aggregate, because a model can produce
 the right number of fills and still pick the wrong orders.
 
@@ -201,7 +201,7 @@ followed by the cluster-robust p and cluster count, the number of orders and the
 no significant fill-rate difference within 1min: +0.0 pp (95% CI [+0.0, +0.0]); equivalent within ±2 pp (TOST p = 0); McNemar p = 1 (cluster-robust p = 1, 26 clusters); 200 orders; no gates configured
 ```
 
-The terminal output of `queuetruth score` leads with the same answer in a `RESULT:` line, then the P&L gap in a
+The terminal output of `queuetruth advanced score` leads with the same answer in a `RESULT:` line, then the P&L gap in a
 `P&L:` line (next section), the equivalence result, the order counts, the gate status and the 2x2 table; `--verbose`
 prints every statistic. A scorecard with no scored order is an error (`QT-INPUT-002`, "NOT SCORED"), not an empty
 result.

@@ -89,7 +89,116 @@ fn usage_exit(msg: &str, detail: Option<&str>, json_out: bool) -> CliExit {
     }
 }
 
-/// Parses argv (including the program name).
+/// Global flags that take a value (skipped when looking for the command word).
+const VALUE_FLAGS: &[&str] = &["--format", "--output-format", "--log-level", "--threads", "--seed"];
+
+/// The command line as the commands run it, and the deprecation line to print on stderr after the command.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct Routed {
+    /// argv (program name first) with `advanced` dropped before a command word: `advanced zoo ...` runs `zoo ...`,
+    /// `help advanced zoo` is `help zoo`.
+    pub argv: Vec<String>,
+    /// For an advanced command spelled at the top level, one line naming the new spelling and the verb that does
+    /// its job; None with `--quiet`, with `QT_NO_DEPRECATION=1`, for help (`--help`, `help CMD`), through
+    /// `advanced`, and for `doctor`, `mcp` and `bench`.
+    pub deprecation: Option<String>,
+}
+
+/// Index of the command word in argv (after the program name and any global flags).
+fn command_index(argv: &[String]) -> Option<usize> {
+    let mut i = 1;
+    while i < argv.len() {
+        let a = argv[i].as_str();
+        if a == "--" {
+            return None;
+        }
+        if !a.starts_with('-') {
+            return Some(i);
+        }
+        i += if VALUE_FLAGS.contains(&a) { 2 } else { 1 };
+    }
+    None
+}
+
+fn word_at(argv: &[String], i: usize) -> Option<&str> {
+    argv.get(i).map(String::as_str).filter(|w| !w.starts_with('-'))
+}
+
+/// The deprecation line of an advanced command path spelled at the top level.
+fn deprecation_line(path: &[&str]) -> String {
+    let typed = format!("queuetruth {}", path.join(" "));
+    // the longest prefix names the verb; a verb this build does not have yet is not named
+    let to = grammar::REPLACED_BY
+        .iter()
+        .filter(|(p, _)| path.starts_with(p))
+        .max_by_key(|(p, _)| p.len())
+        .map(|(_, to)| *to)
+        .filter(|to| to.split(' ').next().is_some_and(grammar::is_command));
+    let use_ = match to {
+        Some(to) if grammar::VERBS.contains(&to.split(' ').next().unwrap_or("")) => {
+            format!(
+                "use `queuetruth {to}`, or `queuetruth advanced {}` for this command",
+                path.join(" ")
+            )
+        }
+        Some(to) => format!("use `queuetruth {to}`"),
+        None => format!("use `queuetruth advanced {}`", path.join(" ")),
+    };
+    format!("warning: `{typed}` is deprecated; {use_} (QT_NO_DEPRECATION=1 hides this line)")
+}
+
+/// Routes a command line before it is parsed (both binaries): drops `advanced` before a command word and, for an
+/// advanced command spelled at the top level, returns its deprecation line. Outputs and exit codes do not change.
+pub fn route(argv: &[String]) -> Routed {
+    let mut out = argv.to_vec();
+    let Some(i) = command_index(argv) else {
+        return Routed {
+            argv: out,
+            deprecation: None,
+        };
+    };
+    let word = argv[i].as_str();
+    if word == grammar::ADVANCED {
+        if word_at(argv, i + 1).is_some() {
+            out.remove(i);
+        }
+        return Routed {
+            argv: out,
+            deprecation: None,
+        };
+    }
+    if word == "help" {
+        if word_at(argv, i + 1) == Some(grammar::ADVANCED) && word_at(argv, i + 2).is_some() {
+            out.remove(i + 1);
+        }
+        return Routed {
+            argv: out,
+            deprecation: None,
+        };
+    }
+    // help is printed the same under both spellings, without the line
+    let help = argv[i..].iter().any(|a| a == "--help" || a == "-h");
+    let quiet =
+        help || argv.iter().any(|a| a == "--quiet") || std::env::var("QT_NO_DEPRECATION").is_ok_and(|v| v == "1");
+    if quiet || !grammar::is_advanced(word) || grammar::UNDEPRECATED.contains(&word) {
+        return Routed {
+            argv: out,
+            deprecation: None,
+        };
+    }
+    let mut path = vec![word];
+    if let Some(sub) = word_at(argv, i + 1)
+        && grammar::all_commands().any(|c| c.path.len() == 2 && c.path[0] == word && c.path[1] == sub)
+    {
+        path.push(sub);
+    }
+    Routed {
+        argv: out,
+        deprecation: Some(deprecation_line(&path)),
+    }
+}
+
+/// Parses argv (including the program name). `advanced CMD ...` parses to the same command as `CMD ...`.
 pub fn parse(argv: &[String]) -> Result<CliCommand, CliExit> {
     let json_out = wants_json(argv);
     let bin: &'static str = match argv.first() {
@@ -142,7 +251,10 @@ pub fn parse(argv: &[String]) -> Result<CliCommand, CliExit> {
         quiet: m.get_flag("quiet"),
         verbose: m.get_flag("verbose"),
     };
-    let (path, leaf) = grammar::leaf_matches(&m);
+    let (mut path, leaf) = grammar::leaf_matches(&m);
+    if path.first().map(String::as_str) == Some(grammar::ADVANCED) {
+        path.remove(0);
+    }
     let Some(cmd) = grammar::find(&path) else {
         return Err(usage_exit(
             &format!("unknown command {:?}", path.join(" ")),
@@ -322,7 +434,21 @@ pub fn run_native(cmd: &CliCommand) -> QtResult<NativeOutput> {
 }
 
 /// Runs a full command line in the standalone binary: returns (stdout text, stderr text, exit code).
+/// The deprecation line, if any, is the last line of stderr (the answer comes first).
 pub fn main_with(argv: &[String]) -> (String, String, i32) {
+    let routed = route(argv);
+    let (out, mut err, code) = run_routed(&routed.argv);
+    if let Some(line) = routed.deprecation {
+        if !err.is_empty() && !err.ends_with('\n') {
+            err.push('\n');
+        }
+        err.push_str(&line);
+        err.push('\n');
+    }
+    (out, err, code)
+}
+
+fn run_routed(argv: &[String]) -> (String, String, i32) {
     let cmd = match parse(argv) {
         Ok(c) => c,
         Err(x) => {

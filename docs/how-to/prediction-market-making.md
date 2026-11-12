@@ -7,7 +7,7 @@ selection minus fees plus maker rewards, with the uncertainty about which orders
 **You need:** `pip install queuetruth` (the `pm` commands are part of the Python CLI `queuetruth`, not of the
 Rust-only `queuetruth-core`), and your own captures of one or more markets while you quoted them: the WebSocket
 messages, a few REST responses, and for Polymarket optionally a Polygon log export of the exchange contract. To try
-it first, `queuetruth pm fixtures` writes invented example captures in the same formats; every block below runs as
+it first, `queuetruth advanced pm fixtures` writes invented example captures in the same formats; every block below runs as
 written on them, in an empty directory.
 
 ## The terms, plainly
@@ -79,7 +79,7 @@ below are checked by `python/tests/pm/test_howto_numbers.py`; they say nothing a
 
 <!-- check-docs: run -->
 ```sh
-queuetruth pm fixtures --out pmfix
+queuetruth advanced pm fixtures --out pmfix
 ```
 
 ```text
@@ -90,7 +90,7 @@ pm fixtures: wrote 11 files under pmfix (invented captures, no venue data; READM
 
 <!-- check-docs: run -->
 ```sh
-queuetruth pm ingest --venue kalshi --in pmfix/kalshi/ws.jsonl --in pmfix/kalshi/rest.jsonl --out kx
+queuetruth advanced pm ingest --venue kalshi --in pmfix/kalshi/ws.jsonl --in pmfix/kalshi/rest.jsonl --out kx
 ```
 
 ```text
@@ -103,7 +103,7 @@ official queue positions: 76
 `kx/` now holds:
 
 - `book/`: the book as published, an ordinary queuetruth L2 dataset (`kind: l2`) on the YES price ladder: YES bids
-  and YES asks at prices of $0.0001 units, contracts at 2 decimals. `queuetruth zoo`, `dq` and the scorer read it.
+  and YES asks at prices of $0.0001 units, contracts at 2 decimals. `queuetruth advanced zoo`, `dq` and the scorer read it.
 - `book_own_free/`: the same book without your own resting size, the book a model of your order must see.
 - `live/`: your orders and fills as a canonical live log.
 - `pm/own_entries.parquet`: where each of your orders joined its level and where it left it. `exact` entries are
@@ -122,7 +122,7 @@ crossed itself too often to trust.
 
 <!-- check-docs: run -->
 ```sh
-queuetruth pm calibrate --pm kx --out kx-cal
+queuetruth advanced pm calibrate --pm kx --out kx-cal
 ```
 
 ```text
@@ -201,7 +201,7 @@ only orders that filled, which leans toward short queues (next section).
 
 <!-- check-docs: run -->
 ```sh
-queuetruth pm score --pm kx --calibration kx-cal --out kx-score
+queuetruth advanced pm score --pm kx --calibration kx-cal --out kx-score
 ```
 
 ```text
@@ -280,10 +280,10 @@ Each row of `kx-score/pm_orders.parquet` is one order under one scenario (its fi
 <!-- check-docs: run -->
 ```sh
 P=pmfix/polymarket
-queuetruth pm ingest --venue polymarket --in "$P/market.jsonl" --in "$P/user.jsonl" --in "$P/gamma.json" \
+queuetruth advanced pm ingest --venue polymarket --in "$P/market.jsonl" --in "$P/user.jsonl" --in "$P/gamma.json" \
     --chain "$P/logs.json" --out px
-queuetruth pm calibrate --pm px --out px-cal
-queuetruth pm score --pm px --calibration px-cal --out px-score
+queuetruth advanced pm calibrate --pm px --out px-cal
+queuetruth advanced pm score --pm px --calibration px-cal --out px-score
 ```
 
 ```text
@@ -324,7 +324,7 @@ orders itself):
 
 <!-- check-docs: run -->
 ```sh
-queuetruth calibrate-live --data px/book --live px/live --family power3 --mode corrected --out px-live
+queuetruth advanced calibrate-live --data px/book --live px/live --family power3 --mode corrected --out px-live
 ```
 
 On the example it refuses too (`few_events`): one minute of quoting is not enough data for either fit.
@@ -400,7 +400,7 @@ rejected).
 <!-- check-docs: run -->
 ```sh
 head -3 pmfix/quotes.csv
-queuetruth pm score --pm kx --quotes pmfix/quotes.csv --model "power3[n=1]" --out kx-quotes
+queuetruth advanced pm score --pm kx --quotes pmfix/quotes.csv --model "power3[n=1]" --out kx-quotes
 ```
 
 A quote goes live at the first batch after its submit time plus latency, behind the size visible there. Without
@@ -417,7 +417,7 @@ it writes every model's fills (`zoo_fills.parquet`); the kit's replay gives the 
 ```sh
 printf 'shadow_id,instrument_id,side,price,qty,ts_submit,latency_ns,ts_cancel\n' > shadows.csv
 printf 's1,1,B,4400,1500,1792764003000000000,0,1792764011000000000\n' >> shadows.csv
-queuetruth zoo --data kx/book_own_free --shadows shadows.csv --mode corrected \
+queuetruth advanced zoo --data kx/book_own_free --shadows shadows.csv --mode corrected \
     --models 'front_of_queue,trade_through_only,hbt_power3[n=2]' --out kx-zoo
 ```
 
