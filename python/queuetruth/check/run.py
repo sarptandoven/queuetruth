@@ -149,9 +149,10 @@ def _dataset(data: str | Path) -> tuple[Path, dict[str, Any]]:
 
 
 def _import(kind: str, paths: list[str], imap: Any, extra: dict[str, Any]) -> Any:
-    from queuetruth.live.importers import SIM_IMPORTERS, ImportOptions
+    from queuetruth import backtesters
+    from queuetruth.live.importers import ImportOptions
 
-    return SIM_IMPORTERS[kind](paths, ImportOptions(account="backtest", imap=imap, extra=dict(extra)))
+    return backtesters.get(kind).import_sim(paths, ImportOptions(account="backtest", imap=imap, extra=dict(extra)))
 
 
 def _vectorbt_labels(paths: list[str]) -> list[str]:

@@ -8,6 +8,23 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ### Added
 
+- **Realistic fills in Backtrader and LEAN, one line each** (docs/how-to/realistic-fills-backtrader-lean.md).
+  `cerebro.broker.set_filler(qt.backtrader.QueueFiller(table="touch.json", tier="T1"))` and
+  `security.set_fill_model(qt.lean.QueueFillModel(table="touch.json", tier="T1"))` keep the framework's own limit
+  logic and accept each limit fill with the atlas touch tables' `P(real | touch)` for the order's tier, side and bar
+  length (or `penetrate_<k>` with `tick=`); a declined fill leaves the order resting. Draws are seeded, keyed by the
+  order and the bar (the same seed gives the same fills), and recorded in `.decisions`. A tier, rule, bar length or
+  side the table lacks, or a cell without a value, is refused with `QT-CONFIG-001`; no probability is assumed. The
+  probabilities come from IEX DEEP+ only and replace a fill rule, not a queue model. Backtrader and LEAN stay
+  optional and are imported only when used; the LEAN model is tested against a stand-in of LEAN's Python API.
+- **`qt.backtrader.OrderLog`**: the Backtrader analyzer the reconcile guide asked users to paste, shipped in the
+  package (`cerebro.addanalyzer(qt.backtrader.OrderLog)`); it writes the same lines as the old `QtOrderLog`.
+- **The `Backtester` plugin interface** (`queuetruth.backtesters`, docs/how-to/add-a-backtester.md). One registry
+  entry per backtester (name, label, simulator-log importer, and optional live importer, replay adapter, snippet
+  writer, zoo models, reconciler and file detection), with the built-ins as thin entries over the existing code and
+  third-party backtesters found through the `queuetruth.backtesters` entry-point group. `check` (kind detection and
+  `--backtester`), `queuetruth.live.import_sim`, the bot live importers and `reconcile --kind` resolve through it, so
+  a new backtester is one package and no queuetruth edit. Every existing name, flag and output is unchanged.
 - **Touch tables for bar-based backtests** (docs/concepts/touch-tables.md). For the atlas's shadow orders resting
   until the close, the atlas now measures what a candle backtester's fill rule says against the exact replay of the
   real queue: the `touch` rule (the bar's low reaches a buy's limit, or its high a sell's) and `penetrate_1`,
