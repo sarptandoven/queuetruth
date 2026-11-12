@@ -406,6 +406,8 @@ class ShadowSampleSummary(QtDoc):
     by_instrument: dict[IdKey, int]
     by_placement: dict[IdKey, int]
     files: Files
+    #: additive: e.g. the placement window shortened so every life fits in the data (absent when none)
+    warnings: list[str] = Field(default_factory=list)
 
 
 # ---- zoo --------------------------------------------------------------------------------------------------------
@@ -477,6 +479,11 @@ class ZooSummary(QtDoc):
     #: 0.1.1 (additive): never-cancel shadows with an exact label in the leaderboard population (the same for every
     #: model); null from the Rust runner, which does not evaluate.
     n_leaderboard: int | None = None
+    #: additive: the bootstrap blocks behind the leaderboard's 95% CIs (`queuetruth.stats.ci_blocks`): their kind
+    #: (`day`, `30min`, `1min`, `instrument_minute`) and number; with fewer than 5 the CIs are null. Null from the
+    #: Rust runner, which does not evaluate.
+    ci_block: str | None = None
+    n_ci_blocks: int | None = None
 
 
 # ---- shadow impact (docs/concepts/impact-warning.md; queuetruth.eval.impact) -------------------------------------
@@ -730,7 +737,8 @@ class ZooToxicity(QtDoc):
     truth_mismatch_rate: float | None
     window_ns: int
     horizons_ns: list[int]
-    ci_block: Literal["day", "30min"]
+    #: kind of the bootstrap blocks (`queuetruth.stats.ci_blocks`); with fewer than 5 blocks every CI is null
+    ci_block: Literal["day", "30min", "1min", "instrument_minute"]
     n_blocks: int
     bootstrap_b: int
     exact: ToxicityExact

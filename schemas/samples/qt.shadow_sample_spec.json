@@ -29,7 +29,8 @@
     "window_open_s": 1,
     "window_close_s": 1,
     "lifetime_ns": 1,
-    "latency_ns": 1
+    "latency_ns": 1,
+    "clamp_to_data_end": true
   },
   "minimal": {
     "dataset": {
@@ -83,6 +84,7 @@
     "window_open_s": 300,
     "window_close_s": 600,
     "lifetime_ns": 300000000000,
-    "latency_ns": 0
+    "latency_ns": 0,
+    "clamp_to_data_end": true
   }
 }

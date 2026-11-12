@@ -348,6 +348,22 @@ def _planned_life(out: Path) -> tuple[pa.Table, list[str]]:
     return pa.table(out_cols), notes
 
 
+def _cut_by_data_end(out: Path, h_max_ns: int) -> tuple[int, int] | None:
+    """(never-cancel shadows whose administrative end (end of data) comes before `ts_live + h_max`, never-cancel
+    shadows) from `zoo_shadows.parquet`, or None when there are none."""
+    try:
+        t = pq.read_table(out / "zoo_shadows.parquet", columns=["never_cancel", "ts_live", "ts_admin_end"])
+    except (OSError, KeyError, ValueError, pa.ArrowException):
+        return None
+    nc = pc.fill_null(t.column("never_cancel"), False)
+    live = pc.cast(t.column("ts_live"), pa.int64())
+    end = pc.cast(t.column("ts_admin_end"), pa.int64())
+    short = pc.fill_null(pc.less(pc.subtract(end, live), h_max_ns), False)
+    n_cut = pc.sum(pc.cast(pc.and_(nc, short), pa.int64())).as_py() or 0
+    n_nc = pc.sum(pc.cast(nc, pa.int64())).as_py() or 0
+    return (int(n_cut), int(n_nc)) if n_cut else None
+
+
 def _evaluate(
     preds: pa.Table,
     out: Path,
@@ -357,9 +373,11 @@ def _evaluate(
     seed: int,
     trajectory: pa.Table | None,
     mcs: bool = False,
+    block: str = "auto",
 ) -> tuple[pa.Table, list[dict[str, Any]], list[str], dict[str, Any]]:
-    from queuetruth.eval import aborted_shadows, evaluate_zoo, leaderboard_population
+    from queuetruth.eval import aborted_shadows, evaluate_zoo, leaderboard_population, zoo_ci_blocks
     from queuetruth.eval.leaderboard import annotate_mcs
+    from queuetruth.stats import MIN_CI_BLOCKS
 
     planned, notes = _planned_life(out)
     errors, board = evaluate_zoo(
@@ -369,13 +387,31 @@ def _evaluate(
         bootstrap_b=bootstrap_b,
         seed=seed,
         planned_life=planned,
+        block=block,
     )
     if mcs:  # the zoo leaderboard's model confidence set (`queuetruth.eval.leaderboard`)
-        board, mcs_notes = annotate_mcs(board, preds, planned, h_max_ns=h_max_ns, bootstrap_b=bootstrap_b, seed=seed)
+        board, mcs_notes = annotate_mcs(
+            board, preds, planned, h_max_ns=h_max_ns, bootstrap_b=bootstrap_b, seed=seed, block=block
+        )
         notes += mcs_notes
+    cut = _cut_by_data_end(out, h_max_ns)
+    if cut:
+        notes.append(
+            f"data end: {cut[0]:,} of {cut[1]:,} never-cancel shadows end with the data before {fmt_dur(h_max_ns)}, "
+            "so the longer horizons score fewer orders than the leaderboard population; shadows sample keeps "
+            "every life inside the data unless --allow-past-end"
+        )
+    cb = zoo_ci_blocks(preds, block)
+    if cb.n and not cb.available:
+        notes.append(
+            f"ci: {cb.n} bootstrap block(s) ({cb.kind}) < {MIN_CI_BLOCKS}: intervals and significance not available "
+            "(more data, or another --bootstrap-block, gives one)"
+        )
     population = {
         "n_excluded_hbt_312": len(aborted_shadows(preds)),
         "n_leaderboard": leaderboard_population(preds, planned, h_max_ns),
+        "ci_block": cb.kind if cb.n else None,
+        "n_ci_blocks": cb.n if cb.n else None,
     }
     return errors, board, notes, population
 
@@ -404,7 +440,14 @@ def run_zoo(spec: s.ZooSpec | dict[str, Any]) -> m.ZooSummary:
         traj_p = out / "zoo_trajectory.parquet"
         traj = pq.read_table(traj_p) if sp.write_trajectory and traj_p.exists() else None
         errors, board, notes, population = _evaluate(
-            preds, out, h_max_ns=sp.h_max_ns, bootstrap_b=sp.bootstrap_b, seed=sp.seed, trajectory=traj, mcs=True
+            preds,
+            out,
+            h_max_ns=sp.h_max_ns,
+            bootstrap_b=sp.bootstrap_b,
+            seed=sp.seed,
+            trajectory=traj,
+            mcs=True,
+            block=sp.bootstrap_block,
         )
         from queuetruth.eval.impact import zoo_spec_warnings
 

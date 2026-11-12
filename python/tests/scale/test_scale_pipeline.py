@@ -195,6 +195,8 @@ def test_block_stats_over_shards_reproduce_evaluate_zoo(tmp_path, monkeypatch, m
         return original(session_date, ts_ns, min_dates)
 
     monkeypatch.setattr("queuetruth.eval.zoo.block_labels", labels)
+    # and the zoo's floor for an interval (5 blocks) with it, so 2 day blocks still carry CIs here
+    monkeypatch.setattr("queuetruth.eval.zoo.MIN_CI_BLOCKS", min(min_dates, 5))
     want_t, _ = evaluate_zoo(pred, h_max_ns=h_max, bootstrap_b=200, seed=3, planned_life=planned)
     want = {
         (r["model_id"], r["metric"], r["horizon_ns"], r["stratum_kind"], r["stratum"]): r for r in want_t.to_pylist()

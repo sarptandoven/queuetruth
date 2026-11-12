@@ -426,6 +426,30 @@
       ],
       "default": null,
       "title": "N Leaderboard"
+    },
+    "ci_block": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Ci Block"
+    },
+    "n_ci_blocks": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "N Ci Blocks"
     }
   },
   "required": [

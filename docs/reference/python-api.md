@@ -269,6 +269,8 @@ Statistics used by evaluation and the scorer (SPEC 4.3 `queuetruth.stats`, 5.5.7
 | `brier` | function | SPEC 4.3 | `(p: np.ndarray, y: np.ndarray) -> float` | Brier score. |
 | `calibration_slope_intercept` | function | SPEC 4.3 | `(p: np.ndarray, y: np.ndarray, eps: float = 1e-06) -> tuple[float, float]` | Logistic recalibration `(slope, intercept)` of `y` on `logit(clip(p, eps, 1 - eps))`. |
 | `CI` | class |  | | Point estimate with a percentile confidence interval. |
+| `ci_blocks` | function |  | `(session_date: np.ndarray, ts_ns: np.ndarray, instrument_id: np.ndarray, block: str = auto, *, labeler: Callable[[np.ndarray, np.ndarray], tuple[np.ndarray, str]] \| None = None, min_blocks: int = 5) -> CiBlocks` | Bootstrap blocks for one row per shadow (or order). `auto` keeps `block_labels` (day blocks with >= 5 dates, else 30-minute buckets) whenever that gives at least `MIN_CI_BLOCKS` blocks, so long runs are unchanged; on shorter data it uses (instrument, minute of `ts_ns`) clusters, the demo's choice, and when those are still fewer than `MIN_CI_BLOCKS` the result is not `available`. A forced kind is used as it is (minutes and half-hours are UTC buckets of `ts_ns`). `labeler` replaces `block_labels` for `auto` and `min_blocks` the threshold (tests). |
+| `CiBlocks` | class |  | | Bootstrap blocks of a run: `labels` = dense block index per row (0..n-1), `kind` = `day`, `30min`, `1min` or `instrument_minute`, `n` = number of blocks, `requested` = the choice asked for. `available` is false with fewer than `MIN_CI_BLOCKS` blocks: callers then report no interval and no significance. |
 | `clustered_mcnemar` | function | SPEC 4.3 | `(live_filled: np.ndarray, sim_filled: np.ndarray, clusters: np.ndarray, *, b: int = 1000, seed: int = 0, alpha: float = 0.05) -> ClusteredDiscordance` | Primary cluster-robust discordance test of paired fill outcomes (see module docstring). |
 | `ClusteredDiscordance` | class |  | | Cluster-robust discordance test result (primary) with plain McNemar as secondary. |
 | `day_block_bootstrap` | function | SPEC 4.3 | `(blocks: np.ndarray, stat: Callable[[np.ndarray], float], b: int, seed: int, alpha: float = 0.05) -> CI` | Block bootstrap percentile CI over resampled blocks. |
@@ -314,6 +316,8 @@ Statistics used by evaluation and the scorer (SPEC 4.3 `queuetruth.stats`, 5.5.7
 | `wilcoxon_signed_rank` | function | SPEC 4.3 | `(d: np.ndarray, zero_method: str = wilcox) -> WilcoxonResult` | Two-sided Wilcoxon signed-rank test, `scipy.stats.wilcoxon(d, zero_method, method="auto")`; NaN if no data. |
 | `WilcoxonResult` | class |  | | Wilcoxon signed-rank result (matches `scipy.stats.wilcoxon`). |
 
+Constants: `CI_BLOCK_CHOICES`, `MIN_CI_BLOCKS`.
+
 ## `queuetruth.eval`
 
 Zoo evaluation against exact truth and Python baselines (SPEC 4.3 `queuetruth.eval`, 5.6).
@@ -326,7 +330,7 @@ Zoo evaluation against exact truth and Python baselines (SPEC 4.3 `queuetruth.ev
 | `baseline_predictions` | function | SPEC 4.3 | `(kind: str, train: pa.Table, test: pa.Table, horizons_ns: Sequence[int]) -> pa.Table` | `qt.zoo_predictions` rows of a Python baseline: climatology_aj \| mmw_bucket \| back_of_queue_rate. |
 | `bias_sentence` | function | SPEC 4.3 | `(entry: Any, horizon_ns: int \| None, aborts: dict[str, tuple[int, int]] \| None = None) -> str` | One plain-English sentence on the model's fill-rate bias at the horizon (module docstring). |
 | `common_population` | function |  | `(predictions: pa.Table) -> pa.Table` | The rows every model is scored on: without every row of a shadow that any faithful hbt pair aborted on at #312, so all models share one population (0.1.1; 0.1.0 dropped only the aborted pair's own rows). |
-| `evaluate_zoo` | function | SPEC 4.3 | `(predictions: pa.Table, *, h_max_ns: int, trajectory: pa.Table \| None = None, bootstrap_b: int = 1000, seed: int = 0, planned_life: pa.Table \| None = None) -> tuple[pa.Table, list[dict[str, Any]]]` | Metrics per model, horizon and stratum (`qt.zoo_errors`) and the leaderboard entries. `planned_life` is required (`QT-INPUT-001` without it, `QT-INPUT-002` when a predicted shadow has no row): label eligibility is never inferred from the outcome-flavoured `censored` column (audit ruling A2, E38 OC-7). |
+| `evaluate_zoo` | function | SPEC 4.3 | `(predictions: pa.Table, *, h_max_ns: int, trajectory: pa.Table \| None = None, bootstrap_b: int = 1000, seed: int = 0, planned_life: pa.Table \| None = None, block: str = auto) -> tuple[pa.Table, list[dict[str, Any]]]` | Metrics per model, horizon and stratum (`qt.zoo_errors`) and the leaderboard entries. `planned_life` is required (`QT-INPUT-001` without it, `QT-INPUT-002` when a predicted shadow has no row): label eligibility is never inferred from the outcome-flavoured `censored` column (audit ruling A2, E38 OC-7). `block` picks the bootstrap blocks (`queuetruth.stats.ci_blocks`; `zoo_ci_blocks` tells which were used): with fewer than 5 the CIs and the cluster-robust discordance p-values are left null. |
 | `family` | function |  | `(model_id: str) -> str` | Family name of a ModelId (`hbt_power3[n=2]` -> `hbt_power3`). |
 | `join_features` | function | SPEC 4.3 | `(predictions: pa.Table, features: pa.Table, model_id: str \| None = None) -> pa.Table` | Shadow table: rows of one model of `qt.zoo_predictions` (default: the first) + landmark-0 feature columns. |
 | `leaderboard_population` | function |  | `(predictions: pa.Table, planned_life: pa.Table, h_max_ns: int) -> int` | Never-cancel shadows (no planned cancel before `ts_live + h_max`) with an exact arm in `common_population`: the shadows behind every leaderboard row. |
@@ -334,6 +338,7 @@ Zoo evaluation against exact truth and Python baselines (SPEC 4.3 `queuetruth.ev
 | `rank_leaderboard` | function | SPEC 4.3 | `(entries: Sequence[Any], horizon_ns: int \| None) -> list[Any]` | Entries sorted by absolute fill-rate bias at `horizon_ns`, then Brier, then model id. |
 | `sort_horizon` | function | SPEC 4.3 | `(horizons: Sequence[int], target_ns: int = 60000000000) -> int \| None` | The horizon the leaderboard is sorted at (module docstring). |
 | `without_aborted` | function |  | `(predictions: pa.Table) -> pa.Table` | The rows that are predictions: a 1.1 `status` of `hbt_312_abort` (faithful hbt pair aborted at its #312 event at or before the row's deadline) is left out of every metric. |
+| `zoo_ci_blocks` | function |  | `(predictions: pa.Table, block: str = auto) -> CiBlocks` | The bootstrap blocks `evaluate_zoo` uses on `predictions` (one label per distinct shadow of the common population, in ascending shadow id order). |
 
 Constants: `DEFAULT_SORT_HORIZON_NS`, `KINDS`.
 

@@ -505,6 +505,7 @@
       "300",
       "--window-close-s",
       "600",
+      "--allow-past-end",
       "--allocation",
       "proportional",
       "--sides",
@@ -563,6 +564,7 @@
         "latency_ns": 250000,
         "window_open_s": 300,
         "window_close_s": 600,
+        "clamp_to_data_end": false,
         "allocation": "proportional",
         "sides": [
           "B"
@@ -679,6 +681,8 @@
       "0",
       "--bootstrap-b",
       "200",
+      "--bootstrap-block",
+      "instrument-minute",
       "--threads",
       "2"
     ],
@@ -729,6 +733,7 @@
           "jitter_ns": 0
         },
         "bootstrap_b": 200,
+        "bootstrap_block": "instrument_minute",
         "threads": 2
       },
       "implementation": "hybrid"
@@ -803,6 +808,8 @@
       "10s",
       "--bootstrap-b",
       "200",
+      "--bootstrap-block",
+      "1min",
       "--amends",
       "amends.parquet",
       "--allow-truth-mismatch",
@@ -847,6 +854,7 @@
         "window_ns": 60000000000,
         "rank_horizon_ns": 10000000000,
         "bootstrap_b": 200,
+        "bootstrap_block": "1min",
         "allow_truth_mismatch": true,
         "seed": 3,
         "threads": 2

@@ -308,6 +308,18 @@
       "title": "Bootstrap B",
       "type": "integer"
     },
+    "bootstrap_block": {
+      "default": "auto",
+      "enum": [
+        "auto",
+        "day",
+        "30min",
+        "1min",
+        "instrument_minute"
+      ],
+      "title": "Bootstrap Block",
+      "type": "string"
+    },
     "amends": {
       "anyOf": [
         {

@@ -340,8 +340,9 @@ decile; read the strata first.
 
 ### Day-block bootstrap
 
-How queuetruth computes intervals: resample whole session days (30-minute blocks when there are fewer than 5 days),
-1,000 resamples by default, one draw matrix shared by every model so differences between models are not resampling
+How queuetruth computes intervals: resample whole session days (30-minute blocks when there are fewer than 5 days;
+in the zoo and zoo-toxicity, instrument x minute clusters when there are fewer than 5 half-hours, and no interval at
+all with fewer than 5 blocks), 1,000 resamples by default, one draw matrix shared by every model so differences between models are not resampling
 noise. Results computed this way cover intraday variation of the days you have, not variation across days you do
 not.
 

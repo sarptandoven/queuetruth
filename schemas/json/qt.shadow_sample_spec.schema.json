@@ -195,6 +195,11 @@
       "minimum": 0,
       "title": "Latency Ns",
       "type": "integer"
+    },
+    "clamp_to_data_end": {
+      "default": true,
+      "title": "Clamp To Data End",
+      "type": "boolean"
     }
   },
   "required": [
