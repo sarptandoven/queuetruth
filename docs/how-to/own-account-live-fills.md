@@ -327,8 +327,8 @@ cause) and `match.json`.
 `pipeline` takes one or more captures and every harness log of the run. Each capture gets the orders sent while it
 was recording, on its markets (an order in no capture is counted in `orders_outside_captures`; one in two captures
 of the same market is refused). For each capture it runs `check`, `export`, `match`, writes one canonical live log per
-segment, ingests each segment with `queuetruth ingest --format bitstamp` and runs `queuetruth score` with the exact
-arm and each model of `--models` (comma-separated, as `queuetruth zoo --models` takes them, or `all`). Its results go
+segment, ingests each segment with `queuetruth advanced ingest --format bitstamp` and runs `queuetruth advanced score` with the exact
+arm and each model of `--models` (comma-separated, as `queuetruth advanced zoo --models` takes them, or `all`). Its results go
 under `cap-K/` of `--out`, which must be new or empty (`QT-CONFIG-001` otherwise; the kit never deletes anything).
 
 The headline is `pooled`: per arm, the scored orders of every segment of every capture, with the summed 2x2 table,
@@ -341,7 +341,7 @@ kit versions); two runs on the same inputs write byte-identical scorecards.
 `--require-consistent` stops with `QT-DATA-001` when a check is `inconsistent`, and `--strict` exits 1 when the exact
 arm disagrees with live or a check is `inconsistent`.
 
-The canonical live log (the directory `queuetruth live import` writes, validated on write) maps each order to
+The canonical live log (the directory `queuetruth advanced live import` writes, validated on write) maps each order to
 `order_key` `bitstamp:<account>:<venue order id>`, venue `bitstamp`, a `gtc` limit order with `post_only` for
 maker-or-cancel:
 
@@ -361,7 +361,7 @@ counted.
 ## Limits
 
 - **A maker filled within the taker window.** An order whose only messages are `order_created` and `order_deleted`
-  within 100 microseconds looks like a taker. `queuetruth ingest --format bitstamp` keeps it when a trade names it as
+  within 100 microseconds looks like a taker. `queuetruth advanced ingest --format bitstamp` keeps it when a trade names it as
   the maker (counted in `maker_in_taker_window`; queuetruth 0.1.1 and earlier dropped it), and so does `check`. The
   matcher's `ingest_suppressed` flag follows the same rule. An order that no trade names as the maker is still
   dropped as a taker and flagged.
@@ -386,20 +386,20 @@ therefore leave a public, publishable trace. The kit contains no IBKR trading co
    can move). Use odd share counts (for example 137) and randomized times, sizes and distances from the touch, as the
    Bitstamp harness does; record your own send time for every order and cancel with nanosecond local clocks.
 2. **Your records.** Export the day's executions with an IBKR Flex Query (Trades, level of detail Executions) and
-   import them with `queuetruth live import --venue ibkr-flex --tz America/New_York`
+   import them with `queuetruth advanced live import --venue ibkr-flex --tz America/New_York`
    ([Import fills from my venue or broker](import-live-logs.md#ibkr-flex)). Flex has no order records, so that log is
    fills-only: orders that never filled are missing and the scorer refuses fill-rate statistics. For fill rates,
    write every order from your own order log (send, cancel and IBKR's status callbacks) with
    `queuetruth.live.write_canonical_log`, mapping events as in the table above.
 3. **The market data.** Download the day's DEEP+ pcap from the HIST listing and ingest it with
-   `queuetruth ingest --format iex-deep-plus --venue iex` for the symbols you traded.
+   `queuetruth advanced ingest --format iex-deep-plus --venue iex` for the symbols you traded.
 4. **The join.** IBKR's records do not give a field documented to equal DEEP+'s order id, so find each order in the
    DEEP+ dataset by signature: the add with your symbol, side, price and odd size that appears within a short window
    after your send time, unique among candidates (the same rule as the Bitstamp signature match). Use its DEEP+
    timestamp as the `ack` exchange time (`match_time`) and its order id as `venue_order_id`, so self-exclusion matches
    by id. Check the join on the first day: every fill in your Flex export should be an Order Executed of the matched
    DEEP+ order with the same price and size.
-5. **Score.** `queuetruth score --live <your log> --data <DEEP+ dataset> --sim exact`, then each zoo model, as in
+5. **Score.** `queuetruth advanced score --live <your log> --data <DEEP+ dataset> --sim exact`, then each zoo model, as in
    step 7. DEEP+ shows no non-displayed orders and does not report routed executions, so keep the orders displayed
    and non-marketable.
 

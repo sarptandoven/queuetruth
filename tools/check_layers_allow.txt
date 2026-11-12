@@ -1,10 +1,13 @@
 # Import-layer violations recorded on purpose (tools/check_layers.py). One `source -> target` per line;
 # the comment names the rules it breaks. Remove a line when its import is gone; never add one to pass CI
 # without saying why in the pull request.
-queuetruth.api -> queuetruth.check.run  # cycle
-queuetruth.api -> queuetruth.fit.run  # cycle
-queuetruth.api -> queuetruth.ledger  # cycle
-queuetruth.api -> queuetruth.score._io.resolve_ref  # private
+queuetruth.api -> queuetruth.ops._call._call  # private
+queuetruth.api -> queuetruth.ops._call._native  # private
+queuetruth.api -> queuetruth.ops._call._qt_error  # private
+queuetruth.api -> queuetruth.ops._call._validate  # private
+queuetruth.api -> queuetruth.ops.replay._expand_order_ids  # private
+queuetruth.api -> queuetruth.ops.why._model_matches  # private
+queuetruth.api -> queuetruth.ops.zoo._planned_life  # private
 queuetruth.atlas.answer -> queuetruth.schemas.models._tag  # private
 queuetruth.atlas.configs -> queuetruth.schemas.models._tag  # private
 queuetruth.atlas.manifest -> queuetruth.schemas.models._tag  # private
@@ -19,7 +22,6 @@ queuetruth.cert.verify -> queuetruth.score._io.resolve_ref  # private
 queuetruth.check.cli -> queuetruth.live.reconcile_cli._options  # private
 queuetruth.check.estimate -> queuetruth.atlas  # layer
 queuetruth.check.estimate -> queuetruth.atlas.touch  # layer
-queuetruth.check.run -> queuetruth.api  # cycle
 queuetruth.check.run -> queuetruth.live.importers.vectorbt._table  # private
 queuetruth.check.run -> queuetruth.pm.cli  # layer
 queuetruth.cli -> queuetruth.api._call  # private
@@ -51,7 +53,6 @@ queuetruth.export.latency -> queuetruth.score._io.read_live_log  # private
 queuetruth.export.replay -> queuetruth.score._io.read_live_log  # private
 queuetruth.export.replay -> queuetruth.score._io.read_parquet  # private
 queuetruth.export.replay -> queuetruth.score._io.rows  # private
-queuetruth.fit.run -> queuetruth.api  # cycle
 queuetruth.fit.run -> queuetruth.export._text.LOG_N_NAMES  # private
 queuetruth.fit.run -> queuetruth.export._text.VERSION  # private
 queuetruth.fit.run -> queuetruth.export._text.data_sources_text  # private
@@ -63,7 +64,6 @@ queuetruth.fit.split -> queuetruth.export._text.window_text  # private
 queuetruth.fit.split -> queuetruth.score._dataset.DatasetView  # private
 queuetruth.forecast.schemas -> queuetruth.schemas.models._tag  # private
 queuetruth.frames -> queuetruth.api  # layer
-queuetruth.ledger._capture -> queuetruth.api  # cycle
 queuetruth.ledger._capture -> queuetruth.cli  # layer
 queuetruth.ledger._capture -> queuetruth.cli._calibration_refused  # private
 queuetruth.ledger._capture -> queuetruth.cli._not_scored  # private
@@ -84,6 +84,7 @@ queuetruth.model.climatology -> queuetruth.eval._tod.session_clock_ns  # private
 queuetruth.model.conformal -> queuetruth.eval.zoo  # layer
 queuetruth.model.conformal -> queuetruth.eval.zoo._planned_life  # private
 queuetruth.model.conformal -> queuetruth.stats._seed.stable_seed  # private
+queuetruth.ops._call -> queuetruth.score._io.resolve_ref  # private
 queuetruth.pm.ingest -> queuetruth.score._io.read_live_log  # private
 queuetruth.pm.kalshi -> queuetruth.live._common.Record  # private
 queuetruth.pm.kalshi -> queuetruth.live._common.dump_raw  # private

@@ -116,10 +116,10 @@ the same orders.
 
 <!-- check-docs: run -->
 ```sh
-queuetruth fixtures synth --out synth
-queuetruth shadows sample --data synth --n 50 --seed 1 --out shadows.parquet
-queuetruth replay --data synth --shadows shadows.parquet --out run1 --bbo none --trajectory none
-queuetruth zoo --data synth --shadows shadows.parquet --out zoo1
+queuetruth advanced fixtures synth --out synth
+queuetruth advanced shadows sample --data synth --n 50 --seed 1 --out shadows.parquet
+queuetruth advanced replay --data synth --shadows shadows.parquet --out run1 --bbo none --trajectory none
+queuetruth advanced zoo --data synth --shadows shadows.parquet --out zoo1
 ```
 
 Now call the local tools through an MCP client session, exactly as an agent would. The server is started as a

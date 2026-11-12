@@ -39,7 +39,7 @@ results ran on.
 ## 1. Export calibrated parameters
 
 ```sh
-queuetruth calibrate alloc --family power3 --data DATASET --shadows SHADOWS --train 2019-12-30 --test 2020-01-30 \
+queuetruth advanced calibrate alloc --family power3 --data DATASET --shadows SHADOWS --train 2019-12-30 --test 2020-01-30 \
     --out out/calib-power3
 python integrations/hftbacktest/export_config.py --calibration out/calib-power3 --calibration out/calib-power2 \
     --log --defaults --out hbt_queue_config.json
@@ -51,13 +51,13 @@ Each power-family calibration (`power`, `power2`, `power3`; allocation quasi-lik
 the same train events the calibration reports. Several calibrations in one config must come from the same data,
 shadows, train window, L2 view, exchange and train events, or the export refuses (`QT-CONFIG-001`): only then are
 their likelihoods comparable. A calibration that queuetruth's trust check refuses (for example one that does not
-beat the default out of sample) is exported only with `--force` (exit 1 without it, as `queuetruth export`), and
+beat the default out of sample) is exported only with `--force` (exit 1 without it, as `queuetruth advanced export`), and
 then carries a `NOT VALIDATED` note.
 
 A fitted entry's `source` carries what you need to judge the parameter: both CIs and the per-stratum estimates
 (`stratified`) on the `n` scale, the held-out Brier score, log loss and fill-rate bias per horizon of the fitted
 model (the `default` entry carries the baseline's), the trust verdict and every trust flag. Non-refusing flags
-become notes with the same text as `queuetruth export hftbacktest` prints, most importantly
+become notes with the same text as `queuetruth advanced export hftbacktest` prints, most importantly
 `note (heterogeneous_strata)`: the instruments disagree about `n`. The format and its rules are in
 [docs/design/extensions/hftbacktest-integration.md](../../docs/design/extensions/hftbacktest-integration.md).
 
@@ -73,7 +73,7 @@ asset = BacktestAsset().data(data).tick_size(0.01).lot_size(1.0)  # your setting
 asset = hbt_config.apply(asset, entry)  # .power_prob_queue_model3(3.165744804349019).partial_fill_exchange()
 ```
 
-The `model_id` strings carry `n` at full precision and are valid `queuetruth zoo --models` ids, so the model you run
+The `model_id` strings carry `n` at full precision and are valid `queuetruth advanced zoo --models` ids, so the model you run
 in hftbacktest is exactly the one queuetruth scored.
 
 ### Result on real data
@@ -120,7 +120,7 @@ python integrations/hftbacktest/reconcile.py --data DATASET --shadows SHADOWS --
 ```
 
 Under `--out` it caches the exact replay, a faithful zoo run of the config's models, one hftbacktest npz per
-instrument-day (`queuetruth export l2-npz`, the zoo's L2 view) with an orders sidecar (every shadow the zoo ran, as a
+instrument-day (`queuetruth advanced export l2-npz`, the zoo's L2 view) with an orders sidecar (every shadow the zoo ran, as a
 GTX order submitted at its activation time at its resolved price and cancelled at its planned end), and the
 hftbacktest runs of each `--hbt` build. `manifest.json` records what the cache was computed from (dataset id,
 shadows hash, L2 view, models, and each build's hftbacktest version and native-module hash); a run with other inputs
@@ -253,9 +253,9 @@ run id `72d4e4207dde2eb6` and calibration run ids `51ddb045010023a4` (power), `6
 
 | path | use it to |
 |---|---|
-| `queuetruth export hftbacktest` | paste one calibrated model into your backtest: a Python snippet with the parameter (6 significant digits) and the trust header |
+| `queuetruth advanced export hftbacktest` | paste one calibrated model into your backtest: a Python snippet with the parameter (6 significant digits) and the trust header |
 | `export_config.py` (this directory) | keep several models, their full-precision parameters, CIs, per-instrument estimates and held-out scores in one machine-readable file, and apply any of them with `hbt_config.apply` |
-| `queuetruth export replay-schedule --target hftbacktest` | replay your own live orders in hftbacktest (10 ms steps) and score the backtest against your live fills (`import_sim("hftbacktest")`, `queuetruth score --sim-log`) |
+| `queuetruth advanced export replay-schedule --target hftbacktest` | replay your own live orders in hftbacktest (10 ms steps) and score the backtest against your live fills (`import_sim("hftbacktest")`, `queuetruth advanced score --sim-log`) |
 | `reconcile.py` (this directory) | find which hftbacktest model is closest to exact truth on a dataset, and check that hftbacktest itself agrees with queuetruth's re-implementation |
 
 To score your live orders with a model from the config, edit the replay script's `configure_asset` (it is called
@@ -322,7 +322,7 @@ Makefile target).
 
 - One exchange model per reconciliation run (`partial` or `no_partial`), zero latency and fees, own orders that do
   not interact (each order sees every trade in full, as in hftbacktest and the zoo). Latency calibrations are not
-  exported here; `queuetruth export hftbacktest` already writes `intp_order_latency` lines.
+  exported here; `queuetruth advanced export hftbacktest` already writes `intp_order_latency` lines.
 - The log families are exported without a parameter: there is nothing to fit, only a likelihood to compare.
 - hftbacktest #316 (partial fills of a resting order reach `position()` only when the order completes) is
   documented in UPSTREAM.md but not fixed; the reconciliation compares fills, not positions.

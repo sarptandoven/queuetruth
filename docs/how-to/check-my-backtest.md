@@ -6,7 +6,7 @@ them order by order: which fills were real, which were phantom (the backtest fil
 not), how long the fills took, and what that does to P&L.
 
 **You need:** your backtester's output file, and order-level (MBO) data that covers the backtest's days, as a
-queuetruth dataset (`queuetruth ingest`; see [Replay a public IEX DEEP+ day](iex-public-demo.md) for free data).
+queuetruth dataset (`queuetruth data add`; see [Replay a public IEX DEEP+ day](iex-public-demo.md) for free data).
 Without data, `check` estimates from the public atlas instead ([without order-level data](#without-order-level-data)).
 `check` reads these outputs:
 
@@ -32,7 +32,7 @@ which the backtest says filled 5 seconds after they were placed.
 
 <!-- check-docs: run -->
 ```bash
-queuetruth fixtures synth --out synth > /dev/null
+queuetruth advanced fixtures synth --out synth > /dev/null
 cat > orders_report.csv <<'EOF'
 client_order_id,venue_order_id,instrument_id,side,type,quantity,price,time_in_force,post_only,reduce_only,status,filled_qty,avg_px,ts_init,ts_last
 O-1,V-1,QTBU6.XCME,SELL,LIMIT,1,5008.50,GTC,False,False,FILLED,1,5008.50,1781620722000000000,1781620727000000000
@@ -80,7 +80,7 @@ What the numbers mean:
 - **Phantom fill.** The backtest filled the order and the real queue did not within the window.
 - **P&L gap.** Each side's fills marked to the mid `--markout` later (default `1min`), net of the backtest's fees,
   backtest minus real, per order. A gap is stated as "too high" or "too low" only when its 95% interval excludes 0.
-- **Intervals.** 95% block-bootstrap intervals from `queuetruth score`, which `check` runs with your backtest in
+- **Intervals.** 95% block-bootstrap intervals from `queuetruth advanced score`, which `check` runs with your backtest in
   the place of the live log.
 
 `--json` prints the whole summary (`qt.check`) instead; the output directory holds `check.json`, `orders.csv` (one

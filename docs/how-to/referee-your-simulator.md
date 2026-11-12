@@ -17,7 +17,7 @@ orders and to write out its fills.
 
 <!-- check-docs: run -->
 ```sh
-queuetruth referee fixtures --out fx
+queuetruth advanced referee fixtures --out fx
 ls fx
 ```
 
@@ -81,9 +81,9 @@ If your simulator takes L2 data, synthesize it from the order-level data:
 <!-- check-docs: run -->
 ```sh
 D=fx/02_level_shrink_caps_queue/dataset
-queuetruth replay --data "$D" --out l2-view --write-l2 --l2-depth 10 --bbo none --trajectory none
+queuetruth advanced replay --data "$D" --out l2-view --write-l2 --l2-depth 10 --bbo none --trajectory none
 ls l2-view/l2/date=2026-06-15/instrument_id=1
-queuetruth export l2-npz --data "$D" --instrument-id 1 --date 2026-06-15 --out l2.npz
+queuetruth advanced export l2-npz --data "$D" --instrument-id 1 --date 2026-06-15 --out l2.npz
 ```
 
 `replay --write-l2` writes `qt.l2` Parquet under `l2-view/l2/`. `export l2-npz` writes one instrument-day as an
@@ -110,7 +110,7 @@ First, referee the exact engine's own fills against itself. This must pass:
 <!-- check-docs: run -->
 ```sh
 C=fx/05_partial_fills_sum_to_cum
-queuetruth referee run --data "$C/dataset" --schedule "$C/schedule.parquet" \
+queuetruth advanced referee run --data "$C/dataset" --schedule "$C/schedule.parquet" \
     --sim-fills "$C/expected_fills.parquet" --simulator exact@0.1.0 --out ref-ok
 cat ref-ok/referee_report.json
 ```
@@ -136,7 +136,7 @@ The referee now fails the gate and exits with code 1:
 <!-- check-docs: run exit=1 -->
 ```sh
 C=fx/05_partial_fills_sum_to_cum
-queuetruth referee run --data "$C/dataset" --schedule "$C/schedule.parquet" \
+queuetruth advanced referee run --data "$C/dataset" --schedule "$C/schedule.parquet" \
     --sim-fills mysim-out/fills.parquet --simulator mysim@1.4.0 --out ref-bad
 ```
 
@@ -157,7 +157,7 @@ The general form:
 <!-- check-docs: skip (needs a simulator) -->
 ```sh
 CLASS=07_size_increase_loses_priority   # any directory under fx/
-queuetruth referee run --data "fx/$CLASS/dataset" --schedule "fx/$CLASS/schedule.parquet" \
+queuetruth advanced referee run --data "fx/$CLASS/dataset" --schedule "fx/$CLASS/schedule.parquet" \
     --sim-fills "mysim-out/$CLASS/fills.parquet" --simulator mysim@1.4.0 --out "ref/$CLASS"
 ```
 
@@ -249,7 +249,7 @@ document. Publish `badge.json` (for example to GitHub Pages) to show the result 
 
 <!-- check-docs: skip (badge markup) -->
 ```markdown
-![queuetruth referee](https://img.shields.io/endpoint?url=https://<you>.github.io/<repo>/badge.json)
+![queuetruth advanced referee](https://img.shields.io/endpoint?url=https://<you>.github.io/<repo>/badge.json)
 ```
 
 The action runs `actions/referee/run.py`, which also works outside GitHub:
@@ -267,14 +267,14 @@ dataset you are licensed to use, sample a schedule, and referee both versions ag
 
 <!-- check-docs: skip (needs user data) -->
 ```sh
-queuetruth shadows sample --data my-ds --n 5000 --out sched.parquet
-queuetruth referee run --data my-ds --schedule sched.parquet --sim-fills v1/fills.parquet --simulator mysim@1.3 --out ref-v1
-queuetruth referee run --data my-ds --schedule sched.parquet --sim-fills v2/fills.parquet --simulator mysim@1.4 --out ref-v2
+queuetruth advanced shadows sample --data my-ds --n 5000 --out sched.parquet
+queuetruth advanced referee run --data my-ds --schedule sched.parquet --sim-fills v1/fills.parquet --simulator mysim@1.3 --out ref-v1
+queuetruth advanced referee run --data my-ds --schedule sched.parquet --sim-fills v2/fills.parquet --simulator mysim@1.4 --out ref-v2
 ```
 
 An L2 simulator will not match exactly on real data, so compare `ref-v1` and `ref-v2` rather than expecting `pass`
 (both commands exit 1 when the default zero tolerance is breached). A change that moves `discordant` or
 `qty_mismatch` when you meant to change something else is the signal. For a statistical view of the same comparison
 (bias with confidence intervals, discordance tests by queue position), use
-[`queuetruth score`](../reference/cli.md#queuetruth-score) with the exact arm and your simulator's log on the same
+[`queuetruth advanced score`](../reference/cli.md#queuetruth-advanced-score) with the exact arm and your simulator's log on the same
 schedule (see [Score my Nautilus backtest](score-nautilus-vs-binance.md)).

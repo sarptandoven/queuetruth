@@ -3,16 +3,16 @@
 **Goal:** run a data-quality battery over an order-level (MBO) dataset and get a pass, warn or fail per check with
 the offending rows, as a JSON document for your pipeline and an HTML page for people.
 
-**You need:** a dataset written by `queuetruth ingest` (ITCH, DBN, etcsv, crypto L3, IEX DEEP+) or
-`queuetruth fixtures synth`. Nothing else: `queuetruth dq` reads the dataset's Parquet files and runs the exact
+**You need:** a dataset written by `queuetruth data add` (ITCH, DBN, etcsv, crypto L3, IEX DEEP+) or
+`queuetruth advanced fixtures synth`. Nothing else: `queuetruth advanced dq` reads the dataset's Parquet files and runs the exact
 replay itself.
 
 ## Run it
 
 <!-- check-docs: run -->
 ```sh
-queuetruth fixtures synth --venue nasdaq --out synth
-queuetruth dq --data synth --out dq
+queuetruth advanced fixtures synth --venue nasdaq --out synth
+queuetruth advanced dq --data synth --out dq
 ```
 
 The terminal leads with the verdict, then one line per check:
@@ -114,7 +114,7 @@ for c in rep.checks:
 | `checks[].notes` | Caveats: the rules applied and what could not be judged. |
 | `spec` | The spec echo. |
 
-The JSON Schemas are `qt.dq_report` and `qt.dq_spec` (`queuetruth schema show qt.dq_report`, or
+The JSON Schemas are `qt.dq_report` and `qt.dq_spec` (`queuetruth advanced schema show qt.dq_report`, or
 `schemas/json/qt.dq_report.schema.json` and `qt.dq_spec.schema.json` in the repository).
 
 ## Compare two sources of the same session
@@ -127,9 +127,9 @@ when `ts_event` is ignored are reported as timestamp-only.
 
 <!-- check-docs: skip (needs two real ingests of the same day) -->
 ```sh
-queuetruth ingest --format itch --in 12302019.NASDAQ_ITCH50.gz --venue nasdaq --symbols AAPL,MSFT --out itch
-queuetruth ingest --format dbn --in xnas-itch-20191230.mbo.dbn.zst --venue nasdaq --out dbn
-queuetruth dq --data itch --compare dbn --out dq-itch-vs-dbn
+queuetruth data add 12302019.NASDAQ_ITCH50.gz --input-format itch --venue nasdaq --symbols AAPL,MSFT --out itch
+queuetruth data add xnas-itch-20191230.mbo.dbn.zst --input-format dbn --venue nasdaq --out dbn
+queuetruth advanced dq --data itch --compare dbn --out dq-itch-vs-dbn
 ```
 
 On the 2019-12-30 Nasdaq ITCH day (AAPL, MSFT, SPY, TSLA), the qt ITCH reader against the independent et parser's
@@ -149,7 +149,7 @@ In CI, a nightly job that ingests the day's files can gate on the battery:
 
 <!-- check-docs: skip (CI sketch) -->
 ```sh
-queuetruth dq --data "ds/$DAY" --out "dq/$DAY" --fail-on fail --format json > "dq/$DAY/summary.json"
+queuetruth advanced dq --data "ds/$DAY" --out "dq/$DAY" --fail-on fail --format json > "dq/$DAY/summary.json"
 ```
 
 ## What it does not check

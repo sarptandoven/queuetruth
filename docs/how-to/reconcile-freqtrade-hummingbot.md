@@ -10,8 +10,8 @@ only one of the two runs. Then measure how far Freqtrade's candle-fill rule is f
 (`data/<config>.sqlite`) of a live bot and of a paper-trade bot that ran the same strategy at the same time. Nothing
 else: no market data and no exchange account.
 
-**From the command line or Python.** Since 0.3.0, `queuetruth reconcile --kind freqtrade|hummingbot` runs the whole comparison
-below, and `queuetruth live import --venue freqtrade | hummingbot | sim-freqtrade | sim-hummingbot` writes one arm as
+**From the command line or Python.** Since 0.3.0, `queuetruth advanced reconcile --kind freqtrade|hummingbot` runs the whole comparison
+below, and `queuetruth advanced live import --venue freqtrade | hummingbot | sim-freqtrade | sim-hummingbot` writes one arm as
 a canonical live log (importer options with `--option KEY=VALUE`, e.g. `--option dry_run=true`); the Python API is
 `queuetruth.live.importers.freqtrade` and `queuetruth.live.importers.hummingbot`. Every file format
 below was read from the projects' public source (Freqtrade `develop` at commit `1c0d709401b5`, Hummingbot 2.17.0 at
@@ -69,7 +69,7 @@ print(render_reconcile(report))
 ```
 
 The arguments are simulator, bot, output directory. It writes `rec/live` (the dry-run as a canonical live log),
-`rec/sim` (the backtest as a simulator log), `rec/score` (the `queuetruth score` output) and `rec/reconcile.json`
+`rec/sim` (the backtest as a simulator log), `rec/score` (the `queuetruth advanced score` output) and `rec/reconcile.json`
 plus `rec/reconcile_orders.csv`. The printout starts with the score and the counts:
 
 ```text
@@ -100,7 +100,7 @@ The same from the command line (`--format json` prints the `qt.bot_reconcile` do
 <!-- check-docs: run -->
 ```sh
 FX="$QT_FIXTURES/live/freqtrade"
-queuetruth reconcile --kind freqtrade --sim "$FX/backtest-result-2024-03-01_14-00-00.zip" \
+queuetruth advanced reconcile --kind freqtrade --sim "$FX/backtest-result-2024-03-01_14-00-00.zip" \
     --live tradesv3.dryrun.sqlite --live "$FX/freqtrade.log" --out rec-cli \
     --instrument-map "$FX/instrument_map.csv" --max-rows 3
 ```
@@ -121,13 +121,13 @@ this short is good for.
 
 ### 2. Score again from the command line
 
-The logs are ordinary canonical logs, so `queuetruth score` runs on them directly. `--window` is the evaluation
+The logs are ordinary canonical logs, so `queuetruth advanced score` runs on them directly. `--window` is the evaluation
 horizon of each order (the live cancel still ends it); Freqtrade orders rest for minutes, so use your
 `unfilledtimeout` or longer:
 
 <!-- check-docs: run -->
 ```sh
-queuetruth score --live rec/live --sim-log rec/sim --out sc --window 1440m
+queuetruth advanced score --live rec/live --sim-log rec/sim --out sc --window 1440m
 ```
 
 The result is the same scorecard as `rec/score` (same `run_id`): `two_by_two` both 4, sim_only 2, live_only 0,
@@ -339,7 +339,7 @@ entry points; the paper arm is `<market>_PaperTrade`), `pair_window_ms`, `pair_p
 
 The reconciliation shows where a backtest and a bot disagree, but a dry-run is itself a simulator. To measure the
 candle-fill rule itself, apply it to orders whose true outcome is known: shadow orders in an exact FIFO replay of
-order-level data. `candle_fill_audit` takes a `queuetruth replay --shadows` output, rebuilds candles from the
+order-level data. `candle_fill_audit` takes a `queuetruth advanced replay --shadows` output, rebuilds candles from the
 replay's trade prints and checks each order the way Freqtrade does: the placement clamp on the first candle, then
 every candle while the order is open, filled when one candle's `low <= price <= high`. It compares that with the
 exact outcome over the order's life [`ts_live`, `min(cancel, ts_live + timeout)`).
@@ -356,9 +356,9 @@ is far later than a Freqtrade bot places.
 
 <!-- check-docs: run -->
 ```sh
-queuetruth fixtures synth --out synth
-queuetruth shadows sample --data synth --n 2000 --lifetime 10m --out shadows.parquet
-queuetruth replay --data synth --shadows shadows.parquet --out replay
+queuetruth advanced fixtures synth --out synth
+queuetruth advanced shadows sample --data synth --n 2000 --lifetime 10m --out shadows.parquet
+queuetruth advanced replay --data synth --shadows shadows.parquet --out replay
 ```
 
 <!-- check-docs: run -->
@@ -382,14 +382,14 @@ lag (4.03%) and 1795 on the clock grid (4.57%). The synthetic tape says nothing 
 ### On Nasdaq ITCH (measured)
 
 The same procedure on two days of real Nasdaq TotalView-ITCH order-level data (AAPL, MSFT, SPY, TSLA on 2019-12-30
-and 2020-01-30), 3000 shadows per day from `queuetruth shadows sample --n 3000 --lifetime 10m` (seed 0; 60% at the
+and 2020-01-30), 3000 shadows per day from `queuetruth advanced shadows sample --n 3000 --lifetime 10m` (seed 0; 60% at the
 touch, 30% one or two ticks behind, 10% one tick inside; times uniform in the session), replayed with the default
 exact FIFO rule, 10-minute timeout:
 
 <!-- check-docs: skip (needs the ITCH datasets of the Getting started page) -->
 ```sh
-queuetruth shadows sample --data nasdaq-20200130 --n 3000 --lifetime 10m --out shadows.parquet
-queuetruth replay --data nasdaq-20200130 --shadows shadows.parquet --out replay-20200130
+queuetruth advanced shadows sample --data nasdaq-20200130 --n 3000 --lifetime 10m --out shadows.parquet
+queuetruth advanced replay --data nasdaq-20200130 --shadows shadows.parquet --out replay-20200130
 python -c "
 from queuetruth.live.importers.freqtrade import candle_fill_audit
 for lag_s in (0, 1, 5, 30, 150):

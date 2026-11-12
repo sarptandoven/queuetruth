@@ -105,6 +105,14 @@ fn cli_parse(py: Python<'_>, argv: Vec<String>) -> PyResult<String> {
     }
 }
 
+/// Routes a command line before it is parsed (`qt_cli::route`): (argv as the commands run it, deprecation line or
+/// None).
+#[pyfunction]
+fn cli_route(argv: Vec<String>) -> (Vec<String>, Option<String>) {
+    let r = qt_cli::route(&argv);
+    (r.argv, r.deprecation)
+}
+
 /// Runs a native CLI command: (summary JSON, gate_failed).
 #[pyfunction]
 fn cli_run_native(py: Python<'_>, cmd_json: &str) -> PyResult<(String, bool)> {
@@ -653,6 +661,7 @@ fn qt_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(table_schema, m)?)?;
     m.add_function(wrap_pyfunction!(zoo_families, m)?)?;
     m.add_function(wrap_pyfunction!(cli_parse, m)?)?;
+    m.add_function(wrap_pyfunction!(cli_route, m)?)?;
     m.add_function(wrap_pyfunction!(cli_run_native, m)?)?;
     m.add_function(wrap_pyfunction!(ingest, m)?)?;
     m.add_function(wrap_pyfunction!(replay, m)?)?;

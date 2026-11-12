@@ -69,7 +69,7 @@ tagged `macosx_11_0` and install directly.
 
 ## Use
 
-Fit with queuetruth (`queuetruth calibrate nt-touch ...`), then:
+Fit with queuetruth (`queuetruth advanced calibrate nt-touch ...`), then:
 
 ```python
 import queuetruth_nautilus as qtn
@@ -78,7 +78,7 @@ from nautilus_trader.model import AccountType, Currency, Money, OmsType
 # 1.x: AccountType, OmsType from nautilus_trader.model.enums; Currency, Money from nautilus_trader.model.objects
 
 USD = Currency.from_str("USD")
-cal = qtn.load_calibration("cal/calibration.json")  # or the text `queuetruth export nautilus --out` wrote
+cal = qtn.load_calibration("cal/calibration.json")  # or the text `queuetruth advanced export nautilus --out` wrote
 engine.add_venue(
     venue=venue,
     oms_type=OmsType.NETTING,
@@ -136,7 +136,7 @@ The class names differ by release line, and the package picks them for the insta
 | cancel latency keyword | `cancel_latency_nanos` | `cancel_latency_nanos` |
 | default `base_latency_nanos` | 1 ms | 0 |
 
-`queuetruth export nautilus` (queuetruth 0.1.1) writes `LatencyModel(..., delete_latency_nanos=...)` and imports
+`queuetruth advanced export nautilus` (queuetruth 0.1.1) writes `LatencyModel(..., delete_latency_nanos=...)` and imports
 from `nautilus_trader.backtest.models`; the keyword fails on both release lines and the import on 2.x. This package
 reads that text (both keywords, and the fit's mode from the baseline it names) and builds the right objects;
 `queuetruth-nautilus snippet` prints code that runs. Only fitted values become code: a latency component without
@@ -238,7 +238,7 @@ $NT_PY integrations/nautilus/repro/heldout.py score --calibration CAL.json --wor
 ```
 
 `score` reads the per-order prediction from `held_out/zoo_predictions.parquet` next to the calibration file
-(`queuetruth calibrate` writes it), or from `--zoo-held-out`. The published reports used the refit below, whose
+(`queuetruth advanced calibrate` writes it), or from `--zoo-held-out`. The published reports used the refit below, whose
 fitted model is the same `p` to the last bit. Fill times are compared as exact int64 nanoseconds.
 
 `heldout.py fit --spec-from CAL.json --dataset .realdata/ds/nasdaq-2d ...` refits the calibration with the current

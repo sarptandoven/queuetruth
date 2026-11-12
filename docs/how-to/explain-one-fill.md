@@ -7,7 +7,7 @@ orders, record by record: which orders were ahead of it, what removed them, and 
 (`qt.shadow_spec`) or a canonical live log.
 
 `queuetruth why` replays the order's instrument-day with that one order injected into the exact engine and writes a
-`qt.why_trace`. It is the same engine and the same rules as `queuetruth replay`.
+`qt.why_trace`. It is the same engine and the same rules as `queuetruth advanced replay`.
 
 ## A shadow order
 
@@ -15,9 +15,9 @@ Make some shadows on the synthetic dataset and replay them, so you can pick one 
 
 <!-- check-docs: run -->
 ```sh
-queuetruth fixtures synth --out synth
-queuetruth shadows sample --data synth --n 20 --seed 1 --out shadows.parquet
-queuetruth replay --data synth --shadows shadows.parquet --out r
+queuetruth advanced fixtures synth --out synth
+queuetruth advanced shadows sample --data synth --n 20 --seed 1 --out shadows.parquet
+queuetruth advanced replay --data synth --shadows shadows.parquet --out r
 ```
 
 `r/shadow_results.parquet` has one row per shadow with `end_state`, `filled_qty`, `ts_first_fill` and
@@ -129,7 +129,7 @@ trajectory from `zoo --write-trajectory`).
 ## One of your live orders
 
 Give the live log and an `order_key` instead of a shadow file. `why` first builds the order's schedule from the
-live log (entry = the exchange time of the acknowledgement, as in `queuetruth shadows from-live`) and traces its
+live log (entry = the exchange time of the acknowledgement, as in `queuetruth advanced shadows from-live`) and traces its
 first leg. Here the key is the first order of the synthetic live log that has a fill:
 
 <!-- check-docs: run -->
@@ -178,7 +178,7 @@ assert json.load(open("why.json"))["outcome"] == t.outcome.model_dump()
 
 The MCP server (`queuetruth mcp serve --local`) has the read-only tool `qt_local_why` with arguments
 `dataset_path`, `shadows_path` and `shadow_id`; it returns the same `qt.why_trace` document. It traces shadows
-only: for a live order, build its schedule first with `queuetruth shadows from-live` and pass the leg's
+only: for a live order, build its schedule first with `queuetruth advanced shadows from-live` and pass the leg's
 `shadow_id`. See [Use queuetruth from an agent](use-from-an-agent.md) and the [MCP reference](../reference/mcp.md).
 
 ## In the report
@@ -188,7 +188,7 @@ picks the orders the arms disagree on, sim-only first, then live-only, then join
 time-to-fill difference; for a zoo run, the shadows with the largest model-versus-exact error. Each trace shows the
 order's facts, an event table (long traces are cut to their first and last rows) and a step chart of the exact
 queue ahead over time, with the model's queue-ahead estimate next to it when the zoo run wrote
-`zoo_trajectory.parquet` (`queuetruth zoo --write-trajectory`).
+`zoo_trajectory.parquet` (`queuetruth advanced zoo --write-trajectory`).
 
 The events come from, in this order: a `qt.why_trace` JSON file in one of the `--in` directories, the exact engine
 (the same as `queuetruth why`) when the run's dataset and live log or shadow file resolve from the current
@@ -196,7 +196,7 @@ directory, the exact queue trajectory in the inputs, or else a note with the `qu
 
 <!-- check-docs: run -->
 ```sh
-queuetruth score --live synth/own_orders/live --sim-model "hbt_power3[n=2]" --data synth --out sc
+queuetruth advanced score --live synth/own_orders/live --sim-model "hbt_power3[n=2]" --data synth --out sc
 queuetruth report --in sc --max-why 3 --out why-report.html
 ```
 

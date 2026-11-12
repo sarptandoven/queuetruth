@@ -1,6 +1,6 @@
 # Add a backtester as a plugin
 
-**Goal:** let `queuetruth check`, `queuetruth.live.import_sim` and `queuetruth reconcile` read your backtester's
+**Goal:** let `queuetruth check`, `queuetruth.live.import_sim` and `queuetruth advanced reconcile` read your backtester's
 output, from a package of your own, with no change to queuetruth.
 
 queuetruth keeps one registry of backtesters, `queuetruth.backtesters`. The built-ins (hftbacktest, NautilusTrader,
@@ -53,10 +53,10 @@ After `pip install` of the package:
 - `queuetruth check mysim_orders.csv --data DATASET` detects the file and replays its orders;
   `--backtester mysim` names it when `detect` cannot tell.
 - `queuetruth.live.import_sim("mysim", [...], OUT)` writes a simulator log with venue `sim:mysim`.
-- `queuetruth reconcile --kind mysim ...` works when the entry has a `reconcile`.
+- `queuetruth advanced reconcile --kind mysim ...` works when the entry has a `reconcile`.
 
 A plugin cannot replace a built-in, and a plugin that fails to load is skipped with a `BacktesterWarning`.
-`queuetruth live import --venue sim-NAME` lists the built-ins only, since its venues are part of the
+`queuetruth advanced live import --venue sim-NAME` lists the built-ins only, since its venues are part of the
 `qt.live_import_spec` schema; plugins use `import_sim`.
 
 queuetruth's own test of this path is
@@ -104,7 +104,7 @@ IMPORTER = ImporterDef(
 myvenue = "myvenue_qt:IMPORTER"
 ```
 
-Then `queuetruth live import --venue myvenue --in fills.csv --out live/ --option region=eu` and
+Then `queuetruth advanced live import --venue myvenue --in fills.csv --out live/ --option region=eu` and
 `queuetruth.import_live({"venue": "myvenue", ...}, region="eu")` run it; options are checked against
 `MyVenueOptions` (an unknown or mistyped one fails `QT-CONFIG-001` and names the known ones).
 `queuetruth.live.importers.registry()` lists it, and the server's `qt.meta` names it in `live_venues`. A plugin

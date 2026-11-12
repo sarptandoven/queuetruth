@@ -700,9 +700,14 @@ fn fail_abs_bias_is_a_fraction_or_pp() {
 /// command table and the reference docs; `queuetruth-core` refuses them like every Python command.
 #[test]
 fn python_only_groups_are_listed_and_documented() {
-    let help = exit_of(&["queuetruth", "--help"]).text;
+    // the verbs are in the main help, every other group under `advanced`
+    let main_help = exit_of(&["queuetruth", "--help"]).text;
+    assert!(
+        main_help.lines().any(|l| l.trim_start().starts_with("demo ")),
+        "{main_help}"
+    );
+    let help = exit_of(&["queuetruth", "advanced", "--help"]).text;
     for word in [
-        "demo",
         "forecast",
         "ledger",
         "pm",
@@ -810,4 +815,192 @@ fn every_live_venue_parses_into_the_spec_mirror() {
         let li: LiveImportSpec = serde_json::from_value(v).unwrap_or_else(|e| panic!("{cli}: {e}"));
         assert_eq!(li.venue, venue, "{cli}");
     }
+}
+
+fn strs(v: &[&str]) -> Vec<String> {
+    v.iter().map(|s| (*s).to_owned()).collect()
+}
+
+/// The command word of an argv case (after the program name and the global flags).
+fn command_index(argv: &[String]) -> Option<usize> {
+    let mut i = 1;
+    while i < argv.len() {
+        if !argv[i].starts_with('-') {
+            return Some(i);
+        }
+        let takes_value =
+            ["--format", "--output-format", "--log-level", "--threads", "--seed"].contains(&argv[i].as_str());
+        i += if takes_value { 2 } else { 1 };
+    }
+    None
+}
+
+#[test]
+fn advanced_spelling_parses_to_the_same_command() {
+    let cases = argv_cases();
+    let mut n = 0;
+    for a in &cases {
+        let Some(i) = command_index(a) else { continue };
+        if a[i] != "advanced" {
+            continue;
+        }
+        let mut top = a.clone();
+        top.remove(i);
+        assert!(cases.contains(&top), "{a:?}: no golden case for the top-level spelling");
+        assert_eq!(parse_ok(a), parse_ok(&top), "{a:?}");
+        n += 1;
+    }
+    // every case of an advanced command has its `advanced` spelling
+    for a in &cases {
+        let Some(i) = command_index(a) else { continue };
+        let w = a[i].as_str();
+        if [
+            "demo", "atlas", "check", "fit", "compare", "data", "why", "report", "verify", "advanced", "explain",
+        ]
+        .contains(&w)
+        {
+            continue;
+        }
+        let mut adv = a.clone();
+        adv.insert(i, "advanced".to_owned());
+        assert!(
+            cases.contains(&adv),
+            "{a:?}: add its `advanced` spelling to cli_argv.json"
+        );
+    }
+    assert!(n > 80, "{n} advanced cases");
+}
+
+#[test]
+fn explain_is_why_and_verify_cert_is_a_verify_subcommand() {
+    let why = parse_ok(&strs(&[
+        "queuetruth",
+        "explain",
+        "--data",
+        "ds",
+        "--shadows",
+        "s",
+        "--shadow-id",
+        "x",
+    ]));
+    assert_eq!(why.path, ["why"]);
+    let vc = parse_ok(&strs(&["queuetruth", "verify", "cert", "c.json"]));
+    assert_eq!(
+        (vc.path.clone(), vc.implementation),
+        (strs(&["verify", "cert"]), Implementation::Python)
+    );
+}
+
+fn help_commands(text: &str) -> Vec<String> {
+    let block = text.split("Commands:\n").nth(1).expect("a Commands section");
+    block
+        .lines()
+        .take_while(|l| l.starts_with("  "))
+        .filter_map(|l| l.split_whitespace().next())
+        .map(str::to_owned)
+        .collect()
+}
+
+#[test]
+fn main_help_lists_the_verbs_the_helpers_and_advanced() {
+    let x = parse(&strs(&["queuetruth", "--help"])).expect_err("help exits");
+    assert_eq!(x.code, 0);
+    let got = help_commands(&x.text);
+    let verbs: Vec<&str> = ["demo", "atlas", "check", "fit", "compare", "data"]
+        .into_iter()
+        .filter(|v| command_table().iter().any(|c| c.path[0] == *v))
+        .collect();
+    let mut want: Vec<String> = strs(&verbs);
+    want.extend(strs(&["why", "report", "verify", "advanced", "help"]));
+    assert_eq!(got, want);
+    // every other top-level word is under `advanced`
+    let adv = parse(&strs(&["queuetruth", "advanced", "--help"])).expect_err("help exits");
+    let listed = help_commands(&adv.text);
+    for info in command_table() {
+        let w = info.path[0];
+        if !want.iter().any(|x| x == w) && w != "bench" {
+            assert!(listed.iter().any(|x| x == w), "{w} is not listed under advanced");
+        }
+    }
+}
+
+#[test]
+fn route_drops_advanced_and_names_the_new_spelling() {
+    let r = qt_cli::route(&strs(&[
+        "queuetruth",
+        "--format",
+        "json",
+        "advanced",
+        "zoo",
+        "--data",
+        "d",
+    ]));
+    assert_eq!(
+        (r.argv, r.deprecation),
+        (strs(&["queuetruth", "--format", "json", "zoo", "--data", "d"]), None)
+    );
+    let r = qt_cli::route(&strs(&["queuetruth", "help", "advanced", "pm"]));
+    assert_eq!(r.argv, strs(&["queuetruth", "help", "pm"]));
+    let r = qt_cli::route(&strs(&["queuetruth", "advanced", "--help"]));
+    assert_eq!(r.argv, strs(&["queuetruth", "advanced", "--help"]));
+    let r = qt_cli::route(&strs(&["queuetruth", "zoo", "--data", "d"]));
+    assert_eq!(r.argv, strs(&["queuetruth", "zoo", "--data", "d"]));
+    assert_eq!(
+        r.deprecation.as_deref(),
+        Some(
+            "warning: `queuetruth zoo` is deprecated; use `queuetruth check`, or `queuetruth advanced zoo` for this \
+             command (QT_NO_DEPRECATION=1 hides this line)"
+        )
+    );
+    let line = |v: &[&str]| qt_cli::route(&strs(v)).deprecation;
+    assert_eq!(
+        line(&["queuetruth", "replay", "--data", "d"]).as_deref(),
+        Some(
+            "warning: `queuetruth replay` is deprecated; use `queuetruth advanced replay` (QT_NO_DEPRECATION=1 hides this line)"
+        )
+    );
+    assert_eq!(
+        line(&["queuetruth", "verify-cert", "c.json"]).as_deref(),
+        Some(
+            "warning: `queuetruth verify-cert` is deprecated; use `queuetruth verify cert` (QT_NO_DEPRECATION=1 hides this line)"
+        )
+    );
+    assert!(
+        line(&["queuetruth", "calibrate", "alloc"])
+            .is_some_and(|l| l.contains("`queuetruth fit`, or `queuetruth advanced calibrate alloc`"))
+    );
+    assert!(line(&["queuetruth", "ingest", "--format", "itch"]).is_some_and(|l| l.contains("`queuetruth data add`")));
+    for quiet in [
+        &["queuetruth", "--quiet", "zoo"][..],
+        &["queuetruth", "zoo", "--quiet"],
+        &["queuetruth", "doctor"],
+        &["queuetruth", "mcp", "serve"],
+        &["queuetruth", "check", "bt.json"],
+        &["queuetruth", "why"],
+        &["queuetruth", "nonsense"],
+        &["queuetruth", "zoo", "--help"],
+        &["queuetruth", "help", "zoo"],
+    ] {
+        assert_eq!(line(quiet), None, "{quiet:?}");
+    }
+}
+
+#[test]
+fn core_binary_prints_the_deprecation_line_last() {
+    let (out, err, code) = qt_cli::main_with(&strs(&["queuetruth-core", "schema", "list", "--format", "json"]));
+    let (out2, err2, code2) = qt_cli::main_with(&strs(&[
+        "queuetruth-core",
+        "advanced",
+        "schema",
+        "list",
+        "--format",
+        "json",
+    ]));
+    assert_eq!((out.clone(), code), (out2, code2));
+    assert_eq!(err2, "");
+    assert_eq!(
+        err.trim_end(),
+        "warning: `queuetruth schema list` is deprecated; use `queuetruth advanced schema list` (QT_NO_DEPRECATION=1 hides this line)"
+    );
+    assert!(out.contains("qt."));
 }

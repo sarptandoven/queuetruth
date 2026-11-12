@@ -27,8 +27,8 @@ their canonical live log (venue `cme`, account `SYNTH`, `venue_order_id` = the M
 
 <!-- check-docs: run -->
 ```sh
-queuetruth fixtures synth --out synth
-queuetruth live validate --live synth/own_orders/live
+queuetruth advanced fixtures synth --out synth
+queuetruth advanced live validate --live synth/own_orders/live
 ```
 
 A canonical live log is a directory with `orders.parquet` (`qt.live_orders`, one row per order),
@@ -43,7 +43,7 @@ your own orders from the tape first (audit ruling A1, below).
 
 <!-- check-docs: run -->
 ```sh
-queuetruth score --live synth/own_orders/live --sim exact --data synth --out sc-exact
+queuetruth advanced score --live synth/own_orders/live --sim exact --data synth --out sc-exact
 ```
 
 stderr shows the match first, for example `warning: self_exclusion: matched 200/200 live orders to MBO order ids
@@ -69,7 +69,7 @@ the same tape:
 
 <!-- check-docs: run -->
 ```sh
-queuetruth score --live synth/own_orders/live --sim-model "hbt_power3[n=2]" --data synth --out sc-power3
+queuetruth advanced score --live synth/own_orders/live --sim-model "hbt_power3[n=2]" --data synth --out sc-power3
 ```
 
 `sim_source.model_id` in the output is the full model id with its defaults filled in. The bias, the 2x2 table and
@@ -142,7 +142,7 @@ print(summary.venue, summary.n_orders, summary.n_fills, summary.validation_statu
 
 <!-- check-docs: run -->
 ```sh
-queuetruth score --live synth/own_orders/live --sim-log nt-sim --data synth --out sc-nt
+queuetruth advanced score --live synth/own_orders/live --sim-log nt-sim --data synth --out sc-nt
 ```
 
 Because the report files copy the live fills, every order lands in `both` or `neither`: `live_only` and
@@ -166,7 +166,7 @@ data the zoo model's bias is small but not shown to be within 2 pp of live, so t
 
 <!-- check-docs: run exit=1 -->
 ```sh
-queuetruth score --live synth/own_orders/live --sim-model "hbt_power3[n=2]" --data synth --out sc-gate \
+queuetruth advanced score --live synth/own_orders/live --sim-model "hbt_power3[n=2]" --data synth --out sc-gate \
     --fail-abs-bias 0.05 --fail-not-equivalent
 ```
 
@@ -192,9 +192,9 @@ binance,BTCUSDT,1,,-9,-8,0.01,0.00001
 
 <!-- check-docs: skip (needs your Binance records) -->
 ```sh
-queuetruth live import --venue binance --account main --instrument-map instrument_map.csv \
+queuetruth advanced live import --venue binance --account main --instrument-map instrument_map.csv \
     --in user_stream_2026-10-05_11.jsonl --in mytrades_2026-10-05_11.json --out live/
-queuetruth live validate --live live/
+queuetruth advanced live validate --live live/
 ```
 
 Decimal prices and sizes convert exactly or fail with `QT-INPUT-004`. Fills deduplicate on (instrument, fill id);
@@ -210,7 +210,7 @@ so the scorer reports fill-rate bias and McNemar as not computable (see "Fills-o
 
 <!-- check-docs: skip (needs your live log) -->
 ```sh
-queuetruth shadows from-live --live live/ --out schedule.parquet
+queuetruth advanced shadows from-live --live live/ --out schedule.parquet
 ```
 
 `schedule.parquet` (`qt.shadow_spec`) has one row per order leg: `shadow_id`, `instrument_id`, `side`, `price`,
@@ -228,7 +228,7 @@ default isolates fill logic from entry latency.
 
 <!-- check-docs: skip (needs Tardis files) -->
 ```sh
-queuetruth ingest --format tardis-l2 --venue generic --source-venue binance \
+queuetruth advanced ingest --format tardis-l2 --venue generic --source-venue binance \
     --in binance-futures_incremental_book_L2_2026-10-05_BTCUSDT.csv.gz \
     --in binance-futures_trades_2026-10-05_BTCUSDT.csv.gz --out bn-l2
 ```
@@ -245,7 +245,7 @@ events it receives as JSON lines keyed by the live `order_key`, so Nautilus's ow
 
 <!-- check-docs: skip (needs your live log and dataset) -->
 ```sh
-queuetruth export replay-schedule --target nautilus --live live/ --data bn-l2 --out qt_replay_strategy.py
+queuetruth advanced export replay-schedule --target nautilus --live live/ --data bn-l2 --out qt_replay_strategy.py
 ```
 
 The file's docstring shows how to use it: add `ScheduleReplayStrategy(ScheduleReplayConfig(events_path=...))` to
@@ -264,7 +264,7 @@ Nautilus's orders and fills reports to files (CSV, Parquet or JSON lines).
 
 ### 5. Import the backtest output
 
-`queuetruth.live.import_sim("nautilus", inputs, out, ...)` (or `queuetruth live import --venue sim-nautilus`) reads
+`queuetruth.live.import_sim("nautilus", inputs, out, ...)` (or `queuetruth advanced live import --venue sim-nautilus`) reads
 the replay strategy's events file, or three kinds of report rows, recognised per row (code:
 `python/queuetruth/live/importers/sim.py`):
 
@@ -308,7 +308,7 @@ a validated canonical log directory from rows with the canonical column names (s
 
 <!-- check-docs: skip (needs your data) -->
 ```sh
-queuetruth score --live live/ --sim-log nt-sim/ --data bn-l2 --out sc-nautilus
+queuetruth advanced score --live live/ --sim-log nt-sim/ --data bn-l2 --out sc-nautilus
 queuetruth report --in sc-nautilus --out sc-nautilus.html
 ```
 
@@ -319,7 +319,7 @@ The same live log can be scored against any zoo model on the Binance L2 data, wi
 <!-- check-docs: skip (needs your data) -->
 ```sh
 for m in nt_queue_l2 "nt_prob_touch[p=0.3]" "hbt_power3[n=3]" hbt_risk_adverse; do
-  queuetruth score --live live/ --sim-model "$m" --data bn-l2 --out "sc-$m"
+  queuetruth advanced score --live live/ --sim-model "$m" --data bn-l2 --out "sc-$m"
 done
 ```
 
@@ -335,7 +335,7 @@ Nautilus run, the gap to live is the model's, not your configuration's.
 
 <!-- check-docs: skip (needs your data) -->
 ```sh
-queuetruth score --live live/ --sim-log nt-sim/ --data bn-l2 --out sc \
+queuetruth advanced score --live live/ --sim-log nt-sim/ --data bn-l2 --out sc \
     --fail-abs-bias 0.02 --fail-not-equivalent
 ```
 

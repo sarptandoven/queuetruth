@@ -1758,15 +1758,15 @@ pub(crate) fn command(bin: &'static str) -> Command {
                 .action(ArgAction::SetTrue)
                 .help("human output: every summary field after the answer; every warning and note on stderr"),
         );
-    let mut seen: Vec<&str> = Vec::new();
+    // One clap command per top-level word, in command-table order.
+    let mut tops: Vec<(&'static str, Command)> = Vec::new();
     for cmd in all_commands() {
         let top = cmd.path[0];
-        if seen.contains(&top) {
+        if tops.iter().any(|(t, _)| *t == top) {
             continue;
         }
-        seen.push(top);
         if cmd.path.len() == 1 {
-            root = root.subcommand(leaf(cmd, top));
+            tops.push((top, leaf(cmd, top)));
         } else {
             let about = GROUPS
                 .iter()
@@ -1783,10 +1783,77 @@ pub(crate) fn command(bin: &'static str) -> Command {
                 hidden &= c.hidden;
                 g = g.subcommand(leaf(c, c.path[1]));
             }
-            root = root.subcommand(g.hide(hidden));
+            tops.push((top, g.hide(hidden)));
         }
     }
-    root
+    // The main help lists the verbs, then the helpers, then `advanced`; every other command is listed under
+    // `advanced` and stays reachable, hidden, at the top level.
+    for word in VERBS.iter().chain(HELPERS) {
+        if let Some((_, c)) = tops.iter().find(|(t, _)| t == word) {
+            let c = c.clone();
+            root = root.subcommand(match ALIASES.iter().find(|(_, to)| to == word) {
+                Some((alias, _)) => c.visible_alias(*alias),
+                None => c,
+            });
+        }
+    }
+    let mut advanced = Command::new(ADVANCED)
+        .about(ADVANCED_ABOUT)
+        .long_about(ADVANCED_LONG_ABOUT)
+        .subcommand_required(true)
+        .arg_required_else_help(true);
+    for (top, c) in &tops {
+        if !is_advanced(top) {
+            continue;
+        }
+        advanced = advanced.subcommand(c.clone());
+        root = root.subcommand(c.clone().hide(true));
+    }
+    root.subcommand(advanced)
+}
+
+/// The six verbs of plan section 4.1, first in `queuetruth --help` (a verb missing from the command table is skipped).
+pub(crate) const VERBS: &[&str] = &["demo", "atlas", "check", "fit", "compare", "data"];
+/// The helpers listed after the verbs.
+pub(crate) const HELPERS: &[&str] = &["why", "report", "verify"];
+/// Other spellings of a verb or helper: (alias, command).
+pub(crate) const ALIASES: &[(&str, &str)] = &[("explain", "why")];
+/// The word that lists, and runs, every other command.
+pub(crate) const ADVANCED: &str = "advanced";
+const ADVANCED_ABOUT: &str = "every other command (ingest, replay, shadows, zoo, calibrate, score, ...)";
+const ADVANCED_LONG_ABOUT: &str = "Every command that is not a verb or a helper. `queuetruth advanced CMD ...` runs \
+CMD exactly as before; the old top-level spelling `queuetruth CMD ...` still works and prints one deprecation line on \
+stderr (hidden by --quiet or QT_NO_DEPRECATION=1).";
+/// Advanced commands that keep their top-level spelling without a deprecation line: `doctor` (asked for in bug
+/// reports), `mcp` (written into MCP client configurations) and `bench` (never listed). No verb replaces them.
+pub(crate) const UNDEPRECATED: &[&str] = &["doctor", "mcp", "bench"];
+/// The verb (or new spelling) that does the job of an advanced command, by command-path prefix; the longest prefix
+/// wins (plan section 4.1).
+pub(crate) const REPLACED_BY: &[(&[&str], &str)] = &[
+    (&["shadows", "from-live"], "compare"),
+    (&["shadows"], "check"),
+    (&["zoo"], "check"),
+    (&["zoo-toxicity"], "check"),
+    (&["calibrate"], "fit"),
+    (&["calibrate-live"], "fit"),
+    (&["export", "hftbacktest"], "fit"),
+    (&["export", "nautilus"], "fit"),
+    (&["reconcile"], "compare"),
+    (&["live", "import"], "compare"),
+    (&["score"], "compare"),
+    (&["ingest"], "data add"),
+    (&["dq"], "data add"),
+    (&["verify-cert"], "verify cert"),
+];
+
+/// A top-level word of the command table that is neither a verb nor a helper.
+pub(crate) fn is_advanced(word: &str) -> bool {
+    !VERBS.contains(&word) && !HELPERS.contains(&word) && all_commands().any(|c| c.path[0] == word)
+}
+
+/// A top-level word of the command table.
+pub(crate) fn is_command(word: &str) -> bool {
+    all_commands().any(|c| c.path[0] == word)
 }
 
 /// The table row of a command path.

@@ -114,7 +114,7 @@ computed at the pair's precision (`0.50000000`). Give the pair precision so the 
 
 <!-- check-docs: skip (needs your own authenticated Kraken capture) -->
 ```sh
-queuetruth ingest --format kraken-l3 --venue generic --in kraken_capture/ --out kraken-ds \
+queuetruth advanced ingest --format kraken-l3 --venue generic --in kraken_capture/ --out kraken-ds \
   --option 'checksum_precision={"BTC/USD": [1, 8], "ETH/USD": [2, 8]}'
 ```
 
@@ -164,7 +164,7 @@ the file name.
 
 <!-- check-docs: skip (needs your own node output) -->
 ```sh
-queuetruth ingest --format hyperliquid-node --venue generic --symbols BTC,ETH \
+queuetruth advanced ingest --format hyperliquid-node --venue generic --symbols BTC,ETH \
   --in ~/hl/data/node_raw_book_diffs_by_block --in ~/hl/data/node_fills_by_block \
   --in ~/hl/data/node_order_statuses_by_block --in l4_snapshot_812340000.json --out hl-ds
 ```

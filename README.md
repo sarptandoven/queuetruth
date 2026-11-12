@@ -83,13 +83,13 @@ Every term (shadow, zoo, exact arm, faithful and corrected) is in the
 
 | You have | You get | Read it with |
 |---|---|---|
-| Order-level data: Nasdaq TotalView-ITCH 5.0, IEX DEEP+ (free), NYSE TAQ Integrated Feed, Databento DBN MBO, Coinbase `level3`, Kraken L3, Hyperliquid node, Bitstamp, Bitfinex | exact replay, shadow orders, the zoo, calibration | `queuetruth ingest --format itch \| iex-deep-plus \| nyse-ibf \| dbn \| ...` |
+| Order-level data: Nasdaq TotalView-ITCH 5.0, IEX DEEP+ (free), NYSE TAQ Integrated Feed, Databento DBN MBO, Coinbase `level3`, Kraken L3, Hyperliquid node, Bitstamp, Bitfinex | exact replay, shadow orders, the zoo, calibration | `queuetruth data add FILES --out DATASET` (format, venue and date read from the files) |
 | An L2-only tape (Tardis `incremental_book_L2` and trades) | the queue models, markouts and a parameter fitted to your fills; never exact truth | `ingest --format tardis-l2` |
-| Your live orders and fills: Binance, Bybit, OKX, Coinbase, Kraken, Deribit, Hyperliquid, IBKR Flex, FIX 4.4 drop copies, QuickFIX logs | the sim-vs-live scorecard, `calibrate-live`, a latency fit | `queuetruth live import --venue <venue>` |
+| Your live orders and fills: Binance, Bybit, OKX, Coinbase, Kraken, Deribit, Hyperliquid, IBKR Flex, FIX 4.4 drop copies, QuickFIX logs | the sim-vs-live scorecard, `calibrate-live`, a latency fit | `queuetruth advanced live import --venue <venue>` |
 | Your backtest's output: hftbacktest or NautilusTrader | your simulator scored order by order against your live fills | `live import --venue sim-hftbacktest` or `sim-nautilus`, then `score --sim-log` |
-| A Freqtrade backtest or dry run, or a Hummingbot paper bot, next to the bot's live run | each order paired with its twin, why it differs, and the scorecard | `queuetruth reconcile --kind freqtrade` or `hummingbot` |
-| A Backtrader or VectorBT backtest (an analyzer's JSON lines, or `records_readable` CSV / JSON) and your live log | the same per-order account, and the backtest scored against live or exact queues | `queuetruth reconcile --kind backtrader` or `vectorbt`; `live import --venue sim-backtrader` or `sim-vectorbt` |
-| A QuantConnect LEAN backtest (the result JSON and its order-events JSON) and your live log | the same per-order account and scorecard | `queuetruth reconcile --kind lean`; `live import --venue sim-lean` |
+| A Freqtrade backtest or dry run, or a Hummingbot paper bot, next to the bot's live run | each order paired with its twin, why it differs, and the scorecard | `queuetruth advanced reconcile --kind freqtrade` or `hummingbot` |
+| A Backtrader or VectorBT backtest (an analyzer's JSON lines, or `records_readable` CSV / JSON) and your live log | the same per-order account, and the backtest scored against live or exact queues | `queuetruth advanced reconcile --kind backtrader` or `vectorbt`; `live import --venue sim-backtrader` or `sim-vectorbt` |
+| A QuantConnect LEAN backtest (the result JSON and its order-events JSON) and your live log | the same per-order account and scorecard | `queuetruth advanced reconcile --kind lean`; `live import --venue sim-lean` |
 
 queuetruth ships no market data. Three commands download public data, each only after you agree (a prompt, or
 `--yes`): `demo` (a sample day), `data fetch iex` (a free IEX day) and `atlas` (the atlas files); commands that read
@@ -105,7 +105,7 @@ the atlas follow the same rule. Nothing is sent anywhere. You need a licence for
   on 100% of orders at 1 s, 10 s and 60 s; its hftbacktest models are bit-exact against a transliteration of
   hftbacktest's source.
 - **You can rerun all of it.** `make reproduce` streams the public day files and rebuilds every published number
-  from the raw bytes. `queuetruth certify` and `verify-cert --rerun` re-execute a result bit for bit.
+  from the raw bytes. `queuetruth advanced certify` and `queuetruth verify cert --rerun` re-execute a result bit for bit.
 
 What each check covers and what is not tested yet:
 [How queuetruth is tested](https://sarptandoven.github.io/queuetruth/docs/testing/).
@@ -154,9 +154,9 @@ The whole workflow on a synthetic dataset generated on your machine (no download
 about markets):
 
 ```sh
-queuetruth fixtures synth --out synth
-queuetruth shadows sample --data synth --n 1000 --out shadows.parquet
-queuetruth zoo --data synth --shadows shadows.parquet --out zoo
+queuetruth advanced fixtures synth --out synth
+queuetruth advanced shadows sample --data synth --n 1000 --out shadows.parquet
+queuetruth advanced zoo --data synth --shadows shadows.parquet --out zoo
 ```
 
 The same from Python:
