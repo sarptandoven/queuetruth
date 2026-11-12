@@ -83,6 +83,8 @@ jobs:
           uv run --frozen --no-sync ruff format --check python service scripts tests benches tools integrations
       - name: import layers (tools/check_layers.py; recorded exceptions in tools/check_layers_allow.txt)
         run: uv run --frozen --no-sync python tools/check_layers.py
+      - name: changelog fragments (tools/changelog.py; changelog.d/README.md)
+        run: uv run --frozen --no-sync python tools/changelog.py check
       # Every generated file (schemas, openapi, the importer registry's files, CLI rows and golden files, reference
       # pages, validated page, README chart, synthetic fixtures), in one place; it lists what is stale and the fix.
       - name: generated files up to date (make generate-check)
@@ -155,7 +157,7 @@ jobs:
           done
       - name: test-hftbacktest-plugin (queuetruth-hftbacktest, hftbacktest 2.4.4)
         run: make test-hftbacktest-plugin
-      - name: test-extra (scripts/scale, scripts/nightly, tools/livefill, actions/referee, integrations/hftbacktest)
+      - name: test-extra (scripts/scale, scripts/nightly, tools, tools/livefill, actions/referee, integrations/hftbacktest)
         run: make test-extra
 
   service:
