@@ -107,8 +107,8 @@ def outcomes(results: Any, trades: Any, instruments: Any, spec: dict[str, Any]) 
     """Per order, bar length and rule: whether the real queue and the rule filled it before the close, whether each
     is real by the end of the other's bar, and the markouts (docs/concepts/touch-tables.md). `results`: the exact
     replay's `shadow_results` with a `shadow_pop` column; `trades`: its `trades`; `instruments`: the dataset's.
-    Orders that never rested in the book (not live, rejected as crossing or without a touch, out of session) or went
-    live at or after the close are left out."""
+    Orders that never rested in the book (not live or without a price, rejected as crossing or without a touch,
+    out of session) or went live at or after the close are left out."""
     import numpy as np
     import pyarrow as pa
     import pyarrow.compute as pc
@@ -126,7 +126,7 @@ def outcomes(results: Any, trades: Any, instruments: Any, spec: dict[str, Any]) 
         rs = results.filter(pc.equal(results["instrument_id"], iid))
         t0 = rs.column("ts_live").cast(pa.int64())
         rested = pc.invert(pc.is_in(rs["end_state"].cast(pa.utf8()), value_set=pa.array(sorted(REJECTED))))
-        ok = pc.and_(pc.is_valid(t0), pc.less(pc.fill_null(t0, hi), hi))
+        ok = pc.and_(pc.and_(pc.is_valid(t0), pc.is_valid(rs["price"])), pc.less(pc.fill_null(t0, hi), hi))
         ok = pc.and_(ok, pc.and_(pc.fill_null(rested, True), pc.invert(pc.fill_null(rs["out_of_session"], False))))
         ok = ok.to_numpy(zero_copy_only=False)
         rs = rs.filter(pa.array(ok))
