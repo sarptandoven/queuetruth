@@ -25,6 +25,7 @@ from queuetruth.dataset import open_dataset, read_manifest_doc
 from queuetruth.errors import QtError
 from queuetruth.ops._call import _native, _path_of, _validate, _write_json
 from queuetruth.ops.replay import _expand_order_ids
+from queuetruth.ops.table import OperationDef
 from queuetruth.schemas import models as m
 from queuetruth.schemas import specs as s
 from queuetruth.schemas.arrow import SCHEMAS
@@ -682,3 +683,15 @@ def why(
     for n in x.notes:
         warnings.warn(n, UserWarning, stacklevel=2)
     return x.trace
+
+
+OPERATIONS = (
+    OperationDef(
+        "why",
+        s.WhySpec,
+        why,
+        m.WhyTrace,
+        "Event by event trace of one shadow or one live order in the exact queue.",
+        out_name="why.json",
+    ),
+)

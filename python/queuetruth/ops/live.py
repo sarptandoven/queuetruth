@@ -6,6 +6,7 @@ from typing import Any
 
 from queuetruth.errors import QtError
 from queuetruth.ops._call import _path_of, _validate
+from queuetruth.ops.table import OperationDef
 from queuetruth.schemas import models as m
 from queuetruth.schemas import specs as s
 
@@ -62,3 +63,14 @@ def validate_live(path: str) -> list[str]:
     from queuetruth import live as qlive
 
     return list(qlive.validate(path))
+
+
+OPERATIONS = (
+    OperationDef(
+        "live_import",
+        s.LiveImportSpec,
+        import_live,
+        m.LiveImportSummary,
+        "Venue exports, simulator reports or a trading bot's run to a canonical live log.",
+    ),
+)

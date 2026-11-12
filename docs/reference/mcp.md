@@ -11,10 +11,16 @@ client: [Use queuetruth from an agent](../how-to/use-from-an-agent.md).
 - **Submit tools** are listed only with `--allow-submit`. They return a `qt.job` handle to poll with `qt_get_job`.
 - **Zoo tools** (`qt_get_zoo`, and `qt_submit_zoo` with `--allow-submit`) are listed in remote mode after the
   tools above.
-- **Run tools** are listed in either mode only with `--allow-run` (or `QT_MCP_ALLOW_RUN=1`). They sample shadows and
-  run replays and zoos on local datasets without the service, each in a sandboxed child process, and write only under
-  the run root (`QT_MCP_RUN_ROOT`, default `<QT_MCP_ROOT>/qt-mcp-runs`); inputs must lie under `QT_MCP_ROOT`,
-  `QT_MCP_DATA_ROOTS` or the run root.
+- **Run tools** are listed in either mode only with `--allow-run` (or `QT_MCP_ALLOW_RUN=1`). They come from the
+  operation table (`queuetruth.ops.table`): one tool per operation that has one. They sample shadows and run replays
+  and zoos on local datasets without the service, and run the verbs (`qt_check`, `qt_fit`, `qt_compare`, `qt_data`,
+  `qt_atlas`, `qt_demo`). Each runs in a sandboxed child process through `queuetruth.runner.run`, the runner the
+  service's jobs use, and writes only under the run root (`QT_MCP_RUN_ROOT`, default `<QT_MCP_ROOT>/qt-mcp-runs`);
+  inputs must lie under `QT_MCP_ROOT`, `QT_MCP_DATA_ROOTS` or the run root. A verb writes each run to a new
+  directory, and the first line of its text is the answer.
+- **The network** is off for run tools unless `QT_MCP_ALLOW_NETWORK=1`. Without it, a spec that needs the network
+  is refused: `qt_atlas` without a local `source`, `qt_demo` without `from_file`, `qt_check` without `data` or a
+  local `atlas`.
 - The agent sandbox tools (`qt_sandbox_*`) are an optional module: see
   [Give an agent a realistic exchange](../how-to/agent-sandbox.md).
 - There is no destructive tool: nothing deletes data or manages keys. Large files are returned as `resource_link`
@@ -45,9 +51,15 @@ Tools in the order the server lists them:
 | `qt_local_why` | local | `dataset_path`, `shadows_path`, `shadow_id` | `qt.why_trace` | Event-by-event why-trace (qt.why_trace) of one shadow order on a local dataset; read-only. |
 | `qt_get_zoo` | remote | `id` | `qt.zoo_summary` | qt.zoo_summary of a finished zoo run (leaderboard of L2 queue models against exact truth); error with the job state while it runs. |
 | `qt_submit_zoo` | remote, `--allow-submit` | `spec`, `idempotency_key`? | `qt.job` | Starts a zoo job (ZooSpec with dataset_id and shadows upload_id or job_file references, out null) and returns its qt.job handle; poll qt_get_job, then qt_get_zoo. |
-| `qt_local_sample_shadows` | run, `--allow-run` | `spec` | `qt.shadow_sample_summary` | Seeded random shadow orders on a local dataset (ShadowSampleSpec, out null); writes shadows.parquet under the run root and returns qt.shadow_sample_summary. Pass the file to qt_local_run_replay or qt_local_run_zoo. |
-| `qt_local_run_replay` | run, `--allow-run` | `spec` | `qt.replay_summary` | Exact replay of a local dataset with optional shadows (ReplaySpec, out null) in a sandboxed child process; outputs under the run root; returns qt.replay_summary. |
-| `qt_local_run_zoo` | run, `--allow-run` | `spec` | `qt.zoo_summary` | Runs L2 queue models on a local dataset's L2 view and scores them against exact truth (ZooSpec, out null) in a sandboxed child process; outputs under the run root; returns qt.zoo_summary with the leaderboard. |
+| `qt_local_sample_shadows` | run, `--allow-run` | `spec` | `qt.shadow_sample_summary` | Seeded random shadow orders on a local dataset; writes shadows.parquet and returns qt.shadow_sample_summary. Runs in a sandboxed child process; references are {"path"} under the allowed roots, spec.out is null and the outputs go under the run root. |
+| `qt_local_run_replay` | run, `--allow-run` | `spec` | `qt.replay_summary` | Exact replay of a local dataset with optional shadows; returns qt.replay_summary. Runs in a sandboxed child process; references are {"path"} under the allowed roots, spec.out is null and the outputs go under the run root. |
+| `qt_local_run_zoo` | run, `--allow-run` | `spec` | `qt.zoo_summary` | L2 queue models run on a local dataset's L2 view and scored against exact truth; returns qt.zoo_summary with the leaderboard. Runs in a sandboxed child process; references are {"path"} under the allowed roots, spec.out is null and the outputs go under the run root. |
+| `qt_check` | run, `--allow-run` | `spec` | `qt.check` | How wrong is a backtest: its own resting limit orders replayed in the exact queue of an order-level dataset (or, without data, the atlas estimate); returns qt.check. Runs in a sandboxed child process; references are {"path"} under the allowed roots, spec.out is null and the outputs go under the run root. |
+| `qt_fit` | run, `--allow-run` | `spec` | `qt.fit` | The parameter that fixes a backtester's fill model, fitted on order-level data or live fills and checked against the library default on held-out data; returns qt.fit. Runs in a sandboxed child process; references are {"path"} under the allowed roots, spec.out is null and the outputs go under the run root. |
+| `qt_compare` | run, `--allow-run` | `spec` | `qt.compare` | A backtest against the live run of the same strategy, order by order: fills on one side only, the P&L gap, time to fill; returns qt.compare. Runs in a sandboxed child process; references are {"path"} under the allowed roots, spec.out is null and the outputs go under the run root. |
+| `qt_data` | run, `--allow-run` | `spec` | `qt.data` | Order-level files of one or more days into one dataset, with the format, venue and dates inferred and the data-quality checks run; returns qt.data. Runs in a sandboxed child process; references are {"path"} under the allowed roots, spec.out is null and the outputs go under the run root. |
+| `qt_atlas` | run, `--allow-run` | `spec` | `qt.atlas_answer` | The atlas answer: how far each setting of a backtester's fill model is from the exact queue, with its 95% interval and the closest setting; returns qt.atlas_answer. Runs in a sandboxed child process; references are {"path"} under the allowed roots, spec.out is null and the outputs go under the run root. |
+| `qt_demo` | run, `--allow-run` | `spec` | `qt.demo_summary` | The demo: shadow orders in the exact queue of a few minutes of order-level data, and how far the backtester's default fill model is from them; returns qt.demo_summary. Runs in a sandboxed child process; references are {"path"} under the allowed roots, spec.out is null and the outputs go under the run root. |
 
 ## Metric glossary (`qt_explain_metric`)
 

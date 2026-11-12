@@ -677,3 +677,20 @@ HTTP client for the queuetruth service (SPEC 4.5; env `QT_API_URL`, `QT_API_KEY`
 | `Submission` | class |  | | Response of a job-creating POST (`{id, job}`), with `replayed` = the `Idempotent-Replayed` header. |
 
 Constants: `DEFAULT_API_URL`, `ENV_API_KEY`, `ENV_API_URL`, `ESTIMATE_KINDS`, `RUN_KINDS`, `TERMINAL_JOB_STATES`.
+
+## `queuetruth.runner`
+
+One runner for every operation (plan section 5.3, step 8): `run(name, spec, out=..., context=...)`.
+
+| Name | Kind | Binding | Signature | Description |
+|---|---|---|---|---|
+| `check_dataset_tree` | function |  | `(top: Path, inside: Callable[[Path], Path \| None], what: str, *, require_manifest: bool = True) -> None` | A dataset directory: `manifest.json` must exist when `require_manifest` (`QT-INPUT-001`; checked first, so a broad directory such as the root is refused without walking it), and no entry may be a symlink for which `inside` returns None (`QT-CONFIG-001`). At most `MAX_TREE_ENTRIES` entries are walked (`QT-INPUT-002` beyond). |
+| `document_of` | function |  | `(result: Any, name: str) -> dict[str, Any]` | The JSON document of an operation's result: a Pydantic document, a result object with `.doc`, or a dict. |
+| `produced_files` | function |  | `(out: Path \| None) -> list[Path]` | Every file at `out` (a file or a directory; symlinks are not followed), sorted. |
+| `Roots` | class |  | | Allowed roots (real paths). Relative paths start at `base` (default: the first root). `env_hint` names the settings that set the roots, for the error hint. |
+| `run` | function | SPEC 4.3 | `(name: str, spec: BaseModel \| dict[str, Any], *, out: str \| os.PathLike[str] \| None = None, context: RunContext \| None = None) -> RunOutcome` | Runs the operation `name` on `spec` (module docstring). `out` is a directory for the outputs; it replaces the spec's own output field (with the operation's `out_name` inside it, such as `shadows.parquet`). |
+| `RunContext` | class |  | | Who runs the operation, and what it may touch (module docstring). |
+| `RunOutcome` | class |  | | One run: the operation, its JSON `document`, the answer line (`summary`, when the result has one), the warnings it raised, the files it wrote (sorted) and its output location. |
+| `summary_of` | function |  | `(result: Any) -> str \| None` | The answer line of a result: `.summary` of the shared result shape (`queuetruth.results.Result`, what every verb returns), else None. |
+
+Constants: `DATASET_FIELDS`, `MAX_TREE_ENTRIES`.

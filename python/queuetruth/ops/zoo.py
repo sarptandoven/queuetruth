@@ -16,6 +16,7 @@ from queuetruth.errors import QtError
 from queuetruth.ledger import recorded as _ledger_recorded
 from queuetruth.ops._call import _native, _out_dir, _validate, _write_json
 from queuetruth.ops.replay import _expand_order_ids
+from queuetruth.ops.table import OperationDef
 from queuetruth.schemas import models as m
 from queuetruth.schemas import specs as s
 from queuetruth.schemas.io import write_table
@@ -153,3 +154,20 @@ def run_zoo(spec: s.ZooSpec | dict[str, Any]) -> m.ZooSummary:
         if sp.out:
             _write_json(summary.model_dump(mode="json"), out / "summary.json")
     return summary
+
+
+OPERATIONS = (
+    OperationDef(
+        "zoo",
+        s.ZooSpec,
+        run_zoo,
+        m.ZooSummary,
+        "L2 queue models run on a local dataset's L2 view and scored against exact truth; returns qt.zoo_summary "
+        "with the leaderboard.",
+        cost="minutes",
+        run_id=True,
+        tool="qt_local_run_zoo",
+        title="Run model zoo locally",
+        service_kind="zoo",
+    ),
+)

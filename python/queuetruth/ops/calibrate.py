@@ -20,6 +20,7 @@ from queuetruth.dataset import open_dataset
 from queuetruth.errors import QtError
 from queuetruth.ledger import recorded as _ledger_recorded
 from queuetruth.ops._call import _dump, _native, _out_dir, _path_of, _resolve_ref, _validate, _write_json
+from queuetruth.ops.table import OperationDef
 from queuetruth.ops.zoo import _evaluate
 from queuetruth.schemas import models as m
 from queuetruth.schemas import specs as s
@@ -237,3 +238,24 @@ def calibrate_live(spec: Any, **kwargs: Any) -> m.CalibrationResult:
     from queuetruth.score import calibrate_live as _calibrate_live
 
     return _calibrate_live(spec, **kwargs)
+
+
+OPERATIONS = (
+    OperationDef(
+        "calibrate",
+        s.CalibrationSpec,
+        calibrate,
+        m.CalibrationResult,
+        "A queue model's parameter fitted on exact queue truth, with its held-out verdict.",
+        cost="minutes",
+        service_kind="calibration",
+    ),
+    OperationDef(
+        "calibrate_live",
+        s.LiveCalibrationSpec,
+        calibrate_live,
+        m.CalibrationResult,
+        "A queue model's parameter fitted on your own live fills.",
+        cost="minutes",
+    ),
+)
