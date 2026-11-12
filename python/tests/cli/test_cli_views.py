@@ -494,7 +494,7 @@ def test_live_import_sim_venues_route_to_import_sim(monkeypatch: pytest.MonkeyPa
     }
     from queuetruth import api
 
-    with pytest.raises(QtError, match="apply to simulator imports"):
+    with pytest.raises(QtError, match=r"binance importer: unknown option\(s\) \['size_exp'\]; known: \[\]"):
         api.import_live({"venue": "binance", "inputs": [{"path": "a"}], "out": "o"}, size_exp=-8)
     with pytest.raises(QtError, match="tz does not apply"):
         api.import_live({"venue": "sim_hftbacktest", "inputs": [{"path": "a"}], "out": "o", "tz": "UTC"})

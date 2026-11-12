@@ -26,7 +26,16 @@ from typing import Any
 from queuetruth.errors import QtError
 from queuetruth.live._common import Record, as_bool, dec, dec_text, dsub, epoch_ns, text_or_none
 from queuetruth.live.builder import ImportResult, LogBuilder
-from queuetruth.live.importers._base import ImportOptions, json_records, new_builder, obj_field, side_of, sub_records
+from queuetruth.live.importers._base import (
+    ImporterDef,
+    ImporterOptions,
+    ImportOptions,
+    json_records,
+    new_builder,
+    obj_field,
+    side_of,
+    sub_records,
+)
 
 VENUE = "deribit"
 _TIF = {
@@ -260,3 +269,21 @@ def import_deribit(paths: list[str], opts: ImportOptions) -> ImportResult:
         oid = b.order_field(h, "venue_order_id")
         b.warn(f"{VENUE}: order {oid}: side taken from trade direction (ASSUMED, no order record)")
     return b.finish()
+
+
+# ---- registry entry (queuetruth.live.importers.registry()) ------------------------------------------------------
+
+IMPORTER = ImporterDef(
+    name="deribit",
+    kind="venue",
+    run=import_deribit,
+    options=ImporterOptions,
+    formats=(
+        "JSON-RPC user.orders and user.trades notifications (JSON lines)",
+        "REST user trades and order history JSON",
+    ),
+    patterns=("*.jsonl", "*.json"),
+    description="Deribit: orders and fills of your own account",
+    docs="how-to/import-live-logs.md#deribit",
+    rank=60,
+)

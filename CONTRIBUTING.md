@@ -54,7 +54,8 @@ the service package. Rebuild it after any change under `crates/`. Every Python c
 | `make test-service` | service tests on an ephemeral PostgreSQL 16 |
 | `make test` | lint, Rust, extension build, Python and service tests |
 | `make test-e2e` | end-to-end parity and determinism tests (builds `queuetruth-core`) |
-| `make schemas` / `make schemas-check` | regenerate / verify the committed JSON and Arrow schemas |
+| `make generate` / `make generate-check` | regenerate / verify every generated file, in dependency order (below) |
+| `make schemas` / `make schemas-check` | regenerate / verify the committed JSON and Arrow schemas only |
 | `make fixtures` | regenerate the committed synthetic fixtures and verify their manifests |
 | `make openapi` | regenerate `service/openapi.json` |
 | `make check-docs` | links, anchors, runnable blocks and generated reference pages in `docs/` |
@@ -108,16 +109,23 @@ install commands and versions are in the `integrations` job of `.github/workflow
 - **Public names are a contract.** The CLI flags, Python API, schemas and HTTP endpoints are described in the
   [design specification](docs/design/spec.md) and the generated reference pages. A change to them needs a schema
   bump or a deprecation path; say so in the pull request.
-- **Generated files are regenerated, not edited**: `schemas/` and `crates/schema/src/live_venue.rs`
-  (`make schemas`), `service/openapi.json` (`make openapi`), `docs/reference/`
-  (`uv run --frozen --no-sync python docs/gen_reference.py`).
+- **Generated files are regenerated, not edited.** `make generate` runs every generator in order; `make
+  generate-check` (in CI) fails when a committed file differs, names it and the command that rewrites it, and
+  changes nothing. `uv run --frozen --no-sync python tools/generate.py --list` lists the steps: the importer
+  registry (`LiveImportSpec.venue`, the CLI's live-import rules), `schemas/` and `crates/schema/src/live_venue.rs`,
+  `service/openapi.json`, `crates/cli/src/python_commands.rs`, the CLI golden files, `docs/reference/`,
+  `docs/validated.md` and the README status block, the README chart, and the synthetic zoo, tape, referee and NYSE
+  fixtures. `--only STEP` runs one step. The steps that read the CLI grammar rebuild `queuetruth._core` first when
+  an earlier step changed a Rust file.
 - **Imports go down the layers.** In `python/queuetruth`: contracts, data adapters, engine, models, evaluation,
   operations, interfaces, products. No package imports another's private names. `tools/check_layers.py` (in
   `make lint`) enforces this; the exceptions that exist today are listed in `tools/check_layers_allow.txt`. Remove a
   line when you remove its import; do not add one.
 - **One list per thing.** Source formats come from one registry (`crates/cli/src/formats.rs`, `_core.formats()`),
-  live venues from `LiveImportSpec.venue`. A copy kept by hand elsewhere needs a test that compares it with its
-  source.
+  importers (live venues, simulator outputs, trading bots) from the importer registry
+  (`queuetruth.live.importers.registry()`): each importer module declares an `ImporterDef` with a typed options
+  model, so a new venue is one Python file plus `make generate`. A copy kept by hand elsewhere needs a test that
+  compares it with its source.
 - **Dependencies.** Do not add or upgrade a dependency in a feature pull request. Propose it in an issue first; the
   maintainer updates `Cargo.lock` and `uv.lock` (`make lock`), which only admits releases at least two weeks old.
 - **Third-party code.** hftbacktest is MIT and its ported logic is credited in `NOTICE`. NautilusTrader is LGPL-3.0:

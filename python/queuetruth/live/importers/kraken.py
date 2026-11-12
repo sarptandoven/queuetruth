@@ -34,7 +34,15 @@ from queuetruth.live._common import (
     text_or_none,
 )
 from queuetruth.live.builder import ImportResult, LogBuilder
-from queuetruth.live.importers._base import ImportOptions, json_records, list_field, new_builder, side_of
+from queuetruth.live.importers._base import (
+    ImporterDef,
+    ImporterOptions,
+    ImportOptions,
+    json_records,
+    list_field,
+    new_builder,
+    side_of,
+)
 
 VENUE = "kraken"
 _TIF = {"GTC": "gtc", "IOC": "ioc", "GTD": "gtd", "FOK": "fok"}
@@ -200,3 +208,18 @@ def import_kraken(paths: list[str], opts: ImportOptions) -> ImportResult:
             sub = Record(m, rec.raw, f"{rec.location}/{i}", rec.file_idx, rec.line_idx, recv_ns=rec.recv_ns)
             _item(b, m, sub, str(obj.get("type", "update")), states)
     return b.finish()
+
+
+# ---- registry entry (queuetruth.live.importers.registry()) ------------------------------------------------------
+
+IMPORTER = ImporterDef(
+    name="kraken",
+    kind="venue",
+    run=import_kraken,
+    options=ImporterOptions,
+    formats=("executions channel messages (JSON lines)",),
+    patterns=("*.jsonl", "*.json"),
+    description="Kraken WebSocket v2 executions: orders and fills of your own account",
+    docs="how-to/import-live-logs.md#kraken",
+    rank=50,
+)
