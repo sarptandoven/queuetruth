@@ -15,19 +15,26 @@ hftbacktest user, in the queuetruth environment (hftbacktest itself runs in its 
     print(cal.text())
     print(cal.code)   # CalibrationRefused (QT-CALIB-001) when no fit passes queuetruth's trust check
 
-`queuetruth-hftbacktest prepare|run|score|calibrate` is the same from the command line.
+    # 3. one line in your hftbacktest code: a fit on your data, or the atlas when you have none
+    asset = qthbt.configure(asset, qt.fit("hftbacktest", data="dataset"))
+    asset = qthbt.configure(asset, qt.atlas.calibration("hftbacktest", tier="T1", yes=True))
+
+`queuetruth-hftbacktest prepare|run|score|calibrate` is the same from the command line. `configure` is standard
+library only, so it also runs in the hftbacktest venv on a saved `fit.json`.
 """
 
 from __future__ import annotations
 
 from queuetruth_hftbacktest.calibrate import FamilyFit, HbtCalibration, calibrate, select, window
-from queuetruth_hftbacktest.errors import CalibrationRefused, QtHbtError
+from queuetruth_hftbacktest.configure import configure, settings
+from queuetruth_hftbacktest.errors import CalibrationRefused, CalibrationWarning, QtHbtError
 from queuetruth_hftbacktest.replay import HbtScore, HorizonScore, Prepared, prepare, run, score
 
 __version__ = "0.1.0"
 
 __all__ = [
     "CalibrationRefused",
+    "CalibrationWarning",
     "FamilyFit",
     "HbtCalibration",
     "HbtScore",
@@ -36,9 +43,11 @@ __all__ = [
     "QtHbtError",
     "__version__",
     "calibrate",
+    "configure",
     "prepare",
     "run",
     "score",
     "select",
+    "settings",
     "window",
 ]

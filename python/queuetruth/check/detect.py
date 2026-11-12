@@ -9,6 +9,7 @@ formats; the rules live in `queuetruth.backtesters._builtin`, and a plugin bring
 - `backtrader`: `QtOrderLog` lines (`"event": "order"` or `"trade"`), or a `Transactions` analyzer dump (an object
   of bar times to lists).
 - `vectorbt`: `records_readable` columns (`Order Id` and `Column`, or a trade id column).
+- `backtesting_py`: a `Backtest.run()` result's `_trades` (`EntryBar`, `ExitBar`, `EntryPrice`, `ExitPrice`).
 - `lean`: a result JSON with an `orders` member, or order events (`orderEventId`, `algorithmId`, `OrderId`).
 - `freqtrade`: a backtest result (`.zip`, or JSON with `strategy` and its trades) or a trades database.
 """

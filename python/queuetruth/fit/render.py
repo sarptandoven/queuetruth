@@ -73,8 +73,70 @@ def gain(r: dict[str, Any]) -> str:
     return text
 
 
+def _setting_words(doc: dict[str, Any]) -> str:
+    """`p = 0.5 for NautilusTrader prob_fill_on_limit`, or the setting's label when it has no number."""
+    p = doc["param"]
+    if p["name"] and p["value"] is not None:
+        return f"{p['name']} = {num(p['value'])} for {p['setting']}"
+    return str(doc["atlas"]["label"])
+
+
+def atlas_answer(doc: dict[str, Any]) -> str:
+    """The answer of an atlas setting: the setting, how far it still is from the real queue, where it comes from."""
+    a = doc["atlas"]
+    iv = a["fill_rate_bias_pp"]
+    where = f"{a['tier_name']} on {a['venue_name']} ({a['window']})"
+    if not doc["verdict"]["passed"]:
+        return (
+            f"The atlas's closest model for {where} is {a['label']}, but no released library setting reproduces it. "
+            "Keep your setting and fit on your own data."
+        )
+    bias = "" if iv["value"] is None else f" its fill rate is off by {pp(iv['value'])}"
+    ci = "" if iv["lo"] is None or iv["hi"] is None else f" (95% interval {pp(iv['lo'])} to {pp(iv['hi'])})"
+    clear = {
+        "too_optimistic": "still clearly too optimistic",
+        "too_pessimistic": "still clearly too pessimistic",
+    }.get(a["verdict"], "no clear difference from the real queue")
+    return (
+        f"Use {_setting_words(doc)}: the atlas's closest setting for {where}; within "
+        f"{units.horizon_words(a['horizon'])}{bias}{ci}, "
+        f"{clear}. From the atlas, not your data: fit on your own data to confirm."
+    )
+
+
+def atlas_text(doc: dict[str, Any]) -> str:
+    """The terminal report of an atlas setting."""
+    a = doc["atlas"]
+    lines = [doc["answer"], ""]
+    lines.append(
+        f"atlas: {a['label']} ({a['model_id']}), the closest of {a['n_settings']} setting(s) in {a['tier']}"
+        + (f" (the tier of {a['symbol']})" if a.get("symbol") else "")
+    )
+    if a["overlapping_labels"]:
+        lines.append(f"  the atlas cannot rank it against: {', '.join(a['overlapping_labels'])}")
+    lines.append(f"  {a['verdict_text']}")
+    if doc["settings"]:
+        lines.append("settings: " + ", ".join(f"{k}={v!r}" for k, v in doc["settings"].items()))
+    if a["config"]:
+        lines.append(f"paste ({a['config_kind']}): {a['config']}")
+    for n in [*(doc.get("warnings") or []), *([a["note"]] if a.get("note") else [])]:
+        lines.append(f"note: {n}")
+    if not doc["verdict"]["passed"]:
+        lines.append("verdict: DO NOT USE: " + ", ".join(r["code"] for r in doc["verdict"]["reasons"]))
+        lines += [f"  - {r['text']}" for r in doc["verdict"]["reasons"]]
+    lines.append(
+        f"source: Fill-Realism Atlas, {a['venue_name']}, {a['window']}, built {a['built_at']}, atlas root "
+        f"{a['atlas_root'][:16]}... ({a['source']})"
+    )
+    if a.get("attribution"):
+        lines.append(a["attribution"])
+    return "\n".join(lines)
+
+
 def answer(doc: dict[str, Any]) -> str:
     """The answer in plain words (the first line of the report)."""
+    if doc.get("source") == "atlas":
+        return atlas_answer(doc)
     p = doc["param"]
     sp = doc["split"]
     held = f"held-out data ({sp['test']}, {sp['n_test']} {sp['orders']})"
@@ -117,6 +179,8 @@ def _table(header: list[str], rows: list[list[str]]) -> list[str]:
 
 def text(doc: dict[str, Any]) -> str:
     """The terminal report."""
+    if doc.get("source") == "atlas":
+        return atlas_text(doc)
     p, sp, v = doc["param"], doc["split"], doc["verdict"]
     lines = [doc["answer"], ""]
     lines.append(
@@ -167,4 +231,4 @@ def text(doc: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-__all__ = ["answer", "headline", "text"]
+__all__ = ["answer", "atlas_answer", "atlas_text", "headline", "text"]

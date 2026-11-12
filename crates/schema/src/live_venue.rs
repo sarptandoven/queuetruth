@@ -60,11 +60,14 @@ pub enum LiveVenue {
     /// `sim_lean`.
     #[serde(rename = "sim_lean")]
     SimLean,
+    /// `sim_backtesting_py`.
+    #[serde(rename = "sim_backtesting_py")]
+    SimBacktestingPy,
 }
 
 impl LiveVenue {
     /// Every venue, in the order of the Python model.
-    pub const ALL: [LiveVenue; 18] = [
+    pub const ALL: [LiveVenue; 19] = [
         LiveVenue::Binance,
         LiveVenue::Bybit,
         LiveVenue::Okx,
@@ -83,6 +86,7 @@ impl LiveVenue {
         LiveVenue::SimBacktrader,
         LiveVenue::SimVectorbt,
         LiveVenue::SimLean,
+        LiveVenue::SimBacktestingPy,
     ];
 
     /// The spec spelling (`ibkr_flex`).
@@ -106,6 +110,7 @@ impl LiveVenue {
             LiveVenue::SimBacktrader => "sim_backtrader",
             LiveVenue::SimVectorbt => "sim_vectorbt",
             LiveVenue::SimLean => "sim_lean",
+            LiveVenue::SimBacktestingPy => "sim_backtesting_py",
         }
     }
 }
@@ -130,4 +135,5 @@ pub const LIVE_VENUE_CLI_NAMES: &[&str] = &[
     "sim-backtrader",
     "sim-vectorbt",
     "sim-lean",
+    "sim-backtesting-py",
 ];

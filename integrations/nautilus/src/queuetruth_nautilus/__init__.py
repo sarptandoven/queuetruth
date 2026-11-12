@@ -9,6 +9,9 @@ order-book replay and scores the fit on a held-out window. This package turns th
     cal = qtn.load_calibration("cal/calibration.json")
     engine.add_venue(venue=..., oms_type=..., account_type=..., starting_balances=[...], **qtn.venue_options(cal))
 
+The result of `qt.fit("nautilus", data=...)` (a fit on your data) or `qt.atlas.calibration("nautilus", tier="T1")`
+(the atlas's closest setting, when you have no data) goes straight in: `**qtn.venue_options(qt.fit(...))`.
+
 A calibration whose trust verdict is `refused` raises `CalibrationRefused` (`QT-CALIB-001`) unless `force=True`.
 """
 
@@ -19,7 +22,9 @@ from queuetruth_nautilus.calibration import (
     Latency,
     NautilusCalibration,
     Trust,
+    as_calibration,
     from_document,
+    from_fit_document,
     from_snippet,
     load_calibration,
 )
@@ -46,10 +51,12 @@ __all__ = [
     "QtNautilusError",
     "Trust",
     "__version__",
+    "as_calibration",
     "check_trust",
     "fill_model",
     "fill_model_kwargs",
     "from_document",
+    "from_fit_document",
     "from_snippet",
     "latency_model",
     "latency_model_kwargs",

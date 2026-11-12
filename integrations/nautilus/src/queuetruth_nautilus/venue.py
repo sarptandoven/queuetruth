@@ -8,6 +8,10 @@ The venue settings the calibration was fitted and cross-checked under are part o
 and `queue_position` = True only for the queue-gated family. `venue_options` returns all of them for
 `BacktestEngine.add_venue(**...)`; `venue_config` builds the high-level `BacktestVenueConfig`.
 
+Every public function takes what `as_calibration` takes: a `NautilusCalibration`, the result of `qt.fit("nautilus",
+...)` or of `qt.atlas.calibration("nautilus", ...)`, a document or a path. An atlas setting warns that it is the
+atlas's closest setting for its tier, not a fit on your data, and says whether it is still clearly off.
+
 A calibration whose trust verdict is `refused` raises `CalibrationRefused` (`QT-CALIB-001`) unless `force=True`,
 which emits a `CalibrationWarning` instead. Each public function checks trust and version once and emits each
 `CalibrationWarning` once, attributed to the caller's line.
@@ -20,7 +24,7 @@ import warnings
 from typing import Any
 
 from queuetruth_nautilus import compat
-from queuetruth_nautilus.calibration import MODE_UNKNOWN, NautilusCalibration
+from queuetruth_nautilus.calibration import MODE_UNKNOWN, NautilusCalibration, as_calibration
 from queuetruth_nautilus.errors import CalibrationRefused, CalibrationWarning, QtNautilusError
 
 U64_MAX = 2**64 - 1
@@ -43,8 +47,9 @@ def _trust_note(cal: NautilusCalibration, force: bool) -> str | None:
     return f"force: using a NOT VALIDATED calibration: {msg}"
 
 
-def check_trust(cal: NautilusCalibration, *, force: bool = False) -> None:
+def check_trust(cal: Any, *, force: bool = False) -> None:
     """Raises `CalibrationRefused` for a refused calibration; with `force`, warns instead."""
+    cal = as_calibration(cal)
     note = _trust_note(cal, force)
     if note is not None:
         warnings.warn(CalibrationWarning(note), stacklevel=2)
@@ -61,6 +66,13 @@ def caveats(
     """The `CalibrationWarning` texts for using `cal` on release line `nt_major` (no trust or version check):
     `fill` when a fill model is built, `latency` when a latency model is."""
     out: list[str] = []
+    if cal.atlas is not None:
+        a = cal.atlas
+        out.append(
+            f"from the Fill-Realism Atlas ({a.get('venue_name')}, {a.get('window')}, tier {a.get('tier')}, within "
+            f"{a.get('horizon')}), not your data: {a.get('verdict_text')}; fit on your own data with "
+            'qt.fit("nautilus", data=...) to confirm'
+        )
     if fill:
         if cal.mode == MODE_UNKNOWN:
             out.append(
@@ -154,10 +166,9 @@ def _require_p(cal: NautilusCalibration) -> float:
     return cal.prob_fill_on_limit
 
 
-def fill_model_kwargs(
-    cal: NautilusCalibration, *, random_seed: int | None = None, prob_slippage: float = 0.0
-) -> dict[str, Any]:
+def fill_model_kwargs(cal: Any, *, random_seed: int | None = None, prob_slippage: float = 0.0) -> dict[str, Any]:
     """Constructor keywords of the probabilistic fill model (the same names in 1.x and 2.x)."""
+    cal = as_calibration(cal)
     return {
         "prob_fill_on_limit": _require_p(cal),
         "prob_slippage": _slippage(prob_slippage),
@@ -165,11 +176,10 @@ def fill_model_kwargs(
     }
 
 
-def fill_model(
-    cal: NautilusCalibration, *, random_seed: int | None = None, prob_slippage: float = 0.0, force: bool = False
-) -> Any:
+def fill_model(cal: Any, *, random_seed: int | None = None, prob_slippage: float = 0.0, force: bool = False) -> Any:
     """NautilusTrader's probabilistic fill model with the fitted `prob_fill_on_limit` (`FillModel` in 1.x,
     `DefaultFillModel` in 2.x). `QT-CONFIG-001` when the calibration fits no fill probability."""
+    cal = as_calibration(cal)
     kw = fill_model_kwargs(cal, random_seed=random_seed, prob_slippage=prob_slippage)
     v, msgs = _prepare(cal, force, fill=True, latency=False, random_seed=random_seed)
     obj = compat.fill_model_cls(v)(**kw)
@@ -177,11 +187,12 @@ def fill_model(
     return obj
 
 
-def latency_model_kwargs(cal: NautilusCalibration) -> dict[str, int] | None:
+def latency_model_kwargs(cal: Any) -> dict[str, int] | None:
     """Constructor keywords of the static latency model, None when no component was fitted.
 
     `base_latency_nanos=0` because the fitted values are whole one-way latencies (NautilusTrader adds the base to
     each); a component without samples is 0 (the class default on both lines) and named in a `CalibrationWarning`."""
+    cal = as_calibration(cal)
     lat = cal.latency
     if lat is None or not lat.fitted:
         return None
@@ -193,8 +204,9 @@ def latency_model_kwargs(cal: NautilusCalibration) -> dict[str, int] | None:
     }
 
 
-def latency_model(cal: NautilusCalibration, *, force: bool = False) -> Any | None:
+def latency_model(cal: Any, *, force: bool = False) -> Any | None:
     """NautilusTrader's static latency model with the fitted p50 one-way latencies, or None when none was fitted."""
+    cal = as_calibration(cal)
     kw = latency_model_kwargs(cal)
     if kw is None:
         return None
@@ -205,13 +217,14 @@ def latency_model(cal: NautilusCalibration, *, force: bool = False) -> Any | Non
 
 
 def venue_options(
-    cal: NautilusCalibration, *, random_seed: int | None = None, prob_slippage: float = 0.0, force: bool = False
+    cal: Any, *, random_seed: int | None = None, prob_slippage: float = 0.0, force: bool = False
 ) -> dict[str, Any]:
     """Keyword arguments for `BacktestEngine.add_venue(...)`: `fill_model` (when fitted), `latency_model` (when
     fitted), `book_type=L2_MBP`, `trade_execution=True` and `queue_position` (True only for the queue-gated family;
     absent for a latency-only calibration). `QT-CONFIG-001` when the calibration carries neither a fill probability
     nor a latency. Not included: `fee_model`, which nautilus_trader requires on every backtest venue from 2.0.0rc7
     (pass `fee_model=FixedFeeModel(Money(0, USD))` for zero fees)."""
+    cal = as_calibration(cal)
     fill = cal.prob_fill_on_limit is not None
     fkw = fill_model_kwargs(cal, random_seed=random_seed, prob_slippage=prob_slippage) if fill else None
     lkw = latency_model_kwargs(cal)
@@ -231,7 +244,7 @@ def venue_options(
 
 
 def venue_config(
-    cal: NautilusCalibration,
+    cal: Any,
     name: str,
     oms_type: Any,
     account_type: Any,
@@ -247,6 +260,7 @@ def venue_config(
     (`FillModelConfig` / `LatencyModelConfig`); in 2.x the config takes the model objects, and `fee_model` is
     required (`QT-CONFIG-001` without it): from 2.0.0rc7 a backtest venue refuses to start without one, and requiring
     it on every 2.x release keeps code written for one release candidate working on the next."""
+    cal = as_calibration(cal)
     clash = sorted({"fill_model", "latency_model", "queue_position", "trade_execution", "book_type"} & set(kwargs))
     if clash:
         raise QtNautilusError("QT-CONFIG-001", f"venue_config: {', '.join(clash)} come from the calibration")

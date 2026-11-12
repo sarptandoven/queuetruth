@@ -177,6 +177,58 @@ qthbt.run(prep, python="hbt-venv/bin/python", code=cal.code)
 print(qthbt.score(prep).text())
 ```
 
+### 3. One line in your hftbacktest code
+
+`configure` sets a calibration's queue model and exchange on your `BacktestAsset` and leaves your data, tick, lot,
+latency and fee settings alone. It takes a fit on your data, or the atlas's closest setting when you have no data:
+
+<!-- check-docs: skip (needs hftbacktest, the plugin and user data; downloads the public atlas after asking) -->
+```python
+import queuetruth as qt
+import queuetruth_hftbacktest as qthbt
+
+asset = qthbt.configure(asset, qt.fit("hftbacktest", data="my-dataset"))  # your data
+asset = qthbt.configure(asset, qt.atlas.calibration("hftbacktest", tier="T1", yes=True))  # no data: the atlas
+```
+
+Here `asset` is your `BacktestAsset` chain. The fit and the atlas setting are the same kind of result (`qt.fit`
+returns it; `qt.atlas.calibration` reads the atlas's `configs.json` through the same download-after-consent cache
+as `queuetruth atlas`). A fit whose verdict is refused raises `CalibrationRefused` (`QT-CALIB-001`); `force=True`
+applies it with a `CalibrationWarning`, for inspection only. An atlas setting always warns that it comes from the
+atlas (one venue, small orders), not from your data, and says whether it is still clearly off. The plugin's own
+`calibrate` result works too: `qthbt.configure(asset, cal)`.
+
+`configure` uses the standard library only, so it also runs in the hftbacktest venv, where queuetruth is not
+installed. Save the result in the queuetruth environment and read it there:
+
+<!-- check-docs: run needs=queuetruth_hftbacktest -->
+```python
+import os
+
+import queuetruth as qt
+import queuetruth_hftbacktest as qthbt
+
+# the synthetic atlas the tests use (invented numbers); without source= it is the public atlas
+atlas = os.path.join(os.environ["QT_FIXTURES"], "atlas_synth")
+cal = qt.atlas.calibration("hftbacktest", source=atlas)
+print(cal.summary)
+cal.save("atlas-fit.json")
+print(qthbt.settings("atlas-fit.json"))
+```
+
+<!-- check-docs: skip (runs in the hftbacktest venv) -->
+```python
+# in the hftbacktest venv: pip install --no-deps queuetruth-hftbacktest
+import queuetruth_hftbacktest as qthbt
+from hftbacktest import BacktestAsset
+
+asset = BacktestAsset().data(data).linear_asset(1.0).tick_size(0.01).lot_size(1.0)  # your settings
+asset = qthbt.configure(asset, "atlas-fit.json")  # .power_prob_queue_model3(3).no_partial_fill_exchange()
+```
+
+The plugin's tests run this line on hftbacktest 2.4.4's own `BacktestAsset` and replay a day with it
+(`make test-hftbacktest-plugin`).
+
 ### From the command line
 
 <!-- check-docs: skip (needs the plugin, user data and hftbacktest) -->

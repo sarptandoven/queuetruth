@@ -5,6 +5,7 @@
 - `QT-CONFIG-001`: an argument is out of range or inconsistent (exit 2).
 - `QT-CALIB-001`: no fitted queue model passes queuetruth's trust check, so there is no code to paste (exit 1, like
   a failed gate); `force=True` writes the best one under a `NOT VALIDATED` header.
+- `CalibrationWarning` (not an error): `configure` applied a setting with a caveat (an atlas setting, a forced fit).
 - `QT-USAGE-001`: the hftbacktest python cannot be run, or the replay stopped with an hftbacktest error (exit 2).
 - `QT-ENGINE-001`: an unexpected exception in the CLI (a bug; exit 2).
 
@@ -61,3 +62,7 @@ class CalibrationRefused(QtHbtError):
     def __init__(self, message: str, reasons: dict[str, list[str]], hint: str | None = None) -> None:
         super().__init__("QT-CALIB-001", message, hint, {"reasons": {k: list(v) for k, v in reasons.items()}})
         self.reasons = {k: list(v) for k, v in reasons.items()}
+
+
+class CalibrationWarning(UserWarning):
+    """`configure` applied a setting with a caveat: an atlas setting (not a fit on your data) or a forced fit."""

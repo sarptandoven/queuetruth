@@ -94,9 +94,10 @@ def rule_ticks(rule: str) -> int:
 class TouchFill:
     """`P(real | rule)` lookups and seeded draws for one tier and rule of a touch table.
 
-    `table`: a `touch.json` path, a `TouchTables` or its dict. `tier`: a liquidity tier of the table (`ALL` pools
-    them). `rule`: `touch` (default) or `penetrate_<k>`. `seed`: the draws' seed. `tick`: the tick size, needed for a
-    `penetrate_<k>` rule (the order fills only when the bar goes k ticks through its limit)."""
+    `table`: a `touch.json` path, a `TouchTables` or its dict. `tier`: a liquidity tier of the table (`ALL` pools them;
+    a short name such as `T1` names the one tier `T1_...`). `rule`: `touch` (default) or `penetrate_<k>`. `seed`: the
+    draws' seed. `tick`: the tick size, needed for a `penetrate_<k>` rule (the order fills only when the bar goes k
+    ticks through its limit)."""
 
     def __init__(self, table: Any, *, tier: str, rule: str = "touch", seed: int = 0, tick: float | None = None) -> None:
         self.tables = load_tables(table)
@@ -109,6 +110,9 @@ class TouchFill:
         self.tick = float(tick) if tick else None
         rows = self.tables.rows
         tiers = sorted({r.tier for r in rows})
+        short = [t for t in tiers if t.split("_", 1)[0].upper() == self.tier.strip().upper()]
+        if self.tier not in tiers and len(short) == 1:
+            self.tier = short[0]  # `T1` names the atlas tier `T1_top100`
         if self.tier not in tiers:
             raise QtError(
                 "QT-CONFIG-001",

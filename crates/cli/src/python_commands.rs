@@ -577,7 +577,7 @@ pub(crate) const PYTHON_COMMANDS: &[Cmd] = &[
         about: "how wrong a backtest is: its own limit orders replayed in the real queue",
         flags: &[
             Flag { long: "data", kind: Kind::Str, to: "_cli.data", required: false, help: "order-level (MBO) dataset covering the backtest's days (without it: the atlas estimate)", short: None, value_name: Some("DIR") },
-            Flag { long: "backtester", kind: Kind::Enum(&["hftbacktest", "nautilus", "backtrader", "vectorbt", "lean", "freqtrade"]), to: "_cli.backtester", required: false, help: "the backtester (default: read from the file)", short: None, value_name: None },
+            Flag { long: "backtester", kind: Kind::Enum(&["hftbacktest", "nautilus", "backtrader", "vectorbt", "lean", "freqtrade", "backtesting_py"]), to: "_cli.backtester", required: false, help: "the backtester (default: read from the file)", short: None, value_name: None },
             Flag { long: "instrument-map", kind: Kind::Str, to: "_cli.instrument_map", required: false, help: "instrument_map.csv (default: built from the dataset's symbols; needed only when they do not match)", short: None, value_name: Some("FILE") },
             Flag { long: "out", kind: Kind::Str, to: "_cli.out", required: false, help: "output directory (default qt-check)", short: None, value_name: Some("DIR") },
             Flag { long: "window", kind: Kind::Str, to: "_cli.window", required: false, help: "how long after entry a fill counts, e.g. 10min (default 1h)", short: None, value_name: Some("DURATION") },

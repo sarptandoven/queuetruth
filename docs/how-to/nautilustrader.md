@@ -70,7 +70,70 @@ pip install ./integrations/nautilus            # next to nautilus_trader 1.231.x
 pip install --pre ./integrations/nautilus      # resolves the latest 2.0 release candidate
 ```
 
-Then pass the calibration to `add_venue`:
+Then pass the calibration to `add_venue`. The one line takes the result of `qt.fit` (a fit on your data) or of
+`qt.atlas.calibration` (the atlas's closest setting, when you have no data) as it is:
+
+<!-- check-docs: skip (needs nautilus_trader, the plugin and user data; downloads the public atlas after asking) -->
+```python
+import queuetruth as qt
+import queuetruth_nautilus as qtn
+
+engine.add_venue(..., **qtn.venue_options(qt.fit("nautilus", data="my-dataset")))
+engine.add_venue(..., **qtn.venue_options(qt.atlas.calibration("nautilus", tier="T1", yes=True)))
+```
+
+`qt.atlas.calibration` reads the atlas's `configs.json` through the same download-after-consent cache as
+`queuetruth atlas` (`yes=True` agrees to the download; a cached copy works offline). `symbol="AAPL"` picks the
+symbol's liquidity tier. The setting carries where it came from (atlas root, tier, horizon, days) and the atlas
+verdict, and using it warns that it is the atlas (one venue, small orders), not your data. This block runs it on the
+synthetic atlas the tests use (invented numbers) inside a NautilusTrader backtest engine, where `nautilus_trader`
+and the plugin are installed:
+
+<!-- check-docs: run needs=nautilus_trader,queuetruth_nautilus -->
+```python
+import os
+import warnings
+
+import queuetruth as qt
+import queuetruth_nautilus as qtn
+
+try:  # nautilus_trader 2.x
+    from nautilus_trader.backtest import BacktestEngine, BacktestEngineConfig
+    from nautilus_trader.execution import FixedFeeModel
+    from nautilus_trader.model import AccountType, Currency, Money, OmsType, Venue
+
+    USD = Currency.from_str("USD")
+    fees = {"fee_model": FixedFeeModel(Money(0, USD))}
+except ImportError:  # 1.231.x
+    from nautilus_trader.backtest.engine import BacktestEngine, BacktestEngineConfig
+    from nautilus_trader.model.enums import AccountType, OmsType
+    from nautilus_trader.model.identifiers import Venue
+    from nautilus_trader.model.objects import Currency, Money
+
+    USD = Currency.from_str("USD")
+    fees = {}
+
+atlas = os.path.join(os.environ["QT_FIXTURES"], "atlas_synth")  # without source= it is the public atlas
+cal = qt.atlas.calibration("nautilus", tier="T1", source=atlas)
+print(cal.summary)
+with warnings.catch_warnings(record=True) as caught:
+    warnings.simplefilter("always")
+    opts = qtn.venue_options(cal, random_seed=42)
+print([str(w.message) for w in caught][0])
+engine = BacktestEngine(config=BacktestEngineConfig())
+engine.add_venue(
+    venue=Venue("XNAS"),
+    oms_type=OmsType.NETTING,
+    account_type=AccountType.MARGIN,
+    base_currency=USD,
+    starting_balances=[Money(1_000_000, USD)],
+    **fees,
+    **opts,
+)
+print(sorted(opts))
+```
+
+With a fit on your data, step by step:
 
 <!-- check-docs: skip (needs nautilus_trader and the plugin) -->
 ```python
@@ -79,7 +142,7 @@ from nautilus_trader.execution import FixedFeeModel  # 1.x: leave out
 from nautilus_trader.model import AccountType, Currency, Money, OmsType
 
 USD = Currency.from_str("USD")
-cal = qtn.load_calibration("qt-fit/calibration/calibration.json")
+cal = qtn.load_calibration("qt-fit")  # the fit.json of `queuetruth fit`, or the FitResult of qt.fit
 engine.add_venue(
     venue=venue,
     oms_type=OmsType.NETTING,
@@ -91,7 +154,7 @@ engine.add_venue(
 )
 ```
 
-`venue_options` returns the fill model with the fitted `prob_fill_on_limit`, `book_type=L2_MBP`,
+`venue_options` returns the fill model with the fitted (or the atlas's) `prob_fill_on_limit`, `book_type=L2_MBP`,
 `trade_execution=True`, `queue_position` (True only for a queue-gated fit) and, when the calibration has one, the
 latency model. A refused calibration raises `CalibrationRefused` (`QT-CALIB-001`) and gives no settings. On 1.x,
 import `AccountType` and `OmsType` from `nautilus_trader.model.enums` and `Currency` and `Money` from
