@@ -114,6 +114,7 @@ section below is the command's own `--help` text.
 | [`queuetruth data`](#queuetruth-data) | bring order-level data in: add files to a dataset, or fetch a free IEX day |
 | [`queuetruth data add`](#queuetruth-data-add) | ingest order-level files into one dataset, format, venue and date inferred |
 | [`queuetruth data fetch`](#queuetruth-data-fetch) | fetch a free public day into a dataset (iex: IEX DEEP+) |
+| [`queuetruth fit`](#queuetruth-fit) | the parameter that fixes your backtester's fill model, with its verdict |
 
 ## queuetruth ingest
 
@@ -2689,6 +2690,80 @@ Options:
 
       --json
           print the full summary as JSON (as --format json)
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+      --log-level <log_level>
+          stderr log level (default warn)
+          
+          [possible values: error, warn, info, debug]
+
+      --output-format <human|json>
+          output format (also --format human|json)
+          
+          [possible values: human, json]
+
+      --quiet
+          no progress or warnings on stderr
+
+      --seed <seed>
+          random seed (default 0)
+
+      --threads <threads>
+          worker threads (outputs do not depend on it; default 1)
+
+      --verbose
+          human output: every summary field after the answer; every warning and note on stderr
+```
+
+## queuetruth fit
+
+```text
+The parameter that fixes your backtester's fill model: fitted on order-level data (exact queue) or on your live fills, compared with the library default on held-out data. The paste-ready snippet is written only when the fit beats the default; otherwise it says why and what would make it pass.
+
+Usage: queuetruth fit [OPTIONS] --backtester <backtester>
+
+Options:
+      --backtester <backtester>
+          the library whose model to fit
+          
+          [possible values: hftbacktest, nautilus, databento]
+
+      --data <DIR>
+          dataset: order-level (MBO), or the L2 or MBO tape of a live log
+
+      --shadows <FILE>
+          shadow orders to fit on (default: sampled from --data)
+
+      --live <DIR>
+          fit to your own fills: a canonical live log (with --data)
+
+      --family <family>
+          the library's fill model (default: power3, nt_prob_touch or databento)
+          
+          [possible values: power3, power2, power, nt-prob-touch, nt-queue-l2-prob-touch, databento]
+
+      --split <SHARE>
+          train on the first SHARE of the data in time, hold out the rest (default 70%)
+
+      --test-after <HH:MM>
+          hold out the data after this venue-local time
+
+      --train <WINDOW>
+          expert: train window, dates or blocks:I-J/N (with --test)
+
+      --test <WINDOW>
+          expert: held-out window, dates or blocks:I-J/N (with --train)
+
+      --out <DIR>
+          output directory (default qt-fit)
+
+      --n-shadows <N>
+          shadows to sample when --shadows is not given (default 1000)
+
+      --json
+          print the qt.fit document as JSON (as --format json)
 
   -h, --help
           Print help (see a summary with '-h')

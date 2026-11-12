@@ -47,6 +47,7 @@ def parsers() -> list[tuple[list[str], argparse.ArgumentParser]]:
     from queuetruth.check.cli import parser as check_parser
     from queuetruth.data.cli import parser as data_parser
     from queuetruth.demo.cli import parser as demo_parser
+    from queuetruth.fit.cli import parser as fit_parser
     from queuetruth.forecast.cli import build_parser as forecast_parser
     from queuetruth.ledger.cli import parser as ledger_parser
     from queuetruth.live.reconcile_cli import parser as reconcile_parser
@@ -62,6 +63,7 @@ def parsers() -> list[tuple[list[str], argparse.ArgumentParser]]:
         ([], reconcile_parser()),
         ([], check_parser()),
         ([], data_parser()),
+        ([], fit_parser()),
     ]
 
 

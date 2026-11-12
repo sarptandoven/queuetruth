@@ -162,7 +162,9 @@ def spec43_names() -> set[str]:
     text = (ROOT / "docs" / "design" / "spec.md").read_text(encoding="utf-8")
     m = re.search(r"^### 4\.3 .*?(?=^### 4\.4 )", text, flags=re.S | re.M)
     body = m.group(0) if m else ""
-    return set(re.findall(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(", body)) | set(re.findall(r"qt\.([A-Za-z_]\w*)", body))
+    # names called in the section, except methods called on a call's result (`HazardModel(...).fit(` is not `fit`)
+    calls = set(re.findall(r"(?<!\)\.)\b([A-Za-z_][A-Za-z0-9_]*)\s*\(", body))
+    return calls | set(re.findall(r"qt\.([A-Za-z_]\w*)", body))
 
 
 def signature(obj: Any) -> str:

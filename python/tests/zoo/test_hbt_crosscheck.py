@@ -20,7 +20,12 @@ import pytest
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-VENV_PY = ROOT / ".scratch" / "hbt-venv" / "bin" / "python"
+#: QT_HBT_PY (or the older QT_HBT_PYTHON), else the venv of `make hbt-crosscheck`.
+VENV_PY = Path(
+    os.environ.get("QT_HBT_PY")
+    or os.environ.get("QT_HBT_PYTHON")
+    or str(ROOT / ".scratch" / "hbt-venv" / "bin" / "python")
+)
 MODELS = "hbt_risk_adverse,hbt_power3[n=2]"
 
 

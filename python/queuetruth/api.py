@@ -723,6 +723,14 @@ def check(backtest: Any, data: str | Path | None = None, **kwargs: Any) -> Any:
     return _check(backtest, data, **kwargs)
 
 
+def fit(backtester: str, **kwargs: Any) -> Any:
+    """`fit`: the parameter that fixes `backtester`'s fill model, compared with the library default on held-out data;
+    the snippet is written only when the fit passes (`queuetruth.fit.fit`; returns a `queuetruth.fit.FitResult`)."""
+    from queuetruth.fit.run import fit as _fit
+
+    return _fit(backtester, **kwargs)
+
+
 def report(spec: s.ReportSpec | dict[str, Any]) -> m.ReportSummary:
     """`report` (`queuetruth.report.render`)."""
     from queuetruth.report import render

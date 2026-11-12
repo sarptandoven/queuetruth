@@ -50,7 +50,9 @@ def prepared(synth: Path, shadows: Path):
 
 @pytest.fixture(scope="session")
 def hbt_py() -> Path:
-    p = Path(os.environ.get("QT_HBT_PY", str(REPO / ".scratch" / "hbt-venv" / "bin" / "python")))
+    default = REPO / ".scratch" / "hbt-venv" / "bin" / "python"
+    # QT_HBT_PYTHON: the older name, still read
+    p = Path(os.environ.get("QT_HBT_PY") or os.environ.get("QT_HBT_PYTHON") or str(default))
     if not p.exists():
         pytest.skip("hftbacktest venv missing (set QT_HBT_PY or run integrations/hftbacktest/setup_venvs.sh)")
     return p

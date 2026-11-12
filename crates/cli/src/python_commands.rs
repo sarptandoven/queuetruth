@@ -27,6 +27,7 @@ pub(crate) const PYTHON_LONG_ABOUT: &[(&[&str], &str)] = &[
     (&["data"], "Bring order-level data in: add files (format, venue and date inferred, days merged, quality checked) or fetch a free IEX DEEP+ day."),
     (&["data", "add"], "Ingests one or more order-level files (ITCH, IEX DEEP+, DBN, NYSE TAQ Integrated Feed, the crypto captures, Tardis L2) into one dataset: the format, venue and session date are read from the files, several days are merged, and the data-quality checks run. An existing dataset at --out gains the new days."),
     (&["data", "fetch"], "Streams a free public order-level day (iex: IEX DEEP+ from IEX's public bucket) after you agree, keeps only the symbols you ask for and adds them to a dataset, with IEX's attribution in its manifest. The day's file (several GB) is never stored."),
+    (&["fit"], "The parameter that fixes your backtester's fill model: fitted on order-level data (exact queue) or on your live fills, compared with the library default on held-out data. The paste-ready snippet is written only when the fit beats the default; otherwise it says why and what would make it pass."),
 ];
 
 /// Help of positional arguments: (command path, argument name, help).
@@ -556,6 +557,28 @@ pub(crate) const PYTHON_COMMANDS: &[Cmd] = &[
             Flag { long: "json", kind: Kind::Flag, to: "_cli.json", required: false, help: "print the full summary as JSON (as --format json)", short: None, value_name: None },
         ],
         positional: &[("SOURCE", "source", true)],
+        globals: Globals::None,
+        hidden: false,
+    },
+    Cmd {
+        path: &["fit"],
+        imp: Implementation::Python,
+        about: "the parameter that fixes your backtester's fill model, with its verdict",
+        flags: &[
+            Flag { long: "backtester", kind: Kind::Enum(&["hftbacktest", "nautilus", "databento"]), to: "_cli.backtester", required: true, help: "the library whose model to fit", short: None, value_name: None },
+            Flag { long: "data", kind: Kind::Str, to: "_cli.data", required: false, help: "dataset: order-level (MBO), or the L2 or MBO tape of a live log", short: None, value_name: Some("DIR") },
+            Flag { long: "shadows", kind: Kind::Str, to: "_cli.shadows", required: false, help: "shadow orders to fit on (default: sampled from --data)", short: None, value_name: Some("FILE") },
+            Flag { long: "live", kind: Kind::Str, to: "_cli.live", required: false, help: "fit to your own fills: a canonical live log (with --data)", short: None, value_name: Some("DIR") },
+            Flag { long: "family", kind: Kind::Enum(&["power3", "power2", "power", "nt-prob-touch", "nt-queue-l2-prob-touch", "databento"]), to: "_cli.family", required: false, help: "the library's fill model (default: power3, nt_prob_touch or databento)", short: None, value_name: None },
+            Flag { long: "split", kind: Kind::Str, to: "_cli.split", required: false, help: "train on the first SHARE of the data in time, hold out the rest (default 70%)", short: None, value_name: Some("SHARE") },
+            Flag { long: "test-after", kind: Kind::Str, to: "_cli.test_after", required: false, help: "hold out the data after this venue-local time", short: None, value_name: Some("HH:MM") },
+            Flag { long: "train", kind: Kind::Str, to: "_cli.train", required: false, help: "expert: train window, dates or blocks:I-J/N (with --test)", short: None, value_name: Some("WINDOW") },
+            Flag { long: "test", kind: Kind::Str, to: "_cli.test", required: false, help: "expert: held-out window, dates or blocks:I-J/N (with --train)", short: None, value_name: Some("WINDOW") },
+            Flag { long: "out", kind: Kind::Str, to: "_cli.out", required: false, help: "output directory (default qt-fit)", short: None, value_name: Some("DIR") },
+            Flag { long: "n-shadows", kind: Kind::Int, to: "_cli.n_shadows", required: false, help: "shadows to sample when --shadows is not given (default 1000)", short: None, value_name: Some("N") },
+            Flag { long: "json", kind: Kind::Flag, to: "_cli.json", required: false, help: "print the qt.fit document as JSON (as --format json)", short: None, value_name: None },
+        ],
+        positional: &[],
         globals: Globals::None,
         hidden: false,
     },
