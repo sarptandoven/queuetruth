@@ -2,14 +2,13 @@
 get) and `/v1/reports` (submit, get). Specs are the SPEC 4.2 models; references must be tenant-owned ids (see `refs`),
 the compute knobs (`threads`, `particles`, `bootstrap.b`, `bootstrap_b`, `perm_b`) stay within `QT_COMPUTE_LIMITS`
 (security review M4), and the zoo and calibration lists stay within `MAX_ZOO_MODELS` model ids and `MAX_HORIZONS`
-horizons; a zoo model id must have the engine's shape and a family of the engine's registry (`engine_models`, the list
-behind `queuetruth zoo --list-models`). Every violation of these bounds is listed in one 422 (`check_bounds`); the
-engine checks parameter values when the job runs."""
+horizons; a zoo model id must have the engine's shape and a family of the engine's registry (`engine_models`, read from
+`queuetruth._core.zoo_families()`, the registry behind `queuetruth zoo --list-models`). Every violation of these
+bounds is listed in one 422 (`check_bounds`); the engine checks parameter values when the job runs."""
 
 from __future__ import annotations
 
 import functools
-import json
 import re
 from typing import Annotated, Any
 
@@ -52,11 +51,11 @@ MAX_ZOO_MODELS = 64
 MAX_HORIZONS = 32
 #: Shape of a zoo model id: a family name, optionally `[key=value;...]` parameters (`hbt_power3[n=3]`).
 MODEL_ID = re.compile(r"[A-Za-z0-9_.\-]{1,64}(\[[A-Za-z0-9_.=;,:+\-]{0,128}\])?")
-#: Models of `all` when the engine's registry cannot be read (a service built without `queuetruth._core`); a test in
-#: the default suite pins it to `engine_models()`.
+#: Models of `all` when the engine's registry cannot be read (a service built without `queuetruth._core`); a test
+#: pins it to the registry (`queuetruth._core.zoo_families()`).
 ZOO_ALL_MODELS = 16
-#: Families whose per-pair cost grows with `particles` (the engine's `Family::is_particle`; a test checks the names
-#: against the registry).
+#: Families whose per-pair cost grows with `particles`, when the engine's registry cannot be read; a test pins it to
+#: the registry's `particle` families.
 PARTICLE_FAMILIES = frozenset({"databento_mc"})
 #: Estimate: a particle model's (model, shadow) pair costs `1 + particles / PARTICLES_PER_PAIR` pairs, and each
 #: leaderboard bootstrap draw costs `(models + 1) / BOOTSTRAP_DRAWS_PER_PAIR` pairs per shadow (measured on
@@ -67,22 +66,27 @@ BOOTSTRAP_DRAWS_PER_PAIR = 1000
 
 @functools.cache
 def engine_models() -> tuple[tuple[str, ...], frozenset[str]] | None:
-    """`(ids that "all" runs, every family name)` from the engine's model registry (`queuetruth zoo --list-models`
-    through `queuetruth._core`), or None when the engine is not available."""
+    """`(ids that "all" runs, every family name)` from the engine's zoo family registry
+    (`queuetruth._core.zoo_families()`), or None when the engine is not available."""
     try:
-        from queuetruth import _core
+        from queuetruth.eval.zoo import zoo_families
+
+        families = zoo_families()
     except ImportError:
         return None
+    ids = tuple(str(i) for f in families for i in f["all_ids"])
+    return ids, frozenset(str(f["name"]) for f in families)
+
+
+@functools.cache
+def particle_families() -> frozenset[str]:
+    """Families whose per-pair cost grows with `particles`: the registry's, else `PARTICLE_FAMILIES`."""
     try:
-        _core.cli_parse(["queuetruth", "--format", "json", "zoo", "--list-models"])
-    except _core.CliExit as e:  # the listing is printed and the command exits 0
-        code, text = e.args[0], e.args[1]
-        if code != 0:
-            return None
-        doc = json.loads(text)
-        ids = tuple(str(r["id"]) for r in doc["all"])
-        return ids, frozenset(str(r["family"]) for r in (*doc["all"], *doc["other"]))
-    return None
+        from queuetruth.eval.zoo import zoo_families
+
+        return frozenset(str(f["name"]) for f in zoo_families() if f["particle"])
+    except ImportError:
+        return PARTICLE_FAMILIES
 
 
 def _family(model: str) -> str:
@@ -154,7 +158,8 @@ def zoo_models_est(spec: dict[str, Any]) -> tuple[int, int]:
             else [f"all#{i}" for i in range(ZOO_ALL_MODELS)]
         )
         out.extend(x for x in ids if x not in out)
-    return len(out), sum(1 for x in out if _family(x) in PARTICLE_FAMILIES)
+    particle = particle_families()
+    return len(out), sum(1 for x in out if _family(x) in particle)
 
 
 def zoo_estimate(base: dict[str, Any], spec: dict[str, Any]) -> dict[str, Any]:

@@ -360,11 +360,11 @@ pub enum IngestFormat {
     TardisL2,
     /// IEX HIST DEEP+ (IEX-TP over pcap / pcap.gz), order by order (`qt_ingest::iex`).
     IexDeepPlus,
-    /// Coinbase Exchange `level3` channel capture (`qt_crypto`; QT-CONFIG-001 until implemented).
+    /// Coinbase Exchange `level3` channel capture (`qt_crypto`).
     CoinbaseLevel3,
-    /// Kraken L3 (WebSocket v2 `level3`) capture (`qt_crypto`; QT-CONFIG-001 until implemented).
+    /// Kraken L3 (WebSocket v2 `level3`) capture (`qt_crypto`).
     KrakenL3,
-    /// Hyperliquid node order-status / fills output (`qt_crypto`; QT-CONFIG-001 until implemented).
+    /// Hyperliquid node order-status / fills output (`qt_crypto`).
     HyperliquidNode,
     /// NYSE Group TAQ Integrated Feed (`EQY_US_<market>_IBF_<channel>_<date>` CSV, gzip or raw), order by order
     /// (`qt_ingest::nyse`, rule set `nyse`).
@@ -1107,33 +1107,7 @@ fn grid_default() -> Vec<i64> {
     ]
 }
 
-/// Live venue.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum LiveVenue {
-    /// Binance.
-    Binance,
-    /// Bybit.
-    Bybit,
-    /// OKX.
-    Okx,
-    /// Coinbase Advanced Trade.
-    Coinbase,
-    /// Kraken.
-    Kraken,
-    /// Deribit.
-    Deribit,
-    /// Hyperliquid.
-    Hyperliquid,
-    /// IBKR Flex.
-    IbkrFlex,
-    /// FIX 4.4 drop copy.
-    Fix44,
-    /// 1.1 (3.11 #13): hftbacktest simulator output.
-    SimHftbacktest,
-    /// 1.1 (3.11 #13): NautilusTrader simulator output.
-    SimNautilus,
-}
+pub use crate::live_venue::{LIVE_VENUE_CLI_NAMES, LiveVenue};
 
 /// FIX options.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

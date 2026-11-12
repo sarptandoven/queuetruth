@@ -7,9 +7,20 @@ from pathlib import Path
 from typing import Any
 
 
-def text(doc: dict[str, Any]) -> str:
-    from queuetruth.cli import _table
+def _table(header: list[str], rows: list[list[str]], right: set[int]) -> list[str]:
+    """Plain aligned text table, numbers right-aligned in the `right` columns."""
+    widths = [max(len(str(r[i])) for r in [header, *rows]) for i in range(len(header))]
 
+    def line(r: list[str]) -> str:
+        cells = [
+            str(c).rjust(w) if i in right else str(c).ljust(w) for i, (c, w) in enumerate(zip(r, widths, strict=True))
+        ]
+        return "  ".join(cells).rstrip()
+
+    return [line(header), *(line(r) for r in rows)]
+
+
+def text(doc: dict[str, Any]) -> str:
     lines = [str(doc["answer"]), ""]
     rows = [
         [

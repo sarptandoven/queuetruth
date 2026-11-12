@@ -69,7 +69,7 @@ position and liquidity tier, plus 36 more symbols in five tiers:
 | You want to | Start here |
 |---|---|
 | know how wrong your backtester's fill model is | `queuetruth demo`, then [the model zoo on your data](https://sarptandoven.github.io/queuetruth/docs/concepts/l2-model-zoo/) |
-| get a fitted parameter to paste into hftbacktest or NautilusTrader | [Calibrate my hftbacktest model](https://sarptandoven.github.io/queuetruth/docs/how-to/calibrate-hftbacktest/), [calibrate on an L2-only venue](https://sarptandoven.github.io/queuetruth/docs/how-to/calibrate-live-l2-venue/) |
+| get a fitted parameter to paste into hftbacktest or NautilusTrader | [Score and calibrate hftbacktest](https://sarptandoven.github.io/queuetruth/docs/how-to/calibrate-hftbacktest/), [check and calibrate NautilusTrader](https://sarptandoven.github.io/queuetruth/docs/how-to/nautilustrader/), [calibrate on an L2-only venue](https://sarptandoven.github.io/queuetruth/docs/how-to/calibrate-live-l2-venue/) |
 | compare your backtest with your live fills | [Score my Nautilus backtest against my Binance fills](https://sarptandoven.github.io/queuetruth/docs/how-to/score-nautilus-vs-binance/), [reconcile Freqtrade or Hummingbot](https://sarptandoven.github.io/queuetruth/docs/how-to/reconcile-freqtrade-hummingbot/) |
 | regression-test your own simulator's queue logic | [Referee my simulator](https://sarptandoven.github.io/queuetruth/docs/how-to/referee-your-simulator/) |
 | prove a backtest result to someone else | [Certify a result](https://sarptandoven.github.io/queuetruth/docs/how-to/certify-a-result/) |

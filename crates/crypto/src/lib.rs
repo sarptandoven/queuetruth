@@ -47,6 +47,7 @@ pub mod bitfinex;
 pub mod bitstamp;
 pub mod coinbase;
 pub mod coinbase_l3;
+pub mod formats;
 pub mod hyperliquid;
 pub mod input;
 pub mod jsonx;
@@ -147,18 +148,12 @@ fn opt_i64(spec: &specs::IngestSpec, key: &str) -> QtResult<Option<Option<i64>>>
 }
 
 fn format_name(f: IngestFormat) -> QtResult<&'static str> {
-    match f {
-        IngestFormat::Bitstamp => Ok("bitstamp"),
-        IngestFormat::Bitfinex => Ok("bitfinex"),
-        IngestFormat::Coinbase => Ok("coinbase"),
-        IngestFormat::TardisL2 => Ok("tardis_l2"),
-        IngestFormat::CoinbaseLevel3 => Ok("coinbase_level3"),
-        IngestFormat::KrakenL3 => Ok("kraken_l3"),
-        IngestFormat::HyperliquidNode => Ok("hyperliquid_node"),
-        other => Err(cfg_err(format!(
+    match formats::get(f) {
+        Some(c) => Ok(c.def.name),
+        None => Err(cfg_err(format!(
             "format: {} is not a crypto format (qt_crypto handles bitstamp|bitfinex|coinbase|coinbase_level3|kraken_l3|\
              hyperliquid_node|tardis_l2)",
-            serde_json::to_value(other)
+            serde_json::to_value(f)
                 .ok()
                 .and_then(|v| v.as_str().map(str::to_string))
                 .unwrap_or_default()
@@ -193,16 +188,8 @@ pub fn guess_currency(symbol: &str) -> String {
 /// `bitfinex`) meaning `crypto_l3` for the L3 formats (E38, M25).
 pub fn rule_set_of(venue: &str, format: IngestFormat) -> QtResult<RuleSet> {
     let rs: RuleSet = venue.parse()?;
-    Ok(match (rs, format) {
-        (
-            RuleSet::Generic,
-            IngestFormat::Bitstamp
-            | IngestFormat::Bitfinex
-            | IngestFormat::Coinbase
-            | IngestFormat::CoinbaseLevel3
-            | IngestFormat::KrakenL3
-            | IngestFormat::HyperliquidNode,
-        ) => RuleSet::CryptoL3,
+    Ok(match (rs, formats::get(format).and_then(|c| c.def.generic_rule_set)) {
+        (RuleSet::Generic, Some(generic)) => generic,
         _ => rs,
     })
 }
@@ -332,6 +319,7 @@ fn reseed_at_boundaries(
 /// Converts the spec's inputs and computes instruments and data quality without writing anything.
 pub fn prepare(spec: &specs::IngestSpec) -> QtResult<Prepared> {
     let format = format_name(spec.format)?;
+    let fmt = formats::get(spec.format).ok_or_else(|| cfg_err("format: not a crypto format"))?;
     let rule_set = rule_set_of(&spec.venue, spec.format)?;
     let venue = rule_set.venue();
     if !(-12..=0).contains(&spec.price_exp) {
@@ -373,8 +361,8 @@ pub fn prepare(spec: &specs::IngestSpec) -> QtResult<Prepared> {
     let mut counters: Counters;
     let mut dq = DataQuality::default();
     let (mut events, l2, trades, instruments_map, exchange, dq_keys);
-    match format {
-        "tardis_l2" => {
+    match fmt.convert {
+        formats::Convert::TardisL2 => {
             let o = tardis::convert_full(
                 lines,
                 &tardis::Config {
@@ -400,121 +388,16 @@ pub fn prepare(spec: &specs::IngestSpec) -> QtResult<Prepared> {
             (events, l2, trades, instruments_map, exchange) = (Vec::new(), o.rows, o.trades, o.instruments, o.exchange);
             dq_keys = tardis::DQ_COUNTERS.to_vec();
         }
-        _ => {
-            let o = match format {
-                "bitstamp" => {
-                    let mut c = bitstamp::Config {
-                        instruments: map,
-                        price_exp: pe,
-                        size_exp: se,
-                        ..Default::default()
-                    };
-                    if let Some(w) = opt_i64(spec, "taker_window_us")? {
-                        c.taker_window_us = w;
-                    }
-                    bitstamp::convert_full(lines, &c)?
-                }
-                "bitfinex" => {
-                    let mut c = bitfinex::Config {
-                        instruments: map,
-                        price_exp: pe,
-                        size_exp: se,
-                        flags: inp.meta.flags.unwrap_or(0),
-                        ..Default::default()
-                    };
-                    if let Some(f) = opt_i64(spec, "flags")? {
-                        c.flags = f.and_then(|x| u64::try_from(x).ok()).unwrap_or(0);
-                    }
-                    if let Some(m) = opt_i64(spec, "max_size")? {
-                        c.max_size = m
-                            .and_then(|x| u64::try_from(x).ok())
-                            .filter(|x| *x > 0)
-                            .unwrap_or(u64::MAX);
-                    }
-                    bitfinex::convert_full(lines, &c)?
-                }
-                "coinbase_level3" => coinbase_l3::convert_full(
-                    lines,
-                    &coinbase_l3::Config {
-                        instruments: map,
-                        price_exp: pe,
-                        size_exp: se,
-                    },
-                )?,
-                "kraken_l3" => {
-                    let mut c = kraken_l3::Config {
-                        instruments: map,
-                        price_exp: pe,
-                        size_exp: se,
-                        ..Default::default()
-                    };
-                    if let Some(Some(d)) = opt_i64(spec, "depth")? {
-                        c.depth =
-                            Some(u32::try_from(d).map_err(|_| cfg_err("options.depth: must be 10, 100 or 1000"))?);
-                    }
-                    if let Some(v) = spec.options.get("checksum_precision") {
-                        c.precision = checksum_precision(v)?;
-                    }
-                    kraken_l3::convert_full(lines, &c)?
-                }
-                "hyperliquid_node" => {
-                    let mut c = hyperliquid::Config {
-                        instruments: map,
-                        price_exp: pe,
-                        size_exp: se,
-                        ..Default::default()
-                    };
-                    if let Some(g) = opt_i64(spec, "max_block_gap_ms")? {
-                        c.max_block_gap_ms = g
-                            .map(|x| u64::try_from(x).map_err(|_| cfg_err("options.max_block_gap_ms: must be >= 0")))
-                            .transpose()?
-                            .unwrap_or(0);
-                    }
-                    let fixed = match opt_i64(spec, "snapshot_block")? {
-                        Some(Some(b)) => {
-                            Some(u64::try_from(b).map_err(|_| cfg_err("options.snapshot_block: must be >= 0"))?)
-                        }
-                        _ => inp.meta.snapshot_block,
-                    };
-                    if fixed.is_some() && inp.snapshots.len() > 1 {
-                        return Err(cfg_err(
-                            "options.snapshot_block: only valid with one L4 snapshot (name several by height)",
-                        ));
-                    }
-                    for f in &inp.snapshots {
-                        let h = fixed.or_else(|| input::snapshot_height_from_name(f)).ok_or_else(|| {
-                            cfg_err(format!(
-                                "L4 snapshot {}: block height unknown (options.snapshot_block, capture_meta.json \
-                                 snapshot_block, or digits in the file name)",
-                                f.display()
-                            ))
-                        })?;
-                        c.snapshots.push((h, input::read_whole(f)?));
-                    }
-                    hyperliquid::convert_full(lines, &c)?
-                }
-                _ => {
-                    let mut c = coinbase::Config {
-                        instruments: map,
-                        price_exp: pe,
-                        size_exp: se,
-                        ..Default::default()
-                    };
-                    if let Some(Some(d)) = opt_i64(spec, "warmup_depth")? {
-                        c.warmup_depth =
-                            usize::try_from(d).map_err(|_| cfg_err("options.warmup_depth: must be >= 0"))?;
-                    }
-                    coinbase::convert_full(lines, &c)?
-                }
+        formats::Convert::L3(convert) => {
+            let args = formats::Args {
+                instruments: map,
+                price_exp: pe,
+                size_exp: se,
+                spec,
+                inp: &inp,
             };
-            let order_level_keys: &[&str] = match format {
-                "bitstamp" => &["order_created", "order_changed", "order_deleted"],
-                "bitfinex" => &["snapshots", "adds", "updates", "deletes", "delete_unknown"],
-                "coinbase_level3" => &["snapshots", "open", "change", "done", "match", "noop"],
-                "kraken_l3" => &["snapshots", "adds", "modifies", "deletes"],
-                "hyperliquid_node" => &["diffs"],
-                _ => &["received", "open", "change", "done_canceled", "done_filled", "match"],
-            };
+            let o = convert(Box::new(lines), args)?;
+            let order_level_keys = fmt.order_level_keys;
             let order_level: u64 = order_level_keys.iter().filter_map(|k| o.counters.get(*k)).sum();
             let other_unknown: u64 = ["done_unknown", "done_never_opened", "change_unknown"]
                 .iter()
@@ -534,14 +417,14 @@ pub fn prepare(spec: &specs::IngestSpec) -> QtResult<Prepared> {
             dq_keys = o.dq_counters;
         }
     }
-    let source_venue = spec.source_venue.clone().unwrap_or_else(|| match format {
-        "tardis_l2" => exchange.clone().unwrap_or_else(|| "tardis".into()),
-        "coinbase_level3" => "coinbase".into(),
-        "kraken_l3" => "kraken".into(),
-        "hyperliquid_node" => "hyperliquid".into(),
-        f => f.to_string(),
-    });
-    let notes = source_notes(format, &counters);
+    let source_venue = spec
+        .source_venue
+        .clone()
+        .unwrap_or_else(|| match fmt.def.default_source_venue {
+            Some(v) => v.to_string(),
+            None => exchange.clone().unwrap_or_else(|| "tardis".into()),
+        });
+    let notes = (fmt.notes)(&counters);
 
     // session dates
     let clock = match spec.tz {
@@ -770,7 +653,7 @@ pub fn prepare(spec: &specs::IngestSpec) -> QtResult<Prepared> {
     };
     Ok(Prepared {
         format,
-        l2_only: format == "tardis_l2",
+        l2_only: fmt.def.kind == DatasetKind::L2,
         venue,
         rule_set,
         source_venue,
@@ -802,60 +685,6 @@ fn checksum_precision(v: &Value) -> QtResult<HashMap<String, (u32, u32)>> {
         out.insert(k.clone(), (d(0)?, d(1)?));
     }
     Ok(out)
-}
-
-/// Exactness caveats of an exact order-level source, from its counters (written as ingest warnings).
-fn source_notes(format: &str, c: &Counters) -> Vec<String> {
-    let g = |k: &str| c.get(k).copied().unwrap_or(0);
-    let mut n = Vec::new();
-    match format {
-        "coinbase_level3" => {
-            if g("unseeded_products") > 0 {
-                n.push(format!(
-                    "coinbase_level3: {} product(s) without a REST level=3 snapshot are warm-up only (orders resting \
-                     before the capture are invisible)",
-                    g("unseeded_products")
-                ));
-            }
-            if g("gaps") > 0 {
-                n.push(format!(
-                    "coinbase_level3: {} sequence gap(s); the book is uncertain from each gap to the next snapshot",
-                    g("gaps")
-                ));
-            }
-            if g("schema_assumed") > 0 {
-                n.push("coinbase_level3: no schema frame in the capture; the documented level3 schema was used".into());
-            }
-        }
-        "kraken_l3" => {
-            n.push(format!(
-                "kraken_l3: exact only inside the subscribed depth of {} price levels per side; orders leaving the \
-                 window are kept frozen (out of view, not cancels) and levels beyond the window are not truth",
-                g("window_truncated_depth")
-            ));
-            n.push(
-                "kraken_l3: the feed has no executions; modify / delete cannot be attributed to fills vs cancels"
-                    .into(),
-            );
-            if g("checksums_verified") + g("checksum_mismatches") == 0 {
-                n.push("kraken_l3: no checksum was verified".into());
-            }
-        }
-        "hyperliquid_node" => {
-            if g("unseeded_instruments") > 0 {
-                n.push(format!(
-                    "hyperliquid_node: {} coin(s) without an L4 snapshot are warm-up only",
-                    g("unseeded_instruments")
-                ));
-            }
-            if g("fills") == 0 {
-                n.push("hyperliquid_node: no node_fills given; size decreases cannot be attributed to fills".into());
-            }
-            n.push("hyperliquid_node: user addresses are dropped; order ids are the on-chain oids".into());
-        }
-        _ => {}
-    }
-    n
 }
 
 /// Writes a prepared conversion as a dataset at `out` (SPEC 3.3 layout).

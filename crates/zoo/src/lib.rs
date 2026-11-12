@@ -8,6 +8,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod families;
 pub mod l3;
 pub mod model_id;
 pub mod models;
@@ -20,6 +21,7 @@ pub mod view;
 #[cfg(test)]
 mod tests;
 
+pub use families::{FAMILIES, FamilyDef, ParamDef, families_json};
 pub use model_id::{default_models, expand_models};
 pub use runner::{particle_simulator, run_zoo};
 

@@ -15,7 +15,7 @@ from queuetruth.schemas import specs as sp
 
 Hex64 = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 #: `IngestSpec.format` values the service accepts (schema 1.2 adds `iex_deep_plus`, `coinbase_level3`, `kraken_l3`,
-#: `hyperliquid_node`).
+#: `hyperliquid_node`; 1.3 `nyse_ibf`). `service/tests/test_format_lists.py` checks it against `_core.formats()`.
 IngestFormat = Literal[
     "itch",
     "dbn",
@@ -29,6 +29,7 @@ IngestFormat = Literal[
     "coinbase_level3",
     "kraken_l3",
     "hyperliquid_node",
+    "nyse_ibf",
 ]
 INGEST_FORMATS: tuple[str, ...] = get_args(IngestFormat)
 

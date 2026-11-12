@@ -22,6 +22,8 @@ not_in_nav: |
   concepts/trial-ledger.md
   concepts/impact-warning.md
   how-to/reconcile-lean.md
+  how-to/score-and-calibrate-hftbacktest.md
+  how-to/score-nautilus-vs-binance.md
 theme:
   name: material
   features: [navigation.sections, navigation.top, content.code.copy, search.highlight]
@@ -47,8 +49,7 @@ nav:
       - Check my backtest: how-to/check-my-backtest.md
       - Fit my backtester's fill model: how-to/fit-my-backtester.md
       - hftbacktest: how-to/calibrate-hftbacktest.md
-      - hftbacktest plugin: how-to/score-and-calibrate-hftbacktest.md
-      - NautilusTrader: how-to/score-nautilus-vs-binance.md
+      - NautilusTrader: how-to/nautilustrader.md
       - Freqtrade and Hummingbot: how-to/reconcile-freqtrade-hummingbot.md
       - Backtrader, VectorBT and LEAN: how-to/reconcile-backtrader-vectorbt.md
       - Realistic fills in Backtrader and LEAN: how-to/realistic-fills-backtrader-lean.md

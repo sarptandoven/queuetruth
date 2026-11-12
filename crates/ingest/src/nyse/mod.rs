@@ -28,7 +28,7 @@ mod ingest;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use ingest::ingest;
+pub(crate) use ingest::{OPTIONS, ingest};
 pub use mapper::{Anomalies, FileCtx, InstrumentInfo, MapOutput, Mapper, MapperStats};
 pub use message::{Message, ParseError, parse_line};
 pub use reader::{FileKind, Reader, parse_file_name};

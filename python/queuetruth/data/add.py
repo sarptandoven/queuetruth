@@ -176,14 +176,14 @@ def add(
     stage = out.parent / f".{out.name}.qt-add-{secrets.token_hex(4)}"
     stage.mkdir()
     try:
-        import queuetruth as qt
+        from queuetruth.api import ingest
 
         parts: list[Path] = []
         for i, spec in enumerate(specs):
             part = stage / f"part-{i}"
             names = ", ".join(Path(x["path"]).name for x in spec["inputs"])
             note(f"ingest {names} ({spec['format']}, venue {spec['venue']})")
-            qt.ingest({**spec, "out": str(part)})
+            ingest({**spec, "out": str(part)})
             parts.append(part)
         sources = ([out] if existing else []) + parts
         if len(sources) == 1:

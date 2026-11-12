@@ -70,11 +70,23 @@ fn schema_names() -> Vec<&'static str> {
     qt_schema::schema_names().to_vec()
 }
 
+/// The source format registry as JSON: one object per `IngestSpec.format`, in CLI order (`qt_cli::formats`).
+#[pyfunction]
+fn formats() -> String {
+    qt_cli::formats::to_json().to_string()
+}
+
 /// The Arrow schema of a table as a `pyarrow.Schema`.
 #[pyfunction(name = "arrow_schema")]
 fn table_schema(py: Python<'_>, name: &str) -> PyResult<Py<PyAny>> {
     let schema = qt_schema::schema(name).ok_or_else(|| PyKeyError::new_err(format!("unknown table {name:?}")))?;
     Ok(arrow_ffi::schema_to_pyarrow(py, schema)?.unbind())
+}
+
+/// The zoo family registry (`qt_zoo::FAMILIES`) as a JSON list, one object per family in canonical order.
+#[pyfunction]
+fn zoo_families() -> String {
+    qt_zoo::families_json().to_string()
 }
 
 /// Parses argv with the shared clap grammar; returns the `CliCommand` JSON or raises `CliExit`.
@@ -637,7 +649,9 @@ fn qt_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("CliExit", py.get_type::<CliExit>())?;
     m.add_function(wrap_pyfunction!(version, m)?)?;
     m.add_function(wrap_pyfunction!(schema_names, m)?)?;
+    m.add_function(wrap_pyfunction!(formats, m)?)?;
     m.add_function(wrap_pyfunction!(table_schema, m)?)?;
+    m.add_function(wrap_pyfunction!(zoo_families, m)?)?;
     m.add_function(wrap_pyfunction!(cli_parse, m)?)?;
     m.add_function(wrap_pyfunction!(cli_run_native, m)?)?;
     m.add_function(wrap_pyfunction!(ingest, m)?)?;

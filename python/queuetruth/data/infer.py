@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from queuetruth.demo.sources import _CAPTURE_MAGICS, infer_date, sniff_format
+from queuetruth.demo.sources import infer_date, sniff_format
 from queuetruth.errors import QtError
 
 #: CLI spelling -> spec name of every format `ingest` reads.
@@ -81,6 +81,14 @@ DBN_VENUES: dict[str, str] = {"XNAS.ITCH": "nasdaq", "GLBX.MDP3": "cme"}
 NEEDS_DATE = frozenset({"itch"})
 
 HEAD_BYTES = 1 << 16
+#: pcapng section header, then classic pcap in both byte orders, microsecond and nanosecond.
+CAPTURE_MAGICS = (
+    b"\x0a\x0d\x0d\x0a",
+    b"\xd4\xc3\xb2\xa1",
+    b"\xa1\xb2\xc3\xd4",
+    b"\x4d\x3c\xb2\xa1",
+    b"\xa1\xb2\x3c\x4d",
+)
 ZSTD_MAGIC = b"\x28\xb5\x2f\xfd"
 NYSE_NAME = re.compile(r"^EQY_US_[A-Z]+_IBF_\d+_(\d{8})", re.IGNORECASE)
 TARDIS_HEADER = "exchange,symbol,timestamp,local_timestamp"
@@ -193,7 +201,7 @@ def json_format(obj: Any) -> str | None:
 
 def sniff(data: bytes, name: str) -> tuple[str, str] | None:
     """(format, how) from a file's first bytes and its name, or None."""
-    if data[:4] in _CAPTURE_MAGICS:
+    if data[:4] in CAPTURE_MAGICS:
         return "iex_deep_plus", "a pcap / pcapng capture"
     if data[:3] == b"DBN" and len(data) > 3 and 0 < data[3] < 16:
         return "dbn", f"DBN version {data[3]} header"
