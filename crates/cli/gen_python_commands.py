@@ -44,6 +44,7 @@ def parsers() -> list[tuple[list[str], argparse.ArgumentParser]]:
     """(path prefix, parser) of every Python-only group, in the order they are listed in `--help`."""
     sys.path.insert(0, str(REPO / "python"))
     from queuetruth.atlas._cli import parser as atlas_parser
+    from queuetruth.atlas._cli import verify_parser
     from queuetruth.cert.cli import parser as cert_parser
     from queuetruth.check.cli import parser as check_parser
     from queuetruth.data.cli import parser as data_parser
@@ -63,6 +64,7 @@ def parsers() -> list[tuple[list[str], argparse.ArgumentParser]]:
         ([], cert_parser()),
         ([], reconcile_parser()),
         ([], atlas_parser()),
+        ([], verify_parser()),
         ([], check_parser()),
         ([], data_parser()),
         ([], fit_parser()),
