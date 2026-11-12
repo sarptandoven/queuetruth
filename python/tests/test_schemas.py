@@ -488,7 +488,8 @@ def _id(spec: dict) -> str:
 
 V1_1_SPEC_FIELDS = {
     s.ReplaySpec: {"fill_rule": "exact", "hidden_print_policy": None, "exclude_order_ids": []},
-    s.ZooSpec: {"amends": None, "exclude_order_ids": []},
+    s.ZooSpec: {"amends": None, "exclude_order_ids": [], "bootstrap_block": "auto"},
+    s.ShadowSampleSpec: {"partition_quotas": {}, "clamp_to_data_end": True},
     s.ScorecardSpec: {
         "window_ns": 60_000_000_000,
         "match_window_ns": 1_000_000,
@@ -507,6 +508,7 @@ V1_1_SPEC_FIELDS = {
 MINIMAL = {
     s.ReplaySpec: {"dataset": {"path": "d"}},
     s.ZooSpec: {"dataset": {"path": "d"}, "shadows": {"path": "s"}},
+    s.ShadowSampleSpec: {"dataset": {"path": "d"}, "n": 10},
     s.ScorecardSpec: {"live": {"path": "l"}, "sim": {"kind": "exact"}},
     s.LiveImportSpec: {"venue": "fix44", "inputs": [{"path": "x"}]},
     s.IngestSpec: {"format": "itch", "inputs": [{"path": "x"}], "venue": "nasdaq"},
@@ -634,7 +636,15 @@ def test_v1_1_documents_accept_v0_1() -> None:
         ("qt.live_manifest", ["coverage", "entry_fallback_share"]),
         (
             "qt.scorecard_summary",
-            ["n_twin_unmatched", "twin_match_rate", "discordance_clustered", "n_taker_fills", "fills_only", "pnl_gap"],
+            [
+                "n_twin_unmatched",
+                "twin_match_rate",
+                "discordance_clustered",
+                "n_taker_fills",
+                "fills_only",
+                "pnl_gap",
+                "ttf_survival",
+            ],
         ),
         ("qt.dataset_manifest", ["rule_set", "source_vintage", "attribution"]),
         (

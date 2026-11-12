@@ -30,6 +30,7 @@ V1_1_DEFAULTS: tuple[tuple[str, tuple[str, ...], Any], ...] = (
     ("sweep_gap_ns", ("exclude_order_ids",), []),
     ("sweep_gap_ns", ("exclude_order_ids", "*", "session_date"), None),
     ("write_fills", ("amends",), None),
+    ("write_fills", ("bootstrap_block",), "auto"),
     ("write_fills", ("exclude_order_ids",), []),
     ("write_fills", ("exclude_order_ids", "*", "session_date"), None),
     ("max_events", ("exclude_order_ids",), []),
@@ -52,6 +53,7 @@ V1_1_DEFAULTS: tuple[tuple[str, tuple[str, ...], Any], ...] = (
     ("family", ("self_exclude",), True),
     ("family", ("match_window_ns",), 1_000_000),
     ("window_open_s", ("partition_quotas",), {}),
+    ("window_open_s", ("clamp_to_data_end",), True),
 )
 #: Key sets that identify a `DatasetRef` / `FileRef` object.
 REF_KEYS = (frozenset({"path"}), frozenset({"dataset_id"}), frozenset({"upload_id"}), frozenset({"job_file"}))

@@ -32,6 +32,9 @@ from queuetruth.stats.equivalence import tost_from_ci, tost_p, tost_p_bootstrap
 from queuetruth.stats.multiplicity import adjust, benjamini_hochberg, benjamini_yekutieli, holm
 from queuetruth.stats.paired import binom_exact_two_sided, mcnemar, paired_permutation, wilcoxon_signed_rank
 from queuetruth.stats.resampling import (
+    CI_BLOCK_CHOICES,
+    MIN_CI_BLOCKS,
+    CiBlocks,
     block_counts,
     block_labels,
     block_replicates,
@@ -39,6 +42,7 @@ from queuetruth.stats.resampling import (
     bootstrap_rng,
     bootstrap_se,
     bootstrap_seed,
+    ci_blocks,
     day_block_bootstrap,
     percentile_ci,
 )
@@ -66,6 +70,9 @@ from queuetruth.stats.survival import aalen_johansen, gray_test, kaplan_meier, l
 
 __all__ = [
     "CI",
+    "CI_BLOCK_CHOICES",
+    "MIN_CI_BLOCKS",
+    "CiBlocks",
     "ClusteredDiscordance",
     "McNemarResult",
     "McsResult",
@@ -92,6 +99,7 @@ __all__ = [
     "bootstrap_seed",
     "brier",
     "calibration_slope_intercept",
+    "ci_blocks",
     "clustered_mcnemar",
     "day_block_bootstrap",
     "deflated_sharpe_ratio",

@@ -176,6 +176,22 @@ def _zoo_extras(out: str | None) -> tuple[int | None, int | None, dict[tuple[str
     return nc, total, rows
 
 
+def _zoo_ci_legend(doc: Doc) -> str:
+    """The table legend, naming the bootstrap blocks behind the 95% CIs (`ci_block`, `n_ci_blocks`)."""
+    from queuetruth.stats import MIN_CI_BLOCKS
+
+    kind, n = doc.get("ci_block"), doc.get("n_ci_blocks")
+    if not isinstance(n, int) or not kind:
+        return "(* = 95% CI excludes 0):"
+    blocks = "instrument x minute clusters" if kind == "instrument_minute" else f"{kind} blocks"
+    if n < MIN_CI_BLOCKS:
+        return (
+            f"(no 95% CIs and no * marks: only {n} {blocks}, fewer than {MIN_CI_BLOCKS}; "
+            "try --bootstrap-block instrument-minute or more data):"
+        )
+    return f"(* = 95% CI excludes 0; CIs from a bootstrap over {n} {blocks}):"
+
+
 def _render_zoo(doc: Doc, args: Doc, extra: Doc) -> str | None:
     """Zoo leaderboard: ranked and worded by `queuetruth.eval.leaderboard` (the report's single source): sorted by
     |fill-rate bias| at the sort horizon (`--sort-horizon`, default 60 s; `sort_horizon` picks the nearest horizon
@@ -227,7 +243,7 @@ def _render_zoo(doc: Doc, args: Doc, extra: Doc) -> str | None:
     lines.append(f"sorted by |fill-rate bias| at {_hz(sort_h)}, smallest first")
     lines.append("")
     lines.append("exact fill rate in %, then each model's fill-rate bias (model minus exact) in pp")
-    lines.append("(* = 95% CI excludes 0):")
+    lines.append(_zoo_ci_legend(doc))
     exact_cells = []
     for h in horizons:
         x = next((r for e in ranked if (r := rates_at(e, h)[1]) is not None), None)
@@ -397,6 +413,71 @@ def _score_clusters(doc: Doc, out: str | None) -> tuple[float | None, int | None
     return None, None, None
 
 
+#: Markout horizons of the terminal answer (hftbacktest discussion #332): 100 ms, 1 s, 10 s.
+PRACTITIONER_HORIZONS_NS = (100_000_000, 1_000_000_000, 10_000_000_000)
+
+
+def _practitioner_lines(doc: Doc) -> list[str]:
+    """The time-to-fill line (Kaplan-Meier share still unfilled at 1 s, else the first scored horizon, with the
+    clustered log-rank) and the markout line (sim minus live first-fill markout at 100 ms, 1 s and 10 s)."""
+    out: list[str] = []
+    sv = doc.get("ttf_survival")
+    if isinstance(sv, dict) and sv.get("arms"):
+        hs = list(sv.get("horizons_ns") or [])
+        if hs:
+            j = hs.index(1_000_000_000) if 1_000_000_000 in hs else 0
+            arms = sv["arms"]
+
+            def at(arm: str) -> str:
+                a = (arms.get(arm) or {}).get("at") or []
+                x = a[j] if j < len(a) else {}
+                if x.get("survival") is None:
+                    return f"{arm} n/a"
+                ci = (
+                    f" [{_pct(x['ci_lo'])}, {_pct(x['ci_hi'])}]"
+                    if x.get("ci_lo") is not None and x.get("ci_hi") is not None
+                    else ""
+                )
+                return f"{arm} {_pct(x['survival'])}{ci}"
+
+            lr = sv.get("logrank") or {}
+            d = (sv.get("diff") or [{}] * (j + 1))[j]
+            diff = ""
+            if d.get("diff") is not None:
+                diff = f"; sim minus live {_pp(d['diff'])} pp"
+                if d.get("ci_lo") is not None and d.get("ci_hi") is not None:
+                    diff += f" (95% CI {_pp(d['ci_lo'])} to {_pp(d['ci_hi'])})"
+            out.append(
+                f"time to fill: still unfilled after {_hz(hs[j])} (Kaplan-Meier, cancels censored): {at('live')} vs "
+                f"{at('sim')}{diff}; log-rank p = {_p(lr.get('p_value'))} (by instrument, "
+                f"{lr.get('n_clusters')} clusters)"
+            )
+    diffs = {
+        int(r["horizon_ns"]): r
+        for r in doc.get("markout_diff") or []
+        if isinstance(r, dict) and r.get("ref") == "mid" and r.get("mean_diff_ticks") is not None
+    }
+    parts = []
+    for h in PRACTITIONER_HORIZONS_NS:
+        r = diffs.get(h)
+        if r is None:
+            continue
+        has_ci = r.get("ci_lo") is not None and r.get("ci_hi") is not None
+        ci = f" [{r['ci_lo']:+.2f}, {r['ci_hi']:+.2f}]" if has_ci else ""
+        parts.append(f"{_hz(h)} {r['mean_diff_ticks']:+.2f}{ci}")
+    if parts:
+        out.append("markouts: sim minus live, ticks of mid, orders filled in both (95% CI): " + ", ".join(parts))
+    return out
+
+
+def _dur_ms(ns: float | None) -> str:
+    return "n/a" if ns is None else f"{float(ns) / 1e6:.3g} ms"
+
+
+def _pct(x: float | None) -> str:
+    return "n/a" if x is None or not math.isfinite(x) else f"{x * 100:.0f}%"
+
+
 def _render_score(doc: Doc, args: Doc, extra: Doc) -> str | None:
     bias = doc.get("bias")
     tbt = doc.get("two_by_two")
@@ -439,6 +520,7 @@ def _render_score(doc: Doc, args: Doc, extra: Doc) -> str | None:
     for g in [] if blocked else doc.get("pnl_gap") or []:  # a blocked arm's P&L describes nothing (as the report)
         if isinstance(g, dict) and g.get("headline"):
             lines.append(f"P&L: {g['headline']}")
+    lines += _practitioner_lines(doc)
     eq = doc.get("equivalence") or {}
     if eq.get("fill_rate_margin") is not None and v is not None and not doc.get("fills_only"):
         m = _pp(eq.get("fill_rate_margin"), signed=False)
@@ -600,6 +682,13 @@ def _render_calibration(doc: Doc, args: Doc, path: list[str]) -> str | None:
     if isinstance(doc.get("ci_bootstrap"), list | tuple):
         lo, hi = doc["ci_bootstrap"]
         cis.append(f"bootstrap {_num(lo)} to {_num(hi)}")
+    lat = ((doc.get("latency") or {}).get("entry_ns") or {}) if doc.get("kind") == "live" else {}
+    if lat.get("p50") is not None:  # calibrate-live --latency-from-log: step 1 of 2 (hftbacktest #332)
+        lines.append(
+            f"latency (fitted first, on the live log): median entry latency {_dur_ms(lat['p50'])} "
+            f"(p10 {_dur_ms(lat.get('p10'))}, p90 {_dur_ms(lat.get('p90'))}, {lat.get('n')} orders); "
+            "the queue below was fitted with it"
+        )
     lines.append(
         f"fitted: {pn} = {_num(est)}"
         + (f" ({'; '.join(cis)})" if cis else "")
@@ -757,8 +846,11 @@ def _render_dq(doc: Doc, args: Doc) -> str | None:
     out = args.get("out")
     if out:
         lines += ["", f"report: {Path(out) / 'dq_report.html'} (JSON: {Path(out) / 'dq_report.json'})"]
+    fail_on = (doc.get("spec") or {}).get("fail_on", "never")
     if doc.get("gate_failed"):
-        lines.append(f"gate --fail-on {(doc.get('spec') or {}).get('fail_on', 'warn')}: failed (exit 1)")
+        lines.append(f"gate --fail-on {fail_on}: failed (exit 1)")
+    elif fail_on == "never" and doc.get("status") in ("warn", "fail"):
+        lines.append("no gate set: exit 0 (--fail-on warn or --fail-on fail exits 1 on this verdict)")
     return "\n".join(lines)
 
 
@@ -810,6 +902,18 @@ def render(
 #: Summary warnings that inform rather than warn: stderr only with --verbose (or --log-level info|debug).
 _NOTE_PREFIXES = ("info: ", "ci_block=", "self_exclusion: matched ")
 _ZERO_COUNTERS = re.compile(r"\b\w+=(\d+)\b")
+#: Diagnostics: kept in the summary's `warnings`, printed with --verbose, and by default counted in one plain note
+#: (prefix -> what the note calls it).
+DIAGNOSTIC_PREFIXES: dict[str, str] = {
+    "mcs: ": "model confidence set",
+    "impact: ": "shadow impact on the book",
+    "ci: ": "interval blocks",
+    "planned_life: ": "planned life",
+    "self_exclusion: ": "self-exclusion",
+    "replay: exclude_order_ids": "self-exclusion",
+    "race: ": "race-flagged orders",
+    "clusters: ": "bootstrap clusters",
+}
 
 
 def _is_note(w: str) -> bool:
@@ -818,6 +922,19 @@ def _is_note(w: str) -> bool:
     # replay's shadow diagnostics when every counter is 0
     counts = _ZERO_COUNTERS.findall(w)
     return w.startswith("shadow diagnostics") and bool(counts) and all(int(c) == 0 for c in counts)
+
+
+def _diagnostic(w: str) -> str | None:
+    return next((what for prefix, what in DIAGNOSTIC_PREFIXES.items() if w.startswith(prefix)), None)
+
+
+def diagnostics_note(topics: list[str]) -> str:
+    """The one default stderr line for the diagnostics `stderr_lines` leaves out."""
+    seen = list(dict.fromkeys(topics))
+    return (
+        f"note: {len(topics)} diagnostic(s) ({', '.join(seen)}) are kept in the summary's warnings; --verbose "
+        "prints them"
+    )
 
 
 def _hbt_312_line(lines: list[str], doc: Doc) -> str:
@@ -842,9 +959,10 @@ def _hbt_312_line(lines: list[str], doc: Doc) -> str:
 
 def stderr_lines(doc: Any, *, verbose: bool) -> list[str]:
     """The stderr lines of a summary's `warnings`: `warning: <w>` each, except that the faithful hbt #312 abort lines
-    collapse into one line and informational lines (`info: `, `ci_block=`, `self_exclusion: matched`, all-zero shadow
-    diagnostics) are left out; `verbose` prints every line (`info: ` lines as they are). The summary itself always
-    keeps every warning."""
+    collapse into one line, informational lines (`info: `, `ci_block=`, `self_exclusion: matched`, all-zero shadow
+    diagnostics) are left out and the diagnostics (`DIAGNOSTIC_PREFIXES`: model confidence set, shadow impact,
+    clusters, ...) are counted in one plain note; `verbose` prints every line (`info: ` lines as they are). The summary
+    itself always keeps every warning."""
     from queuetruth.eval.leaderboard import ABORT_PREFIX
 
     raw = doc.get("warnings") if isinstance(doc, dict) else None
@@ -853,12 +971,19 @@ def stderr_lines(doc: Any, *, verbose: bool) -> list[str]:
         return [w if w.startswith("info: ") else f"warning: {w}" for w in ws]
     aborts = [w for w in ws if ABORT_PREFIX in w]
     out: list[str] = []
+    topics: list[str] = []
     for w in ws:
         if ABORT_PREFIX in w:
             if w is aborts[0]:
                 out.append(_hbt_312_line(aborts, doc))
-        elif not _is_note(w):
+        elif _is_note(w):
+            continue
+        elif (what := _diagnostic(w)) is not None:
+            topics.append(what)
+        else:
             out.append(f"warning: {w}")
+    if topics:
+        out.append(diagnostics_note(topics))
     return out
 
 
@@ -1105,7 +1230,11 @@ def _dispatch(cmd: Doc, ctx: Doc | None = None) -> tuple[Doc | None, bool]:
 
         return _plain(run_zoo_toxicity(args)), False
     if key[0] == "calibrate" or key == ("calibrate-live",):
-        cal = _plain(api.calibrate(args) if key[0] == "calibrate" else api.calibrate_live(args))
+        if key[0] == "calibrate":
+            cal = _plain(api.calibrate(args))
+        else:  # --latency-from-log: latency first, then the queue (hftbacktest #332)
+            lat_first = {"latency_from_log": True} if extra.get("latency_from_log") else {}
+            cal = _plain(api.calibrate_live(args, **lat_first))
         err = _calibration_refused(cal)
         if err is not None:
             raise err

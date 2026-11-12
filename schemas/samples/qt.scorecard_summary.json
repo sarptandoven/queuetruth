@@ -109,7 +109,13 @@
         "live_only_mean": 0.5,
         "diff": 0.5,
         "ci_lo": 0.5,
-        "ci_hi": 0.5
+        "ci_hi": 0.5,
+        "n_sim_only": 1,
+        "n_live_only": 1,
+        "sim_only_ci_lo": 0.5,
+        "sim_only_ci_hi": 0.5,
+        "live_only_ci_lo": 0.5,
+        "live_only_ci_hi": 0.5
       }
     ],
     "equivalence": {
@@ -238,6 +244,50 @@
         "main_part": "granted",
         "headline": "x"
       }
-    ]
+    ],
+    "ttf_survival": {
+      "n": 1,
+      "horizons_ns": [
+        1
+      ],
+      "arms": {
+        "live": {
+          "n_filled": 1,
+          "n_censored": 1,
+          "median_ns": 0.5,
+          "median_ci_lo": 0.5,
+          "median_ci_hi": 0.5,
+          "at": [
+            {
+              "horizon_ns": 1,
+              "survival": 0.5,
+              "ci_lo": 0.5,
+              "ci_hi": 0.5
+            }
+          ],
+          "curve": [
+            [
+              0.5
+            ]
+          ],
+          "curve_exact": true
+        }
+      },
+      "diff": [
+        {
+          "horizon_ns": 1,
+          "diff": 0.5,
+          "ci_lo": 0.5,
+          "ci_hi": 0.5
+        }
+      ],
+      "logrank": {
+        "statistic": 0.5,
+        "p_value": 0.5,
+        "method": "x",
+        "n_clusters": 1,
+        "n_strata": 1
+      }
+    }
   }
 }
