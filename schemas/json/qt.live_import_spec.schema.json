@@ -173,7 +173,8 @@
         "sim_hummingbot",
         "sim_backtrader",
         "sim_vectorbt",
-        "sim_lean"
+        "sim_lean",
+        "sim_backtesting_py"
       ],
       "title": "Venue",
       "type": "string"

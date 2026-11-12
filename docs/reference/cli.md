@@ -753,7 +753,7 @@ venue exports -> canonical live log
 Usage: queuetruth live import [OPTIONS] --venue <venue> --in <PATH> --out <VALUE>
 
 Options:
-      --venue <venue>                  venue [possible values: binance, bybit, okx, coinbase, kraken, deribit, hyperliquid, ibkr-flex, fix44, sim-hftbacktest, sim-nautilus, freqtrade, hummingbot, sim-freqtrade, sim-hummingbot, sim-backtrader, sim-vectorbt, sim-lean]
+      --venue <venue>                  venue [possible values: binance, bybit, okx, coinbase, kraken, deribit, hyperliquid, ibkr-flex, fix44, sim-hftbacktest, sim-nautilus, freqtrade, hummingbot, sim-freqtrade, sim-hummingbot, sim-backtrader, sim-vectorbt, sim-lean, sim-backtesting-py]
       --in <PATH>                      input file (repeatable)
       --out <VALUE>                    output live-log directory
       --account <VALUE>                account label
@@ -2665,7 +2665,7 @@ Options:
       --backtester <backtester>
           the backtester (default: read from the file)
           
-          [possible values: hftbacktest, nautilus, backtrader, vectorbt, lean, freqtrade]
+          [possible values: hftbacktest, nautilus, backtrader, vectorbt, lean, freqtrade, backtesting_py]
 
       --instrument-map <FILE>
           instrument_map.csv (default: built from the dataset's symbols; needed only when they do not match)

@@ -149,6 +149,12 @@ jobs:
           done
       - name: test-nautilus (queuetruth-nautilus in each nautilus_trader venv)
         run: make test-nautilus
+      - name: docs blocks that need nautilus_trader or the plugins (check-docs `run needs=`), once per release line
+        run: |
+          for py in ${QT_NT_PYTHON//:/ }; do
+            PYTHONPATH="$PWD/integrations/nautilus/src:$PWD/integrations/hftbacktest/plugin/src" "$py" docs/check_docs.py \
+              --require-core --page docs/how-to/nautilustrader.md --page docs/how-to/calibrate-hftbacktest.md
+          done
       - name: test-hftbacktest-plugin (queuetruth-hftbacktest, hftbacktest 2.4.4)
         run: make test-hftbacktest-plugin
       - name: test-extra (scripts/scale, scripts/nightly, tools, tools/livefill, actions/referee, integrations/hftbacktest)

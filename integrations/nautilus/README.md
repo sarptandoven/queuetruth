@@ -101,6 +101,11 @@ calibration has a latency fit, `latency_model`. For the high-level API, `qtn.ven
 objects, and `fee_model=...` is required on every 2.x release: `QT-CONFIG-001` without it). `qtn.fill_model(cal)` and
 `qtn.latency_model(cal)` build one object each.
 
+The same line takes the result of `qt.fit("nautilus", ...)` (a fit on your data; `fit.json` works too) or of
+`qt.atlas.calibration("nautilus", tier="T1")` (the atlas's closest setting, when you have no data):
+`engine.add_venue(..., **qtn.venue_options(qt.atlas.calibration("nautilus", tier="T1", yes=True)))`. An atlas
+setting warns that it is the atlas (one venue, small orders), not your data, and whether it is still clearly off.
+
 From the command line:
 
 ```bash

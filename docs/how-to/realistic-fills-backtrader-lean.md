@@ -6,8 +6,10 @@ real: the price touched your limit and turned back before the queue in front of 
 models keep the backtester's own limit logic and accept each such fill with the probability that the real queue
 filled it.
 
-**You need:** the atlas touch tables (`touch.json`, published by the atlas as `atlas/v1/touch.json`) and the
-liquidity tier of your instruments. Nothing else: no order-level data of your own.
+**You need:** the liquidity tier of your instruments. Nothing else: no order-level data of your own. The fill models
+read the atlas touch tables (`atlas/v1/touch.json`) through the same download-after-consent cache as `queuetruth
+atlas`: pass `yes=True` once and the cached copy works offline from then on. `table="touch.json"` reads a copy you
+saved instead.
 
 ## Backtrader
 
@@ -18,7 +20,7 @@ import queuetruth as qt
 
 cerebro = bt.Cerebro()
 # ... your data feeds (1-minute, 5-minute or 1-hour bars) and strategy ...
-filler = qt.backtrader.QueueFiller(table="touch.json", tier="T1", seed=0)
+filler = qt.backtrader.QueueFiller(tier="T1", seed=0, yes=True)  # the atlas's touch tables
 cerebro.broker.set_filler(filler)
 cerebro.addanalyzer(qt.backtrader.OrderLog)  # optional: writes bt_orders.jsonl for queuetruth check
 cerebro.run()
@@ -32,6 +34,20 @@ bar. Market, close and stop orders fill as Backtrader fills them. The bar length
 (`timeframe` and `compression`); pass `bar="5m"` to set it. `filler.decisions` lists every draw: the order, the
 bar, the probability, the random number and whether it filled.
 
+The filler needs no Backtrader to be made, so this block runs anywhere: the same line on the synthetic atlas the
+tests use (invented numbers), and the probabilities it will draw with.
+
+<!-- check-docs: run -->
+```python
+import os
+
+import queuetruth as qt
+
+atlas = os.path.join(os.environ["QT_FIXTURES"], "atlas_synth")  # without atlas= it is the public atlas
+filler = qt.backtrader.QueueFiller(tier="T1", seed=0, atlas=atlas)
+print(filler.touch.tier, filler.touch.probability("1m", "buy"), filler.touch.probability("5m", "sell"))
+```
+
 ## LEAN
 
 <!-- check-docs: skip (runs inside a LEAN Python algorithm) -->
@@ -43,7 +59,7 @@ import queuetruth as qt
 class MyAlgorithm(QCAlgorithm):
     def initialize(self):
         equity = self.add_equity("SPY", Resolution.MINUTE)
-        equity.set_fill_model(qt.lean.QueueFillModel(table="touch.json", tier="T1", seed=0))
+        equity.set_fill_model(qt.lean.QueueFillModel(tier="T1", seed=0))  # the atlas's cached touch tables
 ```
 
 `QueueFillModel` returns a LEAN `FillModel` that calls LEAN's own `limit_fill` and, when LEAN fills the order,
@@ -55,8 +71,9 @@ against a stand-in of LEAN's documented Python API, not against LEAN itself.
 
 | Option | Meaning |
 |---|---|
-| `table` | a `touch.json` file, a `queuetruth.atlas.touch.TouchTables` or its dict |
-| `tier` | the liquidity tier of the instruments, as the table names it; `ALL` pools the tiers |
+| `table` | a `touch.json` file, a `queuetruth.atlas.touch.TouchTables` or its dict; without it the atlas's tables |
+| `atlas`, `yes` | where the atlas is (a directory or URL; default the public atlas) and the consent to download it |
+| `tier` | the liquidity tier of the instruments, as the table names it (`T1_top100`) or by its short name (`T1`); `ALL` pools the tiers |
 | `rule` | `touch` (default): the bar's low reaches a buy's limit (high for a sell); `penetrate_1`, `penetrate_2`: it goes 1 or 2 ticks through. A penetrate rule needs `tick=` the tick size |
 | `seed` | the draws' seed (default 0). The same seed and the same orders give the same fills, in any run |
 | `bar` | `1m`, `5m` or `1h` when it cannot be read from the data |

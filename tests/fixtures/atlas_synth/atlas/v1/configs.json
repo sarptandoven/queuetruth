@@ -1,0 +1,117 @@
+{
+ "atlas_root": "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+ "configs": [
+  {
+   "config": "fill_model=FillModel(prob_fill_on_limit=1), book_type=BookType.L2_MBP, trade_execution=True, queue_position=False",
+   "config_kind": "NautilusTrader BacktestEngine.add_venue keywords",
+   "fill_rate_bias_pp": {
+    "hi": 0.4,
+    "lo": -0.2,
+    "value": 0.1
+   },
+   "label": "NautilusTrader default (touch fill)",
+   "library": "nautilus",
+   "library_name": "NautilusTrader",
+   "model_id": "nt_prob_touch[mode=faithful;p=1]",
+   "n_settings": 3,
+   "overlapping": [],
+   "overlapping_labels": [],
+   "pnl_bias_ticks": null,
+   "tier": "ALL",
+   "tier_name": "all symbols",
+   "verdict": "no_clear_difference",
+   "verdict_text": "no clear difference from the real queue (95% interval includes 0)"
+  },
+  {
+   "config": "fill_model=FillModel(prob_fill_on_limit=0.5), book_type=BookType.L2_MBP, trade_execution=True, queue_position=True",
+   "config_kind": "NautilusTrader BacktestEngine.add_venue keywords",
+   "fill_rate_bias_pp": {
+    "hi": -0.3,
+    "lo": -0.9,
+    "value": -0.6
+   },
+   "label": "NautilusTrader queue position, touch probability 0.5",
+   "library": "nautilus",
+   "library_name": "NautilusTrader",
+   "model_id": "nt_queue_l2_prob_touch[mode=faithful;p=0.5]",
+   "n_settings": 3,
+   "overlapping": [],
+   "overlapping_labels": [],
+   "pnl_bias_ticks": null,
+   "tier": "T1_top100",
+   "tier_name": "the 100 most traded symbols",
+   "verdict": "too_pessimistic",
+   "verdict_text": "still clearly off: fills too few orders"
+  },
+  {
+   "config": ".power_prob_queue_model3(3).no_partial_fill_exchange()",
+   "config_kind": "hftbacktest BacktestAsset chain",
+   "fill_rate_bias_pp": {
+    "hi": 0.5,
+    "lo": -0.1,
+    "value": 0.2
+   },
+   "label": "hftbacktest Power3 queue model (n=3)",
+   "library": "hftbacktest",
+   "library_name": "hftbacktest",
+   "model_id": "hbt_power3[exch=partial;mode=faithful;n=3]",
+   "n_settings": 3,
+   "overlapping": [],
+   "overlapping_labels": [],
+   "pnl_bias_ticks": null,
+   "tier": "ALL",
+   "tier_name": "all symbols",
+   "verdict": "no_clear_difference",
+   "verdict_text": "no clear difference from the real queue (95% interval includes 0)"
+  },
+  {
+   "config": ".log_prob_queue_model2().no_partial_fill_exchange()",
+   "config_kind": "hftbacktest BacktestAsset chain",
+   "fill_rate_bias_pp": {
+    "hi": -0.4,
+    "lo": -1.0,
+    "value": -0.7
+   },
+   "label": "hftbacktest Log2 queue model",
+   "library": "hftbacktest",
+   "library_name": "hftbacktest",
+   "model_id": "hbt_log2[exch=partial;mode=faithful]",
+   "n_settings": 3,
+   "overlapping": [],
+   "overlapping_labels": [],
+   "pnl_bias_ticks": null,
+   "tier": "T1_top100",
+   "tier_name": "the 100 most traded symbols",
+   "verdict": "too_pessimistic",
+   "verdict_text": "still clearly off: fills too few orders"
+  },
+  {
+   "config": null,
+   "config_kind": null,
+   "fill_rate_bias_pp": {
+    "hi": 0.3,
+    "lo": -0.3,
+    "value": 0.0
+   },
+   "label": "hftbacktest Power3 queue model (n=2) (corrected mode)",
+   "library": "hftbacktest",
+   "library_name": "hftbacktest",
+   "model_id": "hbt_power3[exch=partial;mode=corrected;n=2]",
+   "n_settings": 3,
+   "overlapping": [],
+   "overlapping_labels": [],
+   "pnl_bias_ticks": null,
+   "tier": "T5_rest",
+   "tier_name": "the less traded symbols",
+   "verdict": "no_clear_difference",
+   "verdict_text": "no clear difference from the real queue (95% interval includes 0)"
+  }
+ ],
+ "horizon": "1min",
+ "mode": "faithful",
+ "notes": {},
+ "schema": "qt.atlas_configs",
+ "schema_version": 1,
+ "shadow_population": "standard",
+ "venue": "synthetic"
+}

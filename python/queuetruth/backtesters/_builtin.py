@@ -26,6 +26,10 @@ def _is_vectorbt(p: Probe) -> bool:
     )
 
 
+def _is_backtesting_py(p: Probe) -> bool:
+    return {"EntryBar", "ExitBar", "EntryPrice", "ExitPrice"} <= p.columns
+
+
 def _is_backtrader(p: Probe) -> bool:
     if "event" in p.columns and "ref" in p.columns:
         return True
@@ -144,5 +148,12 @@ BUILTINS: tuple[BacktesterEntry, ...] = (
         import_sim=lazy(f"{_IMP}.hummingbot:import_hummingbot_sim"),
         import_live=lazy(f"{_IMP}.hummingbot:import_hummingbot_live"),
         reconcile=lazy(f"{_IMP}.hummingbot:reconcile_hummingbot"),
+    ),
+    BacktesterEntry(
+        name="backtesting_py",
+        label="backtesting.py",
+        import_sim=lazy(f"{_IMP}.backtesting_py:import_backtesting_py_sim"),
+        detect=_is_backtesting_py,
+        detect_priority=25,
     ),
 )

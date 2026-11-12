@@ -3,7 +3,7 @@
 Each writer places the same seeded set of resting limit orders at the best bid or ask of the synthetic tape and
 says, like a touch-fill backtest, that every other order filled 5 s after it was placed; the rest are cancelled
 after 30 s. The files follow the formats the importers read (`queuetruth.live.importers.sim`, `backtrader`,
-`vectorbt`).
+`vectorbt`, `backtesting_py`).
 """
 
 from __future__ import annotations
@@ -155,4 +155,58 @@ def write_vectorbt(path: Path, os_: list[Order]) -> Path:
         ts = dt.datetime.fromtimestamp(o.ts / 1e9, tz=dt.UTC).strftime("%Y-%m-%d %H:%M:%S+00:00")
         rows.append(f"{k},{k},{o.symbol},{ts},{o.qty},{o.price:.2f},0.0,{'Buy' if o.side == 1 else 'Sell'}\n")
     path.write_text("".join(rows))
+    return path
+
+
+def _csv_time(ns: int) -> str:
+    """A naive timestamp as pandas' `to_csv` writes it (`2026-06-15 15:06:40`)."""
+    return _iso(ns).replace("T", " ")
+
+
+def _json_time(text: object) -> str:
+    """The same as `to_json(date_format="iso")` writes it (`2026-06-15T15:06:40.000`)."""
+    return str(text).replace(" ", "T") + ".000"
+
+
+def _pandas_td(seconds: int) -> str:
+    """A duration as pandas prints a `Timedelta` (`0 days 00:32:46`)."""
+    d, rest = divmod(seconds, 86_400)
+    return f"{d} days {rest // 3600:02d}:{rest % 3600 // 60:02d}:{rest % 60:02d}"
+
+
+def write_backtesting_py(path: Path, os_: list[Order], *, json_records: bool = False) -> Path:
+    """backtesting.py trades (`stats._trades.to_csv()`, or `.to_json(orient="records", date_format="iso")`): each
+    filled order is the entry of a trade whose exit is the next filled order of the other side on the same symbol,
+    in the column layout of backtesting.py 0.6.6 (one indicator, `Entry_SMA` / `Exit_SMA`)."""
+    rows: list[dict[str, object]] = []
+    filled = sorted((o for o in os_ if o.filled), key=lambda o: o.ts)
+    used: set[int] = set()
+    for a in filled:
+        if a.oid in used:
+            continue
+        b = next(
+            (x for x in filled if x.oid not in used and x.ts > a.ts and x.side != a.side and x.symbol == a.symbol), None
+        )
+        if b is None:
+            continue
+        used |= {a.oid, b.oid}
+        size = a.qty * a.side
+        rows.append({
+            "Size": size, "EntryBar": len(rows) * 2, "ExitBar": len(rows) * 2 + 1, "EntryPrice": round(a.price, 2),
+            "ExitPrice": round(b.price, 2), "SL": None, "TP": None,
+            "PnL": round(size * (b.price - a.price) - 0.02, 4), "Commission": 0.02,
+            "ReturnPct": round((b.price / a.price - 1) * (1 if size > 0 else -1), 6),
+            "EntryTime": _csv_time(a.ts + FILL_AFTER), "ExitTime": _csv_time(b.ts + FILL_AFTER),
+            "Duration": _pandas_td((b.ts - a.ts) // 1_000_000_000), "Tag": None,
+            "Entry_SMA": 1.0, "Exit_SMA": 1.0,
+        })  # fmt: skip
+    if json_records:
+        iso = [{**r, "EntryTime": _json_time(r["EntryTime"]), "ExitTime": _json_time(r["ExitTime"])} for r in rows]
+        path.write_text(json.dumps(iso))
+        return path
+    cols = list(rows[0])
+    text = "," + ",".join(cols) + "\n"
+    for k, r in enumerate(rows):
+        text += f"{k}," + ",".join("" if r[c] is None else str(r[c]) for c in cols) + "\n"
+    path.write_text(text)
     return path
