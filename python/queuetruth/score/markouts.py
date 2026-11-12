@@ -27,10 +27,9 @@ from dataclasses import dataclass
 import numpy as np
 import pyarrow as pa
 
+from queuetruth.eval.markouts import PAST_END, REFS, PricePath, ccy, markouts, ticks
+from queuetruth.eval.markouts import bps as in_bps
 from queuetruth.score._io import config_error, input_format, make_table, rows
-
-REFS = ("mid", "microprice")
-PAST_END = (None, "last_quote")
 
 
 def side_sign(v: object) -> int:
@@ -91,17 +90,11 @@ class InstrumentDays:
         return v[max(i, 0)]
 
 
-@dataclass
-class _Quotes:
-    ts: np.ndarray
-    bid: np.ndarray
-    ask: np.ndarray
-    bsz: np.ndarray
-    asz: np.ndarray
-    ok: np.ndarray
-
-
-def _quotes(bbo: pa.Table, days: InstrumentDays, default_id: int | None) -> dict[tuple[int, int], _Quotes]:
+def _quotes(
+    bbo: pa.Table, days: InstrumentDays, default_id: int | None, end: Mapping[tuple[int, int], int] | None = None
+) -> dict[tuple[int, int], PricePath]:
+    """One `PricePath` per (instrument_id, session_date) of the BBO rows (file order breaks equal timestamps), with
+    `end` = the instrument-day's last event time (default: its last BBO row)."""
     groups: dict[tuple[int, int], list[tuple[int, int, int | None, int, int | None, int]]] = {}
     for i, r in enumerate(rows(bbo)):
         iid = r.get("instrument_id", default_id)
@@ -115,32 +108,25 @@ def _quotes(bbo: pa.Table, days: InstrumentDays, default_id: int | None) -> dict
         groups.setdefault(key, []).append(
             (ts, i, r.get("bid_px"), int(r.get("bid_sz") or 0), r.get("ask_px"), int(r.get("ask_sz") or 0))
         )
-    out: dict[tuple[int, int], _Quotes] = {}
+    last = dict(end or {})
+    out: dict[tuple[int, int], PricePath] = {}
     for key, g in groups.items():
         g.sort(key=lambda x: (x[0], x[1]))
-        ok = np.array([b is not None and a is not None for _, _, b, _, a, _ in g], dtype=bool)
-        out[key] = _Quotes(
-            ts=np.array([x[0] for x in g], dtype=np.int64),
-            bid=np.array([0 if x[2] is None else int(x[2]) for x in g], dtype=np.int64),
-            ask=np.array([0 if x[4] is None else int(x[4]) for x in g], dtype=np.int64),
-            bsz=np.array([x[3] for x in g], dtype=np.float64),
-            asz=np.array([x[5] for x in g], dtype=np.float64),
-            ok=ok,
+        ts_arr = np.array([x[0] for x in g], dtype=np.int64)
+        out[key] = PricePath(
+            ts_arr,
+            np.array([0 if x[2] is None else int(x[2]) for x in g], dtype=np.int64),
+            np.array([0 if x[4] is None else int(x[4]) for x in g], dtype=np.int64),
+            ok=np.array([b is not None and a is not None for _, _, b, _, a, _ in g], dtype=bool),
+            bid_sz=np.array([x[3] for x in g], dtype=np.float64),
+            ask_sz=np.array([x[5] for x in g], dtype=np.float64),
+            end=int(last.get(key, int(ts_arr[-1]))),
         )
     return out
 
 
-def _ref_minus(q: _Quotes, i: int, ref: str, base: int) -> float | None:
-    """`M - base` at quote row `i` (None if undefined); integer differences first."""
-    if i < 0 or not q.ok[i]:
-        return None
-    b, a = int(q.bid[i]), int(q.ask[i])
-    if ref == "mid":
-        return float(b - base) + float(a - b) * 0.5
-    tot = q.bsz[i] + q.asz[i]
-    if tot <= 0:
-        return None
-    return float(b - base) + float(a - b) * (q.bsz[i] / tot)
+def _f(x: float) -> float | None:
+    return None if x != x else float(x)
 
 
 def compute_markouts(
@@ -155,7 +141,7 @@ def compute_markouts(
     extras: dict[str, list[float | None]] | None = None,
 ) -> pa.Table:
     """`qt.score_markouts` rows in the 1.1 layout (with `mo_bps`, `mo_net_ccy`): one per fill x horizon x
-    reference (fill order, then horizons, then refs).
+    reference (fill order, then horizons, then refs). The markouts come from `queuetruth.eval.markouts`.
 
     `last_event_ts` maps (instrument_id, session_date days) to the instrument-day's last event time; the default is
     the last BBO row of that instrument-day. `past_end`: null = a horizon past that time has no markout,
@@ -171,10 +157,25 @@ def compute_markouts(
         extras.setdefault("mo_net_ccy", [])
     days = InstrumentDays(instruments)
     default_id = days.only_id()
-    quotes = _quotes(bbo, days, default_id)
-    last = dict(last_event_ts or {})
-    for key, q in quotes.items():
-        last.setdefault(key, int(q.ts[-1]))
+    paths = _quotes(bbo, days, default_id, last_event_ts)
+    frows = rows(fills)
+    insts: list[_Inst | None] = []
+    keys: list[tuple[int, int] | None] = []
+    side: list[int] = []
+    for f in frows:
+        iid = f.get("instrument_id", default_id)
+        if iid is None:
+            raise input_format("fills", "instrument_id column required with several instruments")
+        inst = days.lookup(int(iid), int(f["ts"]))
+        insts.append(inst)
+        keys.append(None if inst is None else (int(iid), inst.session_date))
+        side.append(side_sign(f["side"]))
+    ts = [int(f["ts"]) for f in frows]
+    px = [int(f["px"]) for f in frows]
+    mk = {
+        ref: markouts(paths, ts, side, px, horizons_ns, keys=keys, ref=ref, past_end=past_end)  # type: ignore[arg-type]
+        for ref in refs
+    }
     out: dict[str, list] = {
         k: []
         for k in (
@@ -190,45 +191,29 @@ def compute_markouts(
             "mo_net_ccy",
         )
     }
-    for f in rows(fills):
-        iid = f.get("instrument_id", default_id)
-        if iid is None:
-            raise input_format("fills", "instrument_id column required with several instruments")
-        t = int(f["ts"])
-        d = side_sign(f["side"])
-        p = int(f["px"])
+    for i, f in enumerate(frows):
+        p = px[i]
         qty = int(f["qty"])
         fee = f.get("fee")
         fee_ccy = f.get("fee_ccy")
-        inst = days.lookup(int(iid), t)
-        q = None if inst is None else quotes.get((int(iid), inst.session_date))
-        end = None if inst is None else last.get((int(iid), inst.session_date))
-        pre_idx = -1 if q is None else int(np.searchsorted(q.ts, t, side="left")) - 1
+        inst = insts[i]
         same_ccy = (
             inst is not None
             and fee is not None
             and (fee_ccy is None or inst.currency is None or str(fee_ccy).upper() == inst.currency.upper())
         )
-        for h in horizons_ns:
-            th = t + int(h)
-            idx = -1
-            if q is not None and end is not None:
-                if th <= end:
-                    idx = int(np.searchsorted(q.ts, th, side="right")) - 1
-                elif past_end == "last_quote":
-                    idx = int(np.searchsorted(q.ts, end, side="right")) - 1
+        for k, h in enumerate(horizons_ns):
             for ref in refs:
                 mo = mo_ccy = mm = bps = net = None
-                if q is not None and inst is not None:
-                    m_rel = _ref_minus(q, idx, ref, p)
-                    if m_rel is not None:
-                        mo = d * m_rel / inst.tick
-                        mo_ccy = d * m_rel * 10.0**inst.price_exp * qty * 10.0**inst.size_exp * inst.mult
-                        bps = d * m_rel / abs(p) * 1e4 if p != 0 else None
-                        net = mo_ccy - float(fee) if same_ccy else None  # type: ignore[arg-type]
-                        pre_rel = _ref_minus(q, pre_idx, ref, p)
-                        if pre_rel is not None:
-                            mm = d * (m_rel - pre_rel) / inst.tick
+                x = _f(mk[ref].mo[i, k])
+                if x is not None and inst is not None:
+                    mo = ticks(x, inst.tick)
+                    mo_ccy = ccy(x, inst.price_exp, qty, inst.size_exp, inst.mult)
+                    bps = in_bps(x, p) if p != 0 else None
+                    net = mo_ccy - float(fee) if same_ccy else None  # type: ignore[arg-type]
+                    y = _f(mk[ref].mm[i, k])
+                    if y is not None:
+                        mm = ticks(y, inst.tick)
                 if extras is not None:
                     extras["mo_bps"].append(bps)
                     extras["mo_net_ccy"].append(net)

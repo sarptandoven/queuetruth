@@ -216,6 +216,48 @@ def scorer_outputs() -> dict[str, Any]:
     return out
 
 
+def shortfall_outputs() -> dict[str, Any]:
+    """The shortfall decomposition's exact marks (`2 M(t-)`, `2 M(t+h)`) of every fill of the scorer tape."""
+    from queuetruth.score.shortfall import Marks
+
+    fills, bbo, inst, last = _scorer_tape(5)
+    f = fills.to_pylist()
+    ts = np.array([r["ts"] for r in f], dtype=np.int64)
+    out: dict[str, Any] = {}
+    for past_end in (None, "last_quote"):
+        m = Marks(bbo, inst, last_event_ts=last, past_end=past_end)
+        book = m.locate([r["instrument_id"] for r in f], ts)
+        out[f"{past_end}"] = {
+            "book": h(book),
+            "pre": h(m.pre_many(book, ts)),
+            "post": [h(m.post_many(book, ts, hz)) for hz in (0, 1, 100 * MS, 1 * S, 60 * S, 600 * S)],
+            "one": [h(m.pre(r["instrument_id"], r["ts"])) for r in f[:10]]
+            + [h(m.post(r["instrument_id"], r["ts"], 1 * S)) for r in f[:10]],
+        }
+    return out
+
+
+def atlas_touch_outputs() -> dict[str, Any]:
+    """The atlas touch tables' last-print markout (`scripts/scale/atlas_touch.py`) on random prints and orders."""
+    scale = Path(__file__).resolve().parents[3] / "scripts" / "scale"
+    if str(scale) not in sys.path:
+        sys.path.insert(0, str(scale))
+    import atlas_touch as AT
+
+    rng = np.random.default_rng(7)
+    out: dict[str, Any] = {}
+    for case, n_prints in (("prints", 300), ("one_print", 1), ("no_prints", 0)):
+        ts = np.sort(rng.integers(0, 600 * S, n_prints)).astype(np.int64)
+        px = (100_000 + rng.integers(-40, 40, n_prints)).astype(np.int64)
+        n = 250
+        lim = (100_000 + rng.integers(-30, 30, n)).astype(np.int64)
+        sign = rng.choice([-1, 1], n).astype(np.int64)
+        t = rng.integers(-60 * S, 620 * S, n).astype(np.int64)
+        have = rng.random(n) < 0.8
+        out[case] = {str(bar): h(AT.markout(ts, px, lim, sign, 5, t, bar, have)) for bar in (1 * S, 60 * S, 300 * S)}
+    return out
+
+
 # ---- the toxicity evaluation ----------------------------------------------------------------------------------------
 
 
@@ -351,7 +393,13 @@ def sandbox_outputs(tmp: Path) -> dict[str, Any]:
 
 
 def outputs(tmp: Path, *, core: bool) -> dict[str, Any]:
-    out = {"scorer": scorer_outputs(), "toxicity": toxicity_outputs(), "pm": pm_outputs(tmp)}
+    out = {
+        "scorer": scorer_outputs(),
+        "shortfall": shortfall_outputs(),
+        "atlas_touch": atlas_touch_outputs(),
+        "toxicity": toxicity_outputs(),
+        "pm": pm_outputs(tmp),
+    }
     if core:
         out["sandbox"] = sandbox_outputs(tmp)
     return out
@@ -366,6 +414,14 @@ def _pins() -> dict[str, Any]:
 
 def test_scorer_markouts_are_pinned() -> None:
     assert scorer_outputs() == _pins()["scorer"]
+
+
+def test_shortfall_marks_are_pinned() -> None:
+    assert shortfall_outputs() == _pins()["shortfall"]
+
+
+def test_atlas_touch_markouts_are_pinned() -> None:
+    assert atlas_touch_outputs() == _pins()["atlas_touch"]
 
 
 def test_toxicity_markouts_are_pinned() -> None:

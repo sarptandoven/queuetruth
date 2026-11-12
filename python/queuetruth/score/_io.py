@@ -20,6 +20,7 @@ from queuetruth.dataset import read_manifest as dataset_read_manifest
 from queuetruth.errors import QtError
 from queuetruth.schemas.arrow import DICT_VALUES, FULL_SCHEMAS, SCHEMAS
 from queuetruth.schemas.io import sha256_file, write_table
+from queuetruth.schemas.runid import resolve_ref as _resolve_ref
 
 Row = dict[str, Any]
 
@@ -149,34 +150,7 @@ def ref_path(ref: Any, what: str) -> Path:
     return Path(p)
 
 
-def resolve_ref(ref: dict[str, Any]) -> str:
-    """sha256 identity of a reference for `run_id` (SPEC 7.3): dataset -> `dataset_id`, live dir -> sha256 of its
-    `manifest.json` (a directory without one: sha256 over its sorted relative paths and file hashes), file -> file
-    sha256; other reference kinds hash their canonical text."""
-    if "path" in ref:
-        p = Path(ref["path"])
-        if p.is_dir():
-            m = p / "manifest.json"
-            if m.exists():
-                try:
-                    doc = json.loads(m.read_text(encoding="utf-8"))
-                except (OSError, json.JSONDecodeError):
-                    doc = {}
-                if isinstance(doc, dict) and isinstance(doc.get("dataset_id"), str):
-                    return doc["dataset_id"]
-                return sha256_file(m)
-            import hashlib
-
-            h = hashlib.sha256()
-            for f in sorted(x for x in p.rglob("*") if x.is_file()):
-                h.update(f"{f.relative_to(p).as_posix()}\n{sha256_file(f)}\n".encode())
-            return h.hexdigest()
-        if p.exists():
-            return sha256_file(p)
-        raise input_missing(p, "not found")
-    from queuetruth.integrity import canonical_sha256
-
-    return canonical_sha256(ref, "sorted")
+resolve_ref = _resolve_ref  # the one implementation lives in `queuetruth.schemas.runid` (contracts layer)
 
 
 # ---- canonical live logs ------------------------------------------------------------------------------------------

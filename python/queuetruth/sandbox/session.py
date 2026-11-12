@@ -54,6 +54,8 @@ from pydantic import BaseModel, ValidationError
 
 from queuetruth._version import __version__
 from queuetruth.errors import QtError
+from queuetruth.eval.markouts import PricePath, ccy, markouts, ticks
+from queuetruth.eval.markouts import bps as in_bps
 from queuetruth.sandbox import scorecard as sc
 from queuetruth.sandbox._util import (
     config_error,
@@ -620,20 +622,18 @@ class Sandbox:
         }
 
     def _markout(self, o: Order, f: dict[str, Any], h: int) -> dict[str, Any]:
-        """Markout of one fill at one horizon against the visible best-quote history, the formula of
-        `queuetruth.score.markouts.compute_markouts` with `last_event_ts` = the visible cut."""
+        """Markout of one fill at one horizon against the visible best-quote history (`queuetruth.eval.markouts`,
+        mid, no censoring: a horizon is only asked for once it is visible), as `compute_markouts` gives it with
+        `last_event_ts` = the visible cut."""
         u = self._units()
         t, p, q = int(f["ts_event"]), int(f["fill_px"]), int(f["fill_qty"])
-        i = self.book.quote_at(t + h)
+        path = PricePath(self.book.h_ts, self.book.h_bid, self.book.h_ask)
+        x = float(markouts(path, [t], [o.sign], [p], [h]).mo[0, 0])
         mo = bps = mo_ccy = None
-        if i >= 0:
-            b, a = self.book.h_bid[i], self.book.h_ask[i]
-            if b is not None and a is not None:
-                m_rel = float(int(b) - p) + float(int(a) - int(b)) * 0.5
-                d = o.sign
-                mo = d * m_rel / self.instrument["tick_size"]
-                mo_ccy = d * m_rel * 10.0 ** u["price_exp"] * q * 10.0 ** u["size_exp"] * u["mult"]
-                bps = d * m_rel / abs(p) * 1e4 if p != 0 else None
+        if x == x:
+            mo = ticks(x, self.instrument["tick_size"])
+            mo_ccy = ccy(x, u["price_exp"], q, u["size_exp"], u["mult"])
+            bps = in_bps(x, p) if p != 0 else None
         return {
             "order_id": o.order_id,
             "fill_seq": int(f["fill_seq"]),

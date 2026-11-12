@@ -16,12 +16,15 @@ Summary echoes (`spec_echo`) keep the fields.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import warnings
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import queuetruth.integrity as _integrity
+from queuetruth.errors import QtError
 
 #: Keys removed (at any depth) before hashing and in summary echoes.
 EXECUTION_ONLY = ("out", "threads")
@@ -138,6 +141,32 @@ def identity_document(spec: dict[str, Any], engine_version: str, resolve: Callab
     removed and refs resolved."""
     text = _json(spec)
     return _core().identity_document(text, engine_version, _resolved(spec, resolve))
+
+
+def resolve_ref(ref: dict[str, Any]) -> str:
+    """sha256 identity of a reference for `run_id` (SPEC 7.3): dataset -> `dataset_id`, live dir -> sha256 of its
+    `manifest.json` (a directory without one: sha256 over its sorted relative paths and file hashes), file -> file
+    sha256; other reference kinds hash their canonical text. A missing path is `QT-INPUT-001`."""
+    if "path" in ref:
+        p = Path(ref["path"])
+        if p.is_dir():
+            m = p / "manifest.json"
+            if m.exists():
+                try:
+                    doc = json.loads(m.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    doc = {}
+                if isinstance(doc, dict) and isinstance(doc.get("dataset_id"), str):
+                    return doc["dataset_id"]
+                return _integrity.sha256_file(m)
+            h = hashlib.sha256()
+            for f in sorted(x for x in p.rglob("*") if x.is_file()):
+                h.update(f"{f.relative_to(p).as_posix()}\n{_integrity.sha256_file(f)}\n".encode())
+            return h.hexdigest()
+        if p.exists():
+            return _integrity.sha256_file(p)
+        raise QtError("QT-INPUT-001", f"{p}: not found")
+    return _integrity.canonical_sha256(ref, "sorted")
 
 
 def run_id(spec: dict[str, Any], engine_version: str, resolve: Callable[[dict[str, Any]], str]) -> str:

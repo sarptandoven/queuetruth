@@ -66,6 +66,7 @@ import pyarrow.parquet as pq
 
 from queuetruth._version import __version__
 from queuetruth.errors import QtError
+from queuetruth.eval.markouts import PricePath, markouts
 from queuetruth.live._common import rfc3339_ns
 from queuetruth.pm.book import ASK, BID, Ladder
 from queuetruth.pm.calibrate import LevelIndex
@@ -167,6 +168,14 @@ class Mids:
         self.ts = np.maximum.accumulate(np.asarray(ts, dtype=np.int64)) if ts else np.zeros(0, dtype=np.int64)
         self.mid = np.asarray(mid, dtype=float)
         self.end = int(self.ts[-1]) if ts else 0
+        #: the same mids as a `queuetruth.eval.markouts` path (crossed or one-sided books undefined), for markouts
+        self.path = PricePath(
+            self.ts,
+            np.array([0 if b is None else b for b in bb], dtype=np.int64),
+            np.array([0 if a is None else a for a in ba], dtype=np.int64),
+            ok=np.isfinite(self.mid),
+            end=self.end,
+        )
         self.start = int(self.ts[0]) if ts else 0
 
     def before(self, t: int) -> float | None:
@@ -1021,24 +1030,35 @@ def _poly_rebate_pool(
 def _markouts(
     sp: PmScoreSpec, orders: dict[str, list[OrderRow]], iid: int, size_exp: int, mids: Mids
 ) -> list[dict[str, Any]]:
+    """Adverse selection per scenario and horizon: `sum (M(t-) - M(t+h)) d qty` over the fills with a mid before
+    them, from `queuetruth.eval.markouts` (`mm` with the adverse sign convention, the book's mid path censored at
+    its last batch), in dollars and per unit."""
     out = []
+    hs = [int(h) for h in sp.markout_horizons_ns]
     for s in SCENARIOS:
         fills = [f for o in orders[s] if o.iid == iid for f in o.fills if f.mid_before is not None]
-        for h in sp.markout_horizons_ns:
+        mk = markouts(
+            mids.path,
+            [f.ts for f in fills],
+            [1 if f.side == BID else -1 for f in fills],
+            [f.price for f in fills],
+            hs,
+            sign="adverse",
+        )
+        for k, h in enumerate(hs):
             tot, qty, n = 0.0, 0, 0
-            for f in fills:
-                m1 = mids.at(f.ts + h)
-                if m1 is None or f.mid_before is None:
+            for i, f in enumerate(fills):
+                adverse = float(mk.mm[i, k])
+                if adverse != adverse:
                     continue
-                sign = 1 if f.side == BID else -1
-                tot += sign * (f.mid_before - m1) * f.qty
+                tot += adverse * f.qty
                 qty += f.qty
                 n += 1
             out.append(
                 {
                     "scenario": s,
                     "instrument_id": iid,
-                    "horizon_ns": int(h),
+                    "horizon_ns": h,
                     "n": n,
                     "adverse_selection": _dollars(tot, 1, size_exp) if n else None,
                     "per_unit": (tot / qty / ONE) if qty else None,
