@@ -65,6 +65,8 @@ values are not written to `qt.zoo_errors` and are null in the leaderboard (`qt.z
 
 from __future__ import annotations
 
+import functools
+import json
 from typing import Any
 
 import numpy as np
@@ -89,8 +91,46 @@ DECILE_LEVELS = np.array([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9])
 TERCILE_LEVELS = np.array([1.0 / 3.0, 2.0 / 3.0])
 ONE_US_NS = 1_000
 LOGLOSS_EPS = 1e-6
-PARTICLE_FAMILIES = ("databento_mc",)
 BOOTSTRAP_TEST_ID = "zoo_eval"
+
+
+@functools.cache
+def zoo_families() -> tuple[dict[str, Any], ...]:
+    """The engine's zoo family registry (`queuetruth._core.zoo_families()`), one dict per family in canonical order:
+    `name`, `library`, `label`, `summary`, `input`, `params` (key, default, bounds, range), `param_keys`, `hbt_l2`,
+    `nt`, `particle`, `touch`, `in_all` (parameter sets in `--models all`), `all_ids` (those ids as typed on the
+    command line), `calibrations`, `calibration_family` and `library_default`. Raises ImportError without the
+    compiled extension."""
+    from queuetruth import _core
+
+    return tuple(json.loads(_core.zoo_families()))
+
+
+def zoo_all_ids() -> list[str]:
+    """The model ids `--models all` runs, as typed on the command line (`hbt_power3[n=2]`), in engine order."""
+    return [i for f in zoo_families() for i in f["all_ids"]]
+
+
+#: The particle families when the extension is not built; a test pins it to the registry.
+_PARTICLE_FALLBACK = ("databento_mc",)
+
+
+@functools.cache
+def particle_families() -> tuple[str, ...]:
+    """Families of Monte Carlo models (cost and horizons depend on `particles`), from the engine's registry."""
+    try:
+        return tuple(f["name"] for f in zoo_families() if f["particle"])
+    except (ImportError, AttributeError):  # no extension, or one built before the registry
+        return _PARTICLE_FALLBACK
+
+
+def __getattr__(name: str) -> Any:
+    # `PARTICLE_FAMILIES` is read on first use, so importing this module does not load the extension.
+    if name == "PARTICLE_FAMILIES":
+        return particle_families()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 _PRED_COLS = [
     "model_id",
     "shadow_id",
@@ -471,7 +511,7 @@ def evaluate_zoo(
                         if "qty_bias" in stats:
                             entry["qty_bias"] = _none(stats["qty_bias"][0])
             # time to fill (stratum all)
-            if family(str(m)) not in PARTICLE_FAMILIES and h_max_ns in horizons:
+            if family(str(m)) not in particle_families() and h_max_ns in horizons:
                 sel = in_pop & (h == h_max_ns) & usable & y & t_tsv & m_tsv & (m_ts - live <= h_max_ns)
                 if sel.any():
                     mt = np.maximum(m_ts[sel] - live[sel], ONE_US_NS).astype(float)

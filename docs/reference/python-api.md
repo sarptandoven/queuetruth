@@ -354,7 +354,9 @@ Zoo evaluation against exact truth and Python baselines (SPEC 4.3 `queuetruth.ev
 | `rank_leaderboard` | function | SPEC 4.3 | `(entries: Sequence[Any], horizon_ns: int \| None) -> list[Any]` | Entries sorted by absolute fill-rate bias at `horizon_ns`, then Brier, then model id. |
 | `sort_horizon` | function | SPEC 4.3 | `(horizons: Sequence[int], target_ns: int = 60000000000) -> int \| None` | The horizon the leaderboard is sorted at (module docstring). |
 | `without_aborted` | function |  | `(predictions: pa.Table) -> pa.Table` | The rows that are predictions: a 1.1 `status` of `hbt_312_abort` (faithful hbt pair aborted at its #312 event at or before the row's deadline) is left out of every metric. |
+| `zoo_all_ids` | function |  | `() -> list[str]` | The model ids `--models all` runs, as typed on the command line (`hbt_power3[n=2]`), in engine order. |
 | `zoo_ci_blocks` | function |  | `(predictions: pa.Table, block: str = auto) -> CiBlocks` | The bootstrap blocks `evaluate_zoo` uses on `predictions` (one label per distinct shadow of the common population, in ascending shadow id order). |
+| `zoo_families` | function |  | `() -> tuple[dict[str, Any], ...]` | The engine's zoo family registry (`queuetruth._core.zoo_families()`), one dict per family in canonical order: `name`, `library`, `label`, `summary`, `input`, `params` (key, default, bounds, range), `param_keys`, `hbt_l2`, `nt`, `particle`, `touch`, `in_all` (parameter sets in `--models all`), `all_ids` (those ids as typed on the command line), `calibrations`, `calibration_family` and `library_default`. Raises ImportError without the compiled extension. |
 
 Constants: `DEFAULT_SORT_HORIZON_NS`, `KINDS`.
 

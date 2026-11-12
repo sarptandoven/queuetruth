@@ -11,7 +11,7 @@ held-out check needs enough orders.
 ## Why a different command
 
 On an L2-only venue nobody knows the exact queue: the feed shows the size at each price, not the orders. So the
-exact-truth fit of [Calibrate my hftbacktest queue model](calibrate-hftbacktest.md) is not possible. What you do
+exact-truth fit of [Score and calibrate my hftbacktest backtest](calibrate-hftbacktest.md) is not possible. What you do
 know is what happened to your own orders: when each one was acknowledged, whether it filled as a maker, and when.
 `queuetruth calibrate-live` fits the model parameter to those outcomes:
 

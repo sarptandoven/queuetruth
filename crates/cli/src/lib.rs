@@ -9,6 +9,7 @@
 #![forbid(unsafe_code)]
 
 mod bench;
+pub mod formats;
 mod grammar;
 mod human;
 mod native;
@@ -165,59 +166,54 @@ pub fn parse(argv: &[String]) -> Result<CliCommand, CliExit> {
     })
 }
 
-/// `zoo --list-models`: the `all` set with one line per model, then the families that run only when named.
+/// `zoo --list-models`: the `all` set with one line per model, then the families that run only when named. Both
+/// come from the zoo family registry (`qt_zoo::FAMILIES`).
 fn list_models(json_out: bool) -> String {
-    use qt_zoo::{Exchange, Family, Mode};
-    let all = qt_zoo::default_models(Mode::Faithful, Exchange::Partial);
-    // the id as typed on the command line: mode, exch and particles come from --mode, --exchange, --particles
-    let short = |m: &qt_zoo::ModelId| {
-        let ps: Vec<String> = m
-            .params
-            .iter()
-            .filter(|(k, _)| k.as_str() != "particles")
-            .map(|(k, v)| format!("{k}={v}"))
-            .collect();
-        if ps.is_empty() {
-            m.family.name().to_owned()
-        } else {
-            format!("{}[{}]", m.family.name(), ps.join(";"))
-        }
-    };
-    let other: Vec<Family> = Family::ALL
+    use qt_zoo::{FAMILIES, FamilyDef, families::short_id};
+    // the ids as typed on the command line: mode, exch and particles come from --mode, --exchange, --particles
+    let all: Vec<(String, &FamilyDef)> = FAMILIES
         .iter()
-        .copied()
-        .filter(|f| !all.iter().any(|m| m.family == *f) || !f.param_keys().is_empty())
+        .flat_map(|d| d.in_all.iter().map(move |p| (short_id(d.name, p), d)))
         .collect();
-    let template = |f: Family| {
-        let keys: Vec<String> = f
-            .param_keys()
+    let other: Vec<&FamilyDef> = FAMILIES
+        .iter()
+        .filter(|d| d.in_all.is_empty() || !d.param_keys.is_empty())
+        .collect();
+    let template = |d: &FamilyDef| {
+        let keys: Vec<String> = d
+            .param_keys
             .iter()
             .filter(|k| **k != "particles")
             .map(|k| format!("{k}={}", k.to_ascii_uppercase()))
             .collect();
-        format!("{}[{}]", f.name(), keys.join(";"))
+        format!("{}[{}]", d.name, keys.join(";"))
     };
     if json_out {
-        let row = |id: String, f: Family| serde_json::json!({"id": id, "family": f.name(), "summary": f.summary()});
+        let row = |id: String, d: &FamilyDef| serde_json::json!({"id": id, "family": d.name, "summary": d.summary});
         let doc = serde_json::json!({
-            "all": all.iter().map(|m| row(short(m), m.family)).collect::<Vec<_>>(),
-            "other": other.iter().map(|f| row(template(*f), *f)).collect::<Vec<_>>(),
+            "all": all.iter().map(|(id, d)| row(id.clone(), d)).collect::<Vec<_>>(),
+            "other": other.iter().map(|d| row(template(d), d)).collect::<Vec<_>>(),
         });
         return doc.to_string();
     }
-    let ids: Vec<String> = all.iter().map(short).collect();
-    let tpl: Vec<String> = other.iter().map(|f| template(*f)).collect();
-    let w = ids.iter().chain(&tpl).map(String::len).max().unwrap_or(0);
+    let tpl: Vec<String> = other.iter().map(|d| template(d)).collect();
+    let w = all
+        .iter()
+        .map(|(id, _)| id)
+        .chain(&tpl)
+        .map(String::len)
+        .max()
+        .unwrap_or(0);
     let mut out = format!(
         "--models all ({} models; mode from --mode, hftbacktest exchange from --exchange, particles from --particles):\n",
         all.len()
     );
-    for (id, m) in ids.iter().zip(&all) {
-        out.push_str(&format!("  {id:<w$}  {}\n", m.family.summary()));
+    for (id, d) in &all {
+        out.push_str(&format!("  {id:<w$}  {}\n", d.summary));
     }
     out.push_str("\nother parameters or families (name them in --models):\n");
-    for (t, f) in tpl.iter().zip(&other) {
-        out.push_str(&format!("  {t:<w$}  {}\n", f.summary()));
+    for (t, d) in tpl.iter().zip(&other) {
+        out.push_str(&format!("  {t:<w$}  {}\n", d.summary));
     }
     out.push_str(
         "\nexample: --models \"hbt_power3[n=2],nt_prob_touch[p=0.3]\"\n\

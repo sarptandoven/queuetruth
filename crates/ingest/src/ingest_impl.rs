@@ -26,7 +26,7 @@ use std::path::{Path, PathBuf};
 use ::dbn::Schema;
 use qt_schema::json::{DataQuality, FeedGap, IngestSummary, InputFile, TradingHaltSpan};
 use qt_schema::rows::{TradeKind, TradeRow};
-use qt_schema::specs::{IngestFormat, IngestSpec, SessionTz};
+use qt_schema::specs::{IngestSpec, SessionTz};
 use qt_schema::{codec, io as qio, spec_echo};
 use qt_types::{Instrument, MboEvent, QtError, QtResult, RuleSet, Ts, Venue, VenueRules, flags, rules_for};
 use serde_json::Value;
@@ -49,7 +49,7 @@ const NASDAQ_OPEN_S: u32 = 34_200;
 const NASDAQ_CLOSE_S: u32 = 57_600;
 /// Largest `close_s` (two days).
 const MAX_CLOSE_S: u32 = 172_800;
-const ALLOWED_OPTIONS: [&str; 3] = ["open_s", "close_s", "memory_rows"];
+pub(crate) const ALLOWED_OPTIONS: [&str; 3] = ["open_s", "close_s", "memory_rows"];
 
 fn cfg(msg: impl Into<String>) -> QtError {
     QtError::Config(msg.into())
@@ -477,7 +477,55 @@ fn input_paths(spec: &IngestSpec) -> QtResult<Vec<PathBuf>> {
         .collect()
 }
 
+/// Reads one format's inputs into `out` (`inputs` exist; the prelude and the strict gate are in `run`).
+type Body = fn(&IngestSpec, &[PathBuf], &Path) -> QtResult<IngestSummary>;
+
+/// `ingest` of every format of this crate, through the registry (`crate::formats`).
 pub(crate) fn ingest(spec: &IngestSpec) -> QtResult<IngestSummary> {
+    match crate::formats::get(spec.format) {
+        Some(f) => (f.ingest)(spec),
+        None => run(spec, |spec, _, _| {
+            Err(cfg(format!(
+                "format: {:?} is ingested by qt_crypto::ingest, not qt_ingest",
+                serde_json::to_value(spec.format).unwrap_or(Value::Null)
+            )))
+        }),
+    }
+}
+
+/// `SourceFormat::ingest` of `itch`.
+pub(crate) fn itch(spec: &IngestSpec) -> QtResult<IngestSummary> {
+    run(spec, ingest_itch)
+}
+
+/// `SourceFormat::ingest` of `dbn`.
+pub(crate) fn dbn(spec: &IngestSpec) -> QtResult<IngestSummary> {
+    run(spec, ingest_dbn)
+}
+
+/// `SourceFormat::ingest` of `etcsv`.
+pub(crate) fn etcsv(spec: &IngestSpec) -> QtResult<IngestSummary> {
+    run(spec, ingest_etcsv)
+}
+
+/// `SourceFormat::ingest` of `parquet`.
+pub(crate) fn parquet(spec: &IngestSpec) -> QtResult<IngestSummary> {
+    run(spec, ingest_parquet)
+}
+
+/// `SourceFormat::ingest` of `iex_deep_plus`.
+pub(crate) fn iex_deep_plus(spec: &IngestSpec) -> QtResult<IngestSummary> {
+    run(spec, ingest_iex)
+}
+
+/// `SourceFormat::ingest` of `nyse_ibf`.
+pub(crate) fn nyse_ibf(spec: &IngestSpec) -> QtResult<IngestSummary> {
+    run(spec, crate::nyse::ingest)
+}
+
+/// The steps shared by every format of this crate: output and inputs, the format's body, the spec echo and the
+/// strict gate.
+fn run(spec: &IngestSpec, body: Body) -> QtResult<IngestSummary> {
     let out = PathBuf::from(
         spec.out
             .as_deref()
@@ -492,20 +540,7 @@ pub(crate) fn ingest(spec: &IngestSpec) -> QtResult<IngestSummary> {
             });
         }
     }
-    let mut summary = match spec.format {
-        IngestFormat::Itch => ingest_itch(spec, &inputs, &out)?,
-        IngestFormat::Dbn => ingest_dbn(spec, &inputs, &out)?,
-        IngestFormat::Etcsv => ingest_etcsv(spec, &inputs, &out)?,
-        IngestFormat::Parquet => ingest_parquet(spec, &inputs, &out)?,
-        IngestFormat::IexDeepPlus => ingest_iex(spec, &inputs, &out)?,
-        IngestFormat::NyseIbf => crate::nyse::ingest(spec, &inputs, &out)?,
-        other => {
-            return Err(cfg(format!(
-                "format: {:?} is ingested by qt_crypto::ingest, not qt_ingest",
-                serde_json::to_value(other).unwrap_or(Value::Null)
-            )));
-        }
-    };
+    let mut summary = body(spec, &inputs, &out)?;
     let v = serde_json::to_value(spec).map_err(|e| QtError::Engine(format!("spec echo: {e}")))?;
     if let Value::Object(o) = spec_echo(&v) {
         summary.spec = o;
@@ -769,7 +804,7 @@ fn ingest_itch(spec: &IngestSpec, inputs: &[PathBuf], out: &Path) -> QtResult<In
 // ---- IEX DEEP+ --------------------------------------------------------------------------------------------------
 
 /// `IngestSpec.format` name of IEX DEEP+.
-const IEX_FORMAT: &str = "iex_deep_plus";
+pub(crate) const IEX_FORMAT: &str = "iex_deep_plus";
 
 /// IEX HIST days are 8-18 GB of gzip inflating about 4.5x: the absolute inflation cap is raised for this format
 /// (the ratio guard is unchanged).

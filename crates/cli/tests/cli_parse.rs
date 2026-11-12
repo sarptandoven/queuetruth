@@ -782,3 +782,32 @@ fn allocation_per_partition_is_hyphenated() {
         2
     );
 }
+
+/// Drift: every `--venue` choice of `live import` reaches the Rust spec mirror (both lists are generated from the
+/// Python model by `make schemas`; a hand-kept copy dropped seven of them once).
+#[test]
+fn every_live_venue_parses_into_the_spec_mirror() {
+    use qt_schema::specs::{LIVE_VENUE_CLI_NAMES, LiveImportSpec, LiveVenue};
+    assert_eq!(LIVE_VENUE_CLI_NAMES.len(), LiveVenue::ALL.len());
+    for (cli, venue) in LIVE_VENUE_CLI_NAMES.iter().zip(LiveVenue::ALL) {
+        let argv: Vec<String> = [
+            "queuetruth",
+            "live",
+            "import",
+            "--venue",
+            cli,
+            "--in",
+            "x",
+            "--out",
+            "l",
+        ]
+        .iter()
+        .map(|s| (*s).to_owned())
+        .collect();
+        let c = parse_ok(&argv);
+        let mut v = c.args.clone();
+        v.as_object_mut().map(|o| o.remove("_cli"));
+        let li: LiveImportSpec = serde_json::from_value(v).unwrap_or_else(|e| panic!("{cli}: {e}"));
+        assert_eq!(li.venue, venue, "{cli}");
+    }
+}

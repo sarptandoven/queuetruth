@@ -34,9 +34,7 @@ table has no discordant order. The zoo arms are the models being refereed.
 
 from __future__ import annotations
 
-import contextlib
 import hashlib
-import io
 import json
 from pathlib import Path
 from typing import Any
@@ -108,17 +106,13 @@ def split_models(text: str) -> list[str]:
 
 
 def zoo_all_models() -> list[str]:
-    """The model ids of `queuetruth zoo --models all` (from `queuetruth zoo --list-models --format json`)."""
-    from queuetruth import cli as qcli
+    """The model ids of `queuetruth zoo --models all`, from the engine's zoo family registry."""
+    from queuetruth.eval.zoo import zoo_all_ids
 
-    buf = io.StringIO()
-    with contextlib.redirect_stdout(buf):
-        rc = qcli.main(["zoo", "--list-models", "--format", "json"])
     try:
-        doc = json.loads(buf.getvalue())
-    except json.JSONDecodeError as e:
-        raise QtError("QT-ENGINE-001", f"queuetruth zoo --list-models gave no JSON (exit {rc})") from e
-    return [str(m["id"]) for m in doc["all"]]
+        return zoo_all_ids()
+    except ImportError as e:
+        raise QtError("QT-ENGINE-001", "the zoo family registry needs the compiled extension (make develop)") from e
 
 
 def _score(live_dir: Path, ds: Path, out: Path, arm: str) -> dict[str, Any]:

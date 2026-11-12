@@ -130,7 +130,7 @@ def main(argv: list[str]) -> int:
     except SystemExit as e:  # --help
         return int(e.code or 0)
     json_out = args.format == "json" or args.json
-    from queuetruth.atlas import confirm_on_terminal
+    from queuetruth.check.estimate import confirm_on_terminal
 
     interactive = sys.stdin.isatty() and sys.stderr.isatty() and not json_out
     if args.data is not None:
@@ -156,7 +156,7 @@ def main(argv: list[str]) -> int:
             bar=args.bar,
             atlas=args.atlas,
             yes=args.yes,
-            confirm=confirm_on_terminal(interactive, "check", "--atlas DIR"),
+            confirm=confirm_on_terminal(interactive),
             refresh=args.refresh,
             seed=args.seed,
         )

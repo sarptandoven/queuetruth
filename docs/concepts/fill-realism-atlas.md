@@ -69,7 +69,7 @@ with it: the atlas does not rank those by closeness. Next to it is the config to
 
 - hftbacktest: the queue model and exchange calls of your `BacktestAsset()` chain, for example
   `.power_prob_queue_model2(2).no_partial_fill_exchange()`, built from the same builder and exchange tables as
-  `queuetruth export hftbacktest` ([Calibrate my hftbacktest queue model](../how-to/calibrate-hftbacktest.md)). The
+  `queuetruth export hftbacktest` ([Score and calibrate my hftbacktest backtest](../how-to/calibrate-hftbacktest.md)). The
   exchange is `no_partial_fill_exchange`, the export's default, because the released hftbacktest 2.4.4 stops on
   `partial_fill_exchange` with error 14 ([hftbacktest #312](https://github.com/nkaz001/hftbacktest/issues/312)). The
   atlas ran the models with partial fills; the two differ only when a fill is smaller than the order.

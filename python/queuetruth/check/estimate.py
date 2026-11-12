@@ -179,6 +179,13 @@ def _normal_draws(rng: Any, v: float, lo: float, hi: float, n: int) -> Any:
     return np.sort(rng.normal(v, max(sd, 0.0), n))
 
 
+def confirm_on_terminal(interactive: bool) -> Callable[[str], bool]:
+    """The consent callback of `check` without data: `queuetruth atlas`'s prompt, naming `check` and `--atlas`."""
+    from queuetruth.atlas import confirm_on_terminal as atlas_confirm
+
+    return atlas_confirm(interactive, "check", "--atlas DIR")  # type: ignore[no-any-return]
+
+
 def _pct(x: float) -> str:
     return f"{100 * x:.0f}%"
 
@@ -516,4 +523,4 @@ def html(doc: dict[str, Any]) -> str:
     return shell("queuetruth check", "\n".join(body), doc["answer"], skip_to="answer")
 
 
-__all__ = ["DRAWS", "SCHEMA", "bar_from_times", "bar_of", "estimate", "html", "text", "tier_of"]
+__all__ = ["DRAWS", "SCHEMA", "bar_from_times", "bar_of", "confirm_on_terminal", "estimate", "html", "text", "tier_of"]
