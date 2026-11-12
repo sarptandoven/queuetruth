@@ -323,7 +323,17 @@ def run_node(venue_config: Any, catalog_dir: str) -> Any:
             kinds: list[Any] = [NautilusDataType.OrderBookDelta, NautilusDataType.TradeTick]
         except ImportError:
             kinds = ["OrderBookDelta", "TradeTick"]
-        data = [BacktestDataConfig(data_type=k, catalog_path=catalog_dir, instrument_id=iid) for k in kinds]
+
+        def data_config(kind: Any) -> Any:
+            try:  # rc4 to rc8 take a catalog_path
+                return BacktestDataConfig(data_type=kind, catalog_path=catalog_dir, instrument_id=iid)
+            except TypeError:  # 2.0.0rc9 takes a DataCatalogConfig
+                from nautilus_trader.persistence import DataCatalogConfig
+
+                catalog = DataCatalogConfig(path=catalog_dir)
+                return BacktestDataConfig(data_type=kind, catalog=catalog, instrument_id=iid)
+
+        data = [data_config(k) for k in kinds]
         engine = BacktestEngineConfig(trader_id=TraderId("QT-001"), logging=LoggerConfig(bypass_logging=True))
     else:
         cat.write_data([inst])
@@ -336,3 +346,106 @@ def run_node(venue_config: Any, catalog_dir: str) -> Any:
         engine = BacktestEngineConfig(trader_id="QT-001", logging=LoggingConfig(bypass_logging=True))
     run = BacktestRunConfig(venues=[venue_config], data=data, engine=engine, raise_exception=True)
     return BacktestNode([run]).run()
+
+
+def run_strategy(strategy: Any, venue_options: dict[str, Any], prints: Sequence[tuple[int, int, int]]) -> None:
+    """Runs `strategy` in a `BacktestEngine` on XNAS.QTX: an L2 book (bid 100.00 x 100, ask 100.01 x 100) at `T0`,
+    then seller-aggressed trade prints `(ts, price in cents, size)`, then one last book event 1 s after the last
+    print so the engine's clock reaches it. `venue_options` are added to the venue (book type, fill model, ...)."""
+    warnings.filterwarnings("ignore")
+    import nautilus_trader
+
+    nt2 = int(nautilus_trader.__version__.split(".")[0]) >= 2
+    if nt2:
+        from nautilus_trader.backtest import BacktestEngine, BacktestEngineConfig
+        from nautilus_trader.common import LoggerConfig
+        from nautilus_trader.execution import FixedFeeModel
+        from nautilus_trader.model import (
+            AccountType,
+            AggressorSide,
+            BookAction,
+            BookOrder,
+            Currency,
+            Equity,
+            InstrumentId,
+            Money,
+            OmsType,
+            OrderBookDelta,
+            OrderBookDeltas,
+            OrderSide,
+            Price,
+            Quantity,
+            Symbol,
+            TradeId,
+            TraderId,
+            TradeTick,
+            Venue,
+        )
+        from nautilus_trader.risk import RiskEngineConfig
+
+        usd = Currency.from_str("USD")
+        seller = AggressorSide.SELL
+        cfg = BacktestEngineConfig(
+            trader_id=TraderId("QT-001"),
+            logging=LoggerConfig(bypass_logging=True),
+            risk_engine=RiskEngineConfig(bypass=True),
+        )
+    else:
+        from nautilus_trader.backtest.engine import BacktestEngine, BacktestEngineConfig
+        from nautilus_trader.config import LoggingConfig, RiskEngineConfig
+        from nautilus_trader.model.currencies import USD as usd
+        from nautilus_trader.model.data import BookOrder, OrderBookDelta, OrderBookDeltas, TradeTick
+        from nautilus_trader.model.enums import AccountType, AggressorSide, BookAction, OmsType, OrderSide
+        from nautilus_trader.model.identifiers import InstrumentId, Symbol, TradeId, Venue
+        from nautilus_trader.model.instruments import Equity
+        from nautilus_trader.model.objects import Money, Price, Quantity
+
+        seller = AggressorSide.SELLER
+        cfg = BacktestEngineConfig(
+            trader_id="QT-001",
+            logging=LoggingConfig(log_level="ERROR", bypass_logging=True),
+            risk_engine=RiskEngineConfig(bypass=True),
+        )
+    venue = Venue("XNAS")
+    iid = InstrumentId(Symbol("QTX"), venue)
+
+    def px(cents: int) -> Price:
+        return Price.from_str(f"{cents / 100:.2f}")
+
+    def level(side: Any, cents: int, oid: int, flags: int, ts: int, action: Any) -> Any:
+        return OrderBookDelta(iid, action, BookOrder(side, px(cents), Quantity.from_int(100), oid), flags, 0, ts, ts)
+
+    snap = [OrderBookDelta.clear(iid, 0, T0, T0)]
+    snap.append(level(OrderSide.BUY, 10_000, 1, 32, T0, BookAction.ADD))
+    snap.append(level(OrderSide.SELL, 10_001, 2, 32 | 128, T0, BookAction.ADD))
+    data: list[Any] = [OrderBookDeltas(iid, snap)]
+    for j, (ts, cents, size) in enumerate(prints):
+        data.append(TradeTick(iid, px(cents), Quantity.from_int(size), seller, TradeId(f"T{j}"), ts, ts))
+    t_end = max([T0, *(p[0] for p in prints)]) + 1_000_000_000
+    data.append(OrderBookDeltas(iid, [level(OrderSide.SELL, 10_001, 2, 128, t_end, BookAction.UPDATE)]))
+    engine = BacktestEngine(config=cfg)
+    engine.add_venue(
+        venue=venue,
+        oms_type=OmsType.NETTING,
+        account_type=AccountType.MARGIN,
+        base_currency=usd,
+        starting_balances=[Money(10**9, usd)],
+        **({"fee_model": FixedFeeModel(Money(0, usd))} if nt2 else {}),
+        **venue_options,
+    )
+    engine.add_instrument(
+        Equity(
+            instrument_id=iid,
+            raw_symbol=Symbol("QTX"),
+            currency=usd,
+            price_precision=2,
+            price_increment=px(1),
+            lot_size=Quantity.from_int(1),
+            ts_event=0,
+            ts_init=0,
+        )
+    )
+    engine.add_data(data, sort=True)
+    engine.add_strategy(strategy)
+    engine.run()
+    engine.dispose()

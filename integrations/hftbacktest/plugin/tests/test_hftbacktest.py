@@ -46,7 +46,8 @@ def test_312_stop_is_reported_and_scored_up_to_it(prepared: Prepared, hbt_py: Pa
 def test_calibrated_code_runs_in_hftbacktest(synth: Path, prepared: Prepared, hbt_py: Path, tmp_path: Path) -> None:
     cal = calibrate(synth, "2026-06-15", "2026-06-16", out=tmp_path / "cal", n_orders=1500, seed=3, bootstrap_b=20,
                     families=["power3"])  # fmt: skip
-    code = cal.code.replace("partial_fill_exchange", "no_partial_fill_exchange")  # #312 aside
+    code = cal.code  # the default exchange (no_partial) runs on the released hftbacktest 2.4.4 as written
+    assert ".no_partial_fill_exchange()" in code
     out = run(prepared, python=hbt_py, code=code, out=tmp_path / "hbt.jsonl")
     s = score(prepared, out, out=tmp_path / "s")
     assert s.n_scored == prepared.n_orders

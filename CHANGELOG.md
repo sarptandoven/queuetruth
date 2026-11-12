@@ -71,6 +71,12 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   fills most of these orders later, when the price moves through them. The page has the cause shares, a harness to
   rerun it (`scripts/scale/findings/l3_fifo_gap/`), a new test that pins the claim on the synthetic days, and a draft
   hftbacktest issue (`integrations/hftbacktest/upstream/l3-fifo-best-priced-orders.md`, not filed).
+- CI job `integrations`: runs the integration suites against the real engines on every pull request, each in its
+  own venv at exact versions: hftbacktest 2.4.4 (the numba, llvmlite and numpy pins of
+  `integrations/hftbacktest/setup_venvs.sh`), nautilus_trader 1.231.0 and 2.0.0rc9. It runs `make hbt-crosscheck`,
+  the NautilusTrader cross-check harness tests, `make test-nautilus` in each nautilus_trader venv,
+  `make test-hftbacktest-plugin` and `make test-extra` (which now also covers `actions/referee/tests`).
+- `make test-nautilus QT_NT_PYTHON=PY1:PY2` runs the queuetruth-nautilus suite once in each named interpreter.
 
 ### Changed
 
@@ -81,6 +87,17 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   sandbox. Test names and oracle ids in task guides moved to a collapsible "Evidence" note at the end of each page.
   Stale facts fixed: `queuetruth --help` lists `demo`; `--fix-delimiter` and `--fix-local-ts-regex` exist; fuzzing
   runs weekly in CI; the venue rule table has `iex` and `nyse` columns; DBN and NYSE status records censor shadows.
+- `queuetruth export hftbacktest` and `queuetruth_hftbacktest.calibrate` write `.no_partial_fill_exchange()` by
+  default, the exchange that runs on the released hftbacktest 2.4.4. With `.partial_fill_exchange()`, 2.4.4 stops the
+  backtest with error 14 (hftbacktest #312): on the plugin's synthetic test flow 5 of 187 orders were scored with it,
+  187 of 187 with `no_partial`. `partial` stays an explicit choice (`hftbacktest_snippet(cal, exchange="partial")`,
+  `calibrate(..., exchange="partial")`, `queuetruth-hftbacktest calibrate --exchange partial`), and the snippet
+  header then states #312. A fit that simulated `partial` (the default of `queuetruth calibrate`) says so in the
+  header. The hftbacktest replay script's example model uses `no_partial` too.
+- `QT_HBT_PY` is the one name for the hftbacktest venv's python in every test; `QT_HBT_PYTHON` is still read.
+  `make hbt-crosscheck` builds the venv with `integrations/hftbacktest/setup_venvs.sh` (the same pins as the plugin
+  tests and the release lane) and runs the core tests that use it; it used to install unpinned numba and numpy and
+  run the driver on a directory that does not exist.
 - `scripts/scale/iex_split.py` splits an IEX DEEP+ day 10 to 14 times as fast. The capture is read, routed and
   renumbered in Rust (`queuetruth._core.IexSplit`, a port of the Python reader in `crates/ingest/src/iex/split.rs`)
   with the GIL released; a reader thread downloads, hashes and inflates the input, and writer threads (`--threads`,
@@ -113,6 +130,15 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 - `queuetruth why --live` refused every live log written by Python (`live import`, `reconcile`) with `QT-INPUT-002:
   ... column "client_order_id_chain": expected List(Utf8) ..., found ... List(Utf8, field: 'element')`. pyarrow names
   a Parquet list's child `element`, the Rust reader expected `item`; the reader now takes either name.
+- The NautilusTrader strategy of `queuetruth export replay-schedule --target nautilus` runs on NautilusTrader 2.x.
+  On 2.0.0rc7 and rc9 it failed to import (`nautilus_trader.model.enums`) and its config could not subclass the 2.x
+  `StrategyConfig`. The one generated file now picks the names of the installed version, keeps its state in mutated
+  containers (2.x runs a shallow copy of a strategy) and passes the `ClientOrderId` to `modify_order` and
+  `cancel_order` on 2.x. A new test runs it in a real `BacktestEngine` on 1.231.0 and 2.0.0rc9 and imports its events
+  (`integrations/nautilus/tests/test_replay_strategy.py`); it had only been run against a stub.
+- The queuetruth-nautilus test kit runs a `BacktestNode` on 2.0.0rc9, whose `BacktestDataConfig` takes a
+  `DataCatalogConfig` instead of `catalog_path` (`test_venue_config_runs_in_node` and
+  `test_node_without_fee_model_fails_on_2x` failed there).
 - `atlas.py combine` no longer runs out of memory on a full window. It read every day's cells and P&L cells into
   one table: about 1.2 GB per IEX day, so 20 days needed about 25 GB, and the first site rebuild after the backfill
   stopped the 16 GB runner two minutes in. It now reads the days one (mode, shadow population) slice at a time, with

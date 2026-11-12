@@ -17,7 +17,13 @@ PY_DIRS := $(wildcard python service scripts tests benches tools integrations) a
 # Test directories outside python/ and service/ (also in pyproject testpaths). Their optional dependencies
 # (the hftbacktest venvs, queuetruth._core, real data) skip with a reason when absent.
 EXTRA_TEST_DIRS := $(wildcard tools/livefill/tests scripts/nightly/tests scripts/scale/tests \
-	integrations/hftbacktest/tests)
+	integrations/hftbacktest/tests actions/referee/tests)
+# The released hftbacktest the integration tests and the nightly hbt check run (scripts/nightly reads this pin).
+# integrations/hftbacktest/setup_venvs.sh installs it into .scratch/hbt-venv with its numba, llvmlite and numpy pins.
+HBT_REQ := hftbacktest==2.4.4
+# Interpreters with nautilus_trader (and queuetruth) for the queuetruth-nautilus engine tests, joined with ':'
+# (for example a 1.231.0 venv and a 2.x venv). Unset: the tests run in .venv and the engine tests skip.
+QT_NT_PYTHON ?=
 FIXTURE_DIRS := synth_small synth_small_nasdaq referee
 # Local checkout of the author's earlier private et prototype (its out/ and data/ artifacts). Needed only by
 # realdata, bench-et and the realdata bench suite; defaults to $QT_ET_ROOT, empty when unset.
@@ -77,13 +83,21 @@ test-py: ## Python package tests
 test-service: ## service tests
 	$(RUN) pytest service/tests
 
-test-extra: ## tests of tools/, integrations/ and scripts/ (livefill kit, nightly runner, scale tracing, hbt)
+test-extra: ## tests of tools/, integrations/, scripts/ and actions/ (livefill kit, nightly, scale, hbt, referee)
 	$(RUN) pytest $(EXTRA_TEST_DIRS)
 
 # A separate session under the plugin's own pytest config: its tests import their conftest by module name, which
-# resolves to another directory's conftest.py in the root session. Engine tests skip without nautilus_trader.
+# resolves to another directory's conftest.py in the root session. Engine tests skip without nautilus_trader; with
+# QT_NT_PYTHON they run once per interpreter it names.
 test-nautilus: ## queuetruth-nautilus plugin tests (integrations/nautilus, its own pytest session)
+ifeq ($(strip $(QT_NT_PYTHON)),)
 	$(RUN) pytest integrations/nautilus/tests
+else
+	@set -e; for py in $(subst :, ,$(QT_NT_PYTHON)); do \
+		echo "== queuetruth-nautilus tests with $$py ($$($$py -c 'import nautilus_trader as n; print(n.__version__)'))"; \
+		(cd integrations/nautilus && env -u PYTHONPATH $$py -m pytest -q tests -p no:cacheprovider); \
+	done
+endif
 
 # The same for the queuetruth-hftbacktest plugin (integrations/hftbacktest/plugin, its own pyproject and pytest
 # config). Tests that run hftbacktest use QT_HBT_PY (default .scratch/hbt-venv, from setup_venvs.sh) and skip without it.
@@ -271,11 +285,11 @@ compose-smoke: ## compose up, tenant, replay job, verified downloads, compose do
 compose-config: ## validate the compose file (needs the Docker CLI, not the daemon)
 	docker compose -f deploy/compose/docker-compose.yml --env-file deploy/compose/.env.example config -q
 
-hbt-crosscheck: ## optional O-ZOO-3 in a separate venv (hftbacktest 2.4.4)
-	uv venv .scratch/hbt-venv --python $(PYTHON_BIN)
-	uv pip install --python .scratch/hbt-venv numba numpy
-	uv pip install --python .scratch/hbt-venv --no-deps hftbacktest==2.4.4  # its polars pin does not resolve offline
-	.scratch/hbt-venv/bin/python python/tests/zoo/hbt_crosscheck.py tests/fixtures/zoo/npz
+# QT_ZOO3_DIR (a directory of write_hbt_npz days, see python/tests/zoo/test_hbt_crosscheck.py) adds O-ZOO-3.
+hbt-crosscheck: ## the pinned hftbacktest venv (setup_venvs.sh) and the core tests that run hftbacktest in it
+	PYTHON_BIN=$(PYTHON_BIN) HBT_REQ=$(HBT_REQ) bash integrations/hftbacktest/setup_venvs.sh
+	QT_HBT_PY=$(ROOT)/.scratch/hbt-venv/bin/python $(RUN) pytest python/tests/export/test_export_text.py \
+		python/tests/trust/test_replay_schedule.py python/tests/zoo/test_hbt_crosscheck.py
 
 clean-realdata: ## remove real-data outputs and scratch
 	rm -rf .realdata .scratch
