@@ -86,7 +86,7 @@ against their pinned hashes) and keeps it as `nasdaq-day-<YYYY-MM-DD>.tar.gz` on
 a draft until a maintainer publishes it (`release_assets.sh` finds a draft by its pending tag name). The site
 combines the kept Nasdaq days apart from the IEX days (`atlas.py combine` refuses days of two venues) and shows them
 under `nasdaq/` only when the repository variable `ATLAS_NASDAQ_SITE` (or the run's `nasdaq_site`) is true and the
-release is published, best effort (a failure rebuilds the IEX site alone); it is off by default (`docs/concepts/fill-realism-atlas.md`, two venues).
+release is published, best effort (a failure rebuilds the IEX site alone); it is off by default (`docs/how-to/run-the-atlas.md`, Nasdaq days on the site).
 
 **P&L error.** Fill rates say how often a simulator is wrong; the P&L error says what that is worth. A unit replays
 each population's shadows exactly once more with quotes and trades (`bbo: change`, as `zoo-toxicity` does) and runs

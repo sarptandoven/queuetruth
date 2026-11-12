@@ -913,6 +913,11 @@ fn doc_roundtrip(name: &str, v: &Value) -> Option<Value> {
 const PYTHON_ONLY: &[&str] = &[
     "qt.api_key",
     "qt.api_key_created",
+    "qt.atlas_answer",
+    "qt.atlas_api_manifest",
+    "qt.atlas_configs",
+    "qt.atlas_summary",
+    "qt.atlas_symbols",
     "qt.bot_reconcile",
     "qt.cert_verification",
     "qt.certificate",

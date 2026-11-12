@@ -22,6 +22,7 @@ pub(crate) const PYTHON_LONG_ABOUT: &[(&[&str], &str)] = &[
     (&["forecast"], "Forecast referee: commit forecasts to a hash-chained ledger before their questions resolve, record resolutions, and score proper scores, calibration, skill and executable PnL."),
     (&["pm"], "Prediction-market kit (Kalshi, Polymarket): your own captures -> books, queue calibration and reward-aware market-making PnL. Self-hosted use on your own data only; see `queuetruth.pm.terms`."),
     (&["reconcile"], "A trading bot's simulator arm (Freqtrade backtest or dry run, Hummingbot paper bot) against its live run, or a Backtrader, VectorBT or LEAN backtest against a canonical live log: paired orders, why each differs, and the sim-vs-live scorecard."),
+    (&["atlas"], "The Fill-Realism Atlas answer for your library, liquidity tier or symbol: how far each setting fills from the exact replay of the real queue, with its 95% interval, and the closest setting's config to paste. Reads the atlas data API from a local directory or the public site (asks before it downloads)."),
 ];
 
 /// Help of positional arguments: (command path, argument name, help).
@@ -493,6 +494,24 @@ pub(crate) const PYTHON_COMMANDS: &[Cmd] = &[
             Flag { long: "arms-as-given", kind: Kind::Flag, to: "_cli.arms_as_given", required: false, help: "do not refuse arms that look swapped (a simulated live arm, a live bot as the simulator)", short: None, value_name: None },
             Flag { long: "option", kind: Kind::StrAppend, to: "_cli.option", required: false, help: "importer option, e.g. timeframe=5m, strategy=NAME, dry_run=true, log_tz=Europe/Berlin (repeatable)", short: None, value_name: Some("KEY=VALUE") },
             Flag { long: "max-rows", kind: Kind::Int, to: "_cli.max_rows", required: false, help: "order lines printed (default 50)", short: None, value_name: Some("N") },
+        ],
+        positional: &[],
+        globals: Globals::None,
+        hidden: false,
+    },
+    Cmd {
+        path: &["atlas"],
+        imp: Implementation::Python,
+        about: "how far your backtester's fill model is from the real queue, from the public atlas",
+        flags: &[
+            Flag { long: "library", kind: Kind::Enum(&["hftbacktest", "nautilus", "databento"]), to: "_cli.library", required: false, help: "your backtester (default: all three)", short: None, value_name: None },
+            Flag { long: "symbol", kind: Kind::Str, to: "_cli.symbol", required: false, help: "one symbol, e.g. AAPL (its own numbers, at 1s, 10s and 1min)", short: None, value_name: Some("SYMBOL") },
+            Flag { long: "tier", kind: Kind::Str, to: "_cli.tier", required: false, help: "liquidity tier, e.g. T1_top100 (default ALL, or the symbol's)", short: None, value_name: Some("TIER") },
+            Flag { long: "horizon", kind: Kind::Str, to: "_cli.horizon", required: false, help: "fill horizon, e.g. 1s, 10s, 1min (default 1min)", short: None, value_name: Some("DURATION") },
+            Flag { long: "from", kind: Kind::Str, to: "_cli.source", required: false, help: "a site or atlas/v1 directory, or the URL of a data API (default: the public atlas, cached)", short: None, value_name: Some("DIR_OR_URL") },
+            Flag { long: "yes", kind: Kind::Flag, to: "_cli.yes", required: false, help: "download from the public atlas without asking", short: Some('y'), value_name: None },
+            Flag { long: "refresh", kind: Kind::Flag, to: "_cli.refresh", required: false, help: "download the newest manifest even when a copy is cached", short: None, value_name: None },
+            Flag { long: "json", kind: Kind::Flag, to: "_cli.json", required: false, help: "print the qt.atlas_answer document (same as --format json)", short: None, value_name: None },
         ],
         positional: &[],
         globals: Globals::None,

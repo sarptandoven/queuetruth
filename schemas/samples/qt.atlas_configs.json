@@ -1,0 +1,45 @@
+{
+  "sample": {
+    "schema": "qt.atlas_configs",
+    "schema_version": 1,
+    "venue": "x",
+    "atlas_root": "x",
+    "mode": "x",
+    "shadow_population": "x",
+    "horizon": "x",
+    "notes": {
+      "k": "x"
+    },
+    "configs": [
+      {
+        "library": "hftbacktest",
+        "library_name": "x",
+        "tier": "x",
+        "tier_name": "x",
+        "label": "x",
+        "model_id": "x",
+        "n_settings": 1,
+        "fill_rate_bias_pp": {
+          "value": 0.5,
+          "lo": 0.5,
+          "hi": 0.5
+        },
+        "verdict": "too_optimistic",
+        "verdict_text": "x",
+        "overlapping": [
+          "x"
+        ],
+        "overlapping_labels": [
+          "x"
+        ],
+        "pnl_bias_ticks": {
+          "value": 0.5,
+          "lo": 0.5,
+          "hi": 0.5
+        },
+        "config": "x",
+        "config_kind": "x"
+      }
+    ]
+  }
+}

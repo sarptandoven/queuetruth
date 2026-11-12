@@ -18,6 +18,20 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   menu). The README links the Fill-Realism Atlas from its first screen. `docs/RESULTS.md` has one canonical block
   for the headline Nasdaq number that other pages link. `docs/check_docs.py` flags stale version wording ("v0.1",
   "after release", "next release", "new after 0.1") outside the changelog, design notes and launch drafts.
+- **Atlas v2: the answer first, a data API and `queuetruth atlas`.** The atlas front page now opens with the exact
+  fill rate and one plain sentence per library, then one chart of every library's settings at 1 minute with 95%
+  intervals, a "what to do" box per library (closest setting, verdict, config to paste), a symbol lookup, the venue's
+  scope (IEX's share of volume, its speed bump and repricing order types) and the last-built date with the atlas
+  root and how to verify it. Models have human labels ("NautilusTrader default (touch fill)"); model ids move to
+  tooltips and details. The dense tables move to `tables.html`, the explanations to `about.html`, and every page
+  reads on a 390 px phone and in dark mode. Next to the site, `atlas/v1/` is a versioned data API: `manifest.json`
+  (with the sha256 of every other file), `summary.json`, `configs.json` and `symbols/<letter>.json`, defined in the
+  new `queuetruth.atlas` subpackage (schemas `qt.atlas_api_manifest`, `qt.atlas_summary`, `qt.atlas_configs`,
+  `qt.atlas_symbols`). `queuetruth atlas [--library hftbacktest|nautilus|databento] [--symbol S] [--tier T]
+  [--horizon 1min] [--json]` and `qt.atlas.lookup(...)` print the answer, the table and the config to paste
+  (`qt.atlas_answer`), from `--from DIR` or the public site; like `demo`, nothing is downloaded until you agree
+  (`--yes` or the prompt), and the files are cached and checked against the manifest's hashes. The maintainer part of
+  the atlas guide moves to [Run the atlas](docs/how-to/run-the-atlas.md).
 - **Atlas backfill** (`.github/workflows/atlas-backfill.yml`, ROADMAP W1): a manual run fills the atlas window at once.
   `scripts/scale/iex_latest.py --count N --kept FILE` lists the N newest published IEX sessions the `atlas-days`
   release does not hold yet (`--rebuild` keeps them in) as a job matrix; each day runs on its own runner, up to

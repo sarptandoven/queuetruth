@@ -1,0 +1,343 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.atlas_answer",
+  "$defs": {
+    "AnswerConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "library": {
+          "enum": [
+            "hftbacktest",
+            "nautilus",
+            "databento",
+            "bound",
+            "other"
+          ],
+          "title": "Library",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "model_id": {
+          "title": "Model Id",
+          "type": "string"
+        },
+        "fill_rate_bias_pp": {
+          "$ref": "#/$defs/Interval"
+        },
+        "verdict": {
+          "enum": [
+            "too_optimistic",
+            "too_pessimistic",
+            "no_clear_difference"
+          ],
+          "title": "Verdict",
+          "type": "string"
+        },
+        "verdict_text": {
+          "title": "Verdict Text",
+          "type": "string"
+        },
+        "config": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Config"
+        },
+        "config_kind": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Config Kind"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Note"
+        }
+      },
+      "required": [
+        "library",
+        "label",
+        "model_id",
+        "fill_rate_bias_pp",
+        "verdict",
+        "verdict_text",
+        "config",
+        "config_kind",
+        "note"
+      ],
+      "title": "AnswerConfig",
+      "type": "object"
+    },
+    "AnswerRow": {
+      "additionalProperties": false,
+      "description": "One setting in the answer's table.",
+      "properties": {
+        "library": {
+          "enum": [
+            "hftbacktest",
+            "nautilus",
+            "databento",
+            "bound",
+            "other"
+          ],
+          "title": "Library",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "model_id": {
+          "title": "Model Id",
+          "type": "string"
+        },
+        "horizon": {
+          "title": "Horizon",
+          "type": "string"
+        },
+        "fill_rate_bias_pp": {
+          "$ref": "#/$defs/Interval"
+        },
+        "verdict": {
+          "enum": [
+            "too_optimistic",
+            "too_pessimistic",
+            "no_clear_difference"
+          ],
+          "title": "Verdict",
+          "type": "string"
+        },
+        "n": {
+          "title": "N",
+          "type": "integer"
+        },
+        "days": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Days"
+        }
+      },
+      "required": [
+        "library",
+        "label",
+        "model_id",
+        "horizon",
+        "fill_rate_bias_pp",
+        "verdict",
+        "n",
+        "days"
+      ],
+      "title": "AnswerRow",
+      "type": "object"
+    },
+    "Interval": {
+      "additionalProperties": false,
+      "description": "A point estimate with its 95% interval (from the atlas's bootstrap); `lo` and `hi` are null when the atlas\nhas no interval (a symbol seen on one day).",
+      "properties": {
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        },
+        "lo": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Lo"
+        },
+        "hi": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Hi"
+        }
+      },
+      "required": [
+        "value",
+        "lo",
+        "hi"
+      ],
+      "title": "Interval",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "qt.atlas_answer",
+      "default": "qt.atlas_answer",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "summary": {
+      "title": "Summary",
+      "type": "string"
+    },
+    "venue": {
+      "title": "Venue",
+      "type": "string"
+    },
+    "venue_name": {
+      "title": "Venue Name",
+      "type": "string"
+    },
+    "atlas_root": {
+      "title": "Atlas Root",
+      "type": "string"
+    },
+    "built_at": {
+      "title": "Built At",
+      "type": "string"
+    },
+    "window": {
+      "title": "Window",
+      "type": "string"
+    },
+    "library": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Library"
+    },
+    "symbol": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Symbol"
+    },
+    "tier": {
+      "title": "Tier",
+      "type": "string"
+    },
+    "tier_name": {
+      "title": "Tier Name",
+      "type": "string"
+    },
+    "horizon": {
+      "title": "Horizon",
+      "type": "string"
+    },
+    "mode": {
+      "title": "Mode",
+      "type": "string"
+    },
+    "shadow_population": {
+      "title": "Shadow Population",
+      "type": "string"
+    },
+    "source": {
+      "title": "Source",
+      "type": "string"
+    },
+    "rows": {
+      "items": {
+        "$ref": "#/$defs/AnswerRow"
+      },
+      "title": "Rows",
+      "type": "array"
+    },
+    "configs": {
+      "items": {
+        "$ref": "#/$defs/AnswerConfig"
+      },
+      "title": "Configs",
+      "type": "array"
+    },
+    "attribution": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Attribution"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "summary",
+    "venue",
+    "venue_name",
+    "atlas_root",
+    "built_at",
+    "window",
+    "library",
+    "symbol",
+    "tier",
+    "tier_name",
+    "horizon",
+    "mode",
+    "shadow_population",
+    "source",
+    "attribution"
+  ],
+  "type": "object"
+}

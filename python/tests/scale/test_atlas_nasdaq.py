@@ -195,7 +195,12 @@ def test_nasdaq_sample_day_and_iex_day_build_one_site(tmp_path: Path) -> None:
     assert "fill-realism-atlas.md#verify-a-nasdaq-day" in nindex and 'href="https://emi.nasdaq.com/' in nindex
     assert f"scripts/scale/itch_split.py --url file://{src} --date {NASDAQ_DATE} --buckets 2" in nindex
     assert "<title>Fill-Realism Atlas (Nasdaq TotalView-ITCH)</title>" in nindex
-    assert "compat.html" not in nindex and "<h2>Tier ALL</h2>" in nindex
+    assert "compat.html" not in nindex and "<h2>Tier ALL</h2>" in (site / "nasdaq" / "tables.html").read_text()
+    # each venue has its own data API, with its own root and attribution
+    iapi = json.loads((site / "atlas" / "v1" / "manifest.json").read_text())
+    napi = json.loads((site / "nasdaq" / "atlas" / "v1" / "manifest.json").read_text())
+    assert (iapi["venue"], iapi["atlas_root"]) == ("iex", imanifest["atlas_root"]) and iapi["attribution"]
+    assert (napi["venue"], napi["atlas_root"]) == ("nasdaq", nmanifest["atlas_root"]) and napi["attribution"] is None
     for lib in ("hftbacktest.html", "nautilustrader.html"):
         ipage, npage = (site / lib).read_text(), (site / "nasdaq" / lib).read_text()
         assert atlas_site.IEX_ATTRIBUTION in ipage and "Data provided for free by IEX" not in npage
