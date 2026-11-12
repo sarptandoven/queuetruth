@@ -1,6 +1,6 @@
 # The next phase: from engine to product (0.4 to 1.0)
 
-This page is the plan for queuetruth after 0.3.0. [ROADMAP.md](../../ROADMAP.md) is its short form. It rests on four
+This page is the plan for queuetruth after 0.3.0. [ROADMAP.md](https://github.com/sarptandoven/queuetruth/blob/main/ROADMAP.md) is its short form. It rests on four
 audits made on 2026-11-12 at commit f5715d7: a new trader's first hour with the CLI and Python API, the
 architecture, the docs and integrations, and what traders and framework users say they need (public sources). Their
 evidence is summarised here; where a number comes from one of them, the section says so.
