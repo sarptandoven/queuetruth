@@ -229,6 +229,12 @@ def test_site_section_and_touch_json(tmp_path: Path) -> None:
     assert {r.bar for r in doc.rows} == {"1m", "1h"}
     # the lead sentence quotes the 1-minute touch row
     assert f"{100 * row.p_real_given_rule.value:.1f}%" in page
+    # the P&L is called too high or too low only when its interval excludes 0
+    clear = AT.pnl_words({"value": 0.5, "ci_lo": 0.1, "ci_hi": 0.9})
+    assert clear == "Its P&L is 0.50 ticks per order too high (+0.10 to +0.90)."
+    assert "too low" in AT.pnl_words({"value": -0.5, "ci_lo": -0.9, "ci_hi": -0.1})
+    assert "no clear difference" in AT.pnl_words({"value": 0.16, "ci_lo": -0.11, "ci_hi": 0.39})
+    assert "no clear difference" in AT.pnl_words({"value": 0.2, "ci_lo": None, "ci_hi": None})
     # the rest of the site is what it was: only index.html changes
     for name in ("hftbacktest.html", "nautilustrader.html", "databento.html"):
         if (tmp_path / "site-plain" / name).exists():

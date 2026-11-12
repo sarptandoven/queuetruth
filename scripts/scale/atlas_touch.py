@@ -431,6 +431,19 @@ def document(atlas: Path, *, population: str, source: str, attribution: str | No
     return doc.model_dump(mode="json")
 
 
+def pnl_words(e: dict[str, Any]) -> str:
+    """The P&L sentence: stated as too high or too low only when its 95% interval excludes 0."""
+    if e["value"] is None:
+        return "Its P&L cannot be compared here."
+    if e["ci_lo"] is not None and e["ci_hi"] is not None and (e["ci_lo"] > 0 or e["ci_hi"] < 0):
+        way = "too high" if e["value"] > 0 else "too low"
+        return f"Its P&L is {abs(e['value']):.2f} ticks per order {way} ({_iv(e, _ticks)})."
+    return (
+        f"Its P&L per order differs from the real queue's by {_ticks(e)} ticks, with an interval that does not "
+        f"exclude 0 ({_iv(e, _ticks)}): no clear difference."
+    )
+
+
 def section(atlas: Path, out: Path, *, population: str, source: str, attribution: str | None, docs: str) -> str:
     """The site's touch-table section (HTML) and `<out>/atlas/v1/touch.json`; "" and no file when the atlas has no
     touch tables, so a site without them is unchanged."""
@@ -446,12 +459,13 @@ def section(atlas: Path, out: Path, *, population: str, source: str, attribution
     e = at.get(("ALL", "all", first, "touch"))
     parts = ['<h2 id="bar-backtests">Bar-based backtests: how many touch fills are real</h2>']
     if e:
+        pnl = e["pnl_overstated_ticks"]
+        words = {"1m": "1-minute", "5m": "5-minute", "1h": "1-hour"}.get(first, first)
         lead = (
-            f"With {first} bars, a backtest that fills a resting limit order when the bar's low or high touches its "
+            f"With {words} bars, a backtest that fills a resting limit order when the bar's low or high touches its "
             f"price fills {_pct(e['rule_fill_rate'])} of orders by the close; the real queue fills "
             f"{_pct(e['real_fill_rate'])}. Of the backtest's fills, {_pct(e['p_real_given_rule'])} "
-            f"({_iv(e['p_real_given_rule'], _pct)}) had really filled by the end of the same bar, and its P&L is "
-            f"{_ticks(e['pnl_overstated_ticks'])} ticks per order too high ({_iv(e['pnl_overstated_ticks'], _ticks)})."
+            f"({_iv(e['p_real_given_rule'], _pct)}) had really filled by the end of the same bar. " + pnl_words(pnl)
         )
         parts.append(f'<p class="lead">{html.escape(lead, quote=False)}</p>')
     days = doc["days"]
