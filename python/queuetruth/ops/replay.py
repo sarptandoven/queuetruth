@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from queuetruth.errors import QtError
 from queuetruth.ops._call import _call, _call_spec, _dump, _parse_doc, _validate
+from queuetruth.ops.table import OperationDef
 from queuetruth.schemas import models as m
 from queuetruth.schemas import specs as s
 
@@ -90,3 +91,20 @@ def resolve_order_ids(value: str | Path | list[Any] | dict[str, Any], dataset: s
         value = {"path": str(value)}
     items = json.loads(_call("resolve_order_ids", json.dumps(value), str(dataset)))
     return [{k: v for k, v in it.items() if v is not None} for it in items]
+
+
+OPERATIONS = (
+    OperationDef(
+        "replay",
+        s.ReplaySpec,
+        replay,
+        m.ReplaySummary,
+        "Exact replay of a local dataset with optional shadows; returns qt.replay_summary.",
+        cost="minutes",
+        run_id=True,
+        prepare=_expand_order_ids,
+        tool="qt_local_run_replay",
+        title="Run replay locally",
+        service_kind="replay",
+    ),
+)

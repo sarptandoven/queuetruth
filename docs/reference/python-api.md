@@ -471,7 +471,7 @@ Statistics used by evaluation and the scorer (SPEC 4.3 `queuetruth.stats`, 5.5.7
 | `spa_test` | function |  | `(benchmark: np.ndarray, models: np.ndarray, *, b: int = 1000, seed: int = 0, test_id: str = spa, bootstrap: Bootstrap = stationary, block_size: int \| None = None, blocks: np.ndarray \| None = None, indices: np.ndarray \| None = None, studentize: bool = True) -> SpaResult` | Hansen's test of superior predictive ability on losses: H0 = no model beats the benchmark. |
 | `SpaResult` | class |  | | Hansen's SPA test (module docstring). `mean_diff[k] = mean(L_benchmark - L_k)` (positive = model better), `omega[k]` the standard deviation of `sqrt(n) mean_diff[k]`, `t[k] = sqrt(n) mean_diff[k] / omega[k]`. |
 | `spiegelhalter_z` | function | SPEC 4.3 | `(p: np.ndarray, y: np.ndarray) -> TestResult` | Spiegelhalter z test (two-sided normal p-value). |
-| `splitmix64` | function |  | `(x: int) -> int` | One splitmix64 step (adds the golden gamma, then mixes), as `qt_types::splitmix64`. |
+| `splitmix64` | function |  | `(x: int) -> int` | One splitmix64 step (adds the golden gamma, then mixes): `qt_types::splitmix64`. |
 | `stable_seed` | function |  | `(run_seed: int, parts: Sequence[bytes \| str]) -> int` | FNV-1a 64 over `run_seed` (8 LE bytes), then per part its length (4 LE bytes) and bytes; then splitmix64. |
 | `StepFunction` | class |  | | Right-continuous step function: `value[i]` holds on `[time[i], time[i + 1])`; `time[0] = 0` for estimators. |
 | `stepm` | function |  | `(benchmark: np.ndarray, models: np.ndarray, *, alpha: float = 0.05, b: int = 1000, seed: int = 0, test_id: str = stepm, bootstrap: Bootstrap = stationary, block_size: int \| None = None, blocks: np.ndarray \| None = None, indices: np.ndarray \| None = None, studentize: bool = True, recenter: Recenter = upper) -> StepMResult` | Stepwise multiple testing of every model against the benchmark at familywise error `alpha`. |
@@ -608,7 +608,7 @@ hftbacktest / NautilusTrader config text and the IntpOrderLatency npz (SPEC 4.3 
 
 | Name | Kind | Binding | Signature | Description |
 |---|---|---|---|---|
-| `annotate` | function |  | `(cal: CalibrationResult) -> CalibrationResult` | A copy of `cal` with the structured `trust` field (schema 1.1) and its `warnings` ending with the `beats_default` and `verdict` lines (replacing older ones). The assessment is recomputed from the lines and the numbers: an earlier structured field (e.g. the Rust part's, which has no held-out comparison) is replaced. |
+| `annotate` | function |  | `(cal: CalibrationResult) -> CalibrationResult` | A copy of `cal` with the structured `trust` field (schema 1.1) and its `warnings` ending with the `beats_default` and `verdict` lines (replacing older ones), by `qt_calib::trust::annotate`. The assessment is recomputed from the lines and the numbers: an earlier structured field (e.g. the Rust part's, which has no held-out comparison) is replaced. |
 | `assess` | function |  | `(cal: CalibrationResult, fmt: Callable[[int], str] \| None = None) -> Trust` | Exportability of a calibration (see the module doc). The structured `trust` field (schema 1.1) decides when present: its `verdict` / `reasons` and `beats_default` labels win, with texts from the `trust:` lines or the recomputed reasons; without it the assessment is computed from the lines and the numbers. `fmt` writes the horizons in the reason texts (default `dur`, the form stored in the calibration's warnings; displays pass `queuetruth.units.format_duration`). |
 | `export_snippets` | function |  | `(cal: CalibrationResult, latency_npz: str \| None = None) -> Exports` | The `exports` object of a calibration result (snippets + notes; `latency_npz` kept or set). |
 | `ExportNote` | class |  | | A caveat that accompanies an exported snippet (hftbacktest #312/#316, conflated L2, omitted lines). Emitted by `run_export` so `queuetruth export hftbacktest\|nautilus` prints it on stderr (`warning: ...`) next to the text, which keeps the exact SPEC 5.10 layout. |
@@ -677,3 +677,20 @@ HTTP client for the queuetruth service (SPEC 4.5; env `QT_API_URL`, `QT_API_KEY`
 | `Submission` | class |  | | Response of a job-creating POST (`{id, job}`), with `replayed` = the `Idempotent-Replayed` header. |
 
 Constants: `DEFAULT_API_URL`, `ENV_API_KEY`, `ENV_API_URL`, `ESTIMATE_KINDS`, `RUN_KINDS`, `TERMINAL_JOB_STATES`.
+
+## `queuetruth.runner`
+
+One runner for every operation (plan section 5.3, step 8): `run(name, spec, out=..., context=...)`.
+
+| Name | Kind | Binding | Signature | Description |
+|---|---|---|---|---|
+| `check_dataset_tree` | function |  | `(top: Path, inside: Callable[[Path], Path \| None], what: str, *, require_manifest: bool = True) -> None` | A dataset directory: `manifest.json` must exist when `require_manifest` (`QT-INPUT-001`; checked first, so a broad directory such as the root is refused without walking it), and no entry may be a symlink for which `inside` returns None (`QT-CONFIG-001`). At most `MAX_TREE_ENTRIES` entries are walked (`QT-INPUT-002` beyond). |
+| `document_of` | function |  | `(result: Any, name: str) -> dict[str, Any]` | The JSON document of an operation's result: a Pydantic document, a result object with `.doc`, or a dict. |
+| `produced_files` | function |  | `(out: Path \| None) -> list[Path]` | Every file at `out` (a file or a directory; symlinks are not followed), sorted. |
+| `Roots` | class |  | | Allowed roots (real paths). Relative paths start at `base` (default: the first root). `env_hint` names the settings that set the roots, for the error hint. |
+| `run` | function | SPEC 4.3 | `(name: str, spec: BaseModel \| dict[str, Any], *, out: str \| os.PathLike[str] \| None = None, context: RunContext \| None = None) -> RunOutcome` | Runs the operation `name` on `spec` (module docstring). `out` is a directory for the outputs; it replaces the spec's own output field (with the operation's `out_name` inside it, such as `shadows.parquet`). |
+| `RunContext` | class |  | | Who runs the operation, and what it may touch (module docstring). |
+| `RunOutcome` | class |  | | One run: the operation, its JSON `document`, the answer line (`summary`, when the result has one), the warnings it raised, the files it wrote (sorted) and its output location. |
+| `summary_of` | function |  | `(result: Any) -> str \| None` | The answer line of a result: `.summary` of the shared result shape (`queuetruth.results.Result`, what every verb returns), else None. |
+
+Constants: `DATASET_FIELDS`, `MAX_TREE_ENTRIES`.

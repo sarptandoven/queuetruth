@@ -7,6 +7,7 @@ from typing import Any
 
 from queuetruth.ledger import recorded as _ledger_recorded
 from queuetruth.ops._call import _validate
+from queuetruth.ops.table import OperationDef
 from queuetruth.schemas import models as m
 from queuetruth.schemas import specs as s
 
@@ -22,3 +23,15 @@ def fit_hazard(spec: s.HazardFitSpec | dict[str, Any]) -> m.HazardModelCard:
     if path is not None and Path(path).is_dir() and (Path(path) / "features.parquet").is_file():
         sp = sp.model_copy(update={"features": s.PathRef(path=str(Path(path) / "features.parquet"))})
     return _fit(sp)
+
+
+OPERATIONS = (
+    OperationDef(
+        "fit_hazard",
+        s.HazardFitSpec,
+        fit_hazard,
+        m.HazardModelCard,
+        "The hazard model fitted on extracted features; returns its model card.",
+        cost="minutes",
+    ),
+)
