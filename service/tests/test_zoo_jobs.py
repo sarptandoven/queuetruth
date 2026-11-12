@@ -26,6 +26,7 @@ from queuetruth_service.routers.runs import (
     PARTICLES_PER_PAIR,
     ZOO_ALL_MODELS,
     engine_models,
+    particle_families,
     zoo_models_est,
 )
 from queuetruth_service.settings import Settings
@@ -300,7 +301,7 @@ def test_zoo_estimate_follows_the_engine_registry(tmp_path):
     registry = engine_models()
     assert registry is not None
     ids, families = registry
-    assert len(ids) == ZOO_ALL_MODELS and PARTICLE_FAMILIES <= families
+    assert len(ids) == ZOO_ALL_MODELS and PARTICLE_FAMILIES == particle_families() and PARTICLE_FAMILIES <= families
     assert zoo_models_est({"models": ["all", "hbt_power3[n=3]"]}) == zoo_models_est({"models": ["all"]})
     assert zoo_models_est({"models": ["all"]})[1] == sum(1 for i in ids if i.split("[")[0] in PARTICLE_FAMILIES) == 2
     import queuetruth as qt

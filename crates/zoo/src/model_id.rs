@@ -5,46 +5,27 @@ use std::collections::BTreeMap;
 
 use qt_types::{QtError, QtResult};
 
+use crate::families::FAMILIES;
 use crate::{Exchange, Family, Mode, ModelId};
 
 /// Default particle count of `databento_mc` when neither the id nor the spec gives one.
 pub const DEFAULT_PARTICLES: u32 = 100;
 
 impl Family {
-    /// Every family in canonical order.
-    pub const ALL: [Family; 13] = [
-        Family::HbtRiskAdverse,
-        Family::HbtPower,
-        Family::HbtPower2,
-        Family::HbtPower3,
-        Family::HbtLog,
-        Family::HbtLog2,
-        Family::HbtL3Fifo,
-        Family::NtQueueL2,
-        Family::NtProbTouch,
-        Family::NtQueueL2ProbTouch,
-        Family::DatabentoMc,
-        Family::FrontOfQueue,
-        Family::TradeThroughOnly,
-    ];
+    /// Every family in canonical order (the order of `families::FAMILIES`).
+    pub const ALL: [Family; 13] = {
+        let mut out = [Family::HbtRiskAdverse; 13];
+        let mut i = 0;
+        while i < FAMILIES.len() {
+            out[i] = FAMILIES[i].family;
+            i += 1;
+        }
+        out
+    };
 
     /// Canonical family name.
     pub const fn name(self) -> &'static str {
-        match self {
-            Family::HbtRiskAdverse => "hbt_risk_adverse",
-            Family::HbtPower => "hbt_power",
-            Family::HbtPower2 => "hbt_power2",
-            Family::HbtPower3 => "hbt_power3",
-            Family::HbtLog => "hbt_log",
-            Family::HbtLog2 => "hbt_log2",
-            Family::HbtL3Fifo => "hbt_l3_fifo",
-            Family::NtQueueL2 => "nt_queue_l2",
-            Family::NtProbTouch => "nt_prob_touch",
-            Family::NtQueueL2ProbTouch => "nt_queue_l2_prob_touch",
-            Family::DatabentoMc => "databento_mc",
-            Family::FrontOfQueue => "front_of_queue",
-            Family::TradeThroughOnly => "trade_through_only",
-        }
+        self.def().name
     }
 
     /// Parses a canonical family name.
@@ -54,70 +35,34 @@ impl Family {
 
     /// hbt L2 families (RiskAdverse and ProbQueueModel): the only ones with an `exch` key.
     pub const fn is_hbt_l2(self) -> bool {
-        matches!(
-            self,
-            Family::HbtRiskAdverse
-                | Family::HbtPower
-                | Family::HbtPower2
-                | Family::HbtPower3
-                | Family::HbtLog
-                | Family::HbtLog2
-        )
+        self.def().hbt_l2
     }
 
     /// NautilusTrader-style families.
     pub const fn is_nt(self) -> bool {
-        matches!(
-            self,
-            Family::NtQueueL2 | Family::NtProbTouch | Family::NtQueueL2ProbTouch
-        )
+        self.def().nt
     }
 
     /// Particle (Monte Carlo) families.
     pub const fn is_particle(self) -> bool {
-        matches!(self, Family::DatabentoMc)
+        self.def().particle
     }
 
     /// Families whose predictions are analytic in the touch count (5.3.3 e/f).
     pub const fn is_touch(self) -> bool {
-        matches!(self, Family::NtProbTouch | Family::NtQueueL2ProbTouch)
+        self.def().touch
     }
 
     /// Parameter keys (besides `mode`/`exch`) the family accepts.
     pub const fn param_keys(self) -> &'static [&'static str] {
-        match self {
-            Family::HbtPower | Family::HbtPower2 | Family::HbtPower3 => &["n"],
-            Family::NtProbTouch | Family::NtQueueL2ProbTouch => &["p"],
-            Family::DatabentoMc => &["k", "particles"],
-            _ => &[],
-        }
+        self.def().param_keys
     }
 }
 
 impl Family {
     /// One line on what the family models (`zoo --list-models`; docs/concepts/l2-model-zoo.md has the rules).
     pub const fn summary(self) -> &'static str {
-        match self {
-            Family::HbtRiskAdverse => {
-                "hftbacktest RiskAdverseQueueModel: every unexplained decrease came from behind you"
-            }
-            Family::HbtPower => "hftbacktest PowerProbQueueFunc: share of a decrease from ahead b^n / (b^n + f^n)",
-            Family::HbtPower2 => "hftbacktest PowerProbQueueFunc2: share of a decrease from ahead b^n / (b + f)^n",
-            Family::HbtPower3 => "hftbacktest PowerProbQueueFunc3: share of a decrease from ahead 1 - (f / (f + b))^n",
-            Family::HbtLog => "hftbacktest LogProbQueueFunc",
-            Family::HbtLog2 => "hftbacktest LogProbQueueFunc2",
-            Family::HbtL3Fifo => "hftbacktest L3FIFOQueueModel on the MBO records (order-level input, not L2)",
-            Family::NtQueueL2 => "NautilusTrader queue position on L2 (queue_position=True)",
-            Family::NtProbTouch => {
-                "NautilusTrader FillModel(prob_fill_on_limit=p): each at-price touch fills with probability p"
-            }
-            Family::NtQueueL2ProbTouch => {
-                "NautilusTrader queue position, then prob_fill_on_limit=p once the queue is gone"
-            }
-            Family::DatabentoMc => "Databento queue-position estimator (Monte Carlo over particles; k in (-1, 1))",
-            Family::FrontOfQueue => "upper bound: nothing ahead of you, every at-price trade fills",
-            Family::TradeThroughOnly => "lower bound: fills only when a displayed trade goes through your price",
-        }
+        self.def().summary
     }
 
     /// The closest family name to an unknown one (`did you mean`): the first name containing it (3 characters or more),
@@ -375,7 +320,7 @@ impl std::str::FromStr for ModelId {
     }
 }
 
-/// The `all` set of SPEC 5.3.4 (16 models). `hbt_power[n=1]` is not in it: `b / (b + f)` equals
+/// The `all` set of SPEC 5.3.4 (16 models: `FamilyDef::in_all` of every family, in registry order). `hbt_power[n=1]` is not in it: `b / (b + f)` equals
 /// `hbt_power3[n=1]` = `1 - f / (f + b)`, so it only added a duplicate row (0.1.1).
 pub fn default_models(mode: Mode, exchange: Exchange) -> Vec<ModelId> {
     let mk = |f: Family, p: &[(&str, f64)]| {
@@ -393,24 +338,10 @@ pub fn default_models(mode: Mode, exchange: Exchange) -> Vec<ModelId> {
             exchange: if f.is_hbt_l2() { exchange } else { Exchange::Partial },
         }
     };
-    vec![
-        mk(Family::HbtRiskAdverse, &[]),
-        mk(Family::HbtPower, &[("n", 2.0)]),
-        mk(Family::HbtPower, &[("n", 3.0)]),
-        mk(Family::HbtPower2, &[("n", 2.0)]),
-        mk(Family::HbtPower3, &[("n", 1.0)]),
-        mk(Family::HbtPower3, &[("n", 2.0)]),
-        mk(Family::HbtPower3, &[("n", 3.0)]),
-        mk(Family::HbtLog, &[]),
-        mk(Family::HbtLog2, &[]),
-        mk(Family::HbtL3Fifo, &[]),
-        mk(Family::NtQueueL2, &[]),
-        mk(Family::NtProbTouch, &[("p", 1.0)]),
-        mk(Family::DatabentoMc, &[("k", -0.8)]),
-        mk(Family::DatabentoMc, &[("k", -0.95)]),
-        mk(Family::FrontOfQueue, &[]),
-        mk(Family::TradeThroughOnly, &[]),
-    ]
+    FAMILIES
+        .iter()
+        .flat_map(|d| d.in_all.iter().map(move |p| mk(d.family, p)))
+        .collect()
 }
 
 /// Expands a spec model list (`"all"` or ids) into canonical ids; duplicates are removed (first kept).

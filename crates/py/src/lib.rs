@@ -83,6 +83,12 @@ fn table_schema(py: Python<'_>, name: &str) -> PyResult<Py<PyAny>> {
     Ok(arrow_ffi::schema_to_pyarrow(py, schema)?.unbind())
 }
 
+/// The zoo family registry (`qt_zoo::FAMILIES`) as a JSON list, one object per family in canonical order.
+#[pyfunction]
+fn zoo_families() -> String {
+    qt_zoo::families_json().to_string()
+}
+
 /// Parses argv with the shared clap grammar; returns the `CliCommand` JSON or raises `CliExit`.
 #[pyfunction]
 fn cli_parse(py: Python<'_>, argv: Vec<String>) -> PyResult<String> {
@@ -645,6 +651,7 @@ fn qt_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(schema_names, m)?)?;
     m.add_function(wrap_pyfunction!(formats, m)?)?;
     m.add_function(wrap_pyfunction!(table_schema, m)?)?;
+    m.add_function(wrap_pyfunction!(zoo_families, m)?)?;
     m.add_function(wrap_pyfunction!(cli_parse, m)?)?;
     m.add_function(wrap_pyfunction!(cli_run_native, m)?)?;
     m.add_function(wrap_pyfunction!(ingest, m)?)?;

@@ -24,6 +24,8 @@ from queuetruth.eval.zoo import (
     leaderboard_population,
     planned_life_table,
     without_aborted,
+    zoo_all_ids,
+    zoo_families,
 )
 
 __all__ = [
@@ -43,4 +45,6 @@ __all__ = [
     "rank_leaderboard",
     "sort_horizon",
     "without_aborted",
+    "zoo_all_ids",
+    "zoo_families",
 ]
