@@ -8,6 +8,7 @@ pub mod codec;
 pub mod duration;
 pub mod io;
 pub mod json;
+mod live_venue;
 pub mod rows;
 pub mod specs;
 mod tables;

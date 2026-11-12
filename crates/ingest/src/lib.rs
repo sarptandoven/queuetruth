@@ -19,6 +19,7 @@ use qt_schema::{codec, json, specs};
 use qt_types::{Instrument, MboEvent, QtError, QtResult, Ts, VenueRules};
 
 pub mod dq;
+pub mod formats;
 pub mod guard;
 pub mod halts;
 pub mod iex;
@@ -442,7 +443,8 @@ impl Partition {
     }
 }
 
-/// `ingest` for formats `itch | dbn | etcsv | parquet`.
+/// `ingest` for the formats of this crate (`formats::FORMATS`: `itch | dbn | etcsv | parquet | iex_deep_plus |
+/// nyse_ibf`).
 pub fn ingest(spec: &specs::IngestSpec) -> QtResult<json::IngestSummary> {
     ingest_impl::ingest(spec)
 }

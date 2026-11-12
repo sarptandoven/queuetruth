@@ -58,15 +58,17 @@ fmt: ## format Rust and Python sources
 	$(CARGO) fmt --all
 	$(RUN) ruff format $(PY_DIRS)
 
-lint: ## rustfmt check, clippy -D warnings, ruff check and format check
+lint: ## rustfmt check, clippy -D warnings, ruff check and format check, import layers
 	$(CARGO) fmt --all --check
 	$(CARGO) clippy --workspace --all-targets --locked -- -D warnings
 	$(RUN) ruff check $(PY_DIRS)
 	$(RUN) ruff format --check $(PY_DIRS)
+	$(RUN) python tools/check_layers.py
 
-lint-py: ## ruff check and format check only (the Python half of lint)
+lint-py: ## ruff check, format check and the import-layer check (the Python half of lint)
 	$(RUN) ruff check $(PY_DIRS)
 	$(RUN) ruff format --check $(PY_DIRS)
+	$(RUN) python tools/check_layers.py
 
 test-rust: ## all Rust tests including the cross-crate gate tests
 	$(CARGO) test --workspace --locked --exclude queuetruth-py --features gate

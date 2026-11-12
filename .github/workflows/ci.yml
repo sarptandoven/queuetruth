@@ -81,6 +81,8 @@ jobs:
         run: |
           uv run --frozen --no-sync ruff check python service scripts tests benches tools integrations
           uv run --frozen --no-sync ruff format --check python service scripts tests benches tools integrations
+      - name: import layers (tools/check_layers.py; recorded exceptions in tools/check_layers_allow.txt)
+        run: uv run --frozen --no-sync python tools/check_layers.py
       - name: schemas up to date
         run: make schemas-check
       - name: test-py

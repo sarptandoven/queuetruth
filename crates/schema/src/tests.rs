@@ -1745,3 +1745,27 @@ fn zoo_prediction_status_and_prefix_layout() {
     assert!(codec::check_layout(&prefix, "qt.zoo_predictions").is_ok());
     assert!(codec::batch_to_zoo_predictions(&prefix).is_ok());
 }
+
+/// Drift: every venue of the committed JSON Schema (generated from the Python model) is a `LiveVenue`, in order,
+/// and round-trips through `LiveImportSpec`; the CLI spelling is the same list with `-` for `_`.
+#[test]
+fn live_venue_matches_the_json_schema() {
+    let schema = read_json(&repo().join("schemas/json/qt.live_import_spec.schema.json"));
+    let names: Vec<String> = schema["properties"]["venue"]["enum"]
+        .as_array()
+        .unwrap_or_else(|| panic!("venue enum missing"))
+        .iter()
+        .map(|v| v.as_str().unwrap_or_default().to_owned())
+        .collect();
+    let rust: Vec<&str> = specs::LiveVenue::ALL.iter().map(|v| v.as_str()).collect();
+    assert_eq!(rust, names, "regenerate with `make schemas`");
+    let cli: Vec<String> = names.iter().map(|n| n.replace('_', "-")).collect();
+    assert_eq!(specs::LIVE_VENUE_CLI_NAMES, cli.as_slice());
+    for (name, venue) in names.iter().zip(specs::LiveVenue::ALL) {
+        let spec = serde_json::json!({"venue": name, "inputs": [{"path": "x"}]});
+        let li: specs::LiveImportSpec = serde_json::from_value(spec).unwrap_or_else(|e| panic!("{name}: {e}"));
+        assert_eq!(li.venue, venue);
+        let back = serde_json::to_value(&li).unwrap_or(Value::Null);
+        assert_eq!(back["venue"], Value::String(name.clone()));
+    }
+}

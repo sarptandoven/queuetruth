@@ -144,21 +144,8 @@ pub(crate) struct Cmd {
     pub hidden: bool,
 }
 
-const DATA_FORMATS: &[&str] = &[
-    "itch",
-    "dbn",
-    "etcsv",
-    "parquet",
-    "bitstamp",
-    "bitfinex",
-    "coinbase",
-    "coinbase-level3",
-    "kraken-l3",
-    "hyperliquid-node",
-    "tardis-l2",
-    "iex-deep-plus",
-    "nyse-ibf",
-];
+/// From the source format registry (`crate::formats::REGISTRY`).
+const DATA_FORMATS: &[&str] = &crate::formats::CLI_NAMES;
 const BBO: &[&str] = &["none", "change", "full"];
 const DQ_FAIL_ON: &[&str] = &["warn", "fail", "never"];
 const TRAJ: &[&str] = &["none", "ahead", "full"];
@@ -170,26 +157,8 @@ const ENTRY: &[&str] = &["exchange-ack", "send-plus-latency"];
 const POPULATION: &[&str] = &["shadows", "real-orders"];
 const SPLIT: &[&str] = &["auto", "days", "blocks"];
 const RECAL: &[&str] = &["isotonic", "none"];
-const LIVE_VENUES: &[&str] = &[
-    "binance",
-    "bybit",
-    "okx",
-    "coinbase",
-    "kraken",
-    "deribit",
-    "hyperliquid",
-    "ibkr-flex",
-    "fix44",
-    "sim-hftbacktest",
-    "sim-nautilus",
-    "freqtrade",
-    "hummingbot",
-    "sim-freqtrade",
-    "sim-hummingbot",
-    "sim-backtrader",
-    "sim-vectorbt",
-    "sim-lean",
-];
+/// Generated from the Python model by `make schemas` (`qt_schema::specs::LIVE_VENUE_CLI_NAMES`).
+const LIVE_VENUES: &[&str] = qt_schema::specs::LIVE_VENUE_CLI_NAMES;
 const REPLAY_TARGETS: &[&str] = &["hftbacktest", "nautilus"];
 const FIX_CHECKSUM: &[&str] = &["exclude", "keep"];
 const FDR: &[&str] = &["bh", "by"];

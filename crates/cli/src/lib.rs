@@ -9,6 +9,7 @@
 #![forbid(unsafe_code)]
 
 mod bench;
+pub mod formats;
 mod grammar;
 mod human;
 mod native;
