@@ -493,6 +493,10 @@ def render(doc: dict[str, Any]) -> str:
         if c["config"]:
             out.append(f"  config to paste ({c['config_kind']}):")
             out.append(f"    {c['config']}")
+            if c.get("note"):
+                import textwrap
+
+                out += textwrap.wrap(c["note"], 116, initial_indent="  note: ", subsequent_indent="    ")
         else:
             out.append(f"  no released library setting reproduces it (model id {c['model_id']})")
     out.append("")

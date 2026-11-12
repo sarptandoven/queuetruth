@@ -68,9 +68,11 @@ replay at this sample size, not that it is exact. Settings whose intervals overl
 with it: the atlas does not rank those by closeness. Next to it is the config to paste:
 
 - hftbacktest: the queue model and exchange calls of your `BacktestAsset()` chain, for example
-  `.power_prob_queue_model2(2).partial_fill_exchange()`, built from the same builder and exchange tables as
+  `.power_prob_queue_model2(2).no_partial_fill_exchange()`, built from the same builder and exchange tables as
   `queuetruth export hftbacktest` ([Calibrate my hftbacktest queue model](../how-to/calibrate-hftbacktest.md)). The
-  exchange follows the model id's `exch` (`partial` or `no_partial`).
+  exchange is `no_partial_fill_exchange`, the export's default, because the released hftbacktest 2.4.4 stops on
+  `partial_fill_exchange` with error 14 ([hftbacktest #312](https://github.com/nkaz001/hftbacktest/issues/312)). The
+  atlas ran the models with partial fills; the two differ only when a fill is smaller than the order.
 - NautilusTrader: the `BacktestEngine.add_venue` keywords, for example
   `fill_model=FillModel(prob_fill_on_limit=1), book_type=BookType.L2_MBP, trade_execution=True, queue_position=True`
   for the `queue_position` model, as the NautilusTrader integration sets them (`FillModel` is `DefaultFillModel`
@@ -78,8 +80,8 @@ with it: the atlas does not rank those by closeness. Next to it is the config to
   also caps the queue ahead, so a few orders fill differently. Below `prob_fill_on_limit=1`, set `random_seed` to
   compare runs.
 - Databento's tutorial estimator has no library of its own; for `-1 < k <= 0` the table gives hftbacktest's
-  expected-value equivalent `.power_prob_queue_model3(1 / (1 + k)).partial_fill_exchange()`, the exchange the zoo
-  runs it with.
+  expected-value equivalent `.power_prob_queue_model3(1 / (1 + k)).no_partial_fill_exchange()`, with the same
+  exchange note.
 
 Where no released library reproduces the model (corrected mode, Databento with `k > 0`), the table shows only the
 model id. The best setting is the closest one on this venue, horizon and population; refit it on your own data

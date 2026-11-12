@@ -43,8 +43,9 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   registered). `queuetruth atlas [--library hftbacktest|nautilus|databento] [--symbol S] [--tier T]
   [--horizon 1min] [--json]` and `qt.atlas.lookup(...)` print the answer, the table and the config to paste
   (`qt.atlas_answer`), from `--from DIR` or the public site; like `demo`, nothing is downloaded until you agree
-  (`--yes` or the prompt), and the files are cached and checked against the manifest's hashes. The maintainer part of
-  the atlas guide moves to [Run the atlas](docs/how-to/run-the-atlas.md).
+  (`--yes` or the prompt), and the files are cached and checked against the manifest's hashes. The hftbacktest
+  config to paste uses `.no_partial_fill_exchange()`, the export's default, with a one-line note on hftbacktest #312.
+  The maintainer part of the atlas guide moves to [Run the atlas](docs/how-to/run-the-atlas.md).
 
 - **`queuetruth check BACKTEST --data DATASET`** (and `qt.check(backtest, data=...)`): how wrong a backtest is, in
   one command. It replays the backtest's own resting limit orders, at their own entry times and prices, in the exact

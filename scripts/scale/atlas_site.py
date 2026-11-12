@@ -339,11 +339,12 @@ def snippet(model_id: str) -> tuple[str, str] | None:
     (corrected mode, L3 input, Databento k outside (-1, 0], an unknown family, exchange or parameter).
 
     hftbacktest lines take the builder, exchange and number format from `queuetruth.export.hftbacktest`, so the site
-    and `queuetruth export hftbacktest` cannot drift apart; the exchange follows the id's `exch` (the canonical
-    `partial` / `no_partial`; Databento's estimator runs with the partial-fill exchange, as the zoo does). The
+    and `queuetruth export hftbacktest` cannot drift apart. The exchange is the export's default
+    (`no_partial_fill_exchange`, which runs on the released hftbacktest 2.4.4: 2.4.4 stops on `partial_fill_exchange`,
+    hftbacktest #312); an id whose `exch` is neither `partial` nor `no_partial` gets no snippet. The
     NautilusTrader line is the `add_venue` keywords the NautilusTrader integration sets."""
     from queuetruth.export._text import g6
-    from queuetruth.export.hftbacktest import EXCHANGES, FIXED_BUILDERS, POWER_BUILDERS
+    from queuetruth.export.hftbacktest import DEFAULT_EXCHANGE, EXCHANGES, FIXED_BUILDERS, POWER_BUILDERS
 
     fam, p = parse_id(model_id)
     if p.get("mode", "faithful") != "faithful":
@@ -357,9 +358,9 @@ def snippet(model_id: str) -> tuple[str, str] | None:
             f"fill_model=FillModel(prob_fill_on_limit={g6(prob)}), book_type=BookType.L2_MBP, trade_execution=True, "
             f"queue_position={NT_QUEUE[fam]}",
         )
-    exchange = EXCHANGES.get(p.get("exch", "partial").replace("-", "_"))
-    if exchange is None:
-        return None
+    if p.get("exch", "partial").replace("-", "_") not in EXCHANGES:
+        return None  # an exchange the libraries do not have
+    exchange = EXCHANGES[DEFAULT_EXCHANGE]  # the one that runs on the released hftbacktest (#312, `hbt_note`)
     key = fam.removeprefix("hbt_")
     kind = "hftbacktest BacktestAsset chain"
     if fam.startswith("hbt_") and key in POWER_BUILDERS:
@@ -858,11 +859,22 @@ NT_NOTE = (
     "<code>prob_fill_on_limit</code> below 1, every at-price print is a random draw: set <code>random_seed</code> "
     "on the fill model to compare runs."
 )
+
+
 #: What goes with every hftbacktest (and Databento-equivalent) config (HTML).
-HBT_NOTE = (
-    "The hftbacktest line goes on your <code>BacktestAsset()</code> chain in place of its queue model and "
-    "exchange (hftbacktest 2.4.4, which faithful mode reproduces)."
-)
+def hbt_note() -> str:
+    """What goes with every hftbacktest (and Databento-equivalent) config (HTML): where the line goes, and the
+    one-line #312 note on its exchange (`queuetruth.export.hftbacktest`, imported on first use)."""
+    from queuetruth.export.hftbacktest import DEFAULT_EXCHANGE, EXCHANGES, HBT_312_URL
+
+    return (
+        "The hftbacktest line goes on your <code>BacktestAsset()</code> chain in place of its queue model and "
+        "exchange (hftbacktest 2.4.4, which faithful mode reproduces). It uses "
+        f"<code>{EXCHANGES[DEFAULT_EXCHANGE]}</code>, which runs on the released hftbacktest: 2.4.4 stops on "
+        f"<code>{EXCHANGES['partial']}</code> with error 14 "
+        f'(<a href="{HBT_312_URL}">hftbacktest #312</a>); the atlas ran these models with partial fills, and the '
+        "two differ only when a fill is smaller than the order."
+    )
 
 
 def _best_section(
@@ -902,7 +914,7 @@ def _best_section(
     libs = sorted({b["library"] for b in best})
     guides = ", ".join(f'<a href="{REPO}/{LIBRARY_PAGES[x][2]}">{html.escape(LIBRARY_PAGES[x][3])}</a>' for x in libs)
     nt = f" {NT_NOTE}" if "NautilusTrader" in libs else ""
-    hbt = f" {HBT_NOTE}" if "hftbacktest" in libs or "Databento" in libs else ""
+    hbt = f" {hbt_note()}" if "hftbacktest" in libs or "Databento" in libs else ""
     return (
         f"<h2>{'Best setting by tier' if lib is None else f'Best {html.escape(lib)} setting by tier'}</h2>"
         f"<p>Which setting fixes it: for each tier{'' if lib else ' and library'}, the setting whose fill-rate bias "
@@ -1057,6 +1069,12 @@ def _per_symbol_rows(atlas: Path, mode: str, population: str) -> list[dict[str, 
     return pq.read_table(path, columns=[c for c in cols if c in have], filters=filters).to_pylist()
 
 
+def _plain(text: str) -> str:
+    """A note without its markup, for the data API: links keep their address in brackets."""
+    text = re.sub(r'<a href="([^"]+)">([^<]+)</a>', r"\2 (\1)", text)
+    return html.unescape(re.sub(r"<[^>]+>", "", text))
+
+
 def _box(b: dict[str, Any], page: str | None, pnl_at: dict[tuple[str, str], dict[str, Any]] | None) -> str:
     """The "what to do" box of one library: its closest setting, the verdict and the config to paste."""
     C = _C()
@@ -1070,7 +1088,7 @@ def _box(b: dict[str, Any], page: str | None, pnl_at: dict[tuple[str, str], dict
         if b["snippet"]
         else "<p>No released library setting reproduces it; see the guide.</p>"
     )
-    note = NT_NOTE if lib == "NautilusTrader" else HBT_NOTE if b["snippet"] else ""
+    note = NT_NOTE if lib == "NautilusTrader" else hbt_note() if b["snippet"] else ""
     pr = (pnl_at or {}).get((b["tier"], b["model_id"]))
     pnl = (
         f" Its P&amp;L error: {html.escape(C.interval_text(_ticks_iv(pr), 'ticks'))} per order."
@@ -1299,10 +1317,10 @@ def build(
     summary = A.summary_rows(_all_rows(atlas, "leaderboard_by_tier.parquet"), _all_rows(atlas, "pnl_by_tier.parquet"))
     configs = A.config_rows(best, pnl_at, LIBRARY_KEYS)
     notes = {
-        "nautilus": re.sub(r"<[^>]+>", "", NT_NOTE),
-        "hftbacktest": re.sub(r"<[^>]+>", "", HBT_NOTE),
+        "nautilus": _plain(NT_NOTE),
+        "hftbacktest": _plain(hbt_note()),
         "databento": "Databento's estimator has no library of its own: the config is hftbacktest's expected-value "
-        "equivalent. " + re.sub(r"<[^>]+>", "", HBT_NOTE),
+        "equivalent. " + _plain(hbt_note()),
     }
     shards = A.symbol_shards(_per_symbol_rows(atlas, mode, population), mode, population)
     api = A.write_api(

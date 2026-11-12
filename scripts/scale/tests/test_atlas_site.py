@@ -349,16 +349,19 @@ def zoo_atlas(atlas: Path) -> Path:
 
 def test_snippets_use_the_libraries_own_names_and_refuse_what_they_cannot_reproduce() -> None:
     assert S.parse_id(PB2) == ("hbt_power2", {"exch": "partial", "mode": "faithful", "n": "2"})
-    assert S.snippet(PB2) == ("hftbacktest BacktestAsset chain", ".power_prob_queue_model2(2).partial_fill_exchange()")
+    assert S.snippet(PB2) == (
+        "hftbacktest BacktestAsset chain",
+        ".power_prob_queue_model2(2).no_partial_fill_exchange()",
+    )
     # the canonical exchange spelling (crates/zoo model_id.rs) and the CLI's alias give the no-partial exchange
     for exch in ("no_partial", "no-partial"):
         assert S.snippet(f"hbt_power[exch={exch};mode=faithful;n=3]")[1] == (
             ".power_prob_queue_model(3).no_partial_fill_exchange()"
         )
-    assert S.snippet(LOG)[1] == ".log_prob_queue_model().partial_fill_exchange()"
-    assert S.snippet("hbt_log2[mode=faithful]")[1] == ".log_prob_queue_model2().partial_fill_exchange()"
+    assert S.snippet(LOG)[1] == ".log_prob_queue_model().no_partial_fill_exchange()"
+    assert S.snippet("hbt_log2[mode=faithful]")[1] == ".log_prob_queue_model2().no_partial_fill_exchange()"
     assert S.snippet("hbt_risk_adverse[exch=partial;mode=faithful]")[1] == (
-        ".risk_adverse_queue_model().partial_fill_exchange()"
+        ".risk_adverse_queue_model().no_partial_fill_exchange()"
     )
     assert S.snippet(TOUCH) == (
         "NautilusTrader BacktestEngine.add_venue keywords",
@@ -370,14 +373,20 @@ def test_snippets_use_the_libraries_own_names_and_refuse_what_they_cannot_reprod
     assert "prob_fill_on_limit=0.3)" in S.snippet("nt_queue_l2_prob_touch[mode=faithful;p=0.3]")[1]
     # Databento's estimator has no library of its own: hftbacktest's expected-value equivalent, n = 1 / (1 + k)
     # with the partial-fill exchange the zoo runs it with, as `queuetruth export hftbacktest` writes it
-    assert S.snippet(DBN)[1] == ".power_prob_queue_model3(5).partial_fill_exchange()"
+    assert S.snippet(DBN)[1] == ".power_prob_queue_model3(5).no_partial_fill_exchange()"
     assert S.snippet("databento_mc[k=-0.95;mode=faithful;particles=100]")[1] == (
-        ".power_prob_queue_model3(20).partial_fill_exchange()"
+        ".power_prob_queue_model3(20).no_partial_fill_exchange()"
     )
     # the same text as the export's own builder for the same family and parameter
-    from queuetruth.export.hftbacktest import EXCHANGES, POWER_BUILDERS
+    from queuetruth.export.hftbacktest import DEFAULT_EXCHANGE, EXCHANGES, HBT_312_URL, POWER_BUILDERS
 
-    assert S.snippet(PB2)[1] == f".{POWER_BUILDERS['power2']}(2).{EXCHANGES['partial']}()"
+    assert S.snippet(PB2)[1] == f".{POWER_BUILDERS['power2']}(2).{EXCHANGES[DEFAULT_EXCHANGE]}()"
+    # whatever exchange the zoo ran, the pasted line uses the one that runs on the released hftbacktest (#312), and
+    # the note says why, with the link
+    for m in (PB2, "hbt_power3[exch=no_partial;mode=faithful;n=2]", DBN):
+        assert S.snippet(m)[1].endswith(".no_partial_fill_exchange()"), m
+    note = S.hbt_note()
+    assert "error 14" in note and f'href="{HBT_312_URL}"' in note and "<code>no_partial_fill_exchange</code>" in note
     assert "prob_fill_on_limit=0.286626)" in S.snippet("nt_queue_l2_prob_touch[mode=faithful;p=0.28662597]")[1]
     # nothing invented: corrected mode, L3 input, k > 0, unknown families and parameters have no snippet
     for m in (PB2.replace("faithful", "corrected"), L3, "databento_mc[k=0.5;mode=faithful]", FRONT, "x[n=2]",
@@ -410,19 +419,19 @@ def test_best_setting_by_tier_says_whether_it_is_still_clearly_off(zoo_atlas: Pa
         '<td>still clearly off: too pessimistic<br><span class="ci">interval overlaps: hftbacktest Log queue model, '
         "hftbacktest Power3 queue model (n=1)</span></td>" in row
     )
-    assert "<code>.power_prob_queue_model2(2).partial_fill_exchange()</code>" in row
+    assert "<code>.power_prob_queue_model2(2).no_partial_fill_exchange()</code>" in row
     assert '<td class="under">-0.088<br>' in row  # its P&L error, with its interval
     nt = sec.split("<tr><td>ALL</td>")[2].split("</tr>")[0]
     assert '<td class="">+0.04<br>' in nt and "<td>no clear difference (95% interval includes 0)</td>" in nt
     assert "queue_position=True</code>" in nt and "DefaultFillModel" in sec
-    assert "<code>.power_prob_queue_model3(5).partial_fill_exchange()</code>" in sec
+    assert "<code>.power_prob_queue_model3(5).no_partial_fill_exchange()</code>" in sec
     assert "<th>closest setting (point estimate)</th>" in sec and "random_seed" in sec and "from 2.0" in sec
     assert best[("ALL", "hftbacktest")]["overlapping"] == [LOG, PW3] and best[("ALL", "Databento")]["overlapping"] == []
     data = json.loads((out / "data" / "leaderboard.json").read_text())
     assert [(b["tier"], b["library"]) for b in data["best_settings"]] == [
         (t, lib) for t in ("ALL", "T1_top100") for lib in ("hftbacktest", "NautilusTrader", "Databento")
     ]
-    assert data["best_settings"][0]["snippet"] == ".power_prob_queue_model2(2).partial_fill_exchange()"
+    assert data["best_settings"][0]["snippet"] == ".power_prob_queue_model2(2).no_partial_fill_exchange()"
     # corrected mode: the closest setting is named, but no library config is offered for it
     S.build(zoo_atlas, tmp_path / "c", mode="corrected")
     c = (tmp_path / "c" / "tables.html").read_text().split("<h2>Best setting by tier</h2>")[1].split("<h2>")[0]
@@ -451,8 +460,9 @@ def test_one_page_per_library_answers_the_search_question(zoo_atlas: Path, tmp_p
     assert [hbt.index(x) for x in order] == sorted(hbt.index(x) for x in order)
     box = hbt.split("<h2>What to do</h2>")[1].split("<h2>")[0]
     assert "Closest setting: <strong>hftbacktest Power2 queue model (n=2)</strong>, -0.88 pp" in box
-    assert "<pre><code>.power_prob_queue_model2(2).partial_fill_exchange()</code></pre>" in box
+    assert "<pre><code>.power_prob_queue_model2(2).no_partial_fill_exchange()</code></pre>" in box
     assert f"<summary>Model id and notes</summary><p><code>{PB2}</code></p>" in box
+    assert "stops on <code>partial_fill_exchange</code> with error 14" in box and "issues/312" in box
     detail = (
         "Within 1 min, the exact replay of the real queue fills 13.00% of these orders. Of hftbacktest's 3 settings "
         "in the atlas, 3 fill clearly fewer (95% interval excludes 0). The closest point estimate is hftbacktest "
@@ -643,16 +653,24 @@ def test_the_data_api_is_written_next_to_the_site_and_read_by_lookup(zoo_atlas: 
         (t, lib) for t in ("ALL", "T1_top100") for lib in ("hftbacktest", "nautilus", "databento")
     ]
     c = configs["configs"][0]
-    assert c["model_id"] == PB2 and c["config"] == ".power_prob_queue_model2(2).partial_fill_exchange()"
+    assert c["model_id"] == PB2 and c["config"] == ".power_prob_queue_model2(2).no_partial_fill_exchange()"
     assert c["verdict"] == "too_pessimistic" and c["overlapping"] == [LOG, PW3]
     assert c["overlapping_labels"] == ["hftbacktest Log queue model", "hftbacktest Power3 queue model (n=1)"]
     assert "DefaultFillModel" in configs["notes"]["nautilus"] and "<" not in configs["notes"]["nautilus"]
+    for lib in ("hftbacktest", "databento"):  # the #312 note, as text with its link's address
+        assert (
+            "error 14 (hftbacktest #312 (https://github.com/nkaz001/hftbacktest/issues/312))" in configs["notes"][lib]
+        )
+        assert "<" not in configs["notes"][lib]
     # symbols: the library settings of the fixture's one symbol at the horizons it has
     shard = json.loads((base / "symbols" / "A.json").read_text())
     assert shard["horizons"] == ["1s"] and [s["model_id"] for s in shard["settings"]] == [TOUCH]
     assert shard["symbols"] == [{"symbol": "AAPL", "tier": "T1_top100", "days": 2,
                                  "cells": [[[3.0, 2.0, 4.0, 3.1, 1500, 2]]]}]  # fmt: skip
     # `queuetruth atlas` reads what the site wrote
+    hres = qt.atlas.lookup(library="hftbacktest", source=out)
+    assert "  note: The hftbacktest line goes on your BacktestAsset() chain" in hres.text()
+    assert "hftbacktest #312" in hres.text() and ".no_partial_fill_exchange()" in hres.text()
     res = qt.atlas.lookup(library="nautilus", source=out)
     assert res.configs[0]["config"].endswith("queue_position=True") and res.doc["built_at"] == "2026-11-12"
     assert qt.atlas.lookup(symbol="AAPL", horizon="1s", source=out).rows[0]["fill_rate_bias_pp"]["value"] == 3.0
