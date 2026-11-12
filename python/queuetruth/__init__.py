@@ -3,13 +3,18 @@
 `queuetruth.score`, `queuetruth.report`, `queuetruth.export`, `queuetruth.check`, `queuetruth.fit` and
 `queuetruth.compare` are both subpackages and API functions (`qt.score(spec)`, `qt.report(spec)`, `qt.export(spec)`,
 `qt.check(backtest, data=...)`, `qt.fit(backtester, data=...)`, `qt.compare(backtest, live)`): the subpackage
-modules are callable and delegate to the `queuetruth.api` function of the same name, so `import queuetruth.score as
+modules are callable and delegate to the operation of the same name (`queuetruth.ops`), so `import queuetruth.score as
 s` and `qt.score(spec)` both work.
 `qt.HazardModel` is imported on first use (it needs scikit-learn), and so are `qt.backtesters` (the backtester plugin
-registry), `qt.backtrader` and `qt.lean` (fill models and logs for those frameworks, which stay optional).
+registry), `qt.backtrader` and `qt.lean` (fill models and logs for those frameworks, which stay optional),
+`qt.atlas` (`qt.atlas.lookup`) and `qt.demo` (a subpackage and the function `qt.demo(backtester=...)`).
+
+Every verb returns a result of one shape (`queuetruth.results.Result`): `.summary`, `.table()`, `.to_html()`, a
+notebook view, `.doc` and `.save(path)`.
 """
 
 import importlib
+import inspect
 import sys
 import types
 from typing import Any
@@ -44,7 +49,7 @@ _LAZY = {"HazardModel": "queuetruth.model"}
 #: Submodules imported on first access, so `qt.backtrader.QueueFiller` works after `import queuetruth as qt`
 #: (the framework modules import their framework only when used), and `qt.data` (`queuetruth data add`,
 #: `data fetch iex`).
-_LAZY_MODULES = ("backtesters", "backtrader", "data", "lean")
+_LAZY_MODULES = ("atlas", "backtesters", "backtrader", "data", "demo", "lean")
 
 
 def __getattr__(name: str) -> Any:
@@ -62,16 +67,35 @@ def __dir__() -> list[str]:
     return sorted({*globals(), *_LAZY, *_LAZY_MODULES})
 
 
-_CALLABLE_NAMES = ("score", "report", "export", "check", "fit", "compare")
+_CALLABLE_NAMES = ("score", "report", "export", "check", "fit", "compare", "demo")
+#: The function each callable subpackage runs, and whose typed signature it shows: the operation itself
+#: (`queuetruth.ops`, or the verb's own module; `demo` is a product).
+_TARGETS = {
+    "score": "queuetruth.ops.score:score",
+    "report": "queuetruth.ops.report:report",
+    "export": "queuetruth.ops.export:export",
+    "check": "queuetruth.check.run:check",
+    "fit": "queuetruth.fit.run:fit",
+    "compare": "queuetruth.compare.run:compare",
+    "demo": "queuetruth.demo.result:demo",
+}
+
+
+def _target(name: str) -> Any:
+    mod, _, attr = _TARGETS[name].partition(":")
+    return getattr(importlib.import_module(mod), attr)
 
 
 class _CallableModule(types.ModuleType):
-    """A subpackage that is also the `queuetruth.api` function of the same name."""
+    """A subpackage that is also the operation of the same name (`_TARGETS`). `inspect.signature(qt.check)` is the
+    operation's typed signature."""
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        from queuetruth import api
+        return _target(self.__name__.rsplit(".", 1)[-1])(*args, **kwargs)
 
-        return getattr(api, self.__name__.rsplit(".", 1)[-1])(*args, **kwargs)
+    @property
+    def __signature__(self) -> inspect.Signature:
+        return inspect.signature(_target(self.__name__.rsplit(".", 1)[-1]))
 
 
 class _Package(types.ModuleType):
@@ -103,11 +127,13 @@ __all__ = [
     "QtError",
     "Session",
     "__version__",
+    "atlas",
     "calibrate",
     "calibrate_live",
     "check",
     "compare",
     "data",
+    "demo",
     "export",
     "extract_features",
     "fit",

@@ -819,7 +819,7 @@ def test_stored_notebooks_match_their_sources(repo_root: Path) -> None:
     nb_dir = repo_root / "examples" / "notebooks"
     sources = sorted((nb_dir / "src").glob("[0-9][0-9]_*.py"))
     assert [s.stem for s in sources] == [p.stem for p in sorted(nb_dir.glob("[0-9][0-9]_*.ipynb"))]
-    assert len(sources) == 4
+    assert len(sources) == 11
     for src in sources:
         path = nb_dir / f"{src.stem}.ipynb"
         assert path.stat().st_size < 200 * 1024, path.name

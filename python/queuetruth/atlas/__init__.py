@@ -14,22 +14,67 @@ fetching and the answer), `_calibration` (`calibration`) and `_cli` (`queuetruth
 
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Callable
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from queuetruth.atlas._lookup import AtlasResult
+    from queuetruth.fit import FitResult
 
 
-def lookup(**kwargs: Any) -> Any:
-    """The atlas answer for a library, symbol, tier and horizon (`queuetruth.atlas._lookup.lookup`)."""
+def lookup(
+    library: str | None = None,
+    symbol: str | None = None,
+    tier: str | None = None,
+    horizon: str | int | None = None,
+    source: str | Path | None = None,
+    *,
+    yes: bool = False,
+    refresh: bool = False,
+    confirm: Callable[[str], bool] | None = None,
+    fetch: Callable[[str], bytes] | None = None,
+) -> AtlasResult:
+    """The atlas answer for `library` (`hftbacktest`, `nautilus`, `databento`; all three by default), one `symbol` or
+    a liquidity `tier`, at `horizon` (any `queuetruth.units` duration: `"1s"`, `"1min"`; default the site's): the
+    answer in plain words, every setting's bias with its 95% interval, and the closest setting's config to paste
+    (`queuetruth.atlas._lookup.lookup`). `source` is a directory or URL of the data API; nothing is downloaded unless
+    `yes=True` or `confirm(url)` returns True. Returns an `AtlasResult` (`queuetruth.results.Result`)."""
     from queuetruth.atlas._lookup import lookup as _lookup
 
-    return _lookup(**kwargs)
+    return _lookup(
+        library,
+        symbol,
+        tier,
+        None if horizon is None else str(horizon),
+        source,
+        yes=yes,
+        refresh=refresh,
+        confirm=confirm,
+        fetch=fetch,
+    )
 
 
-def calibration(library: str, tier: str | None = None, symbol: str | None = None, **kwargs: Any) -> Any:
-    """The atlas's closest setting of `library` as the `FitResult` `qt.fit` returns
-    (`queuetruth.atlas._calibration.calibration`)."""
+def calibration(
+    library: str,
+    tier: str | None = None,
+    symbol: str | None = None,
+    source: str | Path | None = None,
+    *,
+    yes: bool = False,
+    refresh: bool = False,
+    confirm: Callable[[str], bool] | None = None,
+    fetch: Callable[[str], bytes] | None = None,
+) -> FitResult:
+    """The atlas's closest setting of `library` (`nautilus`, `hftbacktest`, `databento`) in a liquidity `tier`
+    (`T1_top100` or `T1`; default `ALL`) or the tier of `symbol`, as the `FitResult` `qt.fit` returns
+    (`queuetruth.atlas._calibration.calibration`). Nothing is downloaded unless `yes=True` or `confirm(url)` returns
+    True."""
     from queuetruth.atlas._calibration import calibration as _calibration
 
-    return _calibration(library, tier=tier, symbol=symbol, **kwargs)
+    return _calibration(
+        library, tier=tier, symbol=symbol, source=source, yes=yes, refresh=refresh, confirm=confirm, fetch=fetch
+    )
 
 
 def touch_tables(source: Any = None, *, yes: bool = False, **kwargs: Any) -> Any:
