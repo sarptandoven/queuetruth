@@ -12,12 +12,12 @@ For step 3, the `queuetruth-nautilus` plugin
 ## 1. Pick a setting from the atlas
 
 The [Fill-Realism Atlas](../concepts/fill-realism-atlas.md) measures NautilusTrader's fill models against the
-exact queue on every symbol of free IEX DEEP+ data. Over 20 trading days (2026-10-09 to 2026-11-06; 265,402
-symbol-days, 12,440 symbols), small resting orders within 1 minute:
+exact queue on every symbol of free IEX DEEP+ data. Over 20 trading days (2026-10-15 to 2026-11-11; 265,351
+symbol-days, 12,456 symbols), small resting orders within 1 minute:
 
-| setting | fill rate against the exact queue (11.97%) |
+| setting | fill rate against the exact queue (12.20%) |
 |---|---|
-| touch model, `prob_fill_on_limit=1` (the default) | +1.50 pp: 13% more orders (95% interval +1.45 to +1.55) |
+| touch model, `prob_fill_on_limit=1` (the default) | +1.48 pp: 12% more orders (95% interval +1.42 to +1.53) |
 | `queue_position=True`, `prob_fill_on_limit=1` | +0.06 pp |
 
 **Use `queue_position=True` wherever your data supports it** (an L2 book with trade prints). It needs no fit. The

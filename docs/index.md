@@ -10,12 +10,18 @@ fills, order by order. These docs are published at
 [sarptandoven.github.io/queuetruth/docs](https://sarptandoven.github.io/queuetruth/docs/), next to the atlas.
 
 **[The Fill-Realism Atlas](https://sarptandoven.github.io/queuetruth/)**, rebuilt from free IEX DEEP+ data: over 20
-trading days (2026-10-09 to 2026-11-06; 265,402 symbol-days, 12,440 symbols), the exact queue fills **11.97%** of
-small resting orders within 1 minute. NautilusTrader's touch fill model fills **1.50 pp more** (13% more orders; 95%
-interval +1.45 to +1.55 pp), NautilusTrader's `queue_position` model is closest at +0.06 pp, and hftbacktest's L3
-FIFO model fills 1.82 pp fewer because of hftbacktest's own rules: it skips hidden executions and counts a
+trading days (2026-10-15 to 2026-11-11; 265,351 symbol-days, 12,456 symbols), the exact queue fills **12.20%** of
+small resting orders within 1 minute. NautilusTrader's touch fill model fills **1.48 pp more** (12% more orders; 95%
+interval +1.42 to +1.53 pp), NautilusTrader's `queue_position` model is closest at +0.06 pp, and hftbacktest's L3
+FIFO model fills 1.88 pp fewer because of hftbacktest's own rules: it skips hidden executions and counts a
 trade-through only through the feed's best price ([why](https://github.com/sarptandoven/queuetruth/blob/main/scripts/scale/findings/l3-fifo-gap.md)). IEX is one
 venue with its own rules: [how the atlas is made](concepts/fill-realism-atlas.md).
+
+Backtests on bars (Freqtrade, Backtrader, LEAN, VectorBT, backtesting.py) fill a resting limit order when a bar
+touches its price. Of those fills on 1-minute bars, about 1 in 9 had not happened in the real queue by the end of
+the bar (88.8% had; 95% interval 88.3% to 89.2%); on 1-hour bars 97.1% had. IEX prints are
+sparser than consolidated candles, so on those more of the fills are not real:
+[touch tables](concepts/touch-tables.md).
 
 ## Three ways in
 
