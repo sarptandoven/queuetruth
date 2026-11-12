@@ -32,6 +32,7 @@ from typing import Any
 import pyarrow as pa
 from pydantic import ValidationError
 
+from queuetruth import backtesters as _backtesters
 from queuetruth.errors import QtError
 from queuetruth.live._common import valid_id
 from queuetruth.live.builder import ImportResult
@@ -80,16 +81,9 @@ from queuetruth.schemas.specs import FixOptions, LiveImportSpec
 
 #: Venue name -> importer `(input paths, ImportOptions) -> ImportResult` (the nine `LiveImportSpec` venues).
 IMPORTERS: dict[str, Callable[..., Any]] = dict(VENUE_IMPORTERS)
-#: `LiveImportSpec.venue` values of the simulator importers (1.1, SPEC 3.11 #13) -> `import_sim` kind.
-SIM_VENUES: dict[str, str] = {
-    "sim_hftbacktest": "hftbacktest",
-    "sim_nautilus": "nautilus",
-    "sim_freqtrade": "freqtrade",
-    "sim_hummingbot": "hummingbot",
-    "sim_backtrader": "backtrader",
-    "sim_vectorbt": "vectorbt",
-    "sim_lean": "lean",
-}
+#: `LiveImportSpec.venue` values of the simulator importers (1.1, SPEC 3.11 #13) -> `import_sim` kind: one per
+#: built-in of the `queuetruth.backtesters` registry (plugins are reached through `import_sim`).
+SIM_VENUES: dict[str, str] = {f"sim_{n}": n for n in _backtesters.builtin_names()}
 #: Trading-bot venues of the live arm (`queuetruth.live.importers.BOT_IMPORTERS`): the log venue is the exchange.
 BOT_VENUES = frozenset({"freqtrade", "hummingbot"})
 #: Venues whose importer reads `tz` (IBKR Flex account times; FIX log times captured by `fix.local_ts_regex`).
@@ -424,10 +418,8 @@ def import_bot(spec: LiveImportSpec, *, tz: str | None = None, **options: Any) -
         raise QtError("QT-CONFIG-001", f"tz: bot log times take the importer option log_tz (e.g. log_tz={tz})")
     if spec.fix != FixOptions():
         raise QtError("QT-CONFIG-001", f"fix: FIX options apply to venue fix44 only, not {spec.venue}")
-    if spec.venue == "freqtrade":
-        from queuetruth.live.importers.freqtrade import import_freqtrade_live as run
-    else:
-        from queuetruth.live.importers.hummingbot import import_hummingbot_live as run
+    run = _backtesters.get(spec.venue).import_live
+    assert run is not None  # every BOT_VENUES entry has a live importer
     return run(
         _paths(list(spec.inputs)),
         spec.out,
@@ -455,8 +447,8 @@ def import_sim(
     for `backtrader`, `vectorbt` and `lean` `pair_with` = a canonical live-log directory, `timeframe`, ...). The
     log is marked `venue = sim:<kind>`, `source = sim`, `validation_status = simulated` (schema 1.1; 0.1.0 used
     synthetic / fixture_only)."""
-    if kind not in SIM_IMPORTERS:
-        raise QtError("QT-CONFIG-001", f"simulator kind must be one of {sorted(SIM_IMPORTERS)}, got {kind!r}")
+    if kind not in _backtesters.registry():
+        raise QtError("QT-CONFIG-001", f"simulator kind must be one of {sorted(_backtesters.registry())}, got {kind!r}")
     if kind == "lean":
         from queuetruth.live.importers.lean import check_append
 
@@ -466,7 +458,7 @@ def import_sim(
     extra = dict(options)
     if venue:
         extra["venue"] = venue
-    res = SIM_IMPORTERS[kind](paths, ImportOptions(account=account, imap=imap, extra=extra))
+    res = _backtesters.get(kind).import_sim(paths, ImportOptions(account=account, imap=imap, extra=extra))
     return _finish_import(f"sim:{kind}", res, paths, out, append=append, status="simulated")
 
 

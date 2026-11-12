@@ -1,0 +1,238 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "qt.atlas.touch",
+  "$defs": {
+    "Estimate": {
+      "additionalProperties": false,
+      "description": "A value with its 95% interval (null when undefined).",
+      "properties": {
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        },
+        "ci_lo": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ci Lo"
+        },
+        "ci_hi": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Ci Hi"
+        }
+      },
+      "required": [
+        "value",
+        "ci_lo",
+        "ci_hi"
+      ],
+      "title": "Estimate",
+      "type": "object"
+    },
+    "TouchRow": {
+      "additionalProperties": false,
+      "description": "One (tier, side, bar length, rule) cell.",
+      "properties": {
+        "tier": {
+          "description": "liquidity tier, or ALL",
+          "title": "Tier",
+          "type": "string"
+        },
+        "side": {
+          "enum": [
+            "buy",
+            "sell",
+            "all"
+          ],
+          "title": "Side",
+          "type": "string"
+        },
+        "bar": {
+          "description": "bar length: 1m, 5m or 1h",
+          "title": "Bar",
+          "type": "string"
+        },
+        "bar_s": {
+          "description": "bar length in seconds",
+          "title": "Bar S",
+          "type": "integer"
+        },
+        "rule": {
+          "description": "touch, or penetrate_<k> (k ticks through the limit)",
+          "title": "Rule",
+          "type": "string"
+        },
+        "orders": {
+          "description": "orders placed",
+          "title": "Orders",
+          "type": "integer"
+        },
+        "dates": {
+          "title": "Dates",
+          "type": "integer"
+        },
+        "symbols": {
+          "title": "Symbols",
+          "type": "integer"
+        },
+        "real_fill_rate": {
+          "$ref": "#/$defs/Estimate",
+          "description": "share of orders the real queue filled before the close"
+        },
+        "rule_fill_rate": {
+          "$ref": "#/$defs/Estimate",
+          "description": "share of orders the rule filled before the close"
+        },
+        "p_real_given_rule": {
+          "$ref": "#/$defs/Estimate",
+          "description": "of the rule's fills, the share the real queue had filled by the end of the same bar"
+        },
+        "p_rule_given_real": {
+          "$ref": "#/$defs/Estimate",
+          "description": "of the real fills, the share the rule had filled by the end of the same bar"
+        },
+        "real_markout_ticks": {
+          "$ref": "#/$defs/Estimate",
+          "description": "average markout of the real fills one bar later, in ticks"
+        },
+        "rule_markout_ticks": {
+          "$ref": "#/$defs/Estimate",
+          "description": "average markout of the rule's fills one bar later, in ticks"
+        },
+        "pnl_overstated_ticks": {
+          "$ref": "#/$defs/Estimate",
+          "description": "the rule's markout P&L minus the real one per order placed, in ticks (positive: too high)"
+        },
+        "flagged_share": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "share of the orders on symbol-days that are not exact_ok (0 under flag policy exclude)",
+          "title": "Flagged Share"
+        }
+      },
+      "required": [
+        "tier",
+        "side",
+        "bar",
+        "bar_s",
+        "rule",
+        "orders",
+        "dates",
+        "symbols",
+        "real_fill_rate",
+        "rule_fill_rate",
+        "p_real_given_rule",
+        "p_rule_given_real",
+        "real_markout_ticks",
+        "rule_markout_ticks",
+        "pnl_overstated_ticks",
+        "flagged_share"
+      ],
+      "title": "TouchRow",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The document: the atlas it comes from, the days it used and every row.",
+  "properties": {
+    "schema": {
+      "const": "qt.atlas.touch",
+      "default": "qt.atlas.touch",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "atlas_root": {
+      "title": "Atlas Root",
+      "type": "string"
+    },
+    "source": {
+      "description": "venue whose prints and queue are used: iex or nasdaq",
+      "title": "Source",
+      "type": "string"
+    },
+    "population": {
+      "description": "the atlas shadow population",
+      "title": "Population",
+      "type": "string"
+    },
+    "days": {
+      "description": "the days the tables pool (ISO dates); days reduced before them are left out",
+      "items": {
+        "type": "string"
+      },
+      "title": "Days",
+      "type": "array"
+    },
+    "flag_policy": {
+      "title": "Flag Policy",
+      "type": "string"
+    },
+    "definition": {
+      "description": "docs page with the exact definitions",
+      "title": "Definition",
+      "type": "string"
+    },
+    "attribution": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Attribution"
+    },
+    "rows": {
+      "items": {
+        "$ref": "#/$defs/TouchRow"
+      },
+      "title": "Rows",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "schema_version",
+    "atlas_root",
+    "source",
+    "population",
+    "days",
+    "flag_policy",
+    "definition",
+    "rows"
+  ],
+  "type": "object"
+}

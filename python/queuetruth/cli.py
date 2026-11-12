@@ -1208,6 +1208,7 @@ def main(argv: list[str] | None = None) -> int:
         "reveal",
         "cert",
         "reconcile",
+        "atlas",
         "check",
         "fit",
     )
@@ -1239,6 +1240,10 @@ def main(argv: list[str] | None = None) -> int:
     from queuetruth.live.reconcile_cli import maybe_main as reconcile_main  # `reconcile` (Python-only grammar)
 
     if (rc := reconcile_main(args)) is not None:
+        return rc
+    from queuetruth.atlas._cli import maybe_main as atlas_main  # `atlas` (Python-only grammar)
+
+    if (rc := atlas_main(args)) is not None:
         return rc
     from queuetruth.check.cli import maybe_main as check_main  # `check` (Python-only grammar)
 

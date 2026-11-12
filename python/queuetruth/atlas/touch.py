@@ -83,4 +83,7 @@ class TouchTables(QtDoc):
         )
 
 
-__all__ = ["BARS", "SCHEMA", "Estimate", "TouchRow", "TouchTables"]
+#: Registered in `queuetruth.schemas.DOC_MODELS` by `queuetruth.atlas._registry`; `make schemas` writes its schema.
+DOC_MODELS = {SCHEMA: TouchTables}
+
+__all__ = ["BARS", "DOC_MODELS", "SCHEMA", "Estimate", "TouchRow", "TouchTables"]

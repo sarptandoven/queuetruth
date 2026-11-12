@@ -5,6 +5,15 @@ queuetruth.api -> queuetruth.check.run  # cycle
 queuetruth.api -> queuetruth.fit.run  # cycle
 queuetruth.api -> queuetruth.ledger  # cycle
 queuetruth.api -> queuetruth.score._io.resolve_ref  # private
+queuetruth.atlas.answer -> queuetruth.schemas.models._tag  # private
+queuetruth.atlas.configs -> queuetruth.schemas.models._tag  # private
+queuetruth.atlas.manifest -> queuetruth.schemas.models._tag  # private
+queuetruth.atlas.summary -> queuetruth.schemas.models._tag  # private
+queuetruth.atlas.symbols -> queuetruth.schemas.models._tag  # private
+queuetruth.backtesters._builtin -> queuetruth.export.hftbacktest  # layer
+queuetruth.backtesters._builtin -> queuetruth.export.nautilus  # layer
+queuetruth.backtesters._builtin -> queuetruth.export.replay  # layer
+queuetruth.backtesters.touchfill -> queuetruth.atlas.touch  # layer
 queuetruth.cert.certify -> queuetruth.score._io.resolve_ref  # private
 queuetruth.cert.verify -> queuetruth.score._io.resolve_ref  # private
 queuetruth.check.cli -> queuetruth.live.reconcile_cli._options  # private
@@ -13,6 +22,8 @@ queuetruth.check.run -> queuetruth.live.importers.vectorbt._table  # private
 queuetruth.check.run -> queuetruth.pm.cli  # layer
 queuetruth.cli -> queuetruth.api._call  # private
 queuetruth.cli -> queuetruth.api._qt_error  # private
+queuetruth.cli -> queuetruth.atlas._cli  # layer
+queuetruth.cli -> queuetruth.atlas._cli.maybe_main  # private
 queuetruth.cli -> queuetruth.demo._dispatch  # layer
 queuetruth.cli -> queuetruth.demo._dispatch.maybe_run  # private
 queuetruth.cli -> queuetruth.forecast.cli  # layer
@@ -86,6 +97,8 @@ queuetruth.sandbox.book -> queuetruth.score._io.make_table  # private
 queuetruth.sandbox.orders -> queuetruth.score._io.make_table  # private
 queuetruth.sandbox.scorecard -> queuetruth.score._io.rows  # private
 queuetruth.sandbox.session -> queuetruth.score._io.rows  # private
+queuetruth.schemas -> queuetruth.atlas._registry  # layer
+queuetruth.schemas -> queuetruth.atlas._registry.doc_models  # private
 queuetruth.schemas -> queuetruth.forecast.schemas  # layer
 queuetruth.schemas -> queuetruth.ledger.models  # layer
 queuetruth.schemas -> queuetruth.sandbox.models  # layer
@@ -97,6 +110,8 @@ queuetruth.score.runner -> queuetruth.api  # layer
 queuetruth.score.scorecard -> queuetruth.eval.impact  # cycle
 scripts/oracle/disagreements.py -> sys.path += tests  # tests
 scripts/oracle/run_oracle.py -> sys.path += tests  # tests
+scripts/scale/atlas_api.py -> queuetruth.atlas._common  # private
+scripts/scale/atlas_site.py -> queuetruth.atlas._common  # private
 scripts/scale/atlas_site.py -> queuetruth.export._text.g6  # private
 scripts/scale/runner_budget.py -> sys.path += tests  # tests
 scripts/scale/unit.py -> queuetruth.api._native  # private
