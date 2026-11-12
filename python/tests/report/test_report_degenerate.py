@@ -64,6 +64,22 @@ def test_nice_ticks_always_two_increasing_finite(lo: float, hi: float, n: int) -
         assert t[0] <= min(lo, hi) + 1e-9 * max(1.0, abs(lo)) and t[-1] >= max(lo, hi) - 1e-9 * max(1.0, abs(hi))
 
 
+@pytest.mark.parametrize(
+    ("lo", "hi", "n"),
+    [
+        (1e-300, -5.326264145619392e-13, 2),  # a step below 1e-12: 12-decimal rounding merged two ticks
+        (0.0, 3e-15, 5),
+        (-1e-13, 1e-13, 4),
+        (1.0, 1.0 + 4e-12, 3),
+    ],
+)
+def test_nice_ticks_with_steps_below_1e12(lo: float, hi: float, n: int) -> None:
+    t = nice_ticks(lo, hi, n)
+    assert len(t) >= 2 and all(math.isfinite(x) for x in t)
+    assert all(b > a for a, b in itertools.pairwise(t))
+    assert t[0] <= min(lo, hi) and t[-1] >= max(lo, hi)
+
+
 @PROP
 @given(floats, floats)
 def test_log_ticks_and_safe_range(lo: float, hi: float) -> None:

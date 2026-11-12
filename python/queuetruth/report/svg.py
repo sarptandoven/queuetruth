@@ -150,12 +150,19 @@ def nice_ticks(lo: float, hi: float, n: int = 5) -> list[float]:
     count = round((end - start) / step) if math.isfinite((end - start) / step) else 0
     if count < 1 or count > 1000:
         return [lo, hi]
-    ticks = sorted({round(start + i * step, 12) + 0.0 for i in range(count + 1)})
+    # round away float noise (0.30000000000000004) at a precision finer than the step: a fixed 12 decimals merged
+    # the ticks of a step below 1e-12 into one value
+    nd = max(12, 3 - math.floor(math.log10(step)))
+    ticks = sorted({round(start + i * step, nd) + 0.0 for i in range(count + 1)})
     if ticks and ticks[0] > lo:
-        ticks.insert(0, round(ticks[0] - step, 12) + 0.0)
+        ticks.insert(0, round(ticks[0] - step, nd) + 0.0)
     if ticks and ticks[-1] < hi:
-        ticks.append(round(ticks[-1] + step, 12) + 0.0)
-    if len(ticks) < 2 or not ticks[-1] > ticks[0] or not all(math.isfinite(t) for t in ticks):
+        ticks.append(round(ticks[-1] + step, nd) + 0.0)
+    if (
+        len(ticks) < 2
+        or not all(math.isfinite(t) for t in ticks)
+        or not all(b > a for a, b in itertools.pairwise(ticks))
+    ):
         return [lo, hi]
     return ticks
 
