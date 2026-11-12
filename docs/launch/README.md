@@ -12,8 +12,8 @@ docs site and of the placeholder check.
 
 ## Before posting
 
-1. Check that GitHub Pages is on (Settings > Pages > Source: GitHub Actions) and that
-   https://sarptandoven.github.io/queuetruth/ shows the 20-day numbers quoted below and the docs at
+1. Check that GitHub Pages is on (Settings > Pages > Source: GitHub Actions); run `.github/workflows/atlas.yml` once
+   by hand with `site_only` if the docs are not there yet. Check that https://sarptandoven.github.io/queuetruth/ shows the 20-day numbers quoted below and the docs at
    https://sarptandoven.github.io/queuetruth/docs/.
 2. Replace the per-tier and P&L figures in the long post, which are still from the first day (2026-10-09), with the
    20-day figures from the site, or keep them and keep their one-day label. Fill in `{{ATLAS_ROOT}}` with the root
@@ -36,7 +36,7 @@ symbols; symbol-days whose replay checks flagged or that were halted are left ou
 | exact replay | 11.97% fill |
 | NautilusTrader touch model, `prob_fill_on_limit=1` | +1.50 pp (13% more orders; 95% interval +1.45 to +1.55) |
 | NautilusTrader queue_position model | +0.06 pp (closest) |
-| hftbacktest L3 FIFO (order-level input) | -1.82 pp |
+| hftbacktest L3 FIFO (order-level input) | -1.82 pp (15% fewer orders) |
 
 Detail from the first day only (2026-10-09, 9,306 symbols, 5,783,416 orders, exact fill rate 10.76%), until it is
 replaced with 20-day figures:

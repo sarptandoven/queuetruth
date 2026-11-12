@@ -6,6 +6,9 @@
 
 **Your backtest fills orders your live strategy never gets. queuetruth measures by how much, and why.**
 
+[Documentation](https://sarptandoven.github.io/queuetruth/docs/) ·
+[Fill-Realism Atlas](https://sarptandoven.github.io/queuetruth/)
+
 A resting order fills only after everything ahead of it in the queue has traded or cancelled. Backtesters cannot see
 that queue, so they guess. queuetruth replays order-level market data through an exact FIFO book, puts your orders
 in the real queue and records when each one would really have filled. Against that answer it scores the fill models
