@@ -100,6 +100,7 @@ nav:
       - Changelog: https://github.com/sarptandoven/queuetruth/blob/main/CHANGELOG.md
       - Contributing: https://github.com/sarptandoven/queuetruth/blob/main/CONTRIBUTING.md
       - Nightly cross-checks: how-to/nightly-checks.md
+      - The next phase (0.4 to 1.0): design/next-phase.md
       - Design specification: design/spec.md
       - Design extensions: design/extensions/index.md
       - How it was built and verified: design/build-plan.md
