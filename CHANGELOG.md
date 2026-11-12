@@ -8,6 +8,11 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ### Added
 
+- **The docs site on GitHub Pages, next to the atlas.** `atlas.yml` builds the mkdocs site (strict) into `/docs/`
+  of the Pages artifact on every site build, `site_only` included, so the docs live at
+  https://sarptandoven.github.io/queuetruth/docs/ once Pages is on. The README links it, and the package's
+  Documentation URL points there. `mkdocs.yml` takes `site_url` from `QT_DOCS_SITE_URL` when Read the Docs does not set
+  it.
 - **Docs: one "What is validated" page and three front doors.** `docs/validated.toml` is the single source of what is
   checked on real data, against the real library, or on fixtures only; `docs/gen_validated.py` writes
   `docs/validated.md` and the README status block from it, and `make check-docs` fails when either is stale. It
@@ -51,6 +56,11 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ### Changed
 
+- **The hftbacktest L3 FIFO gap is back on the front page, with its cause.** The README and the docs home say why
+  hftbacktest's L3 FIFO model fills 1.82 pp fewer orders in the atlas (it ignores hidden executions, and an order priced
+  better than every displayed order fills only on a cross; the released hftbacktest does the same) and link the
+  findings, as does `docs/concepts/l2-model-zoo.md`. The launch drafts in `docs/launch/` quote the 20-day atlas and
+  point the hftbacktest note at `integrations/hftbacktest/upstream/l3-fifo-best-priced-orders.md`.
 - **Docs pages moved and merged.** `getting-started.md` is now "Your first leaderboard" (its demo section moved to
   `docs/tutorials/see-it-in-a-minute.md`, its Nasdaq full-day section to "A real day from free IEX data",
   `how-to/iex-public-demo.md`). The LEAN guide is section 7 of `how-to/reconcile-backtrader-vectorbt.md`;

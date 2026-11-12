@@ -1,4 +1,4 @@
-# Your backtester's fill model is off by up to 15%. We measured it on every symbol of a real trading day.
+# Your backtester's fill model is off by up to 15%. We measured it on 20 trading days of real order queues.
 
 A backtest of a strategy that places limit orders has to guess, for every order, whether it would have been filled:
 was the order near the front of the queue at its price, or behind thousands of shares that arrived earlier? Backtesters
@@ -10,100 +10,100 @@ and it may be republished with attribution. From it we can replay the exact firs
 level of every symbol, place simulated orders into it, and see exactly when each one would have filled. Then we can ask
 the popular fill models the same question and compare.
 
-We did that for a whole day: IEX, 9 October 2026, every symbol that traded (9,306 of them), 5.8 million simulated
-orders. This is the first edition of the Fill-Realism Atlas, and it will be rebuilt for each new trading day.
+We did that for 20 trading days: IEX, 9 October to 6 November 2026, every symbol that traded (265,402 symbol-days of
+12,440 symbols). This is the Fill-Realism Atlas, and it is rebuilt for each new trading day.
 
 ## What we found
 
-Within 60 seconds of going live, the exact replay of the real queue fills 10.76% of these orders. The fill models
+Within 1 minute of going live, the exact replay of the real queue fills 11.97% of these orders. The fill models
 disagree with it in both directions:
 
 - **NautilusTrader's touch fill model** with `prob_fill_on_limit=1` (fill as soon as the market touches your price)
-  fills **15% more orders** than the real queue (+1.62 percentage points; 95% interval +1.57 to +1.67). It behaves
-  exactly like an order that is always first in the queue: the optimistic bound.
-- **hftbacktest's ProbQueue models** fill **7% to 9% fewer** (-0.71 to -1.02 points across 11 settings). Your
-  backtest is pessimistic with them.
+  fills **13% more orders** than the real queue (+1.50 percentage points; 95% interval +1.45 to +1.55). It behaves
+  like an order that is always first in the queue: the optimistic bound.
 - **hftbacktest's L3 FIFO model**, which is given the same order-by-order data we replay, fills **15% fewer**
-  (-1.62 points). Below we explain why.
-- **NautilusTrader's queue_position model** is within **0.05 points** of the exact replay. On this day it is the one
-  to use.
+  (-1.82 points). Below we explain why: it is how hftbacktest itself behaves.
+- **hftbacktest's ProbQueue models** fill {{PROBQUEUE_RANGE_20D}} fewer. Your backtest is pessimistic with them.
+- **NautilusTrader's queue_position model** is within **0.06 points** of the exact replay. It is the one to use.
 
-The errors are not the same everywhere. Among the 100 most traded symbols, orders fill often (45.67% within 60 s) and
-the relative errors are smaller (+4.9% for the touch model, -2.2% to -4.6% for ProbQueue). Among symbols ranked 501 to
-1,500 by activity they are largest: +16.2% for the touch model, -9.6% to -13.4% for ProbQueue and -21.2% for the L3
-model.
+The errors are not the same everywhere. On the first day (2026-10-09), among the 100 most traded symbols orders filled
+often (45.67% within 60 s) and the relative errors were smaller (+4.9% for the touch model, -2.2% to -4.6% for
+ProbQueue). Among symbols ranked 501 to 1,500 by activity they were largest: +16.2% for the touch model, -9.6% to
+-13.4% for ProbQueue and -21.2% for the L3 model. {{TIER_NUMBERS_20D}}
 
 ## What it does to P&L
 
 A fill model can be wrong about how many orders fill and still get P&L right, if the fills it gets wrong are worth
 nothing. They are not. We marked every fill to the mid price 60 seconds later, per order placed, and compared each
-model's P&L with the exact replay's. Among the 100 most traded symbols, the exact replay loses 1.114 ticks per order
-(adverse selection: resting orders tend to fill just before the price moves against them). Then:
+model's P&L with the exact replay's. On the first day, among the 100 most traded symbols, the exact replay lost 1.114
+ticks per order (adverse selection: resting orders tend to fill just before the price moves against them). Then:
 
-- hftbacktest's ProbQueue models book **0.32 to 0.38 ticks per order less** than that, and the L3 model **0.64 less**.
-  Almost all of it comes from the fills they miss, and the fills they miss are the profitable ones.
-- NautilusTrader's touch model books **0.11 ticks per order more**.
-- NautilusTrader's queue_position model is within its interval of the exact P&L.
+- hftbacktest's ProbQueue models booked **0.32 to 0.38 ticks per order less** than that, and the L3 model **0.64
+  less**. Almost all of it comes from the fills they miss, and the fills they miss are the profitable ones.
+- NautilusTrader's touch model booked **0.11 ticks per order more**.
+- NautilusTrader's queue_position model was within its interval of the exact P&L.
+
+{{PNL_NUMBERS_20D}}
 
 For a strategy that sends thousands of orders a day, a few tenths of a tick per order is the difference between a
 strategy that works and one that does not.
 
 ## Why hftbacktest's L3 model misses fills
 
-The L3 model tracks every order ahead of yours, like our replay does, so we expected it to agree. With its fills
-decided by the exact replay's rules (our `corrected` mode) it agrees to within 0.01 points. The difference is in
-hftbacktest's fill rules as released (2.4.4), checked against its source:
+The L3 model tracks every order ahead of yours, like our replay does, so we expected it to agree. We ran the released
+hftbacktest 2.4.4 itself on the same records and the same orders, one IEX day (12 symbols) and the Nasdaq demo
+window: it gives the same first fill as our replica on all 117,356 orders. So the gap is hftbacktest's own behaviour.
+Two of its rules cause every missed fill:
 
 1. **A trade-through is judged against the feed's best price, not your order's price.** An order resting at a better
-   price than every other order on its side (because it improved the touch, or because the orders ahead of it left)
-   is only filled when an execution happens at a price worse than the feed's best. On feeds like IEX and Nasdaq the
-   executed order is always at the feed's best, so such an order never fills this way.
-2. **Hidden executions are ignored.** Executions against non-displayed orders that trade through or at your price
-   fill a real order but not a backtest one.
+   price than every displayed order on its side (because it improved the touch, or because the orders ahead of it
+   left) is only filled when an execution happens at a price worse than the feed's best. On feeds like IEX and Nasdaq
+   the executed order is always at the feed's best, so such an order fills only when the price crosses it.
+2. **Hidden executions are ignored.** Executions against non-displayed orders at or through your price fill a real
+   order but not a backtest one. On IEX, hidden executions outnumber displayed ones several times over, and they are
+   three quarters of the gap.
 
-On a sample of the day (26 of the 130 work units, 1.17 million orders), the L3 model misses 18,915 fills the exact
-replay makes, 1.62% of orders, the same gap as the full day. 58% of them are trade-throughs (the first rule, or a
-hidden execution through the order's price), most of them orders at the touch whose price level was swept or emptied
-ahead of them. The other 42% are fills the exact replay makes from the queue at the order's price, which for this
-model can only come from hidden executions. So hidden executions account for at least 42% of the gap and the first
-rule for at most 58%. The model never fills an order the exact replay does not.
+Most of the orders it misses do fill later in hftbacktest, after the price has moved through them: the backtest swaps
+a fill inside the spread for a fill on an adverse move, which is where the lower P&L comes from.
 
-The details, with tests that reproduce each rule, are in {{HFTBACKTEST_ISSUE_URL}}.
+The trace, its cause shares and how to rerun it:
+https://github.com/sarptandoven/queuetruth/blob/main/scripts/scale/findings/l3-fifo-gap.md. Our note to the
+hftbacktest maintainers: {{HFTBACKTEST_ISSUE_URL}}.
 
 ## What to do
 
 - **NautilusTrader users:** on order-book data, prefer queue-position tracking (`queue_position=True`) to the touch
   model.
-- **hftbacktest users:** the ProbQueue settings closest to the real queue on this day were `power2` with `n=2` and
-  `power3` with `n=1`; fit your own on your venue (see
-  [calibrate hftbacktest](https://github.com/sarptandoven/queuetruth/blob/main/docs/how-to/calibrate-hftbacktest.md)).
+- **hftbacktest users:** fit the ProbQueue setting to your venue (see
+  [calibrate hftbacktest](https://github.com/sarptandoven/queuetruth/blob/main/docs/how-to/calibrate-hftbacktest.md)),
+  and expect the L3 model to miss fills of orders that improve the touch.
 - **Everyone:** check your own backtest. `pipx run queuetruth demo --yes` places orders in the real queue of a public
-  day in about a minute. To score your simulator against your own live fills, see
-  [import live logs](https://github.com/sarptandoven/queuetruth/blob/main/docs/how-to/import-live-logs.md).
+  day in about a minute. The docs, with one guide per backtester: https://sarptandoven.github.io/queuetruth/docs/
 
 ## How to check any number
 
 Each unit of work (a few symbols) produces a leaf with the hash of its input, its settings and the digests of its
-outputs; the day's numbers sit under one Merkle root, `8d65f7816ce88de7ec3f166260c140565a28fea7a75ba51bd16af16bd15e67b1`.
-Anyone can download IEX's public file for the day, re-run any unit with `scripts/scale/verify_unit.py` and check it
-against that root. The code is open source (Apache-2.0), runs on a laptop and sends nothing anywhere.
+outputs; each day's numbers sit under one Merkle root, which the site lists for every day ({{ATLAS_ROOT}}). Anyone can download IEX's
+public file for a day, re-run any unit with `scripts/scale/verify_unit.py` and check it against that root. The code is
+open source (Apache-2.0), runs on a laptop and sends nothing anywhere.
 
 ## Limits
 
-- **One day, one venue.** IEX carries a few percent of US equity volume, and its queues are thinner than Nasdaq's.
-  The size of each error can differ elsewhere and on other days. The atlas adds a day each trading day, and the
-  intervals will then cover days as well as symbols.
+- **One venue.** IEX carries a few percent of US equity volume, has a speed bump and repricing order types, and its
+  queues are thinner than Nasdaq's. The size of each error can differ elsewhere.
 - **Simulated orders do not move the market.** They wait in the real queue without changing it, so there is no market
   impact and no reaction from other traders.
 - **NautilusTrader's and Databento's models are re-implementations** from their public documentation and the
-  behaviour of their released packages; hftbacktest's are reproduced bit for bit from its released code.
+  behaviour of their released packages; hftbacktest's are reproduced from its released code and checked against the
+  released hftbacktest.
 - **Markouts are not a strategy.** The P&L above is the mid move after a fill, before fees and rebates. It measures
   what a model's fill mistakes are worth, not what anyone would earn.
 
 ## Links
 
 - The atlas: https://sarptandoven.github.io/queuetruth/
-- How to read it, how it is made, its limits:
+- The docs: https://sarptandoven.github.io/queuetruth/docs/
+- How to read the atlas, how it is made, its limits:
   https://github.com/sarptandoven/queuetruth/blob/main/docs/concepts/fill-realism-atlas.md
 - The code: https://github.com/sarptandoven/queuetruth
 

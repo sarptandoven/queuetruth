@@ -157,6 +157,11 @@ Three of hftbacktest's rules give fewer fills:
    liquidity. This needs a locked or crossed book when the order goes live, because the zoo rejects a `+1`
    placement that would cross.
 
+**It is hftbacktest's own behaviour.** The released hftbacktest 2.4.4, run on the same IEX DEEP+ and Nasdaq ITCH
+records with the same orders, gives the same first fill as the faithful replica on all 117,356 orders traced, and
+every missed fill is rule 1 or rule 2; on IEX, hidden prints are three quarters of the gap. The trace, its cause
+shares and how to rerun it: [the L3 FIFO findings](https://github.com/sarptandoven/queuetruth/blob/main/scripts/scale/findings/l3-fifo-gap.md).
+
 Whole-order fills do not count here: they change how much fills, not whether or when an order first fills. Neither
 do hftbacktest #312 aborts: those come from the L2 probability models, never this one, and `common_population`
 drops those shadows for every model and for the exact arm alike. In the other direction, faithful counts an
