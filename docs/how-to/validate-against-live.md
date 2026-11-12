@@ -16,6 +16,12 @@ give each of them:
 run on the synthetic fixture that `queuetruth advanced fixtures synth` writes, so you can try them first. They use no real
 market data.
 
+**The everyday path.** To compare your own backtest with your own live run, `queuetruth compare --backtest
+BACKTEST --live LIVE --data DATASET` prints these checks in one answer (the time-to-fill line, the markout line
+and the latency line), with the fills only one side made and why. See
+[Compare my backtest with my live run](compare-backtest-and-live.md). The sections below show where each number
+comes from and how to read it from the scorecard files.
+
 ## 1. Score the simulator on the live schedule
 
 <!-- check-docs: run -->

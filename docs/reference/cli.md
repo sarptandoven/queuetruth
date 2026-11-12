@@ -48,6 +48,7 @@ without the line. `queuetruth help VERB` shows a verb's help.
 | [`queuetruth atlas`](#queuetruth-atlas) | how far your backtester's fill model is from the real queue, from the public atlas |
 | [`queuetruth check`](#queuetruth-check) | how wrong a backtest is: its own limit orders replayed in the real queue |
 | [`queuetruth fit`](#queuetruth-fit) | the parameter that fixes your backtester's fill model, with its verdict |
+| [`queuetruth compare`](#queuetruth-compare) | my backtest against my live run, order by order |
 | [`queuetruth data`](#queuetruth-data) | bring order-level data in: add files to a dataset, or fetch a free IEX day |
 | [`queuetruth data add`](#queuetruth-data-add) | ingest order-level files into one dataset, format, venue and date inferred |
 | [`queuetruth data fetch`](#queuetruth-data-fetch) | fetch a free public day into a dataset (iex: IEX DEEP+) |
@@ -408,6 +409,83 @@ Options:
 
       --json
           print the qt.fit document as JSON (as --format json)
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+      --log-level <log_level>
+          stderr log level (default warn)
+          
+          [possible values: error, warn, info, debug]
+
+      --output-format <human|json>
+          output format (also --format human|json)
+          
+          [possible values: human, json]
+
+      --quiet
+          no progress or warnings on stderr
+
+      --seed <seed>
+          random seed (default 0)
+
+      --threads <threads>
+          worker threads (outputs do not depend on it; default 1)
+
+      --verbose
+          human output: every summary field after the answer; every warning and note on stderr
+```
+
+## queuetruth compare
+
+```text
+My backtest against my live run, order by order: how many of the backtest's fills happened live, the fills only one side made and why, the P&L gap, time to fill, markouts and latency. Reads the backtester and the kind of live run from the files.
+
+Usage: queuetruth compare [OPTIONS] --backtest <PATH> --live <PATH>
+
+Options:
+      --backtest <PATH>
+          the backtester's output file(s) of one run (repeatable)
+
+      --live <PATH>
+          the live run: a canonical live-log directory, the bot's database and log, or a venue export (repeatable)
+
+      --data <DIR>
+          order-level dataset of the same days: markouts, P&L per order, exact queue
+
+      --backtester <backtester>
+          the backtester (default: read from the backtest file)
+          
+          [possible values: hftbacktest, nautilus, backtrader, vectorbt, lean, freqtrade, hummingbot, backtesting_py]
+
+      --venue <venue>
+          the live run's venue or bot (default: read from the files)
+          
+          [possible values: binance, bybit, okx, coinbase, kraken, deribit, hyperliquid, ibkr_flex, fix44, freqtrade, hummingbot]
+
+      --out <DIR>
+          output directory (default qt-compare)
+
+      --instrument-map <FILE>
+          instrument_map.csv (default: none needed; with --data built from the dataset's symbols)
+
+      --window <DURATION>
+          how long after entry a fill counts, e.g. 1h (default: 1 day for bots and bar backtesters, 60s else)
+
+      --account <NAME>
+          account label of the logs
+
+      --option <KEY=VALUE>
+          backtest importer option, e.g. timeframe=1h, strategy=NAME (repeatable)
+
+      --max-rows <N>
+          differing orders printed (default 10)
+
+      --json
+          print the full summary as JSON (as --format json)
+
+      --html
+          also write a self-contained report to <out>/compare.html
 
   -h, --help
           Print help (see a summary with '-h')

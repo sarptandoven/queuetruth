@@ -26,6 +26,10 @@ from pydantic import BaseModel
 
 from queuetruth import units
 from queuetruth.errors import EXIT_GATE, EXIT_OK, QtError
+from queuetruth.score.lines import horizon as _hz
+from queuetruth.score.lines import pct_points as _pp
+from queuetruth.score.lines import practitioner_lines as _practitioner_lines
+from queuetruth.score.lines import pvalue as _p
 
 log = logging.getLogger("queuetruth")
 
@@ -128,22 +132,6 @@ def render_human(path: list[str], doc: Any) -> str:
 
 H_DEFAULT_NS = 60_000_000_000
 HBT_312_URL = "https://github.com/nkaz001/hftbacktest/issues/312"
-
-
-def _pp(x: float | None, signed: bool = True) -> str:
-    """A fraction as percentage points (`+1.3`)."""
-    if x is None or not math.isfinite(x):
-        return "n/a"
-    return f"{x * 100:+.1f}" if signed else f"{abs(x) * 100:.1f}"
-
-
-def _p(x: float | None) -> str:
-    return "n/a" if x is None else f"{x:.3g}"
-
-
-def _hz(ns: int | str | None) -> str:
-    """Horizon label: `100ms`, `1s`, `1min` (`queuetruth.units.format_duration`)."""
-    return "-" if ns is None else units.format_duration(int(ns))
 
 
 def _table(header: list[str], rows: list[list[str]], right: set[int] | None = None) -> list[str]:
@@ -431,69 +419,8 @@ def _score_clusters(doc: Doc, out: str | None) -> tuple[float | None, int | None
     return None, None, None
 
 
-#: Markout horizons of the terminal answer (hftbacktest discussion #332): 100 ms, 1 s, 10 s.
-PRACTITIONER_HORIZONS_NS = (100_000_000, 1_000_000_000, 10_000_000_000)
-
-
-def _practitioner_lines(doc: Doc) -> list[str]:
-    """The time-to-fill line (Kaplan-Meier share still unfilled at 1 s, else the first scored horizon, with the
-    clustered log-rank) and the markout line (sim minus live first-fill markout at 100 ms, 1 s and 10 s)."""
-    out: list[str] = []
-    sv = doc.get("ttf_survival")
-    if isinstance(sv, dict) and sv.get("arms"):
-        hs = list(sv.get("horizons_ns") or [])
-        if hs:
-            j = hs.index(1_000_000_000) if 1_000_000_000 in hs else 0
-            arms = sv["arms"]
-
-            def at(arm: str) -> str:
-                a = (arms.get(arm) or {}).get("at") or []
-                x = a[j] if j < len(a) else {}
-                if x.get("survival") is None:
-                    return f"{arm} n/a"
-                ci = (
-                    f" [{_pct(x['ci_lo'])}, {_pct(x['ci_hi'])}]"
-                    if x.get("ci_lo") is not None and x.get("ci_hi") is not None
-                    else ""
-                )
-                return f"{arm} {_pct(x['survival'])}{ci}"
-
-            lr = sv.get("logrank") or {}
-            d = (sv.get("diff") or [{}] * (j + 1))[j]
-            diff = ""
-            if d.get("diff") is not None:
-                diff = f"; sim minus live {_pp(d['diff'])} pp"
-                if d.get("ci_lo") is not None and d.get("ci_hi") is not None:
-                    diff += f" (95% CI {_pp(d['ci_lo'])} to {_pp(d['ci_hi'])})"
-            out.append(
-                f"time to fill: still unfilled after {_hz(hs[j])} (Kaplan-Meier, cancels censored): {at('live')} vs "
-                f"{at('sim')}{diff}; log-rank p = {_p(lr.get('p_value'))} (by instrument, "
-                f"{lr.get('n_clusters')} clusters)"
-            )
-    diffs = {
-        int(r["horizon_ns"]): r
-        for r in doc.get("markout_diff") or []
-        if isinstance(r, dict) and r.get("ref") == "mid" and r.get("mean_diff_ticks") is not None
-    }
-    parts = []
-    for h in PRACTITIONER_HORIZONS_NS:
-        r = diffs.get(h)
-        if r is None:
-            continue
-        has_ci = r.get("ci_lo") is not None and r.get("ci_hi") is not None
-        ci = f" [{r['ci_lo']:+.2f}, {r['ci_hi']:+.2f}]" if has_ci else ""
-        parts.append(f"{_hz(h)} {r['mean_diff_ticks']:+.2f}{ci}")
-    if parts:
-        out.append("markouts: sim minus live, ticks of mid, orders filled in both (95% CI): " + ", ".join(parts))
-    return out
-
-
 def _dur_ms(ns: float | None) -> str:
     return "n/a" if ns is None else units.format_duration(float(ns), sig=3)
-
-
-def _pct(x: float | None) -> str:
-    return "n/a" if x is None or not math.isfinite(x) else f"{x * 100:.0f}%"
 
 
 def _render_score(doc: Doc, args: Doc, extra: Doc) -> str | None:
@@ -1415,6 +1342,7 @@ def _main(args: list[str]) -> int:
         "check",
         "data",
         "fit",
+        "compare",
     )
     i = 0
     while i < len(args) and args[i].startswith("-") and args[i] != "--":
@@ -1460,6 +1388,10 @@ def _main(args: list[str]) -> int:
     from queuetruth.fit.cli import maybe_main as fit_main  # `fit` (Python-only grammar)
 
     if (rc := fit_main(args)) is not None:
+        return rc
+    from queuetruth.compare.cli import maybe_main as compare_main  # `compare` (Python-only grammar)
+
+    if (rc := compare_main(args)) is not None:
         return rc
     json_out = _wants_json(args)
     try:

@@ -32,6 +32,8 @@ queuetruth.cli -> queuetruth.demo._dispatch  # layer
 queuetruth.cli -> queuetruth.demo._dispatch.maybe_run  # private
 queuetruth.cli -> queuetruth.forecast.cli  # layer
 queuetruth.cli -> queuetruth.pm.cli  # layer
+queuetruth.compare.cli -> queuetruth.live.reconcile_cli._options  # private
+queuetruth.compare.run -> queuetruth.pm.cli  # layer
 queuetruth.data.iex -> queuetruth.demo.fetch  # layer
 queuetruth.data.iex -> queuetruth.demo.iex  # layer
 queuetruth.data.iex -> queuetruth.demo.sources  # layer

@@ -10,6 +10,11 @@ only one of the two runs. Then measure how far Freqtrade's candle-fill rule is f
 (`data/<config>.sqlite`) of a live bot and of a paper-trade bot that ran the same strategy at the same time. Nothing
 else: no market data and no exchange account.
 
+**The everyday path.** `queuetruth compare --backtest BACKTEST --live LIVE` runs this comparison in one command: it
+reads the backtester and the kind of live records from the files, imports a venue export when needed and
+answers first. See [Compare my backtest with my live run](compare-backtest-and-live.md). This page shows the
+steps underneath, for scripts and for options `compare` does not expose.
+
 **From the command line or Python.** Since 0.3.0, `queuetruth advanced reconcile --kind freqtrade|hummingbot` runs the whole comparison
 below, and `queuetruth advanced live import --venue freqtrade | hummingbot | sim-freqtrade | sim-hummingbot` writes one arm as
 a canonical live log (importer options with `--option KEY=VALUE`, e.g. `--option dry_run=true`); the Python API is

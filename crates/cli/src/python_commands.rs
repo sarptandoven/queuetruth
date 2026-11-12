@@ -31,6 +31,7 @@ pub(crate) const PYTHON_LONG_ABOUT: &[(&[&str], &str)] = &[
     (&["data", "add"], "Ingests one or more order-level files (ITCH, IEX DEEP+, DBN, NYSE TAQ Integrated Feed, the crypto captures, Tardis L2) into one dataset: the format, venue and session date are read from the files, several days are merged, and the data-quality checks run. An existing dataset at --out gains the new days."),
     (&["data", "fetch"], "Streams a free public order-level day (iex: IEX DEEP+ from IEX's public bucket) after you agree, keeps only the symbols you ask for and adds them to a dataset, with IEX's attribution in its manifest. The day's file (several GB) is never stored."),
     (&["fit"], "The parameter that fixes your backtester's fill model: fitted on order-level data (exact queue) or on your live fills, compared with the library default on held-out data. The paste-ready snippet is written only when the fit beats the default; otherwise it says why and what would make it pass."),
+    (&["compare"], "My backtest against my live run, order by order: how many of the backtest's fills happened live, the fills only one side made and why, the P&L gap, time to fill, markouts and latency. Reads the backtester and the kind of live run from the files."),
 ];
 
 /// Help of positional arguments: (command path, argument name, help).
@@ -645,6 +646,29 @@ pub(crate) const PYTHON_COMMANDS: &[Cmd] = &[
             Flag { long: "out", kind: Kind::Str, to: "_cli.out", required: false, help: "output directory (default qt-fit)", short: None, value_name: Some("DIR") },
             Flag { long: "n-shadows", kind: Kind::Int, to: "_cli.n_shadows", required: false, help: "shadows to sample when --shadows is not given (default 1000)", short: None, value_name: Some("N") },
             Flag { long: "json", kind: Kind::Flag, to: "_cli.json", required: false, help: "print the qt.fit document as JSON (as --format json)", short: None, value_name: None },
+        ],
+        positional: &[],
+        globals: Globals::None,
+        hidden: false,
+    },
+    Cmd {
+        path: &["compare"],
+        imp: Implementation::Python,
+        about: "my backtest against my live run, order by order",
+        flags: &[
+            Flag { long: "backtest", kind: Kind::StrAppend, to: "_cli.backtest", required: true, help: "the backtester's output file(s) of one run (repeatable)", short: None, value_name: Some("PATH") },
+            Flag { long: "live", kind: Kind::StrAppend, to: "_cli.live", required: true, help: "the live run: a canonical live-log directory, the bot's database and log, or a venue export (repeatable)", short: None, value_name: Some("PATH") },
+            Flag { long: "data", kind: Kind::Str, to: "_cli.data", required: false, help: "order-level dataset of the same days: markouts, P&L per order, exact queue", short: None, value_name: Some("DIR") },
+            Flag { long: "backtester", kind: Kind::Enum(&["hftbacktest", "nautilus", "backtrader", "vectorbt", "lean", "freqtrade", "hummingbot", "backtesting_py"]), to: "_cli.backtester", required: false, help: "the backtester (default: read from the backtest file)", short: None, value_name: None },
+            Flag { long: "venue", kind: Kind::Enum(&["binance", "bybit", "okx", "coinbase", "kraken", "deribit", "hyperliquid", "ibkr_flex", "fix44", "freqtrade", "hummingbot"]), to: "_cli.venue", required: false, help: "the live run's venue or bot (default: read from the files)", short: None, value_name: None },
+            Flag { long: "out", kind: Kind::Str, to: "_cli.out", required: false, help: "output directory (default qt-compare)", short: None, value_name: Some("DIR") },
+            Flag { long: "instrument-map", kind: Kind::Str, to: "_cli.instrument_map", required: false, help: "instrument_map.csv (default: none needed; with --data built from the dataset's symbols)", short: None, value_name: Some("FILE") },
+            Flag { long: "window", kind: Kind::Str, to: "_cli.window", required: false, help: "how long after entry a fill counts, e.g. 1h (default: 1 day for bots and bar backtesters, 60s else)", short: None, value_name: Some("DURATION") },
+            Flag { long: "account", kind: Kind::Str, to: "_cli.account", required: false, help: "account label of the logs", short: None, value_name: Some("NAME") },
+            Flag { long: "option", kind: Kind::StrAppend, to: "_cli.option", required: false, help: "backtest importer option, e.g. timeframe=1h, strategy=NAME (repeatable)", short: None, value_name: Some("KEY=VALUE") },
+            Flag { long: "max-rows", kind: Kind::Int, to: "_cli.max_rows", required: false, help: "differing orders printed (default 10)", short: None, value_name: Some("N") },
+            Flag { long: "json", kind: Kind::Flag, to: "_cli.json", required: false, help: "print the full summary as JSON (as --format json)", short: None, value_name: None },
+            Flag { long: "html", kind: Kind::Flag, to: "_cli.html", required: false, help: "also write a self-contained report to <out>/compare.html", short: None, value_name: None },
         ],
         positional: &[],
         globals: Globals::None,

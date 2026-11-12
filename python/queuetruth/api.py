@@ -63,6 +63,14 @@ def check(backtest: Any, data: str | Path | None = None, **kwargs: Any) -> Any:
     return _check(backtest, data, **kwargs)
 
 
+def compare(backtest: Any, live: Any, **kwargs: Any) -> Any:
+    """`compare`: a backtest against the live run of the same strategy, order by order: pairs, reasons, scorecard,
+    latency (`queuetruth.compare.compare`; returns a `queuetruth.compare.CompareResult`)."""
+    from queuetruth.compare.run import compare as _compare
+
+    return _compare(backtest, live, **kwargs)
+
+
 def fit(backtester: str, **kwargs: Any) -> Any:
     """`fit`: the parameter that fixes `backtester`'s fill model, compared with the library default on held-out data;
     the snippet is written only when the fit passes (`queuetruth.fit.fit`; returns a `queuetruth.fit.FitResult`)."""

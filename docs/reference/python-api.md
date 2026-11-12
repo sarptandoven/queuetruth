@@ -43,6 +43,14 @@ check(*args: Any, **kwargs: Any) -> Any
 
 `queuetruth check`: how wrong is a backtest, in one command.
 
+### `compare`
+
+```python
+compare(*args: Any, **kwargs: Any) -> Any
+```
+
+`queuetruth compare`: my backtest against my live run, order by order.
+
 ### `data`
 
 Subpackage `queuetruth.data`, listed below.
