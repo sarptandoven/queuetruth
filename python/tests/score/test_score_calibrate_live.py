@@ -18,7 +18,7 @@ from queuetruth.schemas.io import write_table
 from queuetruth.schemas.models import CalibrationResult
 from queuetruth.score import calibrate_live
 from queuetruth.score._io import read_parquet, rows
-from queuetruth.score.calibrate_live import interval_loglik
+from queuetruth.score.calibrate_live import interval_loglik, loglik_matrix
 from score.qt_score_helpers import DAY, T0, FakeRunner, log_from, make_dataset, make_table, order_events
 
 S = 1_000_000_000
@@ -117,6 +117,23 @@ def test_interval_loglik_matches_hand_computation():
     h = 1 - s / np.concatenate([[1.0], s[:-1]])
     assert interval_loglik(p, 2, 1, 1) == pytest.approx(np.log(1 - h[0]) + np.log(h[1]))
     assert interval_loglik(p, 3, 0, 1) == pytest.approx(np.log(1 - h[0]) + np.log(1 - h[1]) + np.log(1 - h[2]))
+
+
+def test_loglik_matrix_is_interval_loglik_per_cell():
+    """The grid search's matrix (Rust, `qt_calib::live`) scores each (order, grid value) as `interval_loglik` does,
+    and a cell without a prediction 0; an interval outside the horizons is `QT-CONFIG-001`."""
+    rng = np.random.default_rng(3)
+    p = np.sort(rng.random((4, 3, 12)), axis=2)
+    present = rng.random((4, 3)) < 0.8
+    k, delta = [1, 5, 12, 9], [1, 0, 1, 0]
+    m = loglik_matrix(p, present, k, delta, 1000)
+    for i in range(4):
+        for g in range(3):
+            want = interval_loglik(p[i, g], k[i], delta[i], 1000) if present[i, g] else 0.0
+            assert m[i, g] == want
+    with pytest.raises(QtError) as e:
+        interval_loglik(p[0, 0], 13, 1, 1)
+    assert e.value.code == "QT-CONFIG-001"
 
 
 def test_calibrate_live_power3_fit_split_and_exports(tmp_path):
