@@ -8,6 +8,19 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ### Added
 
+- `queuetruth._core.formats()`: the source format registry as JSON, one entry per `IngestSpec.format` (name, CLI
+  spelling, dataset kind, manifest `source_format`, vendor or not, rule sets, default source venue, options, engine
+  crate). The ingest dispatch and the CLI `--format` choices read the same registry (`qt_cli::formats`); ingest
+  outputs are byte-identical.
+- `queuetruth._core.zoo_families()` and `queuetruth.eval.zoo_families()` / `zoo_all_ids()`: the zoo family registry
+  (`crates/zoo/src/families.rs`): per family its simulator library, label, parameters with defaults and ranges,
+  whether it is a particle model, its `--models all` entries, the calibrations that fit it and its library default.
+  The model id grammar, `--models all`, `zoo --list-models`, the service's model checks and the livefill kit read it;
+  zoo outputs are byte-identical.
+- `tools/check_layers.py` checks the import layers of `python/queuetruth` (plan section 5.1), private names used
+  across packages and test code imported by shipped code. Today's exceptions are listed in
+  `tools/check_layers_allow.txt`; a new one fails `make lint` and CI.
+
 - **Atlas backfill** (`.github/workflows/atlas-backfill.yml`, ROADMAP W1): a manual run fills the atlas window at once.
   `scripts/scale/iex_latest.py --count N --kept FILE` lists the N newest published IEX sessions the `atlas-days`
   release does not hold yet (`--rebuild` keeps them in) as a job matrix; each day runs on its own runner, up to
@@ -47,6 +60,13 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 - `rustix` 1.1.5 to 1.1.6 in `Cargo.lock` (RUSTSEC-2026-0486: its xattr functions marked unwritten bytes as
   initialized when given a zero-length buffer). Reached only through `tempfile`; 1.1.6 was released on 2026-10-27.
+- The Rust spec mirror rejected the live venues `freqtrade`, `hummingbot`, `sim_freqtrade`, `sim_hummingbot`,
+  `sim_backtrader`, `sim_vectorbt` and `sim_lean`. `LiveVenue` and the CLI venue choices are now generated from the
+  Python model by `make schemas`, and a test round-trips every venue.
+- The service accepts `format: nyse_ibf` for ingest jobs.
+- Reports label datasets ingested from crypto and Tardis captures as vendor data (`VENDOR_FORMATS`), as for ITCH, DBN
+  and IEX: a `synthetic_only` status there describes the venue rules, not the data.
+
 - `atlas.py combine` no longer runs out of memory on a full window. It read every day's cells and P&L cells into
   one table: about 1.2 GB per IEX day, so 20 days needed about 25 GB, and the first site rebuild after the backfill
   stopped the 16 GB runner two minutes in. It now reads the days one (mode, shadow population) slice at a time, with
