@@ -124,7 +124,15 @@ def corpus(tmp_path_factory: pytest.TempPathFactory) -> dict[str, str]:
     for page in sorted(dq.glob("*.html")):
         capsys_out[f"dq {page.name}"] = _html_text(page)
 
-    from atlas.test_atlas_lookup import _write_api
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "_atlas_site", Path(__file__).parent / "atlas" / "test_atlas_lookup.py"
+    )
+    assert spec is not None and spec.loader is not None
+    atlas_tests = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(atlas_tests)
+    _write_api = atlas_tests._write_api
 
     site = str(_write_api(tmp / "site"))
     run("atlas", "atlas", "--library", "hftbacktest", "--from", site)
