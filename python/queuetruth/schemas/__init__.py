@@ -6,7 +6,6 @@ from queuetruth.schemas.arrow import ADDED_COLUMNS, DICT_VALUES, FULL_SCHEMAS, S
 from queuetruth.schemas.models import *  # noqa: F403
 from queuetruth.schemas.models import DOC_MODELS, parse_document
 from queuetruth.schemas.runid import (
-    V1_1_DEFAULTS,
     drop_v1_1_defaults,
     identity_document,
     is_ref,
@@ -35,7 +34,7 @@ __all__ = [
     "FULL_SCHEMAS",
     "SCHEMAS",
     "SPEC_MODELS",
-    "V1_1_DEFAULTS",
+    "V1_1_DEFAULTS",  # noqa: F405  (module __getattr__: read from queuetruth._core on first use)
     "arrow",
     "drop_v1_1_defaults",
     "features_schema",
@@ -48,6 +47,10 @@ __all__ = [
 
 
 def __getattr__(name: str) -> object:
+    if name == "V1_1_DEFAULTS":  # read from `queuetruth._core` on first use (`qt_schema::V1_1_DEFAULTS`)
+        from queuetruth.schemas import runid
+
+        return runid.V1_1_DEFAULTS
     if name == "canonical_json":  # moved to queuetruth.integrity; the old name keeps working with a warning
         import warnings
 
