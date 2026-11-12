@@ -110,6 +110,7 @@ section below is the command's own `--help` text.
 | [`queuetruth cert render`](#queuetruth-cert-render) | render a certificate as HTML |
 | [`queuetruth cert partial-opening`](#queuetruth-cert-partial-opening) | write an opening that opens only some committed items |
 | [`queuetruth reconcile`](#queuetruth-reconcile) | a bot's or backtester's simulated orders against the live run, order by order |
+| [`queuetruth check`](#queuetruth-check) | how wrong a backtest is: its own limit orders replayed in the real queue |
 
 ## queuetruth ingest
 
@@ -2460,6 +2461,73 @@ Options:
 
       --max-rows <N>
           order lines printed (default 50)
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+      --log-level <log_level>
+          stderr log level (default warn)
+          
+          [possible values: error, warn, info, debug]
+
+      --output-format <human|json>
+          output format (also --format human|json)
+          
+          [possible values: human, json]
+
+      --quiet
+          no progress or warnings on stderr
+
+      --seed <seed>
+          random seed (default 0)
+
+      --threads <threads>
+          worker threads (outputs do not depend on it; default 1)
+
+      --verbose
+          human output: every summary field after the answer; every warning and note on stderr
+```
+
+## queuetruth check
+
+```text
+How wrong is my backtest: replays the backtest's own resting limit orders (hftbacktest, NautilusTrader, Backtrader, VectorBT, LEAN or Freqtrade output) in the exact queue of an order-level dataset and compares them order by order: fills, phantom fills, time to fill and the P&L gap.
+
+Usage: queuetruth check [OPTIONS] <BACKTEST>...
+
+Arguments:
+  <BACKTEST>...
+          the backtester's output file(s) of one run
+
+Options:
+      --data <DIR>
+          order-level (MBO) dataset covering the backtest's days
+
+      --backtester <backtester>
+          the backtester (default: read from the file)
+          
+          [possible values: hftbacktest, nautilus, backtrader, vectorbt, lean, freqtrade]
+
+      --instrument-map <FILE>
+          instrument_map.csv (default: built from the dataset's symbols; needed only when they do not match)
+
+      --out <DIR>
+          output directory (default qt-check)
+
+      --window <DURATION>
+          how long after entry a fill counts, e.g. 10min (default 1h)
+
+      --markout <DURATION>
+          P&L horizon: fills marked to the mid this long after (default 1min)
+
+      --option <KEY=VALUE>
+          importer option, e.g. timeframe=5m, data_tz=America/New_York, column=LABEL (repeatable)
+
+      --json
+          print the full summary as JSON (as --format json)
+
+      --html
+          also write a self-contained report to <out>/check.html
 
   -h, --help
           Print help (see a summary with '-h')

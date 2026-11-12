@@ -1260,6 +1260,7 @@ def main(argv: list[str] | None = None) -> int:
         "reveal",
         "cert",
         "reconcile",
+        "check",
     )
     i = 0
     while i < len(args) and args[i].startswith("-") and args[i] != "--":
@@ -1289,6 +1290,10 @@ def main(argv: list[str] | None = None) -> int:
     from queuetruth.live.reconcile_cli import maybe_main as reconcile_main  # `reconcile` (Python-only grammar)
 
     if (rc := reconcile_main(args)) is not None:
+        return rc
+    from queuetruth.check.cli import maybe_main as check_main  # `check` (Python-only grammar)
+
+    if (rc := check_main(args)) is not None:
         return rc
     json_out = _wants_json(args)
     try:

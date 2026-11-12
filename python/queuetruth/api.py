@@ -758,6 +758,14 @@ def score(spec: s.ScorecardSpec | dict[str, Any], **kwargs: Any) -> m.ScorecardS
     return build_scorecard(_validate(s.ScorecardSpec, spec), **kwargs)
 
 
+def check(backtest: Any, data: str | Path | None = None, **kwargs: Any) -> Any:
+    """`check`: how wrong a backtest is, its own resting limit orders replayed in the exact queue of `data`
+    (`queuetruth.check.check`; returns a `queuetruth.check.CheckResult`)."""
+    from queuetruth.check.run import check as _check
+
+    return _check(backtest, data, **kwargs)
+
+
 def report(spec: s.ReportSpec | dict[str, Any]) -> m.ReportSummary:
     """`report` (`queuetruth.report.render`)."""
     from queuetruth.report import render
