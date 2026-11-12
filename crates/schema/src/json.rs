@@ -1649,6 +1649,113 @@ pub struct DiscordantMarkoutRow {
     pub ci_lo: Option<f64>,
     /// Upper bound.
     pub ci_hi: Option<f64>,
+    /// 1.3: sim-only fills behind the mean.
+    #[serde(default)]
+    pub n_sim_only: Option<u64>,
+    /// 1.3: live-only fills behind the mean.
+    #[serde(default)]
+    pub n_live_only: Option<u64>,
+    /// 1.3: lower bound of the sim-only mean.
+    #[serde(default)]
+    pub sim_only_ci_lo: Option<f64>,
+    /// 1.3: upper bound of the sim-only mean.
+    #[serde(default)]
+    pub sim_only_ci_hi: Option<f64>,
+    /// 1.3: lower bound of the live-only mean.
+    #[serde(default)]
+    pub live_only_ci_lo: Option<f64>,
+    /// 1.3: upper bound of the live-only mean.
+    #[serde(default)]
+    pub live_only_ci_hi: Option<f64>,
+}
+
+/// 1.3: Kaplan-Meier survival of one arm at one horizon.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SurvivalAt {
+    /// Horizon.
+    pub horizon_ns: i64,
+    /// Share of orders still unfilled.
+    pub survival: Option<f64>,
+    /// Lower bound.
+    #[serde(default)]
+    pub ci_lo: Option<f64>,
+    /// Upper bound.
+    #[serde(default)]
+    pub ci_hi: Option<f64>,
+}
+
+/// 1.3: survival sim minus live at one horizon.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SurvivalDiffAt {
+    /// Horizon.
+    pub horizon_ns: i64,
+    /// Difference.
+    pub diff: Option<f64>,
+    /// Lower bound.
+    #[serde(default)]
+    pub ci_lo: Option<f64>,
+    /// Upper bound.
+    #[serde(default)]
+    pub ci_hi: Option<f64>,
+}
+
+/// 1.3: Kaplan-Meier time-to-fill curve of one arm.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SurvivalArm {
+    /// Orders filled.
+    pub n_filled: u64,
+    /// Orders censored.
+    pub n_censored: u64,
+    /// Median time to fill.
+    #[serde(default)]
+    pub median_ns: Option<f64>,
+    /// Lower bound of the median.
+    #[serde(default)]
+    pub median_ci_lo: Option<f64>,
+    /// Upper bound of the median.
+    #[serde(default)]
+    pub median_ci_hi: Option<f64>,
+    /// Survival at each horizon.
+    pub at: Vec<SurvivalAt>,
+    /// `[t_ns, S(t)]` points.
+    pub curve: Vec<Vec<f64>>,
+    /// The curve holds every step.
+    pub curve_exact: bool,
+}
+
+/// 1.3: log-rank stratified by instrument with a cluster-robust variance.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ClusteredLogrank {
+    /// Chi-square statistic.
+    pub statistic: Option<f64>,
+    /// p-value.
+    pub p_value: Option<f64>,
+    /// Strata and clusters used.
+    pub method: String,
+    /// Clusters.
+    pub n_clusters: u64,
+    /// Strata.
+    pub n_strata: u64,
+}
+
+/// 1.3: time-to-fill survival curves.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TtfSurvival {
+    /// Scored orders.
+    pub n: u64,
+    /// Horizons.
+    pub horizons_ns: Vec<i64>,
+    /// Curves by arm (`live`, `sim`).
+    pub arms: IndexMap<String, SurvivalArm>,
+    /// Sim minus live per horizon.
+    pub diff: Vec<SurvivalDiffAt>,
+    /// The clustered log-rank.
+    pub logrank: ClusteredLogrank,
 }
 
 /// TOST results.
@@ -1898,6 +2005,9 @@ pub struct ScorecardSummary {
     /// 1.2: P&L gap per currency at the markout equivalence horizon.
     #[serde(default)]
     pub pnl_gap: Option<Vec<PnlGap>>,
+    /// 1.3: time-to-fill survival curves.
+    #[serde(default)]
+    pub ttf_survival: Option<TtfSurvival>,
 }
 doc!(ScorecardSummary, "qt.scorecard_summary");
 
