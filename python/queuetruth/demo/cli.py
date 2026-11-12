@@ -22,8 +22,9 @@ from queuetruth.errors import EXIT_ERROR, EXIT_OK, QtError
 
 DESCRIPTION = """\
 Fetch a small public order-level subset (the first minutes of a Nasdaq TotalView-ITCH or IEX DEEP+ day), place
-simulated resting orders in the real queue, and show how often NautilusTrader's default fill model fills them
-compared with the exact replay, by horizon, with base rates. Writes <out>/demo.html and <out>/demo.json.
+simulated resting orders in the real queue, and show how often your backtester's default fill model
+(NautilusTrader unless --backtester says otherwise) fills them compared with the exact replay, by horizon, with
+base rates. Writes <out>/demo.html and <out>/demo.json.
 """
 
 
@@ -47,6 +48,12 @@ def parser() -> argparse.ArgumentParser:
         help=f"placement window length after 09:35 ET, minutes (default {R.DEFAULT_MINUTES})",
     )
     p.add_argument("--n", type=int, default=R.DEFAULT_N, help=f"simulated orders (default {R.DEFAULT_N})")
+    p.add_argument(
+        "--backtester",
+        choices=list(R.LIBRARIES),
+        default=R.DEFAULT_BACKTESTER,
+        help=f"the library the answer is about, at its default setting (default {R.DEFAULT_BACKTESTER})",
+    )
     p.add_argument(
         "--models",
         help=f"comma-separated zoo model ids, or all (default: {', '.join(R.DEMO_MODELS)})",
@@ -106,6 +113,7 @@ def _options(ns: argparse.Namespace) -> Any:
         refresh=ns.refresh,
         yes=ns.yes,
         max_download_mb=ns.max_download_mb if ns.max_download_mb and ns.max_download_mb > 0 else None,
+        backtester=ns.backtester,
     )
     if ns.models:
         o.models = [m.strip() for m in ns.models.split(",") if m.strip()]
@@ -217,9 +225,10 @@ def render(s: Any, verbose: bool = False) -> str:
         c = cells[k]
         ci = f"[{_pp(c.ci_lo)}, {_pp(c.ci_hi)}]" if c.ci_lo is not None else "n/a"
         rows.append([_hz(k), _pct(c.exact_fill_rate), _pct(c.model_fill_rate), _pp(c.bias), ci])
-    lines += _table(
-        ["horizon", "exact fill rate", "NautilusTrader default", "overfill, pp", "95% CI"], rows, right={1, 2, 3, 4}
-    )
+    from queuetruth.demo.run import LIBRARIES
+
+    column = LIBRARIES[s.headline.backtester].column
+    lines += _table(["horizon", "exact fill rate", column, "overfill, pp", "95% CI"], rows, right={1, 2, 3, 4})
     lines.append(f"(95% CI: cluster bootstrap over instrument x minute, {s.interval.clusters} clusters)")
     if s.reference is not None:
         ref = s.reference

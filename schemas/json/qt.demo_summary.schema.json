@@ -202,7 +202,7 @@
     },
     "Headline": {
       "additionalProperties": false,
-      "description": "The answer: NautilusTrader's default fill model against the exact queue. `verified_against` says which\nNautilusTrader releases the zoo's faithful replica was checked against, order for order (docs/RESULTS.md).",
+      "description": "The answer: the chosen backtester's default fill model against the exact queue (NautilusTrader unless\n`demo --backtester` names another). `verified_against` says what the zoo's replica of that setting was checked\nagainst (docs/RESULTS.md, docs/testing.md).",
       "properties": {
         "model_id": {
           "title": "Model Id",
@@ -226,6 +226,16 @@
           },
           "title": "Cells",
           "type": "object"
+        },
+        "backtester": {
+          "default": "nautilus",
+          "enum": [
+            "nautilus",
+            "hftbacktest",
+            "databento"
+          ],
+          "title": "Backtester",
+          "type": "string"
         }
       },
       "required": [
