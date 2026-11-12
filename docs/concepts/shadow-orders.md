@@ -6,6 +6,8 @@ much of it would have filled. This page states the fill rule the engine uses by 
 replaced an earlier one after the independent audit; [Rules from the independent audit](audit-rules.md) lists what
 changed and why.
 
+**Deeper note:** [Queue ahead](queue-ahead.md), how the queue in front of a shadow is tracked and measured.
+
 ## Inputs
 
 One row per shadow (`qt.shadow_spec`, Parquet; a CSV with header

@@ -3,6 +3,9 @@
 Calibration picks a queue model's parameter from what actually happened in the queue, instead of from guesswork or
 from how well a backtest's PnL matches. There are two kinds:
 
+**Deeper notes:** [The learned fill model](learned-model.md), a competing-risk hazard model trained with exact
+labels, and [Conformal fill probabilities](conformal-fill-probability.md), intervals with a coverage guarantee.
+
 - **against exact truth** (`calibrate alloc | survival | nt-touch`): needs order-level data for the venue, or for a
   venue you are willing to treat as similar; it does not need your fills;
 - **against your own fills** (`calibrate-live`): for L2-only venues, where there is no exact truth; it needs your live
@@ -63,8 +66,8 @@ l    = sum_i [ sum_{j < K_i} ln(1 - h_ij) + d_i ln h_iK_i + (1 - d_i) ln(1 - h_i
 ```
 
 `K_i` is the interval of the exact first fill (`d_i = 1`) or the last fully observed interval (`d_i = 0`). This fits
-the model as it is used, end to end, at the cost of simulation. v0.1 computes no bootstrap interval for C2 and says
-so in `warnings`.
+the model as it is used, end to end, at the cost of simulation. queuetruth computes no bootstrap interval for C2 and
+says so in `warnings`.
 
 ## C3: NautilusTrader touch probability (`p`)
 

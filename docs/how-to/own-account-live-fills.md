@@ -50,6 +50,9 @@ is replayed from; `--seed` (harness, stand-in, synth) is a random seed.
 `synth` writes a synthetic Bitstamp capture with your own orders in it and the harness log that placed them. The
 capture is produced by a small price-time engine that mimics how the real channels look (step 3).
 
+`$QT_SRC` is the root of a queuetruth source checkout: after `git clone https://github.com/sarptandoven/queuetruth`,
+run `export QT_SRC=$PWD/queuetruth`. The docs check sets it for you.
+
 <!-- check-docs: run -->
 ```sh
 export PYTHONPATH="$QT_SRC/tools/livefill"
@@ -60,7 +63,7 @@ python -m livefill pipeline syn/capture --log syn/harness_log.jsonl --out syn-ru
 The pipeline checks the capture, exports it, matches the 24 own orders, writes the canonical live log, ingests the
 market data, scores two arms and pools them. It prints a one-line summary per arm on stderr and the whole
 `livefill.pipeline` document on stdout. The exact arm agrees with every live outcome: its 2x2 table has no
-discordant order (`test_pipeline_end_to_end`), so `--strict` exits 0. One own order there rested and was filled
+discordant order, so `--strict` exits 0. One own order there rested and was filled
 within the same millisecond. Up to queuetruth 0.1.1 the ingest dropped such an order as a taker and the scorer found
 23 of 24 MBO twins; the ingest now keeps an order that a trade names as the maker, so it finds all 24, and the
 matcher no longer flags that order `ingest_suppressed`.
@@ -98,19 +101,19 @@ book (`order_book?group=2`, which carries order ids) after each subscription, an
 Without `--duration` it runs until SIGINT or SIGTERM. It answers silence with `bts:heartbeat`, reconnects with
 backoff after `bts:request_reconnect`, a transport error or `--stall-s` seconds without any frame, and resubscribes.
 A storage error (a full disk) is not a transport error: the daemon stops with `QT-INPUT-001` and records the error
-in `capture_meta.json` (`test_storage_errors_stop_the_capture`).
+in `capture_meta.json`.
 
 **Gap detection.** `live_orders` messages carry `event_id` and `pre_event_id`; per market and connection each
 `pre_event_id` must be the previous `event_id`. A *gap* is one of `event_chain` (a break in that chain), `restart`
 (`pre_event_id` null after earlier messages: the venue restarted the chain) or `reconnect` (a new connection; its
 `reason` says why the old one ended, for example `stall: no frame for 61.0 s`). A break in one market leaves the other
-markets' chains alone, so a drop that hits several markets at once is a gap in each
-(`test_a_break_in_one_market_keeps_the_other_markets_chains`); a reconnect resets every chain. A message without a
+markets' chains alone, so a drop that hits several markets at once is a gap in each;
+a reconnect resets every chain. A message without a
 `pre_event_id` member cannot be checked; it is counted (`no_pre_event_id`), not treated as a restart. Each gap starts
 a new *segment* at the frame that revealed it; segments are exported, seeded and ingested separately, so a lost
 message never corrupts another segment's book. A REST book whose request was sent before a gap and answered after
-it describes the market before the gap: it is stored as `stale_rest_book` and never seeds anything
-(`test_rest_book_requested_before_a_gap_is_stale`). A repeated `event_id` is kept as `kind = duplicate` and never
+it describes the market before the gap: it is stored as `stale_rest_book` and never seeds anything.
+A repeated `event_id` is kept as `kind = duplicate` and never
 exported. The chain cannot see a lost trade (trades have no chain; the matcher's fill checks catch it for your orders)
 or a loss after the last message of a capture. Tests: `test_chain_break_restart_duplicate_and_missing_ids`,
 `test_daemon_reconnects_on_request_and_on_stall` (against a local WebSocket server that requests a reconnect and
@@ -160,7 +163,7 @@ capture above and on the 10-minute BTC/USD capture of 2026-10-12 behind RD-12 ([
 **Lost messages between snapshots.** Inside the part of the book the seed showed order by order (with a REST seed,
 all of it), every order is on the replayed book. A delete of an order the book never held, whose `order_created`
 never arrived and that is not a taker, therefore means a lost `order_created`; `check` counts these as
-`unknown_deletes` and they make the verdict `inconsistent` (`test_unknown_deletes_in_the_known_region_are_lost_creates`).
+`unknown_deletes` and they make the verdict `inconsistent`.
 To measure what `check` catches on its own (the event chain of step 2 catches every lost `live_orders` message
 first), one message at a time was removed from the real 2-minute `btcusd` stream, 30 random picks of each kind:
 
@@ -182,10 +185,10 @@ Results:
 None of the three has an unknown delete. With the REST seed, `deleted_unknown` (deletes of orders the seed did not
 show) on `btcusd` falls from 22 to 0, and the ingested segment holds 21,502 records instead of 12,615. The
 10-minute capture, imported with `import-jsonl` and exported with its first snapshot as RD-12 did, ingests to RD-12's
-77,272 records (`test_rd12_capture_round_trip_and_check`).
+77,272 records.
 
 **Memory.** `check`, `export` and `match` hold one (segment, market) stream at a time, and read each snapshot from the
-capture only when they compare it (`test_check_memory_is_one_stream_at_a_time`). Peak resident memory therefore
+capture only when they compare it. Peak resident memory therefore
 follows the longest stream. Measured on the 10-minute BTC/USD capture (101,824 `live_orders` messages, one segment):
 `check` 428 to 445 MB over two runs, `export` 431 MB, `match` with 200 orders 412 MB, against 151 MB for starting
 Python with the kit loaded. Checking its first 37,904, 75,671 and all 101,824 messages peaked at 334, 397 and 445 MB, about 1.7 MB per
@@ -251,12 +254,11 @@ in `test_harness.py`:
 - Caps are checked before every submit on the exact notional `price * amount`: at least the market's
   `minimum_order_value`, at most `--max-order-notional`, the submitted total at most `--max-total-notional`, one
   order open at a time, and with `--max-net-position` (base units) the net filled amount of the run (buys minus
-  sells, from each order's final `order_status`) plus the new order within that bound
-  (`test_caps_compare_the_exact_notional`, `test_net_position_cap_counts_fills`).
+  sells, from each order's final `order_status`) plus the new order within that bound.
 - An answer that does not settle the outcome makes it `unknown`, never a rejection: any transport error (a timeout,
   `IncompleteRead`, a bad status line, an undecodable body), HTTP 408, 429 or any 5xx, a body that is not JSON, or a
   server signature that does not verify. A submit with an unknown outcome stops the run; the order is looked up by
-  client order id and kept as possibly open (`test_any_lost_answer_is_unknown_and_the_order_is_swept`).
+  client order id and kept as possibly open.
 - A file named `STOP` next to the log stops new orders; any exception stops the run.
 - On every exit the harness sweeps: it cancels every order it believes open, then lists the market's open orders and
   cancels every one whose client order id carries this run's prefix; if that listing fails, it cancels each unresolved
@@ -310,11 +312,11 @@ cause) and `match.json`.
   amount, appearing within 1 s before to 30 s after the send): matched when exactly one unmatched order fits,
   `ambiguous` otherwise. Odd amounts make signatures unique. An id that the feed never carried is searched for by
   signature too (`signature_after_id_miss`, counted in `id_misses` with a warning). Orders are keyed by log and
-  index; a client order id that two submits share fails with `QT-INPUT-003` (`test_two_sessions_are_kept_apart`).
+  index; a client order id that two submits share fails with `QT-INPUT-003`.
 - **Exactness.** `entry_exact` is true when the order's price lies strictly inside the part of the book its seed
   showed order by order (always with a REST seed).
 - **Fees.** Each fill's fee is the fee of the final `order_status` transaction with the same trade id, in the
-  market's counter currency (`test_fees_come_from_the_order_status_transactions`). Dry runs, stand-ins and synthetic
+  market's counter currency. Dry runs, stand-ins and synthetic
   logs have none; a live fill without one is counted in `live_fills_without_fee` with a warning.
 - **Consistency checks.** `fills_consistent` (the trades equal the amount the order lost on `live_orders`),
   `amount_traded_consistent` (the trades equal the sum of the per-message `amount_traded`; Bitstamp reports the
@@ -335,7 +337,7 @@ from a bootstrap that resamples whole segments (`test_pipeline_with_gaps_pools_t
 `test_pipeline_pools_several_captures`). Reaching the roadmap's 1,000 orders at one order every 35 seconds takes
 about ten hours, over several captures and segments; they are pooled in one call. `pipeline.json` lists the
 equivalent `queuetruth` commands and a `run_id` (16 hex digits over the inputs, the options and the queuetruth and
-kit versions); two runs on the same inputs write byte-identical scorecards (`test_pipeline_end_to_end`).
+kit versions); two runs on the same inputs write byte-identical scorecards.
 `--require-consistent` stops with `QT-DATA-001` when a check is `inconsistent`, and `--strict` exits 1 when the exact
 arm disagrees with live or a check is `inconsistent`.
 
@@ -403,3 +405,23 @@ therefore leave a public, publishable trace. The kit contains no IBKR trading co
 
 Whether IBKR's paper trading can stand in is a separate question: paper fills are simulated by the broker, not
 matched in a real queue, so they are not exact truth.
+
+<details>
+<summary>Evidence: the tests behind this page</summary>
+
+<ul>
+<li>1. Rehearse the whole pipeline offline: <code>test_pipeline_end_to_end</code></li>
+<li>2. Capture the public feed: <code>test_storage_errors_stop_the_capture</code></li>
+<li>2. Capture the public feed: <code>test_a_break_in_one_market_keeps_the_other_markets_chains</code></li>
+<li>2. Capture the public feed: <code>test_rest_book_requested_before_a_gap_is_stale</code></li>
+<li>3. Check a capture: <code>test_unknown_deletes_in_the_known_region_are_lost_creates</code></li>
+<li>3. Check a capture: <code>test_rd12_capture_round_trip_and_check</code></li>
+<li>3. Check a capture: <code>test_check_memory_is_one_stream_at_a_time</code></li>
+<li>5. Plan and dry-run the order harness: <code>test_caps_compare_the_exact_notional</code>, <code>test_net_position_cap_counts_fills</code></li>
+<li>5. Plan and dry-run the order harness: <code>test_any_lost_answer_is_unknown_and_the_order_is_swept</code></li>
+<li>7. Match and score: <code>test_two_sessions_are_kept_apart</code></li>
+<li>7. Match and score: <code>test_fees_come_from_the_order_status_transactions</code></li>
+<li>7. Match and score: <code>test_pipeline_end_to_end</code></li>
+</ul>
+
+</details>

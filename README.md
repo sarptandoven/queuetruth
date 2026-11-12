@@ -12,6 +12,11 @@ in the real queue and records when each one would really have filled. Against th
 of hftbacktest, NautilusTrader and Databento, fits their parameters, and scores your own simulator against your live
 fills, order by order.
 
+**[The Fill-Realism Atlas](https://sarptandoven.github.io/queuetruth/)**, rebuilt from free IEX DEEP+ data: over 20
+trading days (2026-10-09 to 2026-11-06; 265,402 symbol-days, 12,440 symbols), the exact queue fills **11.97%** of
+small resting orders within 1 minute. NautilusTrader's touch fill model fills **1.50 pp more** (13% more orders; 95%
+interval +1.45 to +1.55 pp), and NautilusTrader's `queue_position` model is closest at +0.06 pp. IEX is one venue with its own rules; [how the atlas is made](https://github.com/sarptandoven/queuetruth/blob/main/docs/concepts/fill-realism-atlas.md).
+
 ## See it in a minute
 
 ```sh
@@ -40,7 +45,8 @@ scored against the exact replay of the real queue:
 
 - **NautilusTrader's default touch fill model overfills.** In the real engine (nautilus_trader 1.231.0; 2.0.0rc7
   fills the same orders) it fills 14.17% of orders within 1 s where the real queue fills 11.03%: **+3.13 pp**
-  (95% CI [+2.53, +3.77]); +2.80 pp on the second day. On deep-queue names (BAC, F, GE, SIRI, T, PFE) it reaches
+  (95% CI +2.53 to +3.77; [the headline number](https://github.com/sarptandoven/queuetruth/blob/main/docs/RESULTS.md#the-headline-number));
+  +2.80 pp on the second day. On deep-queue names (BAC, F, GE, SIRI, T, PFE) it reaches
   **+8.60 pp at 60 s**.
 - **Calibration fixes it out of sample.** `p = 0.29`, fitted on day one, cuts day two's 1 s overfill from +2.8 pp to
   +0.4 pp. The export refuses any fit that does not beat the library default on held-out data.
@@ -71,7 +77,7 @@ Every term (shadow, zoo, exact arm, faithful and corrected) is in the
 
 | You have | You get | Read it with |
 |---|---|---|
-| Order-level data: Nasdaq TotalView-ITCH 5.0, IEX DEEP+ (free), Databento DBN MBO, Coinbase `level3`, Kraken L3, Hyperliquid node, Bitstamp, Bitfinex | exact replay, shadow orders, the zoo, calibration | `queuetruth ingest --format itch \| iex-deep-plus \| dbn \| ...` |
+| Order-level data: Nasdaq TotalView-ITCH 5.0, IEX DEEP+ (free), NYSE TAQ Integrated Feed, Databento DBN MBO, Coinbase `level3`, Kraken L3, Hyperliquid node, Bitstamp, Bitfinex | exact replay, shadow orders, the zoo, calibration | `queuetruth ingest --format itch \| iex-deep-plus \| nyse-ibf \| dbn \| ...` |
 | An L2-only tape (Tardis `incremental_book_L2` and trades) | the queue models, markouts and a parameter fitted to your fills; never exact truth | `ingest --format tardis-l2` |
 | Your live orders and fills: Binance, Bybit, OKX, Coinbase, Kraken, Deribit, Hyperliquid, IBKR Flex, FIX 4.4 drop copies, QuickFIX logs | the sim-vs-live scorecard, `calibrate-live`, a latency fit | `queuetruth live import --venue <venue>` |
 | Your backtest's output: hftbacktest or NautilusTrader | your simulator scored order by order against your live fills | `live import --venue sim-hftbacktest` or `sim-nautilus`, then `score --sim-log` |
@@ -99,14 +105,31 @@ What each check covers and what is not tested yet:
 
 ## Status
 
-| Validated on real data | Fixtures and synthetic data only |
+<!-- validated:start -->
+
+| Area | Status |
 |---|---|
-| Exact book, shadow orders and scorer on Nasdaq ITCH (2 days); IEX DEEP+ (1 day); the NautilusTrader models against the real engine; calibration and the learned fill model on a held-out day | DBN/CME fidelity; Coinbase, Kraken and Hyperliquid L3 (Bitstamp and Bitfinex: one capture each, counters only); every live-log importer; the prediction-market kit; the forecast referee |
+| Nasdaq TotalView-ITCH: exact book, shadow orders and scorer on 2 public days | Validated on real data |
+| IEX DEEP+: exact book on 22 public days, in the atlas | Validated on real data |
+| Calibration and the learned fill model, scored on a held-out Nasdaq day | Validated on real data |
+| NautilusTrader fill models, against the real engine | Checked against the library |
+| hftbacktest queue models, against a transliteration of its source | Checked against the library |
+| Databento's queue-position model, from its public tutorial only | From public documentation only |
+| Databento DBN and CME semantics | Fixtures and synthetic data only |
+| Crypto order-level readers (Coinbase, Kraken, Hyperliquid, Bitstamp, Bitfinex) | Fixtures and synthetic data only |
+| NYSE TAQ Integrated Feed reader | Fixtures and synthetic data only |
+| Trading-halt spans from DBN and NYSE status records | Fixtures and synthetic data only |
+| Every live-log importer, and the backtest importers and `reconcile` | Fixtures and synthetic data only |
+| The prediction-market kit | Fixtures and synthetic data only |
+| The forecast referee | Fixtures and synthetic data only |
+
+Details and evidence for every row: [What is validated](https://github.com/sarptandoven/queuetruth/blob/main/docs/validated.md).
+
+<!-- validated:end -->
 
 Exact truth covers displayed liquidity on FIFO venues; shadows are censored during trading halts (recorded from
-ITCH and IEX feeds). It does not model your own order's impact on others, hidden or iceberg liquidity, auctions or
-pro-rata matching. queuetruth is
-not a backtester, OMS or trading system.
+ITCH, IEX DEEP+, DBN and NYSE feeds). It does not model your own order's impact on others, hidden or iceberg
+liquidity, auctions or pro-rata matching. queuetruth is not a backtester, OMS or trading system.
 
 ## Install
 
@@ -143,9 +166,9 @@ for row in z.leaderboard:  # fill-rate bias vs exact at 60 s, with its 95% CI
 ## Development
 
 ```sh
-make venv sync develop     # venv, locked dependencies, editable build of queuetruth._core
-make test                  # lint + Rust + Python + service tests
-make reproduce             # every published real-data number from the public Nasdaq files
+uv venv .venv && make sync develop   # venv, locked dependencies, editable build of queuetruth._core
+make test                            # lint + Rust + Python + service tests
+make reproduce                       # every published real-data number from the public Nasdaq files
 ```
 
 [CONTRIBUTING.md](https://github.com/sarptandoven/queuetruth/blob/main/CONTRIBUTING.md) ·

@@ -43,8 +43,8 @@ one machine; self-host when you need shared state, access control, or a zero-egr
   used only by `migrate` and `create-tenant`. A request is bound to a tenant only through the API key it presents,
   and a job only through the attempt that holds it, so a leaked `qt_app` password does not open other tenants' data
   (migration `0005_security.sql`, regression tests in `service/tests/security/`).
-- Postgres holds every table, the queue and the rate-limit buckets. The suite runs against PostgreSQL 16
-  (`test_cluster_is_private_pg16` in `service/tests/test_db.py`); compose pins `postgres:16.14-bookworm`.
+- Postgres holds every table, the queue and the rate-limit buckets. The suite runs against PostgreSQL 16;
+  compose pins `postgres:16.14-bookworm`.
 - The object store holds uploads, datasets and job outputs under per-tenant prefixes `t/{tenant_id}/...`.
 
 ## Quick start with Docker Compose
@@ -143,7 +143,7 @@ queuetruth-service create-tenant --help
 
 ### Create keys for people, CI and agents
 
-Create narrower keys with the admin key. v0.1 has no CLI command for keys; use the HTTP API or the Python client:
+Create narrower keys with the admin key. There is no CLI command for keys; use the HTTP API or the Python client:
 
 <!-- check-docs: skip (needs a running service) -->
 ```python
@@ -186,8 +186,7 @@ until the job is terminal; a failed, canceled or expired job exits with code 2. 
 `jobs files ID` and `jobs download ID --out DIR` complete the set; `download` verifies each file's size and sha256
 against the file manifest and resumes interrupted downloads with HTTP ranges. Job files expire with the tenant's output
 retention (`files_expire_at` on the job). A real replay job on `tests/fixtures/synth_small` through the API, the
-worker and the child process produces the same summary as a local `qt.replay` run
-(`test_real_replay_job_on_synth_small` in `service/tests/test_integration_replay.py`).
+worker and the child process produces the same summary as a local `qt.replay` run.
 
 ### Retries and idempotency keys
 
@@ -196,13 +195,13 @@ cancels) requires an `Idempotency-Key` header of 1 to 255 characters; `DELETE /v
 accept one. The same key with the
 same method, path and body replays the stored response with `Idempotent-Replayed: true` and creates no second job; the
 same key with a different body is 422 `idempotency-key-reused`; a duplicate that arrives while the first request is
-still running is 409 `idempotency-in-flight` (O-API-2, `service/tests/test_idempotency.py`). Records are kept per
+still running is 409 `idempotency-in-flight`. Records are kept per
 tenant and pruned after 24 hours.
 
 An error the handler raises, any 4xx problem or a 5xx, is not stored: its transaction is rolled back and the key is
 released, so you can retry with the same key once the cause is fixed. Those requests committed nothing, so there is
 no effect for a stored reply to protect, and storing them would pin a transient 404 or 409 (for example a dataset
-that was not ready yet) to the key for 24 hours (`test_validation_and_handler_errors_are_not_stored`). A 4xx that is
+that was not ready yet) to the key for 24 hours. A 4xx that is
 the request's outcome rather than an error, such as `upload-size-mismatch`, which records the failed upload, is
 stored and replayed like a success. Secrets in a response (`secret` fields) are never stored; a replay returns
 `null` for them.
@@ -223,8 +222,7 @@ Data reaches the service in two steps.
 2. **Register a dataset** (`POST /v1/datasets` with `name`, `kind` `mbo` or `l2`, `format`, `venue`, `upload_ids` and
    optional `ingest` options, the `IngestSpec` fields without `inputs` and `out`). Every upload must be verified first
    (409 `upload-not-verified` otherwise). The service starts a `dataset_validate` job that runs `queuetruth.ingest`;
-   the dataset becomes `ready` with its manifest and data-quality verdict when the job succeeds
-   (`test_dataset_register_use_and_delete` in `service/tests/test_retention.py`).
+   the dataset becomes `ready` with its manifest and data-quality verdict when the job succeeds.
 
 Directory inputs that are not datasets (a canonical live log for `ScorecardSpec.live`, a simulator log for
 `sim.log`) are uploaded as one `.zip`, `.tar`, `.tar.gz` or `.tgz` archive. The worker downloads it and the job's
@@ -257,13 +255,12 @@ print(sub.id, sub.job.id)
 Deleting a dataset or an upload (`DELETE /v1/datasets/{id}`, `DELETE /v1/uploads/{id}`) removes its objects and rows
 through a deletion job and writes a tombstone. Tombstone ids have the prefix `del_` (`del_<ULID>`, like `ds_` and
 `up_` for datasets and uploads); migration `0006_tombstone_ids.sql` renames tombstones written by earlier builds as
-`tomb_...` (`test_tombstone_ids_follow_the_id_grammar`).
+`tomb_...`.
 
 ## Configuration reference
 
-All settings are environment variables with the prefix `QT_`, read by the api, the worker and the admin commands
-(`service/queuetruth_service/settings.py`). Secrets are never printed in `repr`, logs or problem documents
-(`test_prod_requires_secrets_and_secrets_hidden` in `service/tests/test_settings_admin.py`).
+All settings are environment variables with the prefix `QT_`, read by the api, the worker and the admin commands.
+Secrets are never printed in `repr`, logs or problem documents.
 
 | Variable | Default | Meaning |
 |---|---|---|
@@ -347,8 +344,8 @@ for name, field in Settings.model_fields.items():
   as `qt_app` and the worker as `qt_worker` (`NOSUPERUSER NOBYPASSRLS`, own nothing); each process verifies its role
   at startup. Every tenant table has `FORCE ROW LEVEL SECURITY`. The tenant of a transaction is bound only by
   `SECURITY DEFINER` functions that check an API key or a held job attempt, and is signed so that setting it by hand
-  binds nothing (`0005_security.sql`, `service/tests/security/`). Ids of another tenant return 404 on every endpoint
-  (O-API-3, `service/tests/test_tenancy.py`). Keep the owner DSN out of the api and worker environments.
+  binds nothing (`0005_security.sql`, `service/tests/security/`). Ids of another tenant return 404 on every endpoint.
+  Keep the owner DSN out of the api and worker environments.
 - **TLS at a reverse proxy.** The api serves plain HTTP. Put it behind a proxy that terminates TLS, set
   `QT_PUBLIC_BASE_URL` and `QT_S3_PUBLIC_ENDPOINT` to the HTTPS names clients use, and restrict who can reach the
   proxy. The api trusts `X-Forwarded-For` and `X-Forwarded-Proto` only from the addresses in
@@ -356,12 +353,12 @@ for name, field in Settings.model_fields.items():
   `127.0.0.1` unless the proxy runs on another host.
 - **Keys and scopes.** Give each person, CI job and agent its own key with the smallest scope; agents that only read
   get `read`. Keys are `qt_live_<32 base62>_<6 base62 checksum>`; a bad checksum is rejected before any database
-  lookup, and keys are redacted from logs (`test_key_format_checksum_and_hash`, `test_json_logs_redact_keys`).
+  lookup, and keys are redacted from logs.
 - **Retention and tombstones.** Uploads and job outputs expire after the tenant's retention (default 30 days; change
   it with `PUT /v1/retention`, admin scope). The daily purge deletes objects and rows, marks jobs `expired` and
   writes tombstones (ids, object counts, sha256s, time; no data), listed by `GET /v1/tombstones`. `DELETE`
   endpoints hard-delete through a deletion job. The audit log records key creation and revocation, deletions and
-  retention changes (O-RET-1, `service/tests/test_retention.py`).
+  retention changes.
 - **Zero-egress mode.** Set `QT_ZERO_EGRESS=true` for the whole service, or create single tenants with
   `create-tenant --zero-egress`. Then the biller is `noop`, and each job's child process installs a guard
   (`queuetruth_service.netguard`) that patches `socket.connect`, `connect_ex`, `sendto` and `create_connection` so
@@ -429,7 +426,7 @@ env -u QT_DATABASE_URL -u QT_DATABASE_URL_APP /opt/queuetruth/bin/queuetruth-ser
 not through `uvicorn` directly. Give each process only its own DSN, as above. Run the api and the worker as two services of your init system (for
 example two systemd units with `Restart=always` and an `EnvironmentFile`). SIGTERM or SIGINT stops the worker's
 loops; a job that was interrupted is requeued by the sweeper once its lease expires, and fails after
-`QT_MAX_ATTEMPTS` attempts (O-Q-1, `service/tests/test_queue.py`). A local store only works when the api and every worker share the
+`QT_MAX_ATTEMPTS` attempts. A local store only works when the api and every worker share the
 same `QT_STORE_ROOT` directory; use S3 for more than one machine.
 
 ## Air-gapped install
@@ -449,8 +446,8 @@ Versions follow SemVer. To upgrade, read the changelog, back up, then deploy the
 `queuetruth-service migrate` before starting the new api and worker (compose does this through the `migrate` service
 on every `up`). Migrations are plain SQL files applied once each, in order, under an advisory lock, and recorded in
 `schema_migrations` with their sha256; an applied file that changed is an error. Running `migrate` twice applies
-nothing the second time (`test_admin_migrate_and_create_tenant`). Every JSON document carries `schema_version`;
-`GET /v1/meta` lists the versions the service speaks (all `1` in v0.1).
+nothing the second time. Every JSON document carries `schema_version`;
+`GET /v1/meta` lists the versions the service speaks (all `1` so far).
 
 Migration `0007_heartbeat_lock_timeout.sql` caps the worker heartbeat's wait for a job row at 2 s (it retries on its
 next tick); likewise `POST /v1/jobs/{id}/cancel` waits at most 5 s for a row held by a worker transaction and then
@@ -461,7 +458,7 @@ answers `503` with `Retry-After: 1`, keeping no idempotency record, so retry wit
 Point `queuetruth mcp serve` at the service with `QT_API_URL` and a `read` key in `QT_API_KEY`; add `--allow-submit`
 and a `write` key only if the agent may start jobs. See [Use queuetruth from an agent](use-from-an-agent.md).
 
-## Limits in v0.1
+## Limits
 
 - No SSO or OAuth, no web UI; API keys only.
 - MCP is stdio only; there is no Streamable HTTP MCP endpoint on the service.
@@ -472,3 +469,24 @@ and a `write` key only if the agent may start jobs. See [Use queuetruth from an 
 - The memory cap is Linux only; the zero-egress guard covers Python-level connections in job children.
 - With `QT_WORKER_CONCURRENCY=1` a worker may hold one extra picked (not started) job, a PgQueuer constraint.
 - The compose stack is exercised end to end only by `scripts/compose_smoke.sh`, which needs a Docker daemon.
+
+<details>
+<summary>Evidence: the tests behind this page</summary>
+
+<ul>
+<li>Architecture: <code>test_cluster_is_private_pg16</code> in <code>service/tests/test_db.py</code></li>
+<li>Submit a replay and download the files: <code>test_real_replay_job_on_synth_small</code> in <code>service/tests/test_integration_replay.py</code></li>
+<li>Retries and idempotency keys: O-API-2, <code>service/tests/test_idempotency.py</code></li>
+<li>Retries and idempotency keys: <code>test_validation_and_handler_errors_are_not_stored</code></li>
+<li>Upload data and register datasets: <code>test_dataset_register_use_and_delete</code> in <code>service/tests/test_retention.py</code></li>
+<li>Upload data and register datasets: <code>test_tombstone_ids_follow_the_id_grammar</code></li>
+<li>Configuration reference: <code>service/queuetruth_service/settings.py</code></li>
+<li>Configuration reference: <code>test_prod_requires_secrets_and_secrets_hidden</code> in <code>service/tests/test_settings_admin.py</code></li>
+<li>Production checklist: O-API-3, <code>service/tests/test_tenancy.py</code></li>
+<li>Production checklist: <code>test_key_format_checksum_and_hash</code>, <code>test_json_logs_redact_keys</code></li>
+<li>Production checklist: O-RET-1, <code>service/tests/test_retention.py</code></li>
+<li>Run without Docker: O-Q-1, <code>service/tests/test_queue.py</code></li>
+<li>Upgrades and migrations: <code>test_admin_migrate_and_create_tenant</code></li>
+</ul>
+
+</details>

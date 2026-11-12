@@ -226,8 +226,7 @@ longer every CI includes zero, so read these runs as illustrations of the table,
   late. Example (a buy at a price of 100, values in half price units): live fills 5 at t1 and 5 at t2, the
   simulator 5 at t2; `2M-` is 200 and 210, `2M(t+h)` is 204 and 230. FIFO gives delay -50, spread +50, adverse
   selection +130 and partial fills -150; pairing by time would give 0, 0, 0 and -20. The total (-20) is the same,
-  but the pairing moves value among delay, spread, adverse selection and partial fills
-  (`test_fifo_pairing_reads_unit_k_of_the_order`).
+  but the pairing moves value among delay, spread, adverse selection and partial fills.
 - Fees follow the scorecard's fee model (see [fees](#fees)): the simulator is charged live's average rate.
 - An order whose fills span two instrument-days is valued at the price scale of its entry day; the scorer refuses
   a scale change within an instrument, so this only matters for datasets that change it.
@@ -235,3 +234,12 @@ longer every CI includes zero, so read these runs as illustrations of the table,
   synthetic log of 20,000 orders with 4 fills per arm and 7 horizons (140,028 rows) it took 9.5 to 13.3 s over
   three runs, and the traced peak memory for 5,000 orders was 66 MB (measured 2026-10-24 on a shared laptop under
   heavy load). A log of a million orders therefore needs minutes and gigabytes for this step alone.
+
+<details>
+<summary>Evidence: the tests behind this page</summary>
+
+<ul>
+<li>Limits: <code>test_fifo_pairing_reads_unit_k_of_the_order</code></li>
+</ul>
+
+</details>

@@ -1,10 +1,19 @@
-# Use queuetruth from an agent (MCP)
+# Use queuetruth from an agent (MCP and the sandbox)
 
-**Goal:** let an AI agent (any MCP client) read queuetruth results, explain a fill, and, if you allow it, start jobs
-on your queuetruth service.
+An agent can use queuetruth in two ways:
 
-`queuetruth mcp serve` runs an MCP server over stdio (official `mcp` Python SDK 2.x). Install it with
-`pip install "queuetruth[mcp]"`. The full tool list with schemas is in the [MCP tools reference](../reference/mcp.md).
+- **Read and run analyses (this page).** `queuetruth mcp serve` runs an MCP server over stdio (official `mcp` Python
+  SDK 2.x) that lets any MCP client read queuetruth results, explain a fill, and, if you allow it, run replays and
+  zoos locally or start jobs on your queuetruth service.
+- **Trade a replayed day ([the agent sandbox](agent-sandbox.md)).** The agent's orders are shadow orders placed in
+  the recorded FIFO queue by the exact engine, so they fill exactly as the real queue would have filled them, with
+  order-entry latency. Its clock only moves forward and it is never shown anything past it. At the end it gets a
+  scorecard (P&L after fees, fill rates, adverse selection) and a committed order log anyone can re-execute. The
+  sandbox is `queuetruth.sandbox.Sandbox` in Python and the optional `qt_sandbox_*` MCP tools; session stepping and
+  blind episodes are since 0.3.0.
+
+Install the MCP server with `pip install "queuetruth[mcp]"`. The full tool list with schemas is in the
+[MCP tools reference](../reference/mcp.md).
 
 <!-- check-docs: run -->
 ```sh
@@ -23,7 +32,7 @@ queuetruth mcp serve --help
 The tool order and the mode rules are tested in `python/tests/mcp/test_mcp_server.py` (O-MCP-1:
 `test_O_MCP_1_tool_order_and_schemas`, `test_O_MCP_1_submit_tools_absent_without_allow_submit`,
 `test_O_MCP_1_local_mode_lists_only_local_tools`). `--allow-submit` is ignored in local mode, with a warning on
-stderr. `qt_explain_metric` needs no service but is listed only in remote mode in v0.1; in local mode, read the
+stderr. `qt_explain_metric` needs no service but is listed only in remote mode; in local mode, read the
 metric definitions in [Scorecard statistics](../concepts/scorecard.md) or the
 [metric glossary](../reference/mcp.md#metric-glossary-qt_explain_metric).
 
@@ -31,8 +40,7 @@ In local mode every path argument is resolved against `QT_MCP_ROOT`; a path that
 symlinks is refused with `QT-CONFIG-001`. A summary is any JSON file whose top-level `schema` names a `qt.*`
 document; it is validated with the shared model before it is returned. A directory is read as its summary
 (`summary.json` first, then `calibration.json`, `model.json`, `report.json`, `manifest.json`, else its only `qt.*`
-JSON file). `qt_local_why` runs the exact why-trace with no output file. The local tools never write
-(`test_local_tools_read_and_never_write`).
+JSON file). `qt_local_why` runs the exact why-trace with no output file. The local tools never write.
 
 In remote mode the server also lists `qt_get_zoo` (a finished zoo run's `qt.zoo_summary`) and, with
 `--allow-submit`, `qt_submit_zoo`, after the tools in the table; `qt_estimate` accepts kind `zoo`.
@@ -149,7 +157,7 @@ anyio.run(main)
 Each result carries the full document as `structuredContent` and a short text rendering in `content`: a headline,
 plus the compact JSON when it is shorter than 1,500 characters. A failure is not a protocol error; it is a result with
 `isError` true, a `qt.error` document (`code`, `message`, `hint`) as `structuredContent` and `"<code>: <message>"`
-as text (`test_errors_are_tool_results_with_qt_error`).
+as text.
 
 ## An example exchange
 
@@ -212,7 +220,7 @@ The submit tools return the `qt.job` handle at once; the agent polls `qt_get_job
 reads the summary (`qt_get_replay`, `qt_get_calibration`, `qt_get_scorecard`) or the files (`qt_list_job_files`).
 Calling a `qt_get_*` tool while the job runs returns a `QT-REMOTE-001` error result that names the job and its
 state, with the hint to keep polling. The MCP Tasks extension is not used: the installed SDK (`mcp` 2.3.0) does not
-ship it, so v0.1 relies on this handle pattern. Pass `idempotency_key` to a submit tool so that a retried call does
+ship it, so queuetruth relies on this handle pattern. Pass `idempotency_key` to a submit tool so that a retried call does
 not start a second job.
 
 ## Safety
@@ -231,3 +239,13 @@ not start a second job.
 - **Network.** In remote mode the server's only network client is the HTTP client for `QT_API_URL`; it returns
   presigned URLs to the agent but does not fetch them. The local tools have no network code. (This follows from the
   code in `python/queuetruth/mcp/`; no test asserts it.)
+
+<details>
+<summary>Evidence: the tests behind this page</summary>
+
+<ul>
+<li>Two modes: <code>test_local_tools_read_and_never_write</code></li>
+<li>Try it without a client: <code>test_errors_are_tool_results_with_qt_error</code></li>
+</ul>
+
+</details>

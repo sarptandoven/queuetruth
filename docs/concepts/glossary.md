@@ -60,8 +60,8 @@ auctions, pro-rata matching or your own order's effect on others. See
 
 The per-venue rule table (`qt_types::rules`): whether modify records exist and keep priority, whether trades carry
 the aggressor side, whether hidden executions exist, how snapshots begin. Every venue has a `validation` label
-printed on every output that depends on it: `real data` (`nasdaq`, and the `iex` rule set on one public day),
-`synthetic only` (`cme`) or `assumed` (`coinbase`, `generic`, `crypto_l3`). See
+printed on every output that depends on it: `real data` (`nasdaq` and `iex`), `synthetic only` (`cme`, `nyse`) or
+`assumed` (`coinbase`, `generic`, `crypto_l3`); [What is validated](../validated.md) gives the evidence. See
 [Venue semantics](../venue-semantics.md#the-rule-table).
 
 ### Rule set
@@ -546,7 +546,7 @@ export that was refused. See [Error codes](../reference/errors.md).
 
 `queuetruth doctor`: checks the install. It prints the Python and platform details and the engine version, says
 whether the bundled JSON Schemas load and whether PostgreSQL and Docker are present (only the self-hosted service
-needs them), and exits 1 if it finds a problem. See [Getting started](../getting-started.md#2-install).
+needs them), and exits 1 if it finds a problem. See [Getting started](../getting-started.md#1-install).
 
 ### Report
 
