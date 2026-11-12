@@ -160,9 +160,11 @@ def render_html(rep: DqReport, title: str | None = None) -> str:
             ("validation status", d.validation_status or "unknown", f"dataset {str(d.dataset_id or '')[:12]}"),
         )
     )
-    gate = f"exit gate --fail-on {rep.spec.get('fail_on', 'warn')}: " + (
-        "FAILED (exit 1)" if rep.gate_failed else "passed (exit 0)"
-    )
+    fail_on = rep.spec.get("fail_on", "never")
+    if fail_on == "never":
+        gate = "no exit gate set (--fail-on warn or fail sets one)"
+    else:
+        gate = f"exit gate --fail-on {fail_on}: " + ("FAILED (exit 1)" if rep.gate_failed else "passed (exit 0)")
     verdict = (
         f'<div class="verdict"><div class="kicker">{badge(st)} '
         f'{fmt.esc(gate)}</div><div class="headline">{fmt.esc(headline)}</div>'

@@ -14,7 +14,7 @@ Without data, `check` estimates from the public atlas instead ([without order-le
 |---|---|
 | hftbacktest | order snapshots (JSON lines, CSV or Parquet; the format of `live import --venue sim-hftbacktest`) |
 | NautilusTrader | `generate_orders_report` / `generate_fills_report` output, or order event files |
-| Backtrader | the `QtOrderLog` notification lines ([Reconcile a Backtrader or VectorBT backtest](reconcile-backtrader-vectorbt.md)) |
+| Backtrader | the `qt.backtrader.OrderLog` lines ([Reconcile a Backtrader or VectorBT backtest](reconcile-backtrader-vectorbt.md)) |
 | VectorBT | `pf.orders.records_readable` as CSV or JSON |
 | LEAN | the backtest result JSON and its order events ([Reconcile a LEAN backtest](reconcile-lean.md)) |
 | Freqtrade | the backtest result (`.zip` or `.json`) |

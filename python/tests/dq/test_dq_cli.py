@@ -81,7 +81,11 @@ def test_dispatch_returns_report_and_gate(nasdaq: Path, tmp_path: Path) -> None:
     assert "  ok    sequence" in text and "skip  cross_source" in text
     assert str(tmp_path / "ok" / "dq_report.html") in text
     _warned(nasdaq)
-    doc, gate = cli._dispatch(_cmd({**args, "out": str(tmp_path / "w")}))
+    # no gate unless asked: a warn verdict exits 0 by default
+    doc, gate = cli._dispatch(_cmd({**args, "out": str(tmp_path / "d")}))
+    assert doc["status"] == "warn" and gate is False and doc["gate_failed"] is False
+    assert "no gate set: exit 0" in cli.render(["dq"], doc, args=args)
+    doc, gate = cli._dispatch(_cmd({**args, "out": str(tmp_path / "w"), "fail_on": "warn"}))
     assert doc["status"] == "warn" and gate is True and doc["gate_failed"] is True
     assert "WARN  size_price" in cli.render(["dq"], doc, args=args)
     _, gate = cli._dispatch(_cmd({**args, "fail_on": "fail"}))
@@ -103,7 +107,9 @@ def test_console_script_exit_codes(nasdaq: Path, tmp_path: Path, capsys: pytest.
     doc = json.loads(capsys.readouterr().out)
     assert doc["schema"] == "qt.dq_report" and (tmp_path / "a" / "dq_report.html").is_file()
     _warned(nasdaq)
-    assert cli.main([*base, "--out", str(tmp_path / "b")]) == 1
+    assert cli.main([*base, "--out", str(tmp_path / "b0")]) == 0  # no gate unless asked
+    assert "QT-GATE-001" not in capsys.readouterr().err
+    assert cli.main([*base, "--out", str(tmp_path / "b"), "--fail-on", "warn"]) == 1
     assert "QT-GATE-001" in capsys.readouterr().err
     assert cli.main([*base, "--out", str(tmp_path / "c"), "--fail-on", "fail"]) == 0
     capsys.readouterr()

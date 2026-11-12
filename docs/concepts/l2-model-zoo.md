@@ -324,6 +324,11 @@ The scoring rules follow the audit's outcome-independent censoring rule
 - The **leaderboard** uses never-cancel shadows: no planned cancel within `h_max` (300 s by default). Sample them
   with a lifetime of at least `h_max` (`shadows sample` defaults to 300 s); shadows with shorter planned lives leave
   the leaderboard empty and appear only in the cancel-bearing metrics.
+- `shadows sample` places every shadow no later than the end of the data minus its latency and lifetime, so every
+  life fits in the data and every horizon up to the lifetime scores the same orders (a warning says when this
+  shortens the placement window; `--allow-past-end` keeps the old window). Shadows whose lives run past the end of
+  the data, from older schedules or other tools, lose their labels at the longer horizons, and the zoo warns
+  `data end: N of M never-cancel shadows end with the data before h_max`.
 - **Cancel-bearing** shadows, such as mirror shadows with real cancel times, are evaluated separately under metric
   names prefixed `cancel_bearing/` in `zoo_errors.parquet`, with their own cancel as a competing risk.
 
@@ -346,7 +351,11 @@ probability (0 or 1 for deterministic models) and `y` the exact first fill by `m
 Strata: **queue decile** (deciles of exact queue ahead at activation within instrument and day), **liquidity
 bucket** (terciles of displayed volume traded in the 60 s before activation) and **instrument**. CIs resample session
 days (30-minute blocks when there are fewer than 5 days), 1,000 resamples by default (`--bootstrap-b`), one draw
-matrix shared by every model so differences between models are not resampling noise.
+matrix shared by every model so differences between models are not resampling noise. A short capture has fewer than
+5 half-hours: the zoo then resamples instrument x minute clusters, as the demo does. With fewer than 5 blocks of any
+kind it reports no interval and marks nothing significant, because a bootstrap over one block gives an interval of
+zero width. `--bootstrap-block day|30min|1min|instrument-minute` picks the blocks yourself; the summary's `ci_block`
+and `n_ci_blocks` and the line above the leaderboard say which were used.
 
 Read the strata before the overall number. A model can be unbiased overall because it is too optimistic at the back
 of the queue and too pessimistic at the front.

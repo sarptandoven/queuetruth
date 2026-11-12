@@ -120,6 +120,29 @@ permutation test: swap the arm labels within each order with probability 1/2, re
 A log-rank test on the fill hazard and Gray's test on the fill incidence are also reported, labelled descriptive
 because they assume independent samples and the arms are paired.
 
+**Survival curves** (summary field `ttf_survival`, schema 1.3). Each arm also gets a Kaplan-Meier curve of time to
+the first maker fill on the same orders. Here a cancel, an expiry, a first fill as taker and the end of the window
+censor the order at their own time, so `S(t)` is the share of orders still unfilled at `t` had none been cancelled.
+The cumulative incidence above is the other view, with cancels as a competing risk. Reported per arm: the curve
+(at most 300 points; longer curves are sampled at log-spaced times), `S(h)` at each time-to-fill horizon with a 95%
+block-bootstrap CI, the median time to fill with its CI (null when fewer than half the orders fill), and
+`S_sim(h) - S_live(h)` with its CI. A negative difference means the simulator fills sooner than live.
+
+The test is a log-rank on the fill hazard, stratified by instrument, with a cluster-robust variance:
+
+```text
+u_i = delta_i (z_i - zbar(T_i)) - sum_{t_k <= T_i} (z_i - zbar_k) d_k / n_k     z = 1 for sim, per stratum
+U   = sum_i u_i                                                               the stratified log-rank score
+V   = C / (C - 1) * sum_c (sum_{i in c} u_i)^2                                clusters c = instrument x block
+chi2 = U^2 / V,  p = P(chi2_1 > chi2)
+```
+
+Both arms of an order fall in one cluster, so the pairing is respected (Lee, Wei and Amato, 1992). With fewer than 5
+instrument blocks each order is its own cluster, and `method` says so. With `C` clusters the statistic cannot exceed
+`C - 1`, so a few clusters cannot give a very small p-value. The test is in the secondary family
+(`ttf_logrank_clustered` in `score_tests.parquet`). The report draws both curves with the intervals as whiskers, and
+the terminal answer gives one line: the share still unfilled at 1 s per arm, their difference and the test.
+
 ## Markouts
 
 For each fill, with `d = +1` for a buy and `-1` for a sell, fill price `P`, and `M(t)` the mid of the prevailing quote
@@ -137,7 +160,9 @@ horizons: 50 ms, 100 ms, 1 s, 10 s, 15 s, 60 s, 300 s. These are venue-mid reali
 spread of the taker who hit your passive order equals `2 * mo` of your fill. Reported: mean markout per arm and
 horizon with bootstrap CIs; the difference (sim minus live) on orders filled in both; and the mean markout of
 sim-only fills against live-only fills. If sim-only fills mark out worse than live-only fills, the simulator is
-filling you exactly when you would be picked off.
+filling you exactly when you would be picked off. From schema 1.3 the discordant rows also give the number of fills
+behind each mean and each mean's own CI (`n_sim_only`, `sim_only_ci_lo`, ...), since these groups are often small.
+The terminal answer prints the paired difference at 100 ms, 1 s and 10 s with its CI.
 
 ## Bootstrap and multiple testing
 

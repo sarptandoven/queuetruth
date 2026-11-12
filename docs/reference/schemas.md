@@ -70,7 +70,7 @@ directory with `orders.parquet` (`qt.live_orders`), `events.parquet` (`qt.live_e
 | [`qt.demo_summary`](#qtdemo_summary) | Summary of `queuetruth demo` (module docstring). |
 | [`qt.doctor`](#qtdoctor) | Result of `doctor`. |
 | [`qt.dq_report`](#qtdq_report) | 1.2: `qt.dq_report` (`queuetruth dq`, `dq_report.json`): `status` = the worst check status (`pass` when every check passed or was skipped); `gate_failed` = the status reached `spec.fail_on`. |
-| [`qt.dq_spec`](#qtdq_spec) | 1.2: `queuetruth dq` spec (`qt.dq_spec`; checks in `queuetruth.dq`). `dataset`: the dataset to check; `out`: output directory for `dq_report.json` and `dq_report.html` (null = return the report, write nothing); `compare`: a second dataset of the same session(s) for the cross-source parity check; `checks`: run only these check ids (null = all); `fail_on`: the CLI exits 1 when any check reaches this status (`warn`: warn or fail; `fail`: fail only; `never`); `max_evidence`: evidence rows kept per table; `stale_ns`: a book with no update for longer than this while trades print is stale; `latency_outlier_ns`: `ts_recv - ts_event` above this is an outlier (null = 10 x p99, at least 1 ms); `session_tolerance_ns`: slack at the session open and close before coverage warns; `replay`: run the exact replay for the book checks (crossed books, prints through the book, trade parity, replay counters); `verify_sources`: re-hash the raw input files recorded in the manifest when they still exist (otherwise only their size is compared); `title`: HTML title. |
+| [`qt.dq_spec`](#qtdq_spec) | 1.2: `queuetruth dq` spec (`qt.dq_spec`; checks in `queuetruth.dq`). `dataset`: the dataset to check; `out`: output directory for `dq_report.json` and `dq_report.html` (null = return the report, write nothing); `compare`: a second dataset of the same session(s) for the cross-source parity check; `checks`: run only these check ids (null = all); `fail_on`: the CLI exits 1 when any check reaches this status (`warn`: warn or fail; `fail`: fail only; `never`, the default: no gate, exit 0 whatever the verdict); `max_evidence`: evidence rows kept per table; `stale_ns`: a book with no update for longer than this while trades print is stale; `latency_outlier_ns`: `ts_recv - ts_event` above this is an outlier (null = 10 x p99, at least 1 ms); `session_tolerance_ns`: slack at the session open and close before coverage warns; `replay`: run the exact replay for the book checks (crossed books, prints through the book, trade parity, replay counters); `verify_sources`: re-hash the raw input files recorded in the manifest when they still exist (otherwise only their size is compared); `title`: HTML title. |
 | [`qt.error`](#qterror) | CLI / API error object (exit code 2). |
 | [`qt.estimate`](#qtestimate) | Cost and time estimate of a job. |
 | [`qt.export_spec`](#qtexport_spec) | `export`: config snippets and npz files. |
@@ -1929,7 +1929,7 @@ One output file: name relative to the output directory, row count for tables, si
 
 File: `schemas/json/qt.dq_spec.schema.json`.
 
-1.2: `queuetruth dq` spec (`qt.dq_spec`; checks in `queuetruth.dq`). `dataset`: the dataset to check; `out`: output directory for `dq_report.json` and `dq_report.html` (null = return the report, write nothing); `compare`: a second dataset of the same session(s) for the cross-source parity check; `checks`: run only these check ids (null = all); `fail_on`: the CLI exits 1 when any check reaches this status (`warn`: warn or fail; `fail`: fail only; `never`); `max_evidence`: evidence rows kept per table; `stale_ns`: a book with no update for longer than this while trades print is stale; `latency_outlier_ns`: `ts_recv - ts_event` above this is an outlier (null = 10 x p99, at least 1 ms); `session_tolerance_ns`: slack at the session open and close before coverage warns; `replay`: run the exact replay for the book checks (crossed books, prints through the book, trade parity, replay counters); `verify_sources`: re-hash the raw input files recorded in the manifest when they still exist (otherwise only their size is compared); `title`: HTML title.
+1.2: `queuetruth dq` spec (`qt.dq_spec`; checks in `queuetruth.dq`). `dataset`: the dataset to check; `out`: output directory for `dq_report.json` and `dq_report.html` (null = return the report, write nothing); `compare`: a second dataset of the same session(s) for the cross-source parity check; `checks`: run only these check ids (null = all); `fail_on`: the CLI exits 1 when any check reaches this status (`warn`: warn or fail; `fail`: fail only; `never`, the default: no gate, exit 0 whatever the verdict); `max_evidence`: evidence rows kept per table; `stale_ns`: a book with no update for longer than this while trades print is stale; `latency_outlier_ns`: `ts_recv - ts_event` above this is an outlier (null = 10 x p99, at least 1 ms); `session_tolerance_ns`: slack at the session open and close before coverage warns; `replay`: run the exact replay for the book checks (crossed books, prints through the book, trade parity, replay counters); `verify_sources`: re-hash the raw input files recorded in the manifest when they still exist (otherwise only their size is compared); `title`: HTML title.
 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
@@ -1937,7 +1937,7 @@ File: `schemas/json/qt.dq_spec.schema.json`.
 | `out` | string or null | no | `null` |  |
 | `compare` | PathRef or null | no | `null` |  |
 | `checks` | array of string or null | no | `null` |  |
-| `fail_on` | one of "warn", "fail", "never" | no | `"warn"` |  |
+| `fail_on` | one of "warn", "fail", "never" | no | `"never"` |  |
 | `max_evidence` | integer | no | `20` |  |
 | `stale_ns` | integer | no | `60000000000` |  |
 | `latency_outlier_ns` | integer or null | no | `null` |  |
@@ -6149,6 +6149,7 @@ Summary of `score` (SPEC 5.7).
 | `n_taker_fills` | ArmCounts or null | no | `null` |  |
 | `fills_only` | boolean or null | no | `null` |  |
 | `pnl_gap` | array of PnlGap or null | no | `null` |  |
+| `ttf_survival` | TtfSurvival or null | no | `null` |  |
 
 **`ArmCounts`** (in `qt.scorecard_summary`)
 
@@ -6173,6 +6174,18 @@ Signed fill-rate and quantity bias (sim minus live).
 | `qty_bias_ci_lo` | number or null | yes |  |  |
 | `qty_bias_ci_hi` | number or null | yes |  |  |
 | `direction` | one of "sim_overfills", "sim_underfills", "no_significant_bias" | yes |  |  |
+
+**`ClusteredLogrank`** (in `qt.scorecard_summary`)
+
+Log-rank on the fill hazard, stratified by instrument, cluster-robust variance.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `statistic` | number or null | yes |  |  |
+| `p_value` | number or null | yes |  |  |
+| `method` | string | yes |  |  |
+| `n_clusters` | integer | yes |  |  |
+| `n_strata` | integer | yes |  |  |
 
 **`DataQuality`** (in `qt.scorecard_summary`)
 
@@ -6244,6 +6257,12 @@ Markouts of sim-only vs live-only fills.
 | `diff` | number or null | yes |  |  |
 | `ci_lo` | number or null | yes |  |  |
 | `ci_hi` | number or null | yes |  |  |
+| `n_sim_only` | integer or null | no | `null` |  |
+| `n_live_only` | integer or null | no | `null` |  |
+| `sim_only_ci_lo` | number or null | no | `null` |  |
+| `sim_only_ci_hi` | number or null | no | `null` |  |
+| `live_only_ci_lo` | number or null | no | `null` |  |
+| `live_only_ci_hi` | number or null | no | `null` |  |
 
 **`Equivalence`** (in `qt.scorecard_summary`)
 
@@ -6391,6 +6410,43 @@ Which simulator arm was scored.
 | `model_id` | string or null | no | `null` |  |
 | `path` | string or null | no | `null` |  |
 
+**`SurvivalArm`** (in `qt.scorecard_summary`)
+
+Kaplan-Meier time-to-fill curve of one arm (`queuetruth.score.survival`).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `n_filled` | integer | yes |  |  |
+| `n_censored` | integer | yes |  |  |
+| `median_ns` | number or null | no | `null` |  |
+| `median_ci_lo` | number or null | no | `null` |  |
+| `median_ci_hi` | number or null | no | `null` |  |
+| `at` | array of SurvivalAt | yes |  |  |
+| `curve` | array of array of number | yes |  |  |
+| `curve_exact` | boolean | yes |  |  |
+
+**`SurvivalAt`** (in `qt.scorecard_summary`)
+
+Kaplan-Meier survival (share of orders still unfilled) of one arm at one horizon, 95% block-bootstrap CI.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `horizon_ns` | integer | yes |  |  |
+| `survival` | number or null | yes |  |  |
+| `ci_lo` | number or null | no | `null` |  |
+| `ci_hi` | number or null | no | `null` |  |
+
+**`SurvivalDiffAt`** (in `qt.scorecard_summary`)
+
+`S_sim(h) - S_live(h)` at one horizon, 95% block-bootstrap CI (negative: the simulator fills sooner).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `horizon_ns` | integer | yes |  |  |
+| `diff` | number or null | yes |  |  |
+| `ci_lo` | number or null | no | `null` |  |
+| `ci_hi` | number or null | no | `null` |  |
+
 **`TradingHaltSpan`** (in `qt.scorecard_summary`)
 
 A span `[ts_start, ts_end)` in which one instrument was not in continuous trading as its feed reported it (SPEC 1.2, halt censoring): replay, `why`, the zoo, calibration and features censor shadows there.
@@ -6418,6 +6474,18 @@ Time-to-fill comparison.
 | `logrank_p` | number or null | no | `null` |  |
 | `gray_p` | number or null | no | `null` |  |
 | `cif_fill` | map of object | yes |  |  |
+
+**`TtfSurvival`** (in `qt.scorecard_summary`)
+
+1.3: time-to-fill survival curves (first maker fill; cancels, taker fills and the window end censor).
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `n` | integer | yes |  |  |
+| `horizons_ns` | array of integer | yes |  |  |
+| `arms` | map of SurvivalArm | yes |  |  |
+| `diff` | array of SurvivalDiffAt | yes |  |  |
+| `logrank` | ClusteredLogrank | yes |  |  |
 
 **`TwoByTwo`** (in `qt.scorecard_summary`)
 
@@ -6640,6 +6708,7 @@ File: `schemas/json/qt.shadow_sample_spec.schema.json`.
 | `window_close_s` | integer | no | `600` |  |
 | `lifetime_ns` | integer | no | `300000000000` |  |
 | `latency_ns` | integer | no | `0` |  |
+| `clamp_to_data_end` | boolean | no | `true` |  |
 
 **`DatasetIdRef`** (in `qt.shadow_sample_spec`)
 
@@ -6691,6 +6760,7 @@ Summary of `shadows sample`, `shadows mirror-real` and `shadows from-live`.
 | `by_instrument` | object | yes |  |  |
 | `by_placement` | object | yes |  |  |
 | `files` | array of FileEntry | yes |  |  |
+| `warnings` | array of string | no |  |  |
 
 **`FileEntry`** (in `qt.shadow_sample_summary`)
 
@@ -6966,6 +7036,7 @@ File: `schemas/json/qt.zoo_spec.schema.json`.
 | `write_trajectory` | boolean | no | `false` |  |
 | `threads` | integer | no | `1` |  |
 | `bootstrap_b` | integer | no | `1000` |  |
+| `bootstrap_block` | one of "auto", "day", "30min", "1min", "instrument_minute" | no | `"auto"` |  |
 | `amends` | PathRef or UploadRef or JobFileRef or null | no | `null` |  |
 | `exclude_order_ids` | array of ExcludeOrderId | no |  |  |
 
@@ -7063,6 +7134,8 @@ Summary of `zoo`; the Rust runner leaves `leaderboard` empty (filled by `queuetr
 | `hbt_312_aborts` | map of integer | no |  |  |
 | `n_excluded_hbt_312` | integer | no | `0` |  |
 | `n_leaderboard` | integer or null | no | `null` |  |
+| `ci_block` | string or null | no | `null` |  |
+| `n_ci_blocks` | integer or null | no | `null` |  |
 
 **`CiValue`** (in `qt.zoo_summary`)
 
@@ -7139,7 +7212,7 @@ Summary of `zoo-toxicity`: fill-type tags, markouts and the adverse-selection ra
 | `truth_mismatch_rate` | number or null | yes |  |  |
 | `window_ns` | integer | yes |  |  |
 | `horizons_ns` | array of integer | yes |  |  |
-| `ci_block` | one of "day", "30min" | yes |  |  |
+| `ci_block` | one of "day", "30min", "1min", "instrument_minute" | yes |  |  |
 | `n_blocks` | integer | yes |  |  |
 | `bootstrap_b` | integer | yes |  |  |
 | `exact` | ToxicityExact | yes |  |  |

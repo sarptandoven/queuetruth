@@ -59,7 +59,9 @@ Fill-type table (`by_type`): per arm (`exact`, then each model), status (exact: 
 `fill_qty`-weighted mean `mo_ticks`, `mo_bps`, `mm_ticks`, `mm_bps` over the rows where each is defined.
 
 CIs: 95% percentile block bootstrap, blocks = session dates (>= 5 dates) else 30-minute buckets of `ts_live` of the
-population's shadows; one draw matrix `block_counts(n_blocks, bootstrap_b, stable_seed(seed, [b"bootstrap",
+population's shadows, and with fewer than 5 of those (instrument, minute of `ts_live`) clusters
+(`queuetruth.stats.ci_blocks`; `bootstrap_block` forces one kind). With fewer than 5 blocks every CI and rank interval
+is null (`ci: ` warning). One draw matrix `block_counts(n_blocks, bootstrap_b, stable_seed(seed, [b"bootstrap",
 "zoo_toxicity"]))` shared by every statistic; replicate = `sum_k count_k num_k / sum_k count_k den_k` (a fill row
 belongs to its shadow's block). Rankings at `rank_horizon_ns`: `grant`, `deny` and `bias` each by `|value|`
 descending (rank 1 = the largest PnL distortion of that kind, the signed value kept), undefined values last, ties in
@@ -76,7 +78,7 @@ import json
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import pyarrow as pa
@@ -89,7 +91,7 @@ from queuetruth.eval import _cols as C
 from queuetruth.eval.zoo import PARTICLE_FAMILIES, _planned_life, aborted_shadows, common_population, family
 from queuetruth.schemas import arrow as qa
 from queuetruth.schemas.specs import NonNegInt, PathRef, SpecModel
-from queuetruth.stats import block_counts, block_labels, bootstrap_seed, percentile_ci
+from queuetruth.stats import block_counts, bootstrap_seed, ci_blocks, percentile_ci
 
 MECHANISMS = ("queue", "swept", "cross_on_arrival", "crossed_resting", "hidden_print", "touch", "particle")
 STATUSES = ("confirmed", "phantom", "missed", "neither")
@@ -241,6 +243,9 @@ class ToxicitySpec(SpecModel):
     window_ns: int | None = Field(default=None, gt=0)
     rank_horizon_ns: int = Field(default=DEFAULT_RANK_HORIZON_NS, gt=0)
     bootstrap_b: int = Field(default=1000, ge=1)
+    #: bootstrap blocks of the 95% CIs (`queuetruth.stats.ci_blocks`; `auto` is left out of the run_id, so runs
+    #: before this field keep theirs); with fewer than 5 blocks no CI is reported
+    bootstrap_block: Literal["auto", "day", "30min", "1min", "instrument_minute"] = "auto"
     #: evaluate the shadows whose replay reproduces the zoo's exact arm even when some do not (default: an error)
     allow_truth_mismatch: bool = False
     #: replay threads (execution-only)
@@ -474,10 +479,11 @@ def _none(x: float | None) -> float | None:
 class _Boot:
     """Ratio-of-sums statistics on one shared block draw matrix."""
 
-    def __init__(self, counts: np.ndarray) -> None:
+    def __init__(self, counts: np.ndarray, with_ci: bool = True) -> None:
         self.counts = counts.astype(float)
         self.b = counts.shape[0]
         self.nb = counts.shape[1]
+        self.with_ci = with_ci
 
     def stat(self, num: np.ndarray, den: np.ndarray, blocks: np.ndarray) -> tuple[dict[str, Any], np.ndarray]:
         """The statistic and its replicates (NaN where a replicate's denominator is 0, all NaN when undefined)."""
@@ -487,6 +493,10 @@ class _Boot:
         ns = np.bincount(blocks, weights=num, minlength=self.nb)
         ds = np.bincount(blocks, weights=den, minlength=self.nb)
         value = float(ns.sum()) / float(ds.sum())
+        if not self.with_ci:  # fewer than 5 blocks: no interval, replicates undefined
+            return {"value": _none(value), "ci_lo": None, "ci_hi": None, "n": int((den > 0).sum())}, np.full(
+                self.b, np.nan
+            )
         rn = self.counts @ ns
         rd = self.counts @ ds
         reps = np.where(rd > 0, rn / np.where(rd > 0, rd, 1.0), np.nan)
@@ -622,6 +632,7 @@ def evaluate_toxicity(
     seed: int = 0,
     last_event_ts: dict[tuple[int, int], int] | None = None,
     allow_truth_mismatch: bool = False,
+    bootstrap_block: str = "auto",
 ) -> ToxicityResult:
     """Fill-type tags, markouts, per-model decomposition and rankings (module docstring). Inputs: `qt.zoo_predictions`,
     the planned life (`shadow_id`, `ts_cancel_planned`, `ts_admin_end`), `qt.zoo_fills`, the exact replay's
@@ -867,14 +878,19 @@ def evaluate_toxicity(
     # blocks over the population's shadows (the same draws for every statistic)
     pop_idx = np.flatnonzero(pop)
     block = np.zeros(n_sh, dtype=np.int64)
-    kind = "30min"
+    kind = "30min" if bootstrap_block == "auto" else bootstrap_block
     n_blocks = 0
+    with_ci = True
     if pop_idx.size:
-        labels, kind = block_labels(date[pop_idx], live[pop_idx])
-        _, bl = np.unique(labels, return_inverse=True)
-        block[pop_idx] = np.asarray(bl).reshape(-1)
-        n_blocks = int(block[pop_idx].max()) + 1
-    boot = _Boot(block_counts(n_blocks, bootstrap_b, bootstrap_seed(seed, BOOTSTRAP_TEST_ID)))
+        cb = ci_blocks(date[pop_idx], live[pop_idx], iid[pop_idx], bootstrap_block)
+        block[pop_idx] = cb.labels
+        kind, n_blocks, with_ci = cb.kind, cb.n, cb.available
+        if not with_ci:
+            warnings.append(
+                f"ci: {cb.n} bootstrap block(s) ({cb.kind}) < 5: intervals and significance not available "
+                "(more data, or another --bootstrap-block, gives one)"
+            )
+    boot = _Boot(block_counts(n_blocks, bootstrap_b, bootstrap_seed(seed, BOOTSTRAP_TEST_ID)), with_ci)
 
     # first row of each (arm, shadow)
     first_row: dict[str, np.ndarray] = {}
@@ -1168,7 +1184,7 @@ def _rankings(model_docs: list[dict[str, Any]], rank_reps: list[dict[str, np.nda
                 "gap_to_next": None,
                 "separated_from_next": None,
             }
-            if s["value"] is not None and reps.shape[0]:
+            if s["value"] is not None and reps.shape[0] and np.isfinite(reps[:, i]).any():
                 row["rank_lo"] = int(np.quantile(rank_min[:, i], 0.025, method="lower"))
                 row["rank_hi"] = int(np.quantile(rank_max[:, i], 0.975, method="higher"))
             if place + 1 < n and s["value"] is not None:
@@ -1276,6 +1292,15 @@ def _text_table(header: list[str], rows: list[list[str]]) -> list[str]:
     ]
 
 
+def _ci_text(doc: dict[str, Any]) -> str:
+    n = int(doc.get("n_blocks") or 0)
+    kind = doc.get("ci_block")
+    blocks = "instrument x minute cluster(s)" if kind == "instrument_minute" else f"{kind} block(s)"
+    if n < 5:
+        return f"no 95% CIs and no * marks: {n} {blocks}, fewer than 5"
+    return f"95% CIs from {n} {blocks}, {doc.get('bootstrap_b')} draws"
+
+
 def render_toxicity(doc: dict[str, Any]) -> str | None:
     """Answer-first terminal view of a `qt.zoo_toxicity` document: each model's PnL error at the rank horizon (ranked
     by |bias|), the exact arm's markout per fill mechanism, and the answer in plain words."""
@@ -1292,8 +1317,8 @@ def render_toxicity(doc: dict[str, Any]) -> str | None:
     lines = [
         f"zoo-toxicity: {doc.get('n_shadows')} orders, {len(models)} models (zoo run {doc.get('zoo_run_id')}, "
         f"{doc.get('zoo_mode')} mode; run {doc.get('run_id')})",
-        f"fill window {fmt_dur(doc.get('window_ns'))} from ts_live; rankings at the {fmt_dur(hz)} markout; 95% CIs "
-        f"from {doc.get('n_blocks')} {doc.get('ci_block')} blocks, {doc.get('bootstrap_b')} draws",
+        f"fill window {fmt_dur(doc.get('window_ns'))} from ts_live; rankings at the {fmt_dur(hz)} markout; "
+        + _ci_text(doc),
     ]
     excl = {k: v for k, v in (doc.get("n_excluded") or {}).items() if v}
     if excl:
@@ -1522,8 +1547,11 @@ def run_zoo_toxicity(spec: ToxicitySpec | dict[str, Any]) -> Any:
             seed=sp.seed,
             last_event_ts=_last_event_ts(manifest),
             allow_truth_mismatch=sp.allow_truth_mismatch,
+            bootstrap_block=sp.bootstrap_block,
         )
     dumped = sp.model_dump(mode="json")
+    if dumped.get("bootstrap_block") == "auto":
+        dumped.pop("bootstrap_block")  # the default stays out of the run_id and the echo (runs before the field)
     dumped["window_ns"] = window  # the default resolved: an explicit window equal to h_max is the same run
     zoo_key = json.dumps({"path": sp.zoo.path}, sort_keys=True)
 

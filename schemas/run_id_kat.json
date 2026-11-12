@@ -119,7 +119,8 @@
         "window_open_s": 300,
         "window_close_s": 600,
         "lifetime_ns": 300000000000,
-        "latency_ns": 0
+        "latency_ns": 0,
+        "clamp_to_data_end": true
       },
       "refs": {
         "{\"dataset_id\":\"ds_01J0000000000000000000000\"}": "58edf38f6a3ab63ad0eff730b8a8706a0216c3e52c4704634412678146a800a9"
@@ -171,7 +172,8 @@
         "window_open_s": 300,
         "window_close_s": 600,
         "lifetime_ns": 300000000000,
-        "latency_ns": 0
+        "latency_ns": 0,
+        "clamp_to_data_end": true
       }
     },
     {
@@ -754,6 +756,7 @@
         "write_trajectory": false,
         "threads": 1,
         "bootstrap_b": 1000,
+        "bootstrap_block": "auto",
         "amends": {
           "path": "data/amends.parquet"
         },
@@ -809,6 +812,7 @@
         "write_fills": true,
         "write_trajectory": false,
         "bootstrap_b": 1000,
+        "bootstrap_block": "auto",
         "amends": {
           "path": "data/amends.parquet"
         },
@@ -1116,6 +1120,7 @@
         "write_trajectory": false,
         "threads": 1,
         "bootstrap_b": 1000,
+        "bootstrap_block": "auto",
         "amends": null,
         "exclude_order_ids": []
       },
@@ -1162,6 +1167,7 @@
         "write_fills": true,
         "write_trajectory": false,
         "bootstrap_b": 1000,
+        "bootstrap_block": "auto",
         "amends": null,
         "exclude_order_ids": []
       }
