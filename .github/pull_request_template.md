@@ -15,5 +15,6 @@
 - [ ] Generated files are regenerated, not hand-edited (`make generate`; `make generate-check` passes).
 - [ ] Public names (CLI flags, Python API, schemas, HTTP endpoints) are unchanged, or the change is described above
       with its migration path.
-- [ ] Docs and `CHANGELOG.md` are updated if users will notice the change.
+- [ ] Docs are updated and a `changelog.d/` fragment is added (not an edit of `CHANGELOG.md`) if users will notice
+      the change.
 - [ ] No dependency was added or upgraded (or it was agreed in an issue first).
