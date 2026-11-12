@@ -47,6 +47,7 @@ from typing import Any
 import pyarrow as pa
 from pydantic import Field
 
+from queuetruth.dataset import read_parquet_bounded as read_parquet
 from queuetruth.errors import QtError
 from queuetruth.live._common import (
     Record,
@@ -67,7 +68,6 @@ from queuetruth.live._common import (
 )
 from queuetruth.live.builder import ImportResult, LogBuilder
 from queuetruth.live.importers._base import Flag, ImporterDef, ImporterOptions, ImportOptions, Int, Text, side_of
-from queuetruth.live.importers._parquet import read_parquet
 
 HBT = "sim:hftbacktest"
 NT = "sim:nautilus"

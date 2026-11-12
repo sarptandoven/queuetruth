@@ -17,6 +17,7 @@ from typing import Any
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from queuetruth.dataset import MANIFEST_FILE, Manifest, open_dataset, read_manifest_doc
 from queuetruth.errors import QtError
 from queuetruth.eval.leaderboard import without_degenerate_cis
 from queuetruth.schemas.arrow import SCHEMAS
@@ -293,22 +294,19 @@ def _spec_path(spec: dict[str, Any], key: str) -> str | None:
 
 
 def _note_instruments(prov: Provenance, path: Path) -> None:
-    """Symbols and session time zones of a dataset's instruments (display only; unreadable files are skipped)."""
-    if not path.is_file():
+    """Symbols and session time zones of a dataset's instruments (display only; an unreadable dataset or table is
+    skipped). `path` is the dataset directory."""
+    if not (path / "instruments.parquet").is_file():
         return
     try:
-        t = pq.read_table(path)
-    except (OSError, pa.ArrowException):
+        sessions = open_dataset(path, missing_ok=True).sessions
+    except QtError:
         return
-    names = set(t.column_names)
-    for r in t.select([c for c in ("instrument_id", "symbol", "session_tz") if c in names]).to_pylist():
-        if r.get("instrument_id") is None:
-            continue
-        iid = int(r["instrument_id"])
-        if r.get("symbol"):
-            prov.symbol.setdefault(iid, str(r["symbol"]))
-        if r.get("session_tz"):
-            prov.session_tz.setdefault(iid, str(r["session_tz"]))
+    for s in sessions:
+        if s.instrument.symbol:
+            prov.symbol.setdefault(s.instrument_id, s.instrument.symbol)
+        if s.instrument.session_tz:
+            prov.session_tz.setdefault(s.instrument_id, s.instrument.session_tz)
 
 
 def _provenance(runs: list[RunDir], files: list[FileRec]) -> Provenance:
@@ -353,12 +351,15 @@ def _provenance(runs: list[RunDir], files: list[FileRec]) -> Provenance:
             ds = _spec_path(spec, "dataset")
             if ds and ds not in seen_paths:
                 seen_paths.add(ds)
-                mp = Path(ds) / "manifest.json"
-                data = _load_json(mp) if mp.is_file() else None
-                if isinstance(data, dict) and data.get("schema") == "qt.dataset_manifest":
+                mp = Path(ds) / MANIFEST_FILE
+                try:
+                    data = read_manifest_doc(ds, missing_ok=True)
+                except QtError:
+                    data = None
+                if data is not None and data.get("schema") == "qt.dataset_manifest":
                     try:
-                        man = DatasetManifest.model_validate(data)
-                    except ValueError:
+                        man = Manifest(data, mp, check=False).model()
+                    except QtError:
                         man = None
                     if man is not None:
                         files.append(
@@ -371,7 +372,7 @@ def _provenance(runs: list[RunDir], files: list[FileRec]) -> Provenance:
                             )
                         )
                         note_manifest(man, _display(ds, "manifest.json"))
-                _note_instruments(prov, Path(ds) / "instruments.parquet")
+                _note_instruments(prov, Path(ds))
             lv = _spec_path(spec, "live")
             if lv and lv not in seen_paths:
                 seen_paths.add(lv)

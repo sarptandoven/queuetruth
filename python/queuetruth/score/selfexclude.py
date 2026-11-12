@@ -38,8 +38,6 @@ copy keeps).
 
 from __future__ import annotations
 
-import json
-import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -49,8 +47,8 @@ import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
+from queuetruth.dataset import DatasetWriter, open_dataset, read_manifest
 from queuetruth.schemas.arrow import SCHEMAS
-from queuetruth.schemas.io import sha256_file, write_table
 from queuetruth.score._io import Row
 
 LAST = 1 << 7
@@ -147,9 +145,7 @@ def match_twins(dataset_root: str | Path, orders: list[Row], window_ns: int = DE
     """Matches scheduled live orders (`instrument_id`, `side` B/A byte or buy/sell, `price`, `qty`, `ts_entry`,
     optional `venue_order_id`, optional `session_date` days) to MBO order ids of the dataset (module docstring)."""
     root = Path(dataset_root)
-    manifest = (
-        json.loads((root / "manifest.json").read_text(encoding="utf-8")) if (root / "manifest.json").exists() else {}
-    )
+    manifest = read_manifest(root)
     parts: dict[int, list[tuple[int, list[Path], int | None, int | None]]] = {}
     ranges = {
         (int(p["instrument_id"]), int(p["session_date"])): (p.get("ts_min"), p.get("ts_max"))
@@ -247,9 +243,7 @@ def twin_entry_points(dataset_root: str | Path, ids: dict[int, set[int]]) -> dic
     queue position) -> whether that record is the first record of its partition with that `ts_event` (no earlier
     record shares the timestamp)."""
     root = Path(dataset_root)
-    manifest = (
-        json.loads((root / "manifest.json").read_text(encoding="utf-8")) if (root / "manifest.json").exists() else {}
-    )
+    manifest = read_manifest(root)
     out: dict[tuple[int, int], dict[int, bool]] = {}
     for iid, _, fs in _partition_files(root, manifest):
         want = ids.get(iid)
@@ -329,9 +323,7 @@ def order_twin_ties(dataset_root: str | Path, schedule: list[Row], twins: TwinMa
             iid, oid = twins.by_key[str(schedule[i].get("order_key") or schedule[i]["shadow_id"])]
             want.setdefault(iid, set()).add(oid)
     root = Path(dataset_root)
-    manifest = (
-        json.loads((root / "manifest.json").read_text(encoding="utf-8")) if (root / "manifest.json").exists() else {}
-    )
+    manifest = read_manifest(root)
     pos: dict[tuple[int, int], tuple[int, int]] = {}
     for iid, sd, fs in _partition_files(root, manifest):
         ids = want.get(iid)
@@ -408,14 +400,13 @@ def filtered_dataset(
     with the SPEC 3.10 rule). With `by_day` ((instrument_id, session_date) -> ids, `TwinMatch.days`) each partition
     drops only its own instrument-day's ids; else every partition of an instrument drops `exclude[instrument]`."""
     src, dst = Path(dataset_root), Path(out)
-    dst.mkdir(parents=True, exist_ok=True)
-    manifest = json.loads((src / "manifest.json").read_text(encoding="utf-8"))
+    w = DatasetWriter(dst)
+    manifest = open_dataset(src).manifest.to_dict()
     for name in ("instruments.parquet", "data_quality.json"):
         if (src / name).exists():
-            shutil.copy2(src / name, dst / name)
+            w.copy(src / name, name)
     if (src / "trades_source").exists():
-        shutil.copytree(src / "trades_source", dst / "trades_source", dirs_exist_ok=True)
-    shas: list[str] = []
+        w.copy_tree(src / "trades_source", "trades_source")
     for p in manifest.get("partitions", []) or []:
         ex = (
             by_day.get((int(p["instrument_id"]), int(p["session_date"])), set())
@@ -424,22 +415,14 @@ def filtered_dataset(
         )
         total = 0
         for f in p.get("files", []):
-            sp, dp = src / f["path"], dst / f["path"]
-            dp.parent.mkdir(parents=True, exist_ok=True)
+            sp = src / f["path"]
             if ex and f["path"].startswith("mbo/"):
-                t = filter_mbo(pq.read_table(sp), ex)
-                write_table(t, dp, SCHEMAS["qt.mbo"])
+                f["rows"] = w.write_table(f["path"], filter_mbo(pq.read_table(sp), ex), SCHEMAS["qt.mbo"])["rows"]
             else:
-                shutil.copy2(sp, dp)
-            f["sha256"] = sha256_file(dp)
-            if ex and f["path"].startswith("mbo/"):
-                f["rows"] = pq.read_metadata(dp).num_rows
+                w.copy(sp, f["path"])
+            f["sha256"] = w.entry(f["path"])["sha256"]
             total += int(f.get("rows", 0))
-            shas.append(f["sha256"])
         p["rows"] = total
-    import hashlib
-
-    ident = "\n".join(sorted(shas)) + "\n" + str(manifest.get("source_format", ""))
-    manifest["dataset_id"] = hashlib.sha256(ident.encode()).hexdigest()
-    (dst / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    manifest["dataset_id"] = DatasetWriter.dataset_id(manifest)
+    w.finalize(manifest)
     return dst

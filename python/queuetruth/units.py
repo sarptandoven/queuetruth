@@ -302,9 +302,15 @@ def format_scaled(v: Any, exp: int | None) -> str:
 
 
 def instrument_units(dataset: Any, instrument_id: int, ts_ns: int | None = None) -> dict[str, Any]:
-    """`symbol`, `price_exp`, `size_exp`, `tick_size` and `session_tz` of an instrument, from a dataset directory's
-    `instruments.parquet`, on the session that holds `ts_ns` (else the instrument's first row); `{}` when the table or
-    the instrument is missing. The values that turn its integers into human units."""
+    """`symbol`, `price_exp`, `size_exp`, `tick_size` and `session_tz` of an instrument on the session that holds
+    `ts_ns` (else the instrument's first row); `{}` when the table or the instrument is missing. The values that turn
+    its integers into human units.
+
+    `dataset` is a `queuetruth.dataset.Dataset` (`open_dataset(path)`, the way the package reads it) or a dataset
+    directory, whose `instruments.parquet` is read here (this module is below the dataset layer)."""
+    if hasattr(dataset, "instrument") and callable(dataset.instrument):
+        inst = dataset.instrument(int(instrument_id), ts=ts_ns)
+        return {} if inst is None else inst.units()
     from pathlib import Path
 
     import pyarrow as pa

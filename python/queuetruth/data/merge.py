@@ -12,13 +12,13 @@ it, kept for the scripts that call it.
 from __future__ import annotations
 
 import datetime as dt
-import hashlib
 import json
-import os
-import shutil
+import warnings
 from pathlib import Path
 from typing import Any
 
+from queuetruth.dataset import DatasetWriter, open_dataset
+from queuetruth.dataset import dataset_id as _dataset_id
 from queuetruth.errors import QtError
 
 VERDICT_RANK = {"clean": 0, "warnings": 1, "unusable": 2}
@@ -45,17 +45,13 @@ SIBLING_TREES = ("trades_source", "l2")
 
 
 def dataset_id(partition_shas: list[str], source_format: str) -> str:
-    """SPEC 3.10 `qt.dataset_manifest`: sha256 of the sorted partition-file sha256 list, newline-joined, then a
-    newline and `source_format` (the rule of `qt_schema::json::dataset_id`)."""
-    return hashlib.sha256(("\n".join(sorted(partition_shas)) + "\n" + source_format).encode()).hexdigest()
-
-
-def _link(src: Path, dst: Path) -> None:
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        os.link(src, dst)
-    except OSError:  # another file system, or links not allowed: copy
-        shutil.copy2(src, dst)
+    """Deprecated: use `queuetruth.dataset.dataset_id`."""
+    warnings.warn(
+        "queuetruth.data.merge.dataset_id is deprecated; use queuetruth.dataset.dataset_id",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return _dataset_id(partition_shas, source_format)
 
 
 def _cannot(msg: str, hint: str | None = None) -> QtError:
@@ -67,7 +63,7 @@ def merge(inputs: list[Path], out: Path, *, created_by: str = "merge_datasets.py
     differ in kind, format, venue or schema, hold the same (date, instrument) partition, or give one instrument id
     two price exponents; `created_by` is appended to the first manifest's `created_by`."""
     inputs = [Path(d) for d in inputs]
-    mans = [json.loads((d / "manifest.json").read_text(encoding="utf-8")) for d in inputs]
+    mans = [open_dataset(d).manifest.to_dict() for d in inputs]
     for k in ("kind", "source_format", "venue", "source_venue", "schema_version"):
         vals = {str(m.get(k)) for m in mans}
         if len(vals) != 1:
@@ -88,20 +84,20 @@ def merge(inputs: list[Path], out: Path, *, created_by: str = "merge_datasets.py
         for k, v in m["price_exp_by_instrument"].items():
             if pe.setdefault(k, v) != v:
                 raise _cannot(f"instrument {k} has price_exp {pe[k]} and {v} (locate-code clash)")
-    out.mkdir(parents=True, exist_ok=False)
+    w = DatasetWriter(out, exist_ok=False)
     partitions, shas = [], []
     for d, m in zip(inputs, mans, strict=True):
         for p in m["partitions"]:
             for f in p["files"]:
-                _link(d / f["path"], out / f["path"])
+                w.copy(d / f["path"], f["path"], link=True)
                 shas.append(f["sha256"])
             partitions.append(p)
         for sub in SIBLING_TREES:
             if (d / sub).is_dir():
                 for src in sorted((d / sub).rglob("*.parquet")):
-                    dst = out / src.relative_to(d)
-                    if not dst.exists():
-                        _link(src, dst)
+                    rel = src.relative_to(d)
+                    if not (out / rel).exists():
+                        w.copy(src, rel, link=True)
     partitions.sort(key=lambda p: (p["session_date"], p["instrument_id"]))
     man = dict(mans[0])
     man["inputs"] = [i for m in mans for i in m["inputs"]]
@@ -110,14 +106,13 @@ def merge(inputs: list[Path], out: Path, *, created_by: str = "merge_datasets.py
     man["validation_status"] = max((m["validation_status"] for m in mans), key=lambda s: STATUS_RANK.get(s, 9))
     first = str(mans[0]["created_by"])
     man["created_by"] = first if first.endswith(f" + {created_by}") else f"{first} + {created_by}"
-    man["dataset_id"] = dataset_id(shas, man["source_format"])
+    man["dataset_id"] = _dataset_id(shas, man["source_format"])
     vintage = [v for m in mans for v in (m.get("source_vintage") or [])]
     if vintage:
         man["source_vintage"] = vintage
     attributions = [a for m in mans for a in (m.get("attribution") or [])]
     if attributions:
         man["attribution"] = [dict(t) for t in dict.fromkeys(tuple(sorted(a.items())) for a in attributions)]
-    (out / "manifest.json").write_text(json.dumps(man, indent=1) + "\n", encoding="utf-8")
 
     import pyarrow as pa
     import pyarrow.parquet as pq
@@ -129,6 +124,7 @@ def merge(inputs: list[Path], out: Path, *, created_by: str = "merge_datasets.py
     )
     inst = inst.take(pa.array(order, type=pa.int64())).replace_schema_metadata(tabs[0].schema.metadata)
     pq.write_table(inst, out / "instruments.parquet", compression="zstd", compression_level=3)
+    w.record("instruments.parquet")
 
     dqs = [
         json.loads((d / "data_quality.json").read_text(encoding="utf-8"))
@@ -150,7 +146,8 @@ def merge(inputs: list[Path], out: Path, *, created_by: str = "merge_datasets.py
         dq["source_specific"] = dict(sorted(ss.items()))
         dq["verdict"] = max((x["verdict"] for x in dqs), key=VERDICT_RANK.__getitem__)
         dq["reasons"] = sorted({r for x in dqs for r in x.get("reasons", [])})
-        (out / "data_quality.json").write_text(json.dumps(dq, indent=1) + "\n", encoding="utf-8")
+        w.write_json("data_quality.json", dq, indent=1)
+    w.finalize(man, indent=1)
     return man
 
 

@@ -19,7 +19,6 @@ published by either venue (`prev_ct` / `new_ct` null). Partitions are UTC dates 
 
 from __future__ import annotations
 
-import hashlib
 import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -28,14 +27,14 @@ from typing import Any
 
 import numpy as np
 import pyarrow as pa
-import pyarrow.parquet as pq
 
 from queuetruth._version import __version__
+from queuetruth.dataset import DatasetWriter, dataset_id, open_dataset
 from queuetruth.errors import QtError
 from queuetruth.pm.batches import Batch, BuildStats
 from queuetruth.pm.book import ASK, BID, NONE, Ladder
 from queuetruth.schemas.arrow import SCHEMAS
-from queuetruth.schemas.io import sha256_file, write_table
+from queuetruth.schemas.io import sha256_file
 from queuetruth.schemas.models import DataQuality, DatasetManifest
 
 DAY_NS = 86_400_000_000_000
@@ -254,7 +253,7 @@ def write_dataset(
     """Writes the dataset under `root` (created; existing files of the same names are replaced). Returns the
     manifest, the data-quality document and the `Files` entries."""
     out = Path(root)
-    out.mkdir(parents=True, exist_ok=True)
+    w = DatasetWriter(out)
     partitions = []
     files: list[dict[str, Any]] = []
     shas: list[str] = []
@@ -279,8 +278,7 @@ def write_dataset(
             feed_gaps.append({"instrument_id": ins.instrument_id, "ts_start": int(a), "ts_end": int(b), "reason": why})
         for day, (table, ts_lo, ts_hi, restated) in sorted(series_rows(sr).items()):
             rel = f"l2/date={_date_str(day)}/instrument_id={ins.instrument_id}/part-00000.parquet"
-            entry = write_table(table, out / rel, SCHEMAS["qt.l2"])
-            entry["name"] = rel
+            entry = w.write_table(rel, table, SCHEMAS["qt.l2"])
             files.append(entry)
             shas.append(entry["sha256"])
             records += table.num_rows
@@ -318,8 +316,7 @@ def write_dataset(
                 }
             )
     inst_table = _instruments_table(inst_rows)
-    ient = write_table(inst_table, out / "instruments.parquet", SCHEMAS["qt.instruments"])
-    files.append(ient)
+    files.append(w.write_table("instruments.parquet", inst_table, SCHEMAS["qt.instruments"]))
     dq = {
         "records": records,
         "maybe_bad_book_records": 0,
@@ -340,15 +337,10 @@ def write_dataset(
     }
     verdict, reasons = _verdict(dq)
     dq_doc = DataQuality.model_validate({**dq, "verdict": verdict, "reasons": reasons})
-    dq_path = out / "data_quality.json"
-    dq_path.write_text(json.dumps(dq_doc.model_dump(mode="json", by_alias=True), indent=2) + "\n", encoding="utf-8")
-    files.append(
-        {"name": "data_quality.json", "rows": None, "bytes": dq_path.stat().st_size, "sha256": sha256_file(dq_path)}
-    )
-    ident = "\n".join(sorted(shas)) + "\n" + source_format
+    files.append(w.write_json("data_quality.json", dq_doc))
     manifest = DatasetManifest.model_validate(
         {
-            "dataset_id": hashlib.sha256(ident.encode()).hexdigest(),
+            "dataset_id": dataset_id(shas, source_format),
             "kind": "l2",
             "source_format": source_format,
             "venue": "generic",
@@ -360,9 +352,7 @@ def write_dataset(
             "validation_status": "assumed",
         }
     )
-    mpath = out / "manifest.json"
-    mpath.write_text(json.dumps(manifest.model_dump(mode="json", by_alias=True), indent=2) + "\n", encoding="utf-8")
-    files.append({"name": "manifest.json", "rows": None, "bytes": mpath.stat().st_size, "sha256": sha256_file(mpath)})
+    files.append(w.finalize(manifest))
     return manifest, dq_doc, files
 
 
@@ -412,31 +402,23 @@ class L2Arrays:
 
 
 def read_manifest(root: str | Path) -> dict[str, Any]:
-    """`manifest.json` of a dataset (`QT-INPUT-001` if missing)."""
-    p = Path(root) / "manifest.json"
-    if not p.is_file():
-        raise QtError("QT-INPUT-001", f"{p}: dataset manifest not found")
-    try:
-        return json.loads(p.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as e:
-        raise QtError("QT-INPUT-002", f"{p}: invalid JSON: {e}") from None
+    """`manifest.json` of a dataset (`QT-INPUT-001` if missing, `QT-INPUT-002` if it does not parse)."""
+    return open_dataset(root).manifest.to_dict()
 
 
 def read_l2(root: str | Path, instrument_id: int) -> L2Arrays:
     """Every `qt.l2` row of one instrument (`QT-INPUT-002` for an MBO dataset or missing columns)."""
-    man = read_manifest(root)
-    if man.get("kind") != "l2":
-        raise QtError("QT-CONFIG-001", f"{root}: an L2 dataset is required (kind {man.get('kind')!r})")
-    parts = sorted(
-        (p for p in man.get("partitions", []) if int(p["instrument_id"]) == instrument_id),
-        key=lambda p: int(p["session_date"]),
-    )
+    ds = open_dataset(root)
+    if ds.book_kind != "l2":
+        raise QtError("QT-CONFIG-001", f"{root}: an L2 dataset is required (kind {ds.manifest.get('kind')!r})")
+    parts = sorted(ds.select({"instrument_id": instrument_id}), key=lambda p: p.session_date)
     tables, ords = [], []
     for k, p in enumerate(parts):
-        for f in p["files"]:
-            t = pq.read_table(Path(root) / f["path"])
-            tables.append(t)
-            ords.append(np.full(t.num_rows, k, dtype=np.int32))
+        if not p.files:
+            continue
+        t = ds.table("l2", filter={"instrument_id": instrument_id, "session_date": p.session_date})
+        tables.append(t)
+        ords.append(np.full(t.num_rows, k, dtype=np.int32))
     if not tables:
         empty = np.zeros(0, dtype=np.int64)
         return L2Arrays(instrument_id, *(empty.copy() for _ in range(12)), np.zeros(0, dtype=np.int32))
@@ -485,11 +467,7 @@ def instruments(root: str | Path) -> list[dict[str, Any]]:
     p = Path(root) / "instruments.parquet"
     if not p.is_file():
         raise QtError("QT-INPUT-001", f"{p}: instruments table not found")
-    rows = pq.read_table(p).to_pylist()
-    for r in rows:
-        if hasattr(r.get("session_date"), "toordinal"):
-            r["session_date"] = (r["session_date"] - datetime(1970, 1, 1).date()).days
-    return rows
+    return open_dataset(root, missing_ok=True).instrument_rows()
 
 
 __all__ = [
