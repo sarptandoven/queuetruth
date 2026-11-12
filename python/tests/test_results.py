@@ -247,3 +247,12 @@ def test_verbs_have_typed_signatures() -> None:
     assert {"files", "out"} <= set(inspect.signature(qt.data.add).parameters)
     assert {"date", "symbols", "out"} <= set(inspect.signature(qt.data.fetch_iex).parameters)
     assert callable(qt.demo) and qt.demo.DemoOptions.__name__ == "DemoOptions"
+
+
+def test_check_estimate_names_the_atlas_venue(tmp_path: Path) -> None:
+    """The estimate says which venue its tables come from, as the atlas manifest names it (not always IEX)."""
+    bt = sb.write_hftbacktest(tmp_path / "hbt.jsonl", sb.orders(DATA))
+    res = qt.check(bt, bar="5m", tier="ALL", atlas=ATLAS, out=tmp_path / "o")
+    assert "(Synthetic venue, one venue, 3 days)" in res.summary and "IEX" not in res.summary
+    assert res.doc["atlas"]["venue_name"] == "Synthetic venue"
+    assert any("Synthetic venue only (one venue)" in r for r in res.doc["rests_on"])
