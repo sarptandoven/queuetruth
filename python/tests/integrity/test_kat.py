@@ -148,3 +148,30 @@ def test_atlas_merkle() -> None:
     assert K.merkle_root([]) == EMPTY_ROOT
     t = pa.table({"k": pa.array([2, 1], pa.int64()), "s": pa.array(["b", None]), "f": pa.array([0.5, 1.25])})
     assert K.table_digest(t, ["k"]) == TABLE_DIGEST
+
+
+def test_integrity_functions_give_the_pinned_bytes() -> None:
+    """The same known answers straight from `queuetruth.integrity`, the one implementation behind every name above."""
+    from queuetruth import integrity as I
+
+    assert I.canonical_json(DOC) == JCS
+    assert I.canonical_json(DOC, "compact") == COMPACT
+    assert I.canonical_bytes(DOC, "atlas-v1") == COMPACT.encode("utf-8")
+    assert I.sha256_text(I.canonical_json(CERT_BODY)) == CERT_SHA
+    prev = I.GENESIS_ZERO
+    for seq, want in enumerate(LEDGER_HASHES):
+        _, prev = I.ledger_line({"seq": seq, "prev": prev, "value": seq * 0.5, "name": f"r{seq}"})
+        assert prev == want
+    entry = {"seq": 0, "prev_sha256": I.GENESIS_ZERO, "payload": {"p": 0.62, "q": "Will it?"}}
+    entry["payload_sha256"] = I.canonical_sha256(entry["payload"])
+    assert (entry["payload_sha256"], I.entry_digest(entry, "entry_sha256")) == FORECAST
+    assert I.sha256_text("queuetruth.sandbox.order_log.v1") == SANDBOX[0]
+    assert I.entry_digest({"seq": 0, "kind": "open", "data": {"x": 1.5}, "prev": SANDBOX[0]}, "hash") == SANDBOX[1]
+    spec = I.sha256_bytes(I.canonical_bytes(UNIT, "atlas-v1"))
+    leaves = [I.leaf_hash({"unit_id": f"u{i}", "unit_spec_sha256": spec, "n": i, "d": 2}) for i in range(5)]
+    assert leaves == DAY2_LEAVES
+    assert I.merkle_root(leaves) == DAY_ROOTS[2]
+    assert I.merkle_proof(leaves, 3) == DAY2_PROOF_3
+    assert I.verify_proof(leaves[3], DAY2_PROOF_3, DAY_ROOTS[2])
+    assert I.merkle_root(DAY_ROOTS) == ATLAS_ROOT
+    assert I.merkle_root([]) == EMPTY_ROOT

@@ -11,6 +11,7 @@ from typing import Any
 from queuetruth.dq.data import date_str
 from queuetruth.dq.framework import Check
 from queuetruth.dq.model import DqCheck
+from queuetruth.integrity import sha256_file
 
 #: Formats whose instrument ids are per-day feed ids (ITCH stock locate codes): changes across days are expected.
 PER_DAY_ID_FORMATS = frozenset({"itch", "etcsv"})
@@ -114,14 +115,6 @@ class SymbologyCheck(Check):
         ):
             metrics[k] = counts[k]
         return self.result(status, summary, metrics, [ev], notes)
-
-
-def sha256_file(path: Path, chunk: int = 1 << 20) -> str:
-    h = hashlib.sha256()
-    with path.open("rb") as f:
-        while b := f.read(chunk):
-            h.update(b)
-    return h.hexdigest()
 
 
 def dataset_id(shas: list[str], source_format: str) -> str:

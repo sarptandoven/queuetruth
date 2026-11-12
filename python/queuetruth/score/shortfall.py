@@ -706,12 +706,12 @@ def block_mean_cis(
     _, inv = np.unique(labels, return_inverse=True)
     k = int(inv.max()) + 1
     counts = stats.block_counts(k, b, stats.bootstrap_seed(seed, test_id)).astype(float)
-    den = counts @ np.bincount(inv, minlength=k).astype(float)
+    sizes = np.bincount(inv, minlength=k).astype(float)  # every block holds an order: no replicate divides by 0
     out: dict[str, tuple[float | None, float | None]] = {}
     with np.errstate(all="ignore"):
         for c, vals in values.items():
             x = np.asarray(vals, dtype=float)
-            reps = (counts @ np.bincount(inv, weights=x, minlength=k)) / den
+            reps = stats.ratio_replicates(counts, np.bincount(inv, weights=x, minlength=k), sizes)
             a, z = stats.percentile_ci(reps, 0.05)
             out[c] = (a if math.isfinite(a) else None, z if math.isfinite(z) else None)
     return out, k, kind_

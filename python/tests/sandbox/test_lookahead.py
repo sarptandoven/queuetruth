@@ -28,11 +28,11 @@ import pyarrow.parquet as pq
 import pytest
 
 import queuetruth.api
+from queuetruth.integrity import canonical_json
 from queuetruth.sandbox import Sandbox
 from queuetruth.sandbox.tape import GAP_IN_PROGRESS
 from queuetruth.schemas.arrow import SCHEMAS
 from queuetruth.schemas.io import write_table
-from queuetruth.schemas.runid import canonical_json
 from sandbox.sbx_helpers import (
     MS,
     SYNTH,

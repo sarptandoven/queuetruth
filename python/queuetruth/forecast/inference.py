@@ -30,7 +30,7 @@ from dataclasses import dataclass
 import numpy as np
 from scipy import stats as sps
 
-from queuetruth.stats import bootstrap_p_two_sided, bootstrap_seed, percentile_ci
+from queuetruth.stats import block_counts_chunks, bootstrap_p_two_sided, bootstrap_seed, percentile_ci
 
 #: Largest replicate-by-cluster block held in memory at once (float64 cells).
 CHUNK_CELLS = 4_000_000
@@ -38,18 +38,8 @@ CHUNK_CELLS = 4_000_000
 
 def cluster_count_chunks(n_clusters: int, b: int, seed: int) -> Iterator[np.ndarray]:
     """`(rows, n_clusters)` float multiplicity blocks whose concatenation equals
-    `queuetruth.stats.block_counts(n_clusters, b, seed)`."""
-    if b <= 0:
-        return
-    rng = np.random.default_rng(seed)
-    step = max(1, CHUNK_CELLS // max(n_clusters, 1))
-    done = 0
-    while done < b:
-        c = min(step, b - done)
-        draws = rng.integers(0, n_clusters, size=(c, n_clusters))
-        flat = (np.arange(c, dtype=np.int64)[:, None] * n_clusters + draws).ravel()
-        yield np.bincount(flat, minlength=c * n_clusters).reshape(c, n_clusters).astype(float)
-        done += c
+    `queuetruth.stats.block_counts(n_clusters, b, seed)` (`queuetruth.stats.block_counts_chunks`)."""
+    return block_counts_chunks(n_clusters, b, seed, CHUNK_CELLS)
 
 
 def newey_west_lag(n: int) -> int:

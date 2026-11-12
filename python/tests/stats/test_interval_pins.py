@@ -76,3 +76,15 @@ def test_interval_outputs_unchanged() -> None:
     assert set(got) == set(PINS)
     for key, want in PINS.items():
         assert got[key] == want, key
+
+
+def test_callers_use_the_shared_estimators() -> None:
+    """Every routed caller now reaches `queuetruth.stats.intervals`; the pins above prove the numbers did not move."""
+    from queuetruth import stats
+    from queuetruth.stats import intervals
+
+    assert FI.cluster_count_chunks.__module__ == FI.__name__  # kept, as a thin wrapper of block_counts_chunks
+    assert stats.percentile_ci is intervals.percentile_ci
+    assert TX.percentile_ci is intervals.percentile_ci
+    assert FT.wilson is intervals.wilson
+    assert SF.stats.ratio_replicates is intervals.ratio_replicates

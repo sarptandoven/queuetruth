@@ -10,13 +10,14 @@ Hashing rules (the manifest contract, `docs/scale.md`):
   machine compares contents, not file bytes.
 - Merkle tree: leaves `sha256(b"\\x00" + canonical_json(leaf_doc))` in unit-id order; inner nodes
   `sha256(b"\\x01" + left + right)`; an odd node is carried up unchanged; the root of no leaves is sha256(b"").
+
+Canonical JSON, sha256 and the Merkle tree are `queuetruth.integrity` (`python/tests/integrity` pins their bytes);
+this module re-exports them under the names the pipeline has always used.
 """
 
 from __future__ import annotations
 
 import hashlib
-import json
-import math
 import os
 import sys
 from collections.abc import Sequence
@@ -31,7 +32,17 @@ for _p in (REPO / "scripts" / "realdata", REPO / "scripts" / "repro", HERE):
 
 from breadth import HORIZONS, POPULATIONS, STD_PLACEMENTS, STD_QTY, TIERS  # noqa: E402
 from reproduce import build_info as _build_info  # noqa: E402
-from reproduce import free_gib, sha256_file  # noqa: E402
+from reproduce import free_gib  # noqa: E402
+
+from queuetruth.integrity import (  # noqa: E402
+    canonical_bytes,
+    leaf_hash,
+    merkle_proof,
+    merkle_root,
+    sha256_file,
+    verify_proof,
+)
+from queuetruth.integrity import sha256_bytes as sha256_hex  # noqa: E402
 
 S1 = 1_000_000_000
 H_MAX_NS = 300 * S1
@@ -78,22 +89,8 @@ def build_info() -> dict[str, Any]:
 
 
 def canonical_json(obj: Any) -> bytes:
-    def check(x: Any) -> None:
-        if isinstance(x, float) and not math.isfinite(x):
-            raise ValueError("canonical_json: NaN / inf are not allowed")
-        if isinstance(x, dict):
-            for v in x.values():
-                check(v)
-        elif isinstance(x, list | tuple):
-            for v in x:
-                check(v)
-
-    check(obj)
-    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
-
-
-def sha256_hex(b: bytes) -> str:
-    return hashlib.sha256(b).hexdigest()
+    """The `atlas-v1` canonical JSON bytes (`queuetruth.integrity.canonical_bytes`); NaN and inf refused."""
+    return canonical_bytes(obj, "atlas-v1")
 
 
 def table_digest(table: Any, keys: Sequence[str] = ()) -> str:
@@ -126,48 +123,3 @@ def table_digest(table: Any, keys: Sequence[str] = ()) -> str:
                 col = col.cast(pa.int32() if pa.types.is_date32(typ) else pa.int64())
             h.update(np.asarray(pc.fill_null(col.cast(pa.int64()), 0).to_numpy(), dtype="<i8").tobytes())
     return h.hexdigest()
-
-
-def leaf_hash(leaf_doc: dict[str, Any]) -> str:
-    return sha256_hex(b"\x00" + canonical_json(leaf_doc))
-
-
-def _level_up(level: list[bytes]) -> list[bytes]:
-    nxt = []
-    for i in range(0, len(level), 2):
-        if i + 1 < len(level):
-            nxt.append(hashlib.sha256(b"\x01" + level[i] + level[i + 1]).digest())
-        else:
-            nxt.append(level[i])
-    return nxt
-
-
-def merkle_root(leaves: Sequence[str]) -> str:
-    if not leaves:
-        return sha256_hex(b"")
-    level = [bytes.fromhex(x) for x in leaves]
-    while len(level) > 1:
-        level = _level_up(level)
-    return level[0].hex()
-
-
-def merkle_proof(leaves: Sequence[str], index: int) -> list[list[str]]:
-    """Sibling path of leaf `index`: `[["L" or "R", sibling hex], ...]` from the leaf up (carried nodes skipped)."""
-    level = [bytes.fromhex(x) for x in leaves]
-    path: list[list[str]] = []
-    i = index
-    while len(level) > 1:
-        sib = i ^ 1
-        if sib < len(level):
-            path.append(["L" if sib < i else "R", level[sib].hex()])
-        level = _level_up(level)
-        i //= 2
-    return path
-
-
-def verify_proof(leaf: str, proof: Sequence[Sequence[str]], root: str) -> bool:
-    h = bytes.fromhex(leaf)
-    for side, sib in proof:
-        s = bytes.fromhex(sib)
-        h = hashlib.sha256(b"\x01" + (s + h if side == "L" else h + s)).digest()
-    return h.hex() == root

@@ -1,6 +1,7 @@
-"""Run identity (SPEC 7.3): RFC 8785 (JCS) canonical JSON, execution-only field removal and `run_id`.
+"""Run identity (SPEC 7.3): execution-only field removal and `run_id` over RFC 8785 canonical JSON
+(`queuetruth.integrity.canonical_json`).
 
-Mirror of `qt_schema::canonical_json` / `qt_schema::run_id`; `schemas/run_id_kat.json` holds shared known answers.
+Mirror of `qt_schema::run_id`; `schemas/run_id_kat.json` holds shared known answers.
 
 Schema 1.1 canonicalisation: the spec fields added in 1.1 (SPEC 3.11) are left out of the identity document when
 they hold their default, so every spec that does not set them keeps its v0.1 `run_id`; a non-default value enters
@@ -15,10 +16,11 @@ Summary echoes (`spec_echo`) keep the fields.
 from __future__ import annotations
 
 import hashlib
-import math
+import warnings
 from collections.abc import Callable
-from decimal import Decimal
 from typing import Any
+
+import queuetruth.integrity as _integrity
 
 #: Keys removed (at any depth) before hashing and in summary echoes.
 EXECUTION_ONLY = ("out", "threads")
@@ -59,87 +61,26 @@ V1_1_DEFAULTS: tuple[tuple[str, tuple[str, ...], Any], ...] = (
 REF_KEYS = (frozenset({"path"}), frozenset({"dataset_id"}), frozenset({"upload_id"}), frozenset({"job_file"}))
 
 
-def _format_float(x: float) -> str:
-    """ECMAScript Number::toString for a finite float (shortest round-trip digits)."""
-    if not math.isfinite(x):
-        raise ValueError(f"non-finite number {x!r} is not allowed in canonical JSON")
-    if x == 0.0:
-        return "0"
-    sign = "-" if x < 0 else ""
-    tup = Decimal(repr(abs(x))).as_tuple()
-    digits = "".join(str(d) for d in tup.digits).lstrip("0")
-    exp = int(tup.exponent)
-    stripped = digits.rstrip("0")
-    exp += len(digits) - len(stripped)
-    digits = stripped
-    k = len(digits)
-    n = k + exp  # value = 0.digits * 10^n
-    if k <= n <= 21:
-        out = digits + "0" * (n - k)
-    elif 0 < n <= 21:
-        out = digits[:n] + "." + digits[n:]
-    elif -6 < n <= 0:
-        out = "0." + "0" * (-n) + digits
-    else:
-        e = n - 1
-        es = f"+{e}" if e >= 0 else str(e)
-        out = digits + "e" + es if k == 1 else digits[0] + "." + digits[1:] + "e" + es
-    return sign + out
+_canonical_json = _integrity.canonical_json
+#: Old names of the canonical JSON pieces, now in `queuetruth.integrity` (deprecated here; still working).
+_MOVED = {
+    "canonical_json": ("queuetruth.integrity.canonical_json", _integrity.canonical_json),
+    "_format_float": ("queuetruth.integrity.format_float", _integrity.format_float),
+    "_escape": ("queuetruth.integrity.escape_string", _integrity.escape_string),
+    "_utf16_key": ("queuetruth.integrity.utf16_key", _integrity.utf16_key),
+}
 
 
-def _escape(s: str) -> str:
-    out = ['"']
-    for ch in s:
-        o = ord(ch)
-        if ch == '"':
-            out.append('\\"')
-        elif ch == "\\":
-            out.append("\\\\")
-        elif ch == "\b":
-            out.append("\\b")
-        elif ch == "\f":
-            out.append("\\f")
-        elif ch == "\n":
-            out.append("\\n")
-        elif ch == "\r":
-            out.append("\\r")
-        elif ch == "\t":
-            out.append("\\t")
-        elif o < 0x20:
-            out.append(f"\\u{o:04x}")
-        else:
-            out.append(ch)
-    out.append('"')
-    return "".join(out)
-
-
-def _utf16_key(s: str) -> bytes:
-    return s.encode("utf-16-be")
-
-
-def canonical_json(value: Any) -> str:
-    """RFC 8785 canonical JSON: sorted keys (UTF-16 code units), no whitespace, ES number format, ints exact."""
-    if value is None:
-        return "null"
-    if value is True:
-        return "true"
-    if value is False:
-        return "false"
-    if isinstance(value, int):
-        return str(value)
-    if isinstance(value, float):
-        return _format_float(value)
-    if isinstance(value, str):
-        return _escape(value)
-    if isinstance(value, (list, tuple)):
-        return "[" + ",".join(canonical_json(v) for v in value) + "]"
-    if isinstance(value, dict):
-        for k in value:
-            if not isinstance(k, str):
-                raise TypeError(f"object keys must be strings, got {k!r}")
-        items = sorted(value.items(), key=lambda kv: _utf16_key(kv[0]))
-        return "{" + ",".join(_escape(k) + ":" + canonical_json(v) for k, v in items) + "}"
-    raise TypeError(f"value of type {type(value).__name__} is not JSON")
+def __getattr__(name: str) -> Any:
+    if name in _MOVED:
+        new, fn = _MOVED[name]
+        warnings.warn(
+            f"queuetruth.schemas.runid.{name} moved to {new}; the old name will be removed in a future release",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return fn
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def is_ref(value: Any) -> bool:
@@ -180,7 +121,7 @@ def _drop_path(node: Any, path: tuple[str, ...], default: Any) -> Any:
     out = dict(node)
     if rest:
         out[head] = _drop_path(node[head], rest, default)
-    elif canonical_json(node[head]) == canonical_json(default):
+    elif _canonical_json(node[head]) == _canonical_json(default):
         del out[head]
     return out
 
@@ -200,7 +141,7 @@ def drop_v1_1_defaults(spec: Any) -> Any:
 def identity_document(spec: dict[str, Any], engine_version: str, resolve: Callable[[dict[str, Any]], str]) -> str:
     """Canonical JSON of `{"engine_version": v, "spec": s}` with execution-only fields and defaulted 1.1 fields
     removed and refs resolved."""
-    return canonical_json({"engine_version": engine_version, "spec": _identity(drop_v1_1_defaults(spec), resolve)})
+    return _canonical_json({"engine_version": engine_version, "spec": _identity(drop_v1_1_defaults(spec), resolve)})
 
 
 def run_id(spec: dict[str, Any], engine_version: str, resolve: Callable[[dict[str, Any]], str]) -> str:

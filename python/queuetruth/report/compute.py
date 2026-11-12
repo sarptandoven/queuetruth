@@ -11,22 +11,17 @@ from collections.abc import Sequence
 import numpy as np
 
 from queuetruth.report.svg import RelBin
+from queuetruth.stats.intervals import Z95
+from queuetruth.stats.intervals import wilson as _wilson
 
-Z95 = 1.959963984540054
 PROFILE_CHI2_95 = 3.841459
 
 
 def wilson(k: float, n: float, z: float = Z95) -> tuple[float, float]:
-    """Wilson score interval for k successes out of n (n > 0)."""
-    if n <= 0:
-        return (0.0, 1.0)
-    phat = k / n
-    den = 1.0 + z * z / n
-    centre = (phat + z * z / (2 * n)) / den
-    half = z * math.sqrt(phat * (1 - phat) / n + z * z / (4 * n * n)) / den
-    lo = 0.0 if k <= 0 else max(0.0, centre - half)
-    hi = 1.0 if k >= n else min(1.0, centre + half)
-    return (lo, hi)
+    """Wilson score interval for k successes out of n (`queuetruth.stats.wilson` with exact 0 and 1 edges)."""
+    out = _wilson(k, n, z=z, edges="exact")
+    assert out is not None
+    return out
 
 
 def reliability_bins(p: np.ndarray, y: np.ndarray, n_bins: int = 10) -> list[RelBin]:

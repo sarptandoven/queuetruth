@@ -8,6 +8,20 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ### Added
 
+- **`queuetruth.integrity`: one implementation of each integrity primitive.** Canonical JSON in each byte form
+  that is already published (`canonical_json(obj)` is RFC 8785; `form="compact"`, `"atlas-v1"`, `"compact-ascii"`
+  and `"sorted"` keep the other forms), sha256 of bytes, text, files and streams, the hash-chain digests of the run
+  ledger, forecast ledger and sandbox log, and the atlas Merkle tree. Run ids, certificates, ledgers, the sandbox
+  log, the test client and the atlas pipeline (`scripts/scale`) all use it; known-answer tests pin every run id,
+  certificate, ledger entry, day root and atlas root form, and nothing published changes.
+  `queuetruth.schemas.canonical_json` and `queuetruth.schemas.runid.canonical_json` still work and warn that they
+  moved.
+- **One home for interval estimators in `queuetruth.stats`.** `wilson` (with the `exact`, `clip` and `none` edge
+  rules the report, the candle audit and forecast calibration each publish), `wilson_arrays`, `clopper_pearson`,
+  `percentile_ci`, `ratio_replicates` (the ratio-of-sums block bootstrap, in the shared and the zoo's own summation
+  order) and `block_counts_chunks`. The report, zoo, toxicity, model card, shortfall, demo, freqtrade audit, forecast
+  and conformal intervals use them, with the same numbers bit for bit. `queuetruth.model.conformal.clopper_pearson`
+  still works and warns that it moved.
 - **One guide per backtester for hftbacktest and NautilusTrader.** "Score and calibrate my hftbacktest backtest"
   (`docs/how-to/calibrate-hftbacktest.md`) merges the plugin page and the calibration recipe and starts with the
   `queuetruth-hftbacktest` plugin; the old plugin page points to its sections, and the plugin README keeps a short

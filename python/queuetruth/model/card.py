@@ -140,7 +140,7 @@ def _bss_ci(tm: np.ndarray, tc: np.ndarray, blocks: np.ndarray, b: int, seed: in
     (E5 / E29): `block_counts` (one `integers(0, n_blocks, (b, n_blocks))` call of
     `default_rng(bootstrap_seed(seed, "bss_vs_climatology:<tau>"))`), replicate = ratio of the block-count-weighted
     sums, `percentile_ci` (linear quantiles, NaN replicates ignored)."""
-    from queuetruth.stats import block_counts, bootstrap_seed, percentile_ci
+    from queuetruth.stats import block_counts, bootstrap_seed, percentile_ci, ratio_replicates
 
     n_blocks = int(blocks.max(initial=-1)) + 1
     if n_blocks < 2:
@@ -148,8 +148,7 @@ def _bss_ci(tm: np.ndarray, tc: np.ndarray, blocks: np.ndarray, b: int, seed: in
     sm = np.bincount(blocks, weights=tm, minlength=n_blocks)
     sc = np.bincount(blocks, weights=tc, minlength=n_blocks)
     counts = block_counts(n_blocks, b, bootstrap_seed(seed, f"bss_vs_climatology:{tau}")).astype(np.float64)
-    bm, bc = counts @ sm, counts @ sc
-    reps = np.where(bc > 0, 1.0 - bm / np.where(bc > 0, bc, 1.0), np.nan)
+    reps = 1.0 - ratio_replicates(counts, sm, sc)
     lo, hi = percentile_ci(reps, 0.05)
     return _num(lo), _num(hi)
 

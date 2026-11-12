@@ -32,7 +32,7 @@ import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
 from queuetruth.eval import _cols as C
-from queuetruth.stats import block_counts, bootstrap_seed, percentile_ci
+from queuetruth.stats import block_counts, bootstrap_seed, percentile_ci, ratio_replicates
 
 NT_DEFAULT = "nt_prob_touch[p=1]"
 CLUSTER_NS = 60_000_000_000
@@ -159,9 +159,7 @@ def cluster_intervals(
             else:
                 num = np.bincount(cluster[sel], weights=d, minlength=n_clusters)
                 den = np.bincount(cluster[sel], minlength=n_clusters).astype(float)
-                rd = counts @ den
-                reps = np.where(rd > 0, (counts @ num) / np.where(rd > 0, rd, 1.0), np.nan)
-                lo, hi = percentile_ci(reps, 0.05)
+                lo, hi = percentile_ci(ratio_replicates(counts, num, den), 0.05)
                 cell.update(ci_lo=_finite(lo), ci_hi=_finite(hi), ci_method="cluster_bootstrap")
             cells[hk] = cell
         out[mid] = cells

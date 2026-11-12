@@ -24,6 +24,7 @@ from scipy import special
 from scipy import stats as sps
 
 from queuetruth.stats._types import TestResult
+from queuetruth.stats.intervals import wilson_arrays
 
 Z975 = float(sps.norm.ppf(0.975))
 
@@ -82,9 +83,7 @@ def reliability_table(p: np.ndarray, y: np.ndarray, n_bins: int = 10) -> dict[st
     p_max = np.full(labels.size, -np.inf)
     np.minimum.at(p_min, inv, pp)
     np.maximum.at(p_max, inv, pp)
-    z2 = Z975 * Z975
-    centre = (rate + z2 / (2 * count)) / (1 + z2 / count)
-    half = Z975 * np.sqrt(rate * (1 - rate) / count + z2 / (4 * count * count)) / (1 + z2 / count)
+    rate_lo, rate_hi = wilson_arrays(rate, count, z=Z975)
     return {
         "bin": labels.astype(np.int64),
         "count": count.astype(np.int64),
@@ -92,8 +91,8 @@ def reliability_table(p: np.ndarray, y: np.ndarray, n_bins: int = 10) -> dict[st
         "observed_rate": rate,
         "p_min": p_min,
         "p_max": p_max,
-        "rate_lo": centre - half,
-        "rate_hi": centre + half,
+        "rate_lo": rate_lo,
+        "rate_hi": rate_hi,
     }
 
 

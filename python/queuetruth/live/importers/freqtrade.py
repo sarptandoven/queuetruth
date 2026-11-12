@@ -121,6 +121,7 @@ from queuetruth.live.importers._base import ImportOptions
 from queuetruth.schemas.io import sha256_file
 from queuetruth.schemas.models import QtModel
 from queuetruth.schemas.reconcile import ReconcileOrder, ReconcileReport, ReconcileScore
+from queuetruth.stats.intervals import percentile_ci, wilson
 
 FT_SIM = "sim:freqtrade"
 #: Freqtrade sources pinned for the fixtures and the format notes above.
@@ -2095,14 +2096,7 @@ class CandleAudit(QtModel):
 
 
 def _wilson(k: int, n: int) -> tuple[float, float] | None:
-    if n == 0:
-        return None
-    z = 1.959963984540054
-    p = k / n
-    d = 1 + z * z / n
-    c = (p + z * z / (2 * n)) / d
-    h = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / d
-    return (max(0.0, c - h), min(1.0, c + h))
+    return wilson(k, n, edges="clip")
 
 
 def _cluster_ci(num: np.ndarray, den: np.ndarray, cl: np.ndarray) -> tuple[tuple[float, float] | None, int]:
@@ -2120,11 +2114,9 @@ def _cluster_ci(num: np.ndarray, den: np.ndarray, cl: np.ndarray) -> tuple[tuple
     draws = rng.integers(0, k, size=(AUDIT_BOOTSTRAP_DRAWS, k))
     nn, dd = n_k[draws].sum(axis=1), d_k[draws].sum(axis=1)
     ratio = np.divide(nn, dd, out=np.full(nn.shape, np.nan), where=dd > 0)
-    ratio = ratio[np.isfinite(ratio)]
-    if ratio.size == 0:
+    if not np.isfinite(ratio).any():
         return None, k
-    lo, hi = np.percentile(ratio, [2.5, 97.5])
-    return (float(lo), float(hi)), k
+    return percentile_ci(ratio, 0.05), k
 
 
 def _counts(

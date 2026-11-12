@@ -89,9 +89,10 @@ from pydantic import Field, field_validator
 from queuetruth.errors import QtError
 from queuetruth.eval import _cols as C
 from queuetruth.eval.zoo import PARTICLE_FAMILIES, _planned_life, aborted_shadows, common_population, family
+from queuetruth.integrity import canonical_json
 from queuetruth.schemas import arrow as qa
 from queuetruth.schemas.specs import NonNegInt, PathRef, SpecModel
-from queuetruth.stats import block_counts, bootstrap_seed, ci_blocks, percentile_ci
+from queuetruth.stats import block_counts, bootstrap_seed, ci_blocks, percentile_ci, ratio_replicates
 
 MECHANISMS = ("queue", "swept", "cross_on_arrival", "crossed_resting", "hidden_print", "touch", "particle")
 STATUSES = ("confirmed", "phantom", "missed", "neither")
@@ -497,9 +498,7 @@ class _Boot:
             return {"value": _none(value), "ci_lo": None, "ci_hi": None, "n": int((den > 0).sum())}, np.full(
                 self.b, np.nan
             )
-        rn = self.counts @ ns
-        rd = self.counts @ ds
-        reps = np.where(rd > 0, rn / np.where(rd > 0, rd, 1.0), np.nan)
+        reps = ratio_replicates(self.counts, ns, ds)
         lo, hi = percentile_ci(reps, 0.05)
         return {"value": _none(value), "ci_lo": _none(lo), "ci_hi": _none(hi), "n": int((den > 0).sum())}, reps
 
@@ -1553,10 +1552,10 @@ def run_zoo_toxicity(spec: ToxicitySpec | dict[str, Any]) -> Any:
     if dumped.get("bootstrap_block") == "auto":
         dumped.pop("bootstrap_block")  # the default stays out of the run_id and the echo (runs before the field)
     dumped["window_ns"] = window  # the default resolved: an explicit window equal to h_max is the same run
-    zoo_key = json.dumps({"path": sp.zoo.path}, sort_keys=True)
+    zoo_key = canonical_json({"path": sp.zoo.path}, "sorted")
 
     def resolve(ref: dict[str, Any]) -> str:
-        if json.dumps(ref, sort_keys=True) == zoo_key:
+        if canonical_json(ref, "sorted") == zoo_key:
             hsh = hashlib.sha256()
             for name in _ZOO_INPUTS:
                 hsh.update(f"{name}\n{sha256_file(zoo / name)}\n".encode())

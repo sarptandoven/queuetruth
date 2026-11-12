@@ -82,7 +82,8 @@ from queuetruth.cert.runs import (
 )
 from queuetruth.cert.tolerance import equivalent, json_close
 from queuetruth.errors import QtError
-from queuetruth.schemas.runid import canonical_json, spec_echo
+from queuetruth.integrity import canonical_json
+from queuetruth.schemas.runid import spec_echo
 
 MAX_DETAILS = 20
 #: Default limit of one re-execution (`verify-cert --timeout`).
