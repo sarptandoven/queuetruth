@@ -165,16 +165,40 @@ roots and attribution; the two are never pooled. How maintainers publish them is
 The page shows the atlas root and every day's root. A day root is a Merkle root over the leaves of that day's
 units. A leaf holds the unit's spec, the sha256 of its input bucket and of the files it wrote, and the content
 digests of its outputs. Every day is kept as `day-<date>.tar.gz` on the repository's `atlas-days` release: its
-reduced tables, its `day_manifest.json` (the day root and every leaf's proof) and the `plan.json` it ran. To check
-one unit:
+reduced tables, its `day_manifest.json` (the day root and every leaf's proof) and the `plan.json` it ran.
 
-1. Download and unpack the day, and take `atlas_manifest.json` from the site's `data/` folder.
-2. Check out the commit the day was built at (the site's "built at" column, or `builds` in `day_manifest.json`)
-   and run `make develop`. The file sha256 values depend on the build's Parquet writer, so another commit can
-   compute the same numbers and still give a different leaf.
-3. Re-create the unit's bucket from IEX's public file (about 9 GB is streamed, never stored; the URL is the day's
-   `source.url` in `day_manifest.json`).
-4. Re-run the unit.
+`queuetruth verify atlas` checks the published atlas without a checkout. It asks before it downloads anything
+(`--yes` skips the question) and keeps what it downloaded in the user cache, so a second run is offline:
+
+<!-- check-docs: skip (downloads the public atlas, after asking) -->
+```bash
+queuetruth verify atlas                                    # the data API and the atlas root, in seconds
+queuetruth verify atlas --day 2026-10-09                   # also one day: its root, leaves and proofs
+queuetruth verify atlas --day 2026-10-09 --unit 10092026-b000-u0001 --rerun   # and re-run one unit
+```
+
+It prints one line per check, and exits 1 when one fails:
+
+1. **Files.** Every file of the data API (`atlas/v1/`) matches the sha256 and size in its manifest and its document
+   model, and names the manifest's atlas root.
+2. **Atlas root.** The site's `data/atlas_manifest.json` lists every day's root. The root over them, in date order,
+   is the atlas root the API states, and its days are the API's days.
+3. **One day** (`--day DATE`, or a day directory or `.tar.gz` file). The reduced day is downloaded from the
+   `atlas-days` release. The atlas lists its root, the root recomputes from its leaves, every leaf's proof reaches
+   it, and its plan hashes to the day manifest's `plan_sha256`.
+4. **One unit** (`--unit ID`). The unit is in the plan and its leaf reaches the day root. With `--rerun` it runs
+   again and its leaf hash is compared with the published one.
+
+A re-run needs more than the published files. The leaf holds sha256 digests of the Parquet files the build wrote,
+which depend on its Parquet writer, so the unit must run at the commit the day was built at (the site's "built at"
+column, or `builds` in `day_manifest.json`): check out that commit, run `make develop`, and run the command from the
+checkout (or pass `--checkout DIR`). The unit's bucket is re-created from IEX's public file: about 9 GB is streamed,
+never stored, and only the unit's bucket is kept (`scripts/scale/iex_split.py --only-bucket`; the URL is the day's
+`source.url`). `--split DIR` uses a bucket you already have. The command says when the checkout is not the commit
+the day was built at.
+
+`scripts/scale/verify_unit.py` runs the same checks from files at hand, with the same code
+(`queuetruth.atlas.verify`):
 
 <!-- check-docs: skip (needs the 9 GB IEX day file) -->
 ```bash
@@ -183,13 +207,10 @@ uv run --frozen --no-sync python scripts/scale/verify_unit.py --day day-2026-10-
     --atlas-manifest atlas_manifest.json --unit-id 10092026-b000-u0001 --split split/10092026
 ```
 
-`verify_unit.py` checks that the unit's spec hashes to the leaf's, re-runs the unit and compares its leaf with the
-published one. It also checks the leaf's proof up to the day root, and that the atlas lists that day root and
-recomputes its own root from the day roots. It says when the checkout is not the commit the day was built at.
-
 ### Verify a Nasdaq day
 
-The steps are the same, with the Nasdaq names:
+The steps are the same, with the Nasdaq names (`queuetruth verify atlas --from` the Nasdaq site's `atlas/v1`
+directory checks its files and roots; a unit re-run needs `--split`, since only IEX buckets are streamed):
 
 1. The day is `nasdaq-day-<date>.tar.gz` on the `atlas-days-nasdaq` release (a draft until a maintainer publishes
    it), and the atlas manifest is in the site's `nasdaq/data/` folder.

@@ -175,3 +175,18 @@ def test_integrity_functions_give_the_pinned_bytes() -> None:
     assert I.verify_proof(leaves[3], DAY2_PROOF_3, DAY_ROOTS[2])
     assert I.merkle_root(DAY_ROOTS) == ATLAS_ROOT
     assert I.merkle_root([]) == EMPTY_ROOT
+
+
+def test_atlas_verify_gives_the_pinned_bytes() -> None:
+    """`queuetruth verify atlas` (`queuetruth.atlas.verify`) checks with the same functions and the same bytes."""
+    from queuetruth.atlas import verify as V
+
+    assert V.canonical_json(DOC) == COMPACT.encode("utf-8")
+    spec = V.sha256_hex(V.canonical_json(UNIT))
+    leaves = [V.leaf_hash({"unit_id": f"u{i}", "unit_spec_sha256": spec, "n": i, "d": 2}) for i in range(5)]
+    assert leaves == DAY2_LEAVES
+    assert V.merkle_root(leaves) == DAY_ROOTS[2]
+    assert V.merkle_proof(leaves, 3) == DAY2_PROOF_3
+    assert V.verify_proof(leaves[3], DAY2_PROOF_3, DAY_ROOTS[2])
+    assert V.merkle_root(DAY_ROOTS) == ATLAS_ROOT
+    assert V.merkle_root([]) == EMPTY_ROOT

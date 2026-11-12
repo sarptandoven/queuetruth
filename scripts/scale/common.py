@@ -11,8 +11,9 @@ Hashing rules (the manifest contract, `docs/scale.md`):
 - Merkle tree: leaves `sha256(b"\\x00" + canonical_json(leaf_doc))` in unit-id order; inner nodes
   `sha256(b"\\x01" + left + right)`; an odd node is carried up unchanged; the root of no leaves is sha256(b"").
 
-Canonical JSON, sha256 and the Merkle tree are `queuetruth.integrity` (`python/tests/integrity` pins their bytes);
-this module re-exports them under the names the pipeline has always used.
+`canonical_json`, `sha256_hex`, `leaf_hash` and the Merkle functions are re-exported from `queuetruth.atlas.verify`
+(so `queuetruth verify atlas` checks with the same code), which takes them from `queuetruth.integrity`
+(`python/tests/integrity` pins their bytes).
 """
 
 from __future__ import annotations
@@ -34,15 +35,16 @@ from breadth import HORIZONS, POPULATIONS, STD_PLACEMENTS, STD_QTY, TIERS  # noq
 from reproduce import build_info as _build_info  # noqa: E402
 from reproduce import free_gib  # noqa: E402
 
-from queuetruth.integrity import (  # noqa: E402
-    canonical_bytes,
+# the hashing and the Merkle tree live in the package, so `queuetruth verify atlas` checks with the same code
+from queuetruth.atlas.verify import (  # noqa: E402
+    canonical_json,
     leaf_hash,
     merkle_proof,
     merkle_root,
-    sha256_file,
+    sha256_hex,
     verify_proof,
 )
-from queuetruth.integrity import sha256_bytes as sha256_hex  # noqa: E402
+from queuetruth.integrity import sha256_file  # noqa: E402
 
 S1 = 1_000_000_000
 H_MAX_NS = 300 * S1
@@ -86,11 +88,6 @@ def build_info() -> dict[str, Any]:
     if not info.get("git_head"):
         info["git_head"] = os.environ.get("QT_GIT_HEAD") or None
     return info
-
-
-def canonical_json(obj: Any) -> bytes:
-    """The `atlas-v1` canonical JSON bytes (`queuetruth.integrity.canonical_bytes`); NaN and inf refused."""
-    return canonical_bytes(obj, "atlas-v1")
 
 
 def table_digest(table: Any, keys: Sequence[str] = ()) -> str:
