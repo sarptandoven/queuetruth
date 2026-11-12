@@ -70,27 +70,12 @@ def _positive_int(text: str) -> int:
     return v
 
 
-def parser() -> argparse.ArgumentParser:
-    """The argument parser of the certificate commands."""
-    root = _Parser(prog="queuetruth", description="certificates and commitments")
-    _globals(root, suppress=False)
-    sub = root.add_subparsers(dest="command", required=True, parser_class=_Parser)
+#: One-line description of `verify-cert` (also `queuetruth verify cert`).
+VERIFY_CERT_HELP = "verify a certificate; --rerun re-executes every run"
 
-    c = sub.add_parser("certify", help="certify run directories and claims")
-    c.add_argument("runs", nargs="+", metavar="RUN_DIR", help="run directory, or LABEL=RUN_DIR")
-    c.add_argument("--out", required=True, help="certificate JSON to write")
-    c.add_argument("--claim", action="append", default=[], help="claim text with {RUN#/json/pointer} references")
-    c.add_argument("--key", help="Ed25519 private key PEM to sign with (passphrase from QT_CERT_KEY_PASSPHRASE)")
-    c.add_argument("--html", help="also write an HTML rendering")
-    c.add_argument("--title")
-    c.add_argument("--issuer", help="who issues the certificate (free text)")
-    c.add_argument("--attach", action="append", default=[], help="extra file or directory to hash (no rerun)")
-    c.add_argument("--commitment", action="append", default=[], help="qt.commitment to link (pair with --opening)")
-    c.add_argument("--opening", action="append", default=[], help="qt.commitment_opening of the matching --commitment")
-    c.add_argument("--base", help="directory the runs were launched from (default: current directory)")
-    _globals(c, suppress=True)
 
-    v = sub.add_parser("verify-cert", help="verify a certificate; --rerun re-executes every run")
+def verify_cert_arguments(v: argparse.ArgumentParser) -> None:
+    """The arguments of `verify-cert`, also those of `queuetruth verify cert` (`queuetruth.atlas._cli`)."""
     v.add_argument("cert")
     v.add_argument("--rerun", action="store_true", help="re-execute the runs and compare outputs bit for bit")
     v.add_argument("--only", action="append", default=[], metavar="RUN", help="verify only these runs")
@@ -112,6 +97,30 @@ def parser() -> argparse.ArgumentParser:
     v.add_argument("--out", help="also write the qt.cert_verification document here")
     v.add_argument("--html", help="also write the certificate page with the verification results")
     _globals(v, suppress=True)
+
+
+def parser() -> argparse.ArgumentParser:
+    """The argument parser of the certificate commands."""
+    root = _Parser(prog="queuetruth", description="certificates and commitments")
+    _globals(root, suppress=False)
+    sub = root.add_subparsers(dest="command", required=True, parser_class=_Parser)
+
+    c = sub.add_parser("certify", help="certify run directories and claims")
+    c.add_argument("runs", nargs="+", metavar="RUN_DIR", help="run directory, or LABEL=RUN_DIR")
+    c.add_argument("--out", required=True, help="certificate JSON to write")
+    c.add_argument("--claim", action="append", default=[], help="claim text with {RUN#/json/pointer} references")
+    c.add_argument("--key", help="Ed25519 private key PEM to sign with (passphrase from QT_CERT_KEY_PASSPHRASE)")
+    c.add_argument("--html", help="also write an HTML rendering")
+    c.add_argument("--title")
+    c.add_argument("--issuer", help="who issues the certificate (free text)")
+    c.add_argument("--attach", action="append", default=[], help="extra file or directory to hash (no rerun)")
+    c.add_argument("--commitment", action="append", default=[], help="qt.commitment to link (pair with --opening)")
+    c.add_argument("--opening", action="append", default=[], help="qt.commitment_opening of the matching --commitment")
+    c.add_argument("--base", help="directory the runs were launched from (default: current directory)")
+    _globals(c, suppress=True)
+
+    v = sub.add_parser("verify-cert", help=VERIFY_CERT_HELP)
+    verify_cert_arguments(v)
 
     m = sub.add_parser("commit", help="commit to files now, reveal later")
     m.add_argument("files", nargs="+", metavar="FILE")

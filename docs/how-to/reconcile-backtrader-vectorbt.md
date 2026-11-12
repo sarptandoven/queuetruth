@@ -6,7 +6,7 @@ the backtest filled that the market did not, which fills came at another price o
 exist on one side only. Then score the backtest, against your live fills or against exact-queue shadows.
 
 **You need:** one export of the backtest (one line added to your Backtrader script, or one line after your
-VectorBT portfolio), and your live orders and fills as a canonical live log, written by `queuetruth live import`
+VectorBT portfolio), and your live orders and fills as a canonical live log, written by `queuetruth advanced live import`
 from your venue's or broker's records ([Import fills from my venue or broker](import-live-logs.md)). queuetruth
 never imports Backtrader or VectorBT: it reads the exported JSON or CSV. The formats below were read from the
 projects' public source (Backtrader 1.9.78.123, VectorBT 0.28.1); the fixtures in
@@ -18,10 +18,10 @@ reads the backtester and the kind of live records from the files, imports a venu
 answers first. See [Compare my backtest with my live run](compare-backtest-and-live.md). This page shows the
 steps underneath, for scripts and for options `compare` does not expose.
 
-These importers and `queuetruth reconcile` need queuetruth 0.3.0 or later. For a QuantConnect LEAN backtest, see
+These importers and `queuetruth advanced reconcile` need queuetruth 0.3.0 or later. For a QuantConnect LEAN backtest, see
 [section 7](#7-quantconnect-lean): the same report, from LEAN's result and order-events JSON.
 
-**From the command line or Python.** `queuetruth live import --venue sim-backtrader | sim-vectorbt` writes the
+**From the command line or Python.** `queuetruth advanced live import --venue sim-backtrader | sim-vectorbt` writes the
 backtest as a simulator log (venue `sim:backtrader` / `sim:vectorbt`, `validation_status = simulated`), with options
 through `--option KEY=VALUE`. `queuetruth reconcile --kind backtrader | vectorbt --sim EXPORT --live LIVE_LOG_DIR
 --out DIR` runs the whole comparison. The Python API is `queuetruth.live.importers.backtrader` and
@@ -153,7 +153,7 @@ The live arm is any canonical live log. The fixtures hold the live run as a capt
 <!-- check-docs: run -->
 ```sh
 FX="$QT_FIXTURES/live/backtesters"
-queuetruth live import --venue binance --account main --in "$FX/binance_user_stream.jsonl" \
+queuetruth advanced live import --venue binance --account main --in "$FX/binance_user_stream.jsonl" \
     --instrument-map "$FX/instrument_map.csv" --out live
 ```
 
@@ -165,13 +165,13 @@ one was cancelled unfilled, one was cancelled after filling 0.008 of 0.02, and o
 <!-- check-docs: run -->
 ```sh
 FX="$QT_FIXTURES/live/backtesters"
-queuetruth reconcile --kind backtrader --sim "$FX/bt_orders.jsonl" --live live --out rec-bt \
+queuetruth advanced reconcile --kind backtrader --sim "$FX/bt_orders.jsonl" --live live --out rec-bt \
     --option timeframe=1h
 ```
 
 `--sim` is the export (repeatable), `--live` one canonical live-log directory, `--out` the output directory. It
 writes `rec-bt/live` (the live log, with instrument ids from it), `rec-bt/sim` (the backtest as a simulator log),
-`rec-bt/score` (the `queuetruth score` output), `rec-bt/reconcile.json` (`qt.bot_reconcile`, the same document as
+`rec-bt/score` (the `queuetruth advanced score` output), `rec-bt/reconcile.json` (`qt.bot_reconcile`, the same document as
 for Freqtrade and Hummingbot) and `rec-bt/reconcile_orders.csv`. The printout starts with the score and the counts:
 
 ```text
@@ -226,7 +226,7 @@ command line gives the same report.
 of the same instrument and side placed nearest to the backtest's submission time (Backtrader: `created`; VectorBT:
 the record's timestamp), within `pair_window_ms` (default two bars of `timeframe`, else 60 s); ties go to the
 smaller quantity difference. A Backtrader order that carries an `order_key` pairs with that live order first.
-Paired simulator orders take the live `order_key`, so `queuetruth score` matches them. A backtest fill stamped
+Paired simulator orders take the live `order_key`, so `queuetruth advanced score` matches them. A backtest fill stamped
 before the live order existed (the bar's time) is moved to the live order's entry time, with the bar time kept in
 the fill's `reason`: the scorer's window starts at the live entry.
 
@@ -267,15 +267,15 @@ rounded half-even to the instrument's tick and lot (counted in a warning), as fo
 
 ## 5. Import the backtest alone, then score
 
-`reconcile` runs `score` for you. To build the simulator log yourself, for `queuetruth score --sim-log`, the
+`reconcile` runs `score` for you. To build the simulator log yourself, for `queuetruth advanced score --sim-log`, the
 referee or the HTML report, import it with the live log to pair with:
 
 <!-- check-docs: run -->
 ```sh
 FX="$QT_FIXTURES/live/backtesters"
-queuetruth live import --venue sim-vectorbt --in "$FX/vbt_orders.csv" --instrument-map "$FX/instrument_map.csv" \
+queuetruth advanced live import --venue sim-vectorbt --in "$FX/vbt_orders.csv" --instrument-map "$FX/instrument_map.csv" \
     --option pair_with=live --option timeframe=1h --out vbt-sim
-queuetruth score --live live --sim-log vbt-sim --out sc-vbt --window 1440m
+queuetruth advanced score --live live --sim-log vbt-sim --out sc-vbt --window 1440m
 ```
 
 The same in Python is `queuetruth.live.import_sim("vectorbt", ["vbt_orders.csv"], "vbt-sim", pair_with="live",
@@ -293,7 +293,7 @@ synthetic live log at its limit price when it is placed: a bar backtester's view
 
 <!-- check-docs: run -->
 ```sh
-queuetruth fixtures synth --out synth
+queuetruth advanced fixtures synth --out synth
 ```
 
 <!-- check-docs: run -->
@@ -317,11 +317,11 @@ with open("synth_vbt_orders.csv", "w", newline="") as f:
 
 <!-- check-docs: run -->
 ```sh
-queuetruth live import --venue sim-vectorbt --in synth_vbt_orders.csv --out synth-vbt \
+queuetruth advanced live import --venue sim-vectorbt --in synth_vbt_orders.csv --out synth-vbt \
     --option pair_with=synth/own_orders/live --option order_type=limit \
     --option instruments=QTAU6:QTAU6,QTBU6:QTBU6 --option size_exp=0
-queuetruth score --live synth/own_orders/live --sim-log synth-vbt --data synth --out sc-bar
-queuetruth score --live synth/own_orders/live --sim exact --data synth --out sc-exact
+queuetruth advanced score --live synth/own_orders/live --sim-log synth-vbt --data synth --out sc-bar
+queuetruth advanced score --live synth/own_orders/live --sim exact --data synth --out sc-exact
 queuetruth report --in sc-exact --in sc-bar --out bar-vs-exact.html
 ```
 
@@ -333,8 +333,8 @@ instrument map that matches its `instrument_id`s for both imports:
 
 <!-- check-docs: skip (needs your live log and an order-level dataset) -->
 ```sh
-queuetruth score --live live --sim-log bt-sim --data my-dataset --out sc-backtest
-queuetruth score --live live --sim exact --data my-dataset --out sc-exact
+queuetruth advanced score --live live --sim-log bt-sim --data my-dataset --out sc-backtest
+queuetruth advanced score --live live --sim exact --data my-dataset --out sc-exact
 queuetruth report --in sc-exact --in sc-backtest --out backtest-vs-exact.html
 ```
 
@@ -345,7 +345,7 @@ imports LEAN: it reads the JSON that LEAN writes. The formats were read from LEA
 of github.com/QuantConnect/Lean); the fixtures in `tests/fixtures/live/backtesters/` are written from that source by
 `make_fixtures.py`, not exported from a real run, so check the counts against your own records the first time.
 
-`queuetruth live import --venue sim-lean` writes the backtest as a simulator log (venue `sim:lean`,
+`queuetruth advanced live import --venue sim-lean` writes the backtest as a simulator log (venue `sim:lean`,
 `validation_status = simulated`), with options through `--option KEY=VALUE`. `queuetruth reconcile --kind lean --sim
 RESULT_JSON --sim ORDER_EVENTS_JSON --live LIVE_LOG_DIR --out DIR` runs the whole comparison. The Python API is
 `queuetruth.live.importers.lean`.
@@ -434,7 +434,7 @@ live orders on 1-hour bars on 2024-03-01.
 <!-- check-docs: run -->
 ```sh
 FX="$QT_FIXTURES/live/backtesters"
-queuetruth reconcile --kind lean --sim "$FX/lean_result.json" --sim "$FX/lean_order_events.json" --live live \
+queuetruth advanced reconcile --kind lean --sim "$FX/lean_result.json" --sim "$FX/lean_order_events.json" --live live \
     --out rec-lean --option timeframe=1h
 ```
 
@@ -504,15 +504,15 @@ instrument's tick and lot (counted in a warning).
 
 ### LEAN 5. Import the backtest alone, then score
 
-To build the simulator log yourself, for `queuetruth score --sim-log`, the referee or the HTML report, import it
+To build the simulator log yourself, for `queuetruth advanced score --sim-log`, the referee or the HTML report, import it
 with the live log to pair with:
 
 <!-- check-docs: run -->
 ```sh
 FX="$QT_FIXTURES/live/backtesters"
-queuetruth live import --venue sim-lean --in "$FX/lean_result.json" --in "$FX/lean_order_events.json" \
+queuetruth advanced live import --venue sim-lean --in "$FX/lean_result.json" --in "$FX/lean_order_events.json" \
     --instrument-map "$FX/instrument_map.csv" --option pair_with=live --option timeframe=1h --out lean-sim
-queuetruth score --live live --sim-log lean-sim --out sc-lean --window 1440m
+queuetruth advanced score --live live --sim-log lean-sim --out sc-lean --window 1440m
 ```
 
 The same in Python is `queuetruth.live.import_sim("lean", [result, events], "lean-sim", pair_with="live",

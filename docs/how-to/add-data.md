@@ -76,7 +76,7 @@ print(res.summary)
 res.table()
 ```
 
-`--json` (or `--format json` before the command) prints the whole `qt.data_add` document. `queuetruth ingest`
+`--json` (or `--format json` before the command) prints the whole `qt.data_add` document. `queuetruth advanced ingest`
 stays for the options `data add` does not take (`--tick-size`, `--option`, an etcsv `--instruments` file).
 
 ## Fetch a free IEX day

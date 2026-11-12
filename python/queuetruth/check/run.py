@@ -367,10 +367,10 @@ def check(
         )
 
     # ---- the exact replay ------------------------------------------------------------------------------------
-    from queuetruth import api
+    from queuetruth.ops.score import score
 
     score_dir = outp / "score"
-    sm = api.score(
+    sm = score(
         {
             "live": {"path": str(log_dir)},
             "dataset": {"path": str(root)},
@@ -535,7 +535,7 @@ def _result(
         s["pnl_gap_per_order"] = sum(gaps) / len(gaps) if gaps else None
         syms.append(s)
     syms.sort(key=lambda s: (-(s["backtest_filled"] - s["real_filled"]), -s["phantom"], s["symbol"]))
-    from queuetruth.api import why_suggestion
+    from queuetruth.ops.why import why_suggestion
 
     examples = []
     for o in sorted((o for o in orders if o["outcome"] == "phantom"), key=lambda o: (o["symbol"], o["entry"] or "")):

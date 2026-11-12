@@ -1,7 +1,7 @@
 # Fill toxicity: what a queue model's mistakes cost
 
 The [zoo leaderboard](l2-model-zoo.md) counts how often a queue model's fills disagree with the exact arm. A
-strategy does not care about counts; it cares about PnL. `queuetruth zoo-toxicity` prices the disagreement. It tags
+strategy does not care about counts; it cares about PnL. `queuetruth advanced zoo-toxicity` prices the disagreement. It tags
 every fill of the exact arm and of every model with the mechanism that produced it, measures signed mid markouts
 after each fill, and splits each model's PnL error into the fills it wrongly grants, the fills it wrongly denies and
 the fills it gets at the wrong time.
@@ -17,10 +17,10 @@ the replay reproduces the zoo's exact arm shadow by shadow, and writes its outpu
 
 <!-- check-docs: run -->
 ```sh
-queuetruth fixtures synth --venue nasdaq --out synth
-queuetruth shadows sample --data synth --n 400 --seed 1 --out shadows.parquet
-queuetruth zoo --data synth --shadows shadows.parquet --mode corrected --out zoo
-queuetruth zoo-toxicity --zoo zoo --data synth --window 60s --out tox
+queuetruth advanced fixtures synth --venue nasdaq --out synth
+queuetruth advanced shadows sample --data synth --n 400 --seed 1 --out shadows.parquet
+queuetruth advanced zoo --data synth --shadows shadows.parquet --mode corrected --out zoo
+queuetruth advanced zoo-toxicity --zoo zoo --data synth --window 60s --out tox
 ```
 
 The terminal answer comes first: the exact arm's markout per fill mechanism, then one row per model with its phantom
@@ -165,7 +165,7 @@ than when the right fills happened; `--rank-horizon 1s` ranks the short-term vie
 | `zoo_toxicity_shadows.parquet` | one per model and order | `status`, first-fill times and mechanisms of both arms. |
 
 The three tables carry `qt.schema` metadata (`qt.zoo_toxicity_fills`, `qt.zoo_toxicity_markouts`,
-`qt.zoo_toxicity_shadows`) and are in the schema registry, so `queuetruth schema show` prints their layout (also
+`qt.zoo_toxicity_shadows`) and are in the schema registry, so `queuetruth advanced schema show` prints their layout (also
 `queuetruth.eval.toxicity.TABLES`) and `doctor` checks it.
 
 The same document comes back from `queuetruth.eval.toxicity.run_zoo_toxicity(spec)`, and
@@ -179,9 +179,9 @@ section 4), zoo run with the default 16 models, `h_max` 300 s, in each mode, the
 
 <!-- check-docs: skip (needs the licensed real data) -->
 ```sh
-queuetruth zoo --data .realdata/ds/nasdaq-2019-12-30 --shadows .realdata/shadows/d1-sampled-3000.parquet \
+queuetruth advanced zoo --data .realdata/ds/nasdaq-2019-12-30 --shadows .realdata/shadows/d1-sampled-3000.parquet \
   --mode corrected --threads 3 --out zoo-d1-corrected
-queuetruth zoo-toxicity --zoo zoo-d1-corrected --data .realdata/ds/nasdaq-2019-12-30 --window 60s \
+queuetruth advanced zoo-toxicity --zoo zoo-d1-corrected --data .realdata/ds/nasdaq-2019-12-30 --window 60s \
   --threads 3 --out tox-d1-corrected-60s
 ```
 

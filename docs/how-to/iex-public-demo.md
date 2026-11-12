@@ -79,7 +79,7 @@ ingesting it; `queuetruth data add` then reads that pcap.
 ## 2. What the dataset holds
 
 Instrument ids are assigned per symbol in order of first appearance in the file. Records go to the US/Eastern date of
-their timestamp; the tick defaults to 0.01 (`queuetruth ingest --tick-size` sets another). `data_quality.json` lists the IEX
+their timestamp; the tick defaults to 0.01 (`queuetruth advanced ingest --tick-size` sets another). `data_quality.json` lists the IEX
 counters: `iex_modify_maintain_priority` and `iex_modify_reset_priority` (volumes, information only), and anomalies
 such as `iex_unknown_order_ref` or `iex_modify_maintain_unrepresentable` (a maintain-priority modify that also changed
 the price or raised the size, which queuetruth records cannot express; written as a priority loss and counted).
@@ -88,7 +88,7 @@ the price or raised the size, which queuetruth records cannot express; written a
 
 <!-- check-docs: skip (needs the dataset from step 1) -->
 ```sh
-queuetruth replay --data iex-20261009 --out iex-20261009-replay --rank-oracle
+queuetruth advanced replay --data iex-20261009 --out iex-20261009-replay --rank-oracle
 ```
 
 The rank oracle checks, for every execution of a displayed order, where that order stood in its price level's FIFO
@@ -136,7 +136,7 @@ terms (see [Data and licensing](../data-and-licensing.md)) and download a file y
 <!-- check-docs: skip (needs a downloaded ITCH file) -->
 ```sh
 queuetruth data add 01302020.NASDAQ_ITCH50.gz --symbols AAPL,MSFT,SPY,TSLA --out nasdaq-20200130
-queuetruth replay --data nasdaq-20200130 --out replay-20200130 --rank-oracle --parity-trades
+queuetruth advanced replay --data nasdaq-20200130 --out replay-20200130 --rank-oracle --parity-trades
 ```
 
 Read `replay-20200130/summary.json` before anything else:
@@ -153,10 +153,10 @@ Then the same analysis as [Your first leaderboard](../getting-started.md), on re
 
 <!-- check-docs: skip (needs a downloaded ITCH file) -->
 ```sh
-queuetruth shadows sample --data nasdaq-20200130 --n 3000 --out shadows.parquet
-queuetruth shadows mirror-real --data nasdaq-20200130 --n 3000 --out mirror.parquet
-queuetruth zoo --data nasdaq-20200130 --shadows shadows.parquet --out zoo --threads 4
-queuetruth calibrate alloc --family power3 --data nasdaq-20200130 --shadows shadows.parquet \
+queuetruth advanced shadows sample --data nasdaq-20200130 --n 3000 --out shadows.parquet
+queuetruth advanced shadows mirror-real --data nasdaq-20200130 --n 3000 --out mirror.parquet
+queuetruth advanced zoo --data nasdaq-20200130 --shadows shadows.parquet --out zoo --threads 4
+queuetruth advanced calibrate alloc --family power3 --data nasdaq-20200130 --shadows shadows.parquet \
     --train blocks:0-3/5 --test blocks:4/5 --out cal-power3
 queuetruth report --in zoo --in cal-power3 --out nasdaq-20200130.html
 ```

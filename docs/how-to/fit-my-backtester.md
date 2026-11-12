@@ -5,7 +5,7 @@ trust it. `queuetruth fit` fits the setting on part of your data, compares it wi
 it did not see, and writes the line to paste only when the fit wins there. When it does not, it says why and what
 would make it pass.
 
-**You need:** order-level (MBO) data of your market as a queuetruth dataset (`queuetruth ingest`; see
+**You need:** order-level (MBO) data of your market as a queuetruth dataset (`queuetruth data add`; see
 [Replay a public IEX DEEP+ day](iex-public-demo.md) for free data), or your own live fills with the L2 or MBO data of
 the same period.
 
@@ -23,7 +23,7 @@ This page uses the synthetic dataset that ships with queuetruth (two futures, tw
 
 <!-- check-docs: run -->
 ```bash
-queuetruth fixtures synth --out synth > /dev/null
+queuetruth advanced fixtures synth --out synth > /dev/null
 queuetruth fit --backtester nautilus --data synth
 ```
 
@@ -55,7 +55,7 @@ What the numbers mean:
   error is the model's fill rate minus the exact one; log loss scores each order's predicted fill probability (lower
   is better). The fit passes when it is better at one horizon at least and worse at none.
 
-The verdict is the same fail-safe check `queuetruth export` applies: enough events, a usable interval, a value
+The verdict is the same fail-safe check `queuetruth advanced export` applies: enough events, a usable interval, a value
 inside the range the fit searches, and a win over the default on held-out data. The exit code is 0 when the fit
 passes and the snippet is written, 1 when it is refused, 2 on an error.
 
@@ -97,15 +97,15 @@ queuetruth fit --backtester nautilus --data synth --test-after 18:00 --out qt-fi
 split: held out after 18:00:00 venue time: train before 18:00:00 (701 shadows), held out from 18:00:00 (299 shadows)
 ```
 
-`--train` and `--test` take the expert windows of `queuetruth calibrate`: dates (`2026-06-15`) or `blocks:I-J/N`.
+`--train` and `--test` take the expert windows of `queuetruth advanced calibrate`: dates (`2026-06-15`) or `blocks:I-J/N`.
 Blocks are fifths (`/5`) of the whole trading session, not of your data, so on a short capture `blocks:4/5` can
 hold no order at all; `fit` then stops with `QT-DATA-001` and says so. `--split` and `--test-after` are cut where
 the data are.
 
 ## 4. Fit to your own live fills
 
-With your live order log (in the canonical form `queuetruth live import` writes) and the market data of the same
-period, `--live` fits the setting to your own fills instead of the exact queue (`queuetruth calibrate-live`). The
+With your live order log (in the canonical form `queuetruth advanced live import` writes) and the market data of the same
+period, `--live` fits the setting to your own fills instead of the exact queue (`queuetruth advanced calibrate-live`). The
 synthetic dataset ships such a log of 200 orders:
 
 <!-- check-docs: run exit=1 -->

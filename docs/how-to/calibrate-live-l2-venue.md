@@ -13,7 +13,7 @@ held-out check needs enough orders.
 On an L2-only venue nobody knows the exact queue: the feed shows the size at each price, not the orders. So the
 exact-truth fit of [Score and calibrate my hftbacktest backtest](calibrate-hftbacktest.md) is not possible. What you do
 know is what happened to your own orders: when each one was acknowledged, whether it filled as a maker, and when.
-`queuetruth calibrate-live` fits the model parameter to those outcomes:
+`queuetruth advanced calibrate-live` fits the model parameter to those outcomes:
 
 1. Your live orders are scheduled as in the scorer: each order's first instruction-sized leg enters at the
    exchange acknowledgement (`--entry exchange-ack`, the default) or at send time plus latency
@@ -67,8 +67,8 @@ The numbers are not a result about any venue.
 
 <!-- check-docs: run -->
 ```sh
-queuetruth fixtures synth --out synth
-queuetruth calibrate-live --data synth --live synth/own_orders/live --family power3 --out live-power3
+queuetruth advanced fixtures synth --out synth
+queuetruth advanced calibrate-live --data synth --live synth/own_orders/live --family power3 --out live-power3
 ```
 
 The two session dates give a one-day train window (2026-06-15) and a one-day test window (2026-06-16). The output
@@ -132,13 +132,13 @@ code 1, and `--force` writes it anyway under a `# !! NOT VALIDATED` header that 
 
 <!-- check-docs: run exit=1 -->
 ```sh
-queuetruth export hftbacktest --calibration live-power3/calibration.json --out hbt_snippet.py
+queuetruth advanced export hftbacktest --calibration live-power3/calibration.json --out hbt_snippet.py
 ```
 
 <!-- check-docs: run -->
 ```sh
-queuetruth export hftbacktest --calibration live-power3/calibration.json --out hbt_snippet.py --force
-queuetruth export nautilus --calibration live-power3/calibration.json --out nt_snippet.py --force
+queuetruth advanced export hftbacktest --calibration live-power3/calibration.json --out hbt_snippet.py --force
+queuetruth advanced export nautilus --calibration live-power3/calibration.json --out nt_snippet.py --force
 cat hbt_snippet.py nt_snippet.py
 ```
 
@@ -176,7 +176,7 @@ The commands below need your data, so the docs check only checks their syntax.
 
 <!-- check-docs: skip (needs user data) -->
 ```sh
-queuetruth ingest --format tardis-l2 --venue generic --source-venue binance \
+queuetruth advanced ingest --format tardis-l2 --venue generic --source-venue binance \
     --in binance_incremental_book_L2_2026-10-05_BTCUSDT.csv.gz --in binance_trades_2026-10-05_BTCUSDT.csv.gz \
     --in binance_incremental_book_L2_2026-10-06_BTCUSDT.csv.gz --in binance_trades_2026-10-06_BTCUSDT.csv.gz \
     --out bn-l2
@@ -192,9 +192,9 @@ output; `pre_snapshot_rows_skipped` and `remove_absent_level` are counted there.
 
 <!-- check-docs: skip (needs user data) -->
 ```sh
-queuetruth live import --venue binance --account main --instrument-map instrument_map.csv \
+queuetruth advanced live import --venue binance --account main --instrument-map instrument_map.csv \
     --in user_stream_2026-10-05.jsonl --in user_stream_2026-10-06.jsonl --in mytrades.json --out live/
-queuetruth live validate --live live/
+queuetruth advanced live validate --live live/
 ```
 
 `instrument_map.csv` must give each symbol the same `instrument_id` as `bn-l2/instruments.parquet`. The importer,
@@ -204,9 +204,9 @@ its inputs and `live validate` are described in [Import fills from my venue or b
 
 <!-- check-docs: skip (needs user data) -->
 ```sh
-queuetruth calibrate-live --data bn-l2 --live live/ --family power3 \
+queuetruth advanced calibrate-live --data bn-l2 --live live/ --family power3 \
     --train 2026-10-05 --test 2026-10-06 --out bn-cal-power3
-queuetruth export hftbacktest --calibration bn-cal-power3/calibration.json --out hbt_snippet.py
+queuetruth advanced export hftbacktest --calibration bn-cal-power3/calibration.json --out hbt_snippet.py
 ```
 
 `--l2-depth`, `--l2-cadence-ns` and `--l2-trades` set the L2 view the zoo runs on. Leave them at the defaults to
@@ -219,7 +219,7 @@ test window with the full scorecard:
 <!-- check-docs: skip (needs user data) -->
 ```sh
 N=$(python -c 'import json; print(json.load(open("bn-cal-power3/calibration.json"))["estimate"])')
-queuetruth score --live live/ --data bn-l2 --sim-model "hbt_power3[n=$N]" --out sc-fitted
+queuetruth advanced score --live live/ --data bn-l2 --sim-model "hbt_power3[n=$N]" --out sc-fitted
 ```
 
 See [Score my Nautilus backtest against my Binance fills](score-nautilus-vs-binance.md) for reading it.

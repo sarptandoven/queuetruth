@@ -115,7 +115,7 @@ run, `h_max_ns` default to the run's `summary.json` spec. On the synthetic fixtu
 
 <!-- check-docs: run -->
 ```bash
-queuetruth zoo --data "$QT_FIXTURES/synth_small" --shadows "$QT_FIXTURES/synth_small/truth/shadows.parquet" \
+queuetruth advanced zoo --data "$QT_FIXTURES/synth_small" --shadows "$QT_FIXTURES/synth_small/truth/shadows.parquet" \
   --out zoo --models front_of_queue --bootstrap-b 20 > /dev/null
 python -m queuetruth.eval.impact zoo --zoo zoo --out impact > summary.json
 python -c "import json; d = json.load(open('summary.json')); print(d['n_assessed'], d['n_material'], d['material'])"

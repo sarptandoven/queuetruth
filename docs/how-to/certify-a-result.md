@@ -4,8 +4,8 @@
 report) together with a file that lets them check, without trusting you, that the numbers you quote are the numbers
 the runs produced, that the runs used the inputs you name, and that running them again gives the same bytes.
 
-`queuetruth certify` writes that file, a `qt.certificate`. `queuetruth verify-cert` checks it, and with `--rerun`
-executes every run again and compares every output file. `queuetruth commit` and `queuetruth reveal` add the
+`queuetruth advanced certify` writes that file, a `qt.certificate`. `queuetruth verify cert` checks it, and with `--rerun`
+executes every run again and compares every output file. `queuetruth advanced commit` and `queuetruth advanced reveal` add the
 missing piece for forecasts and order schedules: proof that a file was fixed before you saw the data it is scored
 against, as far as an independent timestamp of the commitment allows.
 
@@ -21,12 +21,12 @@ that directory (`--base` names another one).
 
 <!-- check-docs: run -->
 ```sh
-queuetruth referee fixtures --out fx > /dev/null
+queuetruth advanced referee fixtures --out fx > /dev/null
 D=fx/02_level_shrink_caps_queue
-queuetruth shadows sample --data $D/dataset --n 20 --seed 1 --window-open-s 0 --window-close-s 0 \
+queuetruth advanced shadows sample --data $D/dataset --n 20 --seed 1 --window-open-s 0 --window-close-s 0 \
   --out shadows.parquet > /dev/null
-queuetruth replay --data $D/dataset --shadows shadows.parquet --out replay > /dev/null
-queuetruth referee run --data $D/dataset --schedule $D/schedule.parquet --sim-fills $D/expected_fills.parquet \
+queuetruth advanced replay --data $D/dataset --shadows shadows.parquet --out replay > /dev/null
+queuetruth advanced referee run --data $D/dataset --schedule $D/schedule.parquet --sim-fills $D/expected_fills.parquet \
   --out referee > /dev/null
 ls replay referee
 ```
@@ -40,7 +40,7 @@ next to the claim and fills it into the text.
 
 <!-- check-docs: run -->
 ```sh
-queuetruth certify replay referee --out cert.json --html cert.html \
+queuetruth advanced certify replay referee --out cert.json --html cert.html \
   --title "Referee fixture 02" \
   --claim "replay filled {replay#/shadows/n_filled} of {replay#/shadows/n} shadow orders" \
   --claim "referee pass: {referee#/pass}, discordant sim-only fills: {referee#/discordant/sim_only}"
@@ -67,8 +67,8 @@ for them only `--rerun` binds outputs to inputs; `certify` says so in a warning.
 
 <!-- check-docs: run -->
 ```sh
-queuetruth verify-cert cert.json
-queuetruth verify-cert cert.json --rerun --verbose
+queuetruth verify cert cert.json
+queuetruth verify cert cert.json --rerun --verbose
 ```
 
 Without `--rerun` the checks are:
@@ -105,10 +105,10 @@ and the sha256 and size a JSON summary records of a file it rewrote.
 
 <!-- check-docs: run -->
 ```sh
-queuetruth cert keygen --out keys/me.pem
-queuetruth certify replay referee --out signed.json --key keys/me.pem \
+queuetruth advanced cert keygen --out keys/me.pem
+queuetruth advanced certify replay referee --out signed.json --key keys/me.pem \
   --claim "replay filled {replay#/shadows/n_filled} of {replay#/shadows/n} shadow orders"
-queuetruth verify-cert signed.json --pubkey keys/me.pub.pem
+queuetruth verify cert signed.json --pubkey keys/me.pub.pem
 ```
 
 `cert keygen` writes an Ed25519 private key (PKCS#8 PEM, mode 0600, encrypted with the passphrase in
@@ -126,9 +126,9 @@ certificates.
 
 <!-- check-docs: run -->
 ```sh
-queuetruth commit shadows.parquet --label "schedule for 2026-06-15" --out commitment.json
+queuetruth advanced commit shadows.parquet --label "schedule for 2026-06-15" --out commitment.json
 ls -l commitment.opening.json
-queuetruth reveal commitment.json shadows.parquet --opening commitment.opening.json
+queuetruth advanced reveal commitment.json shadows.parquet --opening commitment.opening.json
 ```
 
 The public `qt.commitment` holds one leaf per file, sha256 over a fresh 32-byte nonce, the file's name and the
@@ -148,8 +148,8 @@ and the earliest `ts_event` from each dataset's `manifest.json`, so neither can 
 
 <!-- check-docs: run -->
 ```sh
-queuetruth certify replay --out linked.json --commitment commitment.json --opening commitment.opening.json
-queuetruth verify-cert linked.json --only replay
+queuetruth advanced certify replay --out linked.json --commitment commitment.json --opening commitment.opening.json
+queuetruth verify cert linked.json --only replay
 ```
 
 `committed_at` is the committer's clock. To make the time evidence, get the root independently timestamped
@@ -162,7 +162,7 @@ post or a counterparty's receipt. queuetruth contacts no timestamp service itsel
 <!-- check-docs: run exit=1 -->
 ```sh
 printf 'x' >> replay/trades.parquet
-queuetruth verify-cert cert.json
+queuetruth verify cert cert.json
 ```
 
 The failed check names the file (`outputs:replay`, `changed: trades.parquet`). An edited certificate fails
