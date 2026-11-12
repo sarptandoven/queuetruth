@@ -150,9 +150,10 @@ the latency gives a parameter that is too small.
 
 Score the fitted model on held-out days and read the same four checks:
 
-<!-- check-docs: skip (needs an accepted fit; put the fitted n in place of the placeholder) -->
+<!-- check-docs: skip (needs an accepted fit on your own live log and data) -->
 ```sh
-queuetruth score --live live_test --data data --sim-model "hbt_power3[n={{N}}]" --out sc_fitted
+N=$(python -c 'import json; print(json.load(open("fit/calibration.json"))["estimate"])')
+queuetruth score --live live_test --data data --sim-model "hbt_power3[n=$N]" --out sc_fitted
 ```
 
 ## What these numbers do not tell you
