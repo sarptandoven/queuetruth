@@ -1,8 +1,8 @@
 # Draft: L3FIFOQueueModel misses fills of an order priced better than every displayed order
 
 Status: **draft, not filed.** To open as an issue on https://github.com/nkaz001/hftbacktest after the maintainers of
-queuetruth agree. The evidence is in `scripts/scale/findings/l3-fifo-gap.md`. It supersedes the hftbacktest part of
-`docs/launch/upstream.md`, which predates the run on the released hftbacktest.
+queuetruth agree. The evidence is in `scripts/scale/findings/l3-fifo-gap.md`. It replaces the earlier hftbacktest note in
+`docs/launch/upstream.md`, which now points here.
 
 Title: `L3FIFOQueueModel: an order priced better than every displayed order fills only on a cross`
 

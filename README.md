@@ -15,7 +15,10 @@ fills, order by order.
 **[The Fill-Realism Atlas](https://sarptandoven.github.io/queuetruth/)**, rebuilt from free IEX DEEP+ data: over 20
 trading days (2026-10-09 to 2026-11-06; 265,402 symbol-days, 12,440 symbols), the exact queue fills **11.97%** of
 small resting orders within 1 minute. NautilusTrader's touch fill model fills **1.50 pp more** (13% more orders; 95%
-interval +1.45 to +1.55 pp), and NautilusTrader's `queue_position` model is closest at +0.06 pp. IEX is one venue with its own rules; [how the atlas is made](https://github.com/sarptandoven/queuetruth/blob/main/docs/concepts/fill-realism-atlas.md).
+interval +1.45 to +1.55 pp), NautilusTrader's `queue_position` model is closest at +0.06 pp, and hftbacktest's L3
+FIFO model fills 1.82 pp fewer because of hftbacktest's own rules: it skips hidden executions and counts a
+trade-through only through the feed's best price ([why](https://github.com/sarptandoven/queuetruth/blob/main/scripts/scale/findings/l3-fifo-gap.md)). IEX is one
+venue with its own rules; [how the atlas is made](https://sarptandoven.github.io/queuetruth/docs/concepts/fill-realism-atlas/).
 
 ## See it in a minute
 
@@ -32,11 +35,11 @@ fills 29.4%: 3.6 pp (1.12x) too many (95% CI +2.6 to +4.8 pp).
 ```
 
 followed by the table for every horizon and a self-contained HTML report. Nothing else is downloaded, and nothing is
-sent anywhere: queuetruth has no telemetry. [Getting started](https://github.com/sarptandoven/queuetruth/blob/main/docs/getting-started.md)
+sent anywhere: queuetruth has no telemetry. [Getting started](https://sarptandoven.github.io/queuetruth/docs/getting-started/)
 walks through the same steps by hand.
 
 <!-- Release step: pin this image URL to the release tag (.../queuetruth/vX.Y.Z/docs/assets/...) so the PyPI page and its chart cannot disagree. -->
-[![Fill-rate bias of each queue-model configuration against the exact replay at 1 s on two public Nasdaq days, with day-block bootstrap 95% intervals, drawn from the faithful-mode table in docs/RESULTS.md section 4, every model scored on the same orders.](https://raw.githubusercontent.com/sarptandoven/queuetruth/main/docs/assets/fill-bias-1s.svg)](https://github.com/sarptandoven/queuetruth/blob/main/docs/RESULTS.md#4-how-far-are-l2-queue-models-from-exact-truth-rd-8-extended-the-headline-experiment)
+[![Fill-rate bias of each queue-model configuration against the exact replay at 1 s on two public Nasdaq days, with day-block bootstrap 95% intervals, drawn from the faithful-mode table in docs/RESULTS.md section 4, every model scored on the same orders.](https://raw.githubusercontent.com/sarptandoven/queuetruth/main/docs/assets/fill-bias-1s.svg)](https://sarptandoven.github.io/queuetruth/docs/RESULTS/#4-how-far-are-l2-queue-models-from-exact-truth-rd-8-extended-the-headline-experiment)
 
 ## What it found on real data
 
@@ -45,7 +48,7 @@ scored against the exact replay of the real queue:
 
 - **NautilusTrader's default touch fill model overfills.** In the real engine (nautilus_trader 1.231.0; 2.0.0rc7
   fills the same orders) it fills 14.17% of orders within 1 s where the real queue fills 11.03%: **+3.13 pp**
-  (95% CI +2.53 to +3.77; [the headline number](https://github.com/sarptandoven/queuetruth/blob/main/docs/RESULTS.md#the-headline-number));
+  (95% CI +2.53 to +3.77; [the headline number](https://sarptandoven.github.io/queuetruth/docs/RESULTS/#the-headline-number));
   +2.80 pp on the second day. On deep-queue names (BAC, F, GE, SIRI, T, PFE) it reaches
   **+8.60 pp at 60 s**.
 - **Calibration fixes it out of sample.** `p = 0.29`, fitted on day one, cuts day two's 1 s overfill from +2.8 pp to
@@ -56,22 +59,22 @@ scored against the exact replay of the real queue:
 
 Two days, one venue, the most liquid US stocks: refit for your venue and feed. Every table, by horizon, queue
 position and liquidity tier, plus 36 more symbols in five tiers:
-[Results](https://github.com/sarptandoven/queuetruth/blob/main/docs/RESULTS.md).
+[Results](https://sarptandoven.github.io/queuetruth/docs/RESULTS/).
 
 ## Pick your path
 
 | You want to | Start here |
 |---|---|
-| know how wrong your backtester's fill model is | `queuetruth demo`, then [the model zoo on your data](https://github.com/sarptandoven/queuetruth/blob/main/docs/concepts/l2-model-zoo.md) |
-| get a fitted parameter to paste into hftbacktest or NautilusTrader | [Calibrate my hftbacktest model](https://github.com/sarptandoven/queuetruth/blob/main/docs/how-to/calibrate-hftbacktest.md), [calibrate on an L2-only venue](https://github.com/sarptandoven/queuetruth/blob/main/docs/how-to/calibrate-live-l2-venue.md) |
-| compare your backtest with your live fills | [Score my Nautilus backtest against my Binance fills](https://github.com/sarptandoven/queuetruth/blob/main/docs/how-to/score-nautilus-vs-binance.md), [reconcile Freqtrade or Hummingbot](https://github.com/sarptandoven/queuetruth/blob/main/docs/how-to/reconcile-freqtrade-hummingbot.md) |
-| regression-test your own simulator's queue logic | [Referee my simulator](https://github.com/sarptandoven/queuetruth/blob/main/docs/how-to/referee-your-simulator.md) |
-| prove a backtest result to someone else | [Certify a result](https://github.com/sarptandoven/queuetruth/blob/main/docs/how-to/certify-a-result.md) |
-| let an AI agent trade a replayed day with exact fills | [Agent sandbox](https://github.com/sarptandoven/queuetruth/blob/main/docs/how-to/agent-sandbox.md), [use from an agent (MCP)](https://github.com/sarptandoven/queuetruth/blob/main/docs/how-to/use-from-an-agent.md) |
-| make markets on Kalshi or Polymarket, or score forecasts | [Prediction-market making](https://github.com/sarptandoven/queuetruth/blob/main/docs/how-to/prediction-market-making.md), [score forecasts](https://github.com/sarptandoven/queuetruth/blob/main/docs/how-to/score-forecasts.md) |
+| know how wrong your backtester's fill model is | `queuetruth demo`, then [the model zoo on your data](https://sarptandoven.github.io/queuetruth/docs/concepts/l2-model-zoo/) |
+| get a fitted parameter to paste into hftbacktest or NautilusTrader | [Calibrate my hftbacktest model](https://sarptandoven.github.io/queuetruth/docs/how-to/calibrate-hftbacktest/), [calibrate on an L2-only venue](https://sarptandoven.github.io/queuetruth/docs/how-to/calibrate-live-l2-venue/) |
+| compare your backtest with your live fills | [Score my Nautilus backtest against my Binance fills](https://sarptandoven.github.io/queuetruth/docs/how-to/score-nautilus-vs-binance/), [reconcile Freqtrade or Hummingbot](https://sarptandoven.github.io/queuetruth/docs/how-to/reconcile-freqtrade-hummingbot/) |
+| regression-test your own simulator's queue logic | [Referee my simulator](https://sarptandoven.github.io/queuetruth/docs/how-to/referee-your-simulator/) |
+| prove a backtest result to someone else | [Certify a result](https://sarptandoven.github.io/queuetruth/docs/how-to/certify-a-result/) |
+| let an AI agent trade a replayed day with exact fills | [Agent sandbox](https://sarptandoven.github.io/queuetruth/docs/how-to/agent-sandbox/), [use from an agent (MCP)](https://sarptandoven.github.io/queuetruth/docs/how-to/use-from-an-agent/) |
+| make markets on Kalshi or Polymarket, or score forecasts | [Prediction-market making](https://sarptandoven.github.io/queuetruth/docs/how-to/prediction-market-making/), [score forecasts](https://sarptandoven.github.io/queuetruth/docs/how-to/score-forecasts/) |
 
 Every term (shadow, zoo, exact arm, faithful and corrected) is in the
-[Glossary](https://github.com/sarptandoven/queuetruth/blob/main/docs/concepts/glossary.md).
+[Glossary](https://sarptandoven.github.io/queuetruth/docs/concepts/glossary/).
 
 ## Bring your data
 
@@ -86,7 +89,7 @@ Every term (shadow, zoo, exact arm, faithful and corrected) is in the
 | A QuantConnect LEAN backtest (the result JSON and its order-events JSON) and your live log | the same per-order account and scorecard | `queuetruth reconcile --kind lean`; `live import --venue sim-lean` |
 
 queuetruth ships no market data and fetches none except `demo`'s public sample day, after you agree. You need a
-licence for the data you process: [Data and licensing](https://github.com/sarptandoven/queuetruth/blob/main/docs/data-and-licensing.md).
+licence for the data you process: [Data and licensing](https://sarptandoven.github.io/queuetruth/docs/data-and-licensing/).
 
 ## Why the answer is exact
 
@@ -101,7 +104,7 @@ licence for the data you process: [Data and licensing](https://github.com/sarpta
   from the raw bytes. `queuetruth certify` and `verify-cert --rerun` re-execute a result bit for bit.
 
 What each check covers and what is not tested yet:
-[How queuetruth is tested](https://github.com/sarptandoven/queuetruth/blob/main/docs/testing.md).
+[How queuetruth is tested](https://sarptandoven.github.io/queuetruth/docs/testing/).
 
 ## Status
 
@@ -123,7 +126,7 @@ What each check covers and what is not tested yet:
 | The prediction-market kit | Fixtures and synthetic data only |
 | The forecast referee | Fixtures and synthetic data only |
 
-Details and evidence for every row: [What is validated](https://github.com/sarptandoven/queuetruth/blob/main/docs/validated.md).
+Details and evidence for every row: [What is validated](https://sarptandoven.github.io/queuetruth/docs/validated/).
 
 <!-- validated:end -->
 
@@ -171,10 +174,11 @@ make test                            # lint + Rust + Python + service tests
 make reproduce                       # every published real-data number from the public Nasdaq files
 ```
 
+[Documentation](https://sarptandoven.github.io/queuetruth/docs/) ·
 [CONTRIBUTING.md](https://github.com/sarptandoven/queuetruth/blob/main/CONTRIBUTING.md) ·
 [SECURITY.md](https://github.com/sarptandoven/queuetruth/blob/main/SECURITY.md) ·
 [Roadmap](https://github.com/sarptandoven/queuetruth/blob/main/ROADMAP.md) ·
-[Design specification](https://github.com/sarptandoven/queuetruth/blob/main/docs/design/spec.md) ·
+[Design specification](https://sarptandoven.github.io/queuetruth/docs/design/spec/) ·
 [Changelog](https://github.com/sarptandoven/queuetruth/blob/main/CHANGELOG.md)
 
 ## Licence

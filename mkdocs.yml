@@ -1,11 +1,12 @@
 # Site configuration for the queuetruth docs (mkdocs-material, dev dependency; Zensical also reads this file).
 # The theme, nav and page settings live in docs/mkdocs.yml (owned with the docs, checked by docs/check_docs.py); MkDocs
 # refuses a config file inside docs_dir, so this root file inherits it and adds only the site-level keys below.
-# Build: make docs-build. Read the Docs builds this same file (.readthedocs.yaml) and sets READTHEDOCS_CANONICAL_URL;
-# a local build leaves site_url unset, as before.
+# Build: make docs-build. The published site is https://sarptandoven.github.io/queuetruth/docs/: the atlas workflow
+# (.github/workflows/atlas.yml) builds it with QT_DOCS_SITE_URL set to that URL. Read the Docs builds this same file
+# (.readthedocs.yaml) and sets READTHEDOCS_CANONICAL_URL; a local build leaves site_url unset, as before.
 INHERIT: docs/mkdocs.yml
 docs_dir: docs
-site_url: !ENV [READTHEDOCS_CANONICAL_URL, null]
+site_url: !ENV [QT_DOCS_SITE_URL, READTHEDOCS_CANONICAL_URL, null]
 repo_url: https://github.com/sarptandoven/queuetruth
 repo_name: sarptandoven/queuetruth
 # No edit buttons: the theme does not enable content.action.edit, and docs/reference/ is generated.
