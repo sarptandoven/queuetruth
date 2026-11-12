@@ -9,7 +9,7 @@ backtester and wherever your live records come from:
 queuetruth compare --backtest BACKTEST --live LIVE [--data DATASET]
 ```
 
-**You need:** queuetruth 0.3.0 or later, your backtester's output, and the live records of the same strategy over
+**You need:** queuetruth 0.4.0 or later, your backtester's output, and the live records of the same strategy over
 the same days. Market data is optional: with an order-level dataset (`--data`) every fill is also marked to the
 mid, which gives the markouts and the P&L gap per order, and the live orders are replayed in the exact queue.
 

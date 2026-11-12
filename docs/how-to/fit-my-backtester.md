@@ -5,7 +5,7 @@ trust it. `queuetruth fit` fits the setting on part of your data, compares it wi
 it did not see, and writes the line to paste only when the fit wins there. When it does not, it says why and what
 would make it pass.
 
-**You need:** order-level (MBO) data of your market as a queuetruth dataset (`queuetruth data add`; see
+**You need:** queuetruth 0.4.0 or later, and order-level (MBO) data of your market as a queuetruth dataset (`queuetruth data add`; see
 [Replay a public IEX DEEP+ day](iex-public-demo.md) for free data), or your own live fills with the L2 or MBO data of
 the same period.
 

@@ -30,7 +30,7 @@ from queuetruth_hftbacktest.configure import configure, settings
 from queuetruth_hftbacktest.errors import CalibrationRefused, CalibrationWarning, QtHbtError
 from queuetruth_hftbacktest.replay import HbtScore, HorizonScore, Prepared, prepare, run, score
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "CalibrationRefused",

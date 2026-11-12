@@ -20,7 +20,7 @@ view.
 
 Spec and summary models live in `queuetruth.schemas` and are documented field by field in [Schemas](schemas.md).
 
-Package version: `0.3.0`.
+Package version: `0.4.0`.
 
 ## `queuetruth`
 

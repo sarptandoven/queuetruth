@@ -5,7 +5,8 @@ own resting limit orders, at their own times and prices, in the exact queue of a
 them order by order: which fills were real, which were phantom (the backtest filled the order, the real queue did
 not), how long the fills took, and what that does to P&L.
 
-**You need:** your backtester's output file, and order-level (MBO) data that covers the backtest's days, as a
+**You need:** queuetruth 0.4.0 or later, your backtester's output file, and order-level (MBO) data that covers the
+backtest's days, as a
 queuetruth dataset (`queuetruth data add`; see [Replay a public IEX DEEP+ day](iex-public-demo.md) for free data).
 Without data, `check` estimates from the public atlas instead ([without order-level data](#without-order-level-data)).
 `check` reads these outputs:

@@ -1,7 +1,7 @@
 {
   "schema": "qt.dataset_manifest",
   "schema_version": 1,
-  "dataset_id": "ced39e727cb803a0bf5acb45645762734078034f5f9b571ced02fa450b963545",
+  "dataset_id": "fe9e1d9d3ed88927527a1cb66c504b7cea51631fe5a811ecf93f582297495a04",
   "kind": "mbo",
   "source_format": "synthetic",
   "venue": "cme",
@@ -15,7 +15,7 @@
         {
           "path": "mbo/date=2026-06-15/instrument_id=1/part-00000.parquet",
           "rows": 14,
-          "sha256": "7681173277d515e7336968d6107209e2e5129376d42f109dd6778b057764436f"
+          "sha256": "0b901493ffe978bd58dc988b6e49eb9937f8dcedcbaf3cd5657aea10febd5af1"
         }
       ],
       "rows": 14,
@@ -26,7 +26,7 @@
   "price_exp_by_instrument": {
     "1": -9
   },
-  "created_by": "queuetruth-testkit 0.3.0",
+  "created_by": "queuetruth-testkit 0.4.0",
   "validation_status": "fixture_only",
   "rule_set": null,
   "source_vintage": null
