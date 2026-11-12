@@ -139,6 +139,13 @@ def corpus(tmp_path_factory: pytest.TempPathFactory) -> dict[str, str]:
     run("atlas --symbol", "atlas", "--symbol", "ZZZA", "--from", site)
     run("atlas --horizon", "atlas", "--library", "nautilus", "--horizon", "1000000000", "--from", site,
         ok=lambda c: c in (0, 2))  # fmt: skip
+    from check import synth_atlas as sa
+
+    est = tmp / "check_est"
+    touch_site = str(sa.write_atlas(tmp / "touch_site", symbols={"QTAU6": "T1_top100"}))
+    run("check without data", "check", str(bt), "--atlas", touch_site, "--bar", "5min", "--tier", "ALL", "--out",
+        str(est), "--html")  # fmt: skip
+    capsys_out["check without data html"] = _html_text(est / "check.html")
     return capsys_out
 
 
