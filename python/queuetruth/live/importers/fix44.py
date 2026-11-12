@@ -82,6 +82,8 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any
 
+from pydantic import Field
+
 from queuetruth.errors import QtError
 from queuetruth.live._common import (
     ID_RE,
@@ -98,7 +100,7 @@ from queuetruth.live._common import (
     rfc3339_ns,
 )
 from queuetruth.live.builder import ImportResult, LogBuilder
-from queuetruth.live.importers._base import ImportOptions
+from queuetruth.live.importers._base import ImporterDef, ImporterOptions, ImportOptions, Text
 from queuetruth.live.importers.fixdict import STANDARD_TAGS, FixDictionary, load_dictionary
 from queuetruth.live.importers.fixwire import (
     coarsest,
@@ -119,6 +121,7 @@ from queuetruth.live.importers.quickfix import (
     read_seqnums,
     read_store,
 )
+from queuetruth.schemas.specs import FixOptions
 
 VENUE = "fix44"
 _NO_ID = {"", "NONE", "0", "UNKNOWN"}
@@ -1578,3 +1581,25 @@ def _merge(results: list[ImportResult]) -> ImportResult:
 
 
 __all__ = ["FIX_KEEP_PRIORITY_VENUES", "VENUE", "FixConfig", "fix_ts", "import_fix44"]
+
+# ---- registry entry (queuetruth.live.importers.registry()) ------------------------------------------------------
+
+
+class Fix44Options(ImporterOptions):
+    """Options of the FIX log importer."""
+
+    fix: FixOptions | None = Field(None, description="LiveImportSpec.fix: delimiter, local_ts_regex, venue_name, ...")
+    tz: Text = Field(None, description="IANA zone of log times captured by fix.local_ts_regex without an offset")
+
+
+IMPORTER = ImporterDef(
+    name="fix44",
+    kind="venue",
+    run=import_fix44,
+    options=Fix44Options,
+    formats=("QuickFIX FileLog and FileStore files or directories", "one-message-per-line FIX 4.4 logs"),
+    patterns=("*.messages.current.log", "*.messages.log", "*.body", "*.header", "*.seqnums", "*.log"),
+    description="FIX 4.4 order-entry and drop-copy logs (QuickFIX C++, J, n, Go and plain FIX logs)",
+    docs="how-to/import-live-logs.md#fix44",
+    rank=90,
+)

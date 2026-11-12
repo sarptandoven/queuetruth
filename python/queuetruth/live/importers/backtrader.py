@@ -41,9 +41,9 @@ from typing import Any
 from queuetruth.errors import QtError
 from queuetruth.live._common import Record, dump_raw, input_error, read_json_records
 from queuetruth.live.builder import ImportResult
-from queuetruth.live.importers._base import ImportOptions
+from queuetruth.live.importers._base import ImporterDef, ImportOptions
 from queuetruth.live.importers.backtest import (
-    COMMON_OPTIONS,
+    BacktestOptions,
     SimFill,
     SimOrder,
     SimRun,
@@ -63,7 +63,13 @@ from queuetruth.schemas.io import sha256_file
 BT_SIM = "sim:backtrader"
 #: Backtrader release the format notes were read from.
 BACKTRADER_VERSION = "1.9.78.123"
-BT_OPTIONS = COMMON_OPTIONS
+
+
+class BacktraderOptions(BacktestOptions):
+    """`BacktestOptions`."""
+
+
+BT_OPTIONS = BacktraderOptions.option_names()
 _NS = 1_000_000_000
 _EXEC = {
     "market": "market",
@@ -388,3 +394,17 @@ __all__ = [
     "read_backtrader",
     "reconcile_backtrader",
 ]
+
+# ---- registry entry (queuetruth.live.importers.registry()) ------------------------------------------------------
+
+IMPORTER = ImporterDef(
+    name="backtrader",
+    kind="sim",
+    run=import_backtrader_sim,
+    options=BacktraderOptions,
+    formats=("QtOrderLog notification lines (JSON lines)", "order and trade notification JSON"),
+    patterns=("*.jsonl", "*.json"),
+    description="Backtrader backtest: order and trade notifications (log venue sim:backtrader)",
+    docs="how-to/reconcile-backtrader-vectorbt.md#backtrader-add-an-analyzer",
+    rank=160,
+)

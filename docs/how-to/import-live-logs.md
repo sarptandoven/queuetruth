@@ -47,10 +47,9 @@ queuetruth live import --venue binance --account main --instrument-map instrumen
     --in user_stream_2026-10-05.jsonl --in mytrades_2026-10-05.json --out live/
 ```
 
-`--venue` is one of `binance`, `bybit`, `okx`, `coinbase`, `kraken`, `deribit`, `hyperliquid`, `ibkr-flex`,
-`fix44`, or one of the simulator outputs `sim-hftbacktest`, `sim-nautilus`, `sim-freqtrade`, `sim-hummingbot`,
-`sim-backtrader`, `sim-vectorbt` and `sim-lean` (their options go in
-`--option KEY=VALUE`). FIX logs take the `--fix-*` flags ([Score my QuickFIX-driven strategy](score-quickfix-strategy.md)). `--in` repeats; every input of one run goes into the same log and fills seen in more than one input are
+`--venue` names one importer of the [importer table](../reference/importers.md): a venue's own records, a
+simulator's or backtester's output (`sim-*`) or a trading bot's live run. An importer's own options go in
+`--option KEY=VALUE`; the table lists them. FIX logs take the `--fix-*` flags ([Score my QuickFIX-driven strategy](score-quickfix-strategy.md)). `--in` repeats; every input of one run goes into the same log and fills seen in more than one input are
 deduplicated. `--append` adds to an existing log: orders with an existing `order_key` keep their row, events already
 present (same fill id, or an identical lifecycle event) are dropped and counted, and events are renumbered.
 `--tz` is the account time zone of venue-local times (IBKR Flex). The output is a

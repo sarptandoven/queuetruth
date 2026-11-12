@@ -53,6 +53,8 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+from pydantic import Field
+
 from queuetruth.errors import QtError
 from queuetruth.live._common import (
     Record,
@@ -65,7 +67,7 @@ from queuetruth.live._common import (
 )
 from queuetruth.live.builder import ImportResult, LogBuilder
 from queuetruth.live.imap import InstrumentMap, load_instrument_map
-from queuetruth.live.importers._base import ImportOptions
+from queuetruth.live.importers._base import ImporterDef, ImporterOptions, ImportOptions, Int, Num, Paths, Text
 from queuetruth.live.importers.freqtrade import (
     OrderView,
     ReconcileReport,
@@ -90,9 +92,29 @@ HUMMINGBOT_COMMIT = "9af100d6822da7d2d0291a906c730ef172284ee2"
 _NS = 1_000_000_000
 _PAPER_SUFFIXES = ("_papertrade", "_paper_trade")
 _CREATED = {"buyordercreated": "buy", "sellordercreated": "sell"}
-HB_OPTIONS = frozenset(
-    {"market", "pair_with", "pair_window_ms", "pair_price_tol", "price_exp", "size_exp", "venue", "map_venue"}
-)
+
+
+class HummingbotOptions(ImporterOptions):
+    """Options of the Hummingbot importers (the live bot reads these; the paper bot adds the pairing ones)."""
+
+    market: Text = Field(None, description="the connector market to read when the database holds several")
+    venue: Text = Field(None, description="log venue (default: the market's exchange)")
+    map_venue: Text = Field(None, description="venue of the instrument-map rows when it differs from venue")
+    price_exp: Int = Field(None, description="decimal exponent of prices (default -9)")
+    size_exp: Int = Field(None, description="decimal exponent of sizes (default -8)")
+
+
+class HummingbotSimOptions(HummingbotOptions):
+    """`HummingbotOptions` and the live run the paper bot is paired with."""
+
+    pair_with: Paths = Field(
+        None, description="the live bot's database or trades CSV: paired orders take its order_key"
+    )
+    pair_window_ms: Int = Field(None, description="pairing window in milliseconds (default 1000)")
+    pair_price_tol: Num = Field(None, description="price difference still paired (default 0)")
+
+
+HB_OPTIONS = HummingbotSimOptions.option_names()
 
 
 @dataclass
@@ -920,3 +942,30 @@ __all__ = [
     "read_hb_sqlite",
     "reconcile_hummingbot",
 ]
+
+# ---- registry entry (queuetruth.live.importers.registry()) ------------------------------------------------------
+
+IMPORTERS = (
+    ImporterDef(
+        name="hummingbot",
+        kind="bot",
+        run=import_hummingbot,
+        options=HummingbotOptions,
+        formats=("bot database (SQLite)", "trades CSV"),
+        patterns=("*.sqlite", "trades_*.csv"),
+        description="Hummingbot bot: the orders and fills of a live run (log venue = the exchange market)",
+        docs="how-to/reconcile-freqtrade-hummingbot.md#part-2-hummingbot-paper-trading-vs-live",
+        rank=130,
+    ),
+    ImporterDef(
+        name="hummingbot",
+        kind="sim",
+        run=import_hummingbot_sim,
+        options=HummingbotSimOptions,
+        formats=("paper-trade bot database (SQLite)", "paper-trade trades CSV"),
+        patterns=("*_paper_trade*.sqlite", "*_papertrade*.sqlite", "trades_*.csv"),
+        description="Hummingbot paper bot as the simulator arm (log venue sim:hummingbot)",
+        docs="how-to/reconcile-freqtrade-hummingbot.md#part-2-hummingbot-paper-trading-vs-live",
+        rank=150,
+    ),
+)
