@@ -2729,8 +2729,9 @@ asset = (
 `power_prob_queue_model3(n)`, databento with `k <= 0` -> `power_prob_queue_model3(1/(1+k))` (for `k > 0` no hbt
 equivalent exists: the builder line is omitted with a note) (expected-value approximation of DB's
 Monte Carlo, noted), log -> `log_prob_queue_model()`, log2 -> `log_prob_queue_model2()`, risk_adverse ->
-`risk_adverse_queue_model()`. `exchange`: `partial_fill_exchange` or `no_partial_fill_exchange` per the fit's
-exchange. `latency_line`: `.intp_order_latency("{npz}")` when a latency calibration exists, else omitted. Notes
+`risk_adverse_queue_model()`. `exchange`: `no_partial_fill_exchange` by default (it runs on the released
+hftbacktest 2.4.4, which stops on `partial_fill_exchange` with error 14, #312), `partial_fill_exchange` when asked
+(`hftbacktest_snippet(cal, exchange="partial")`); the header says when the fit simulated the other one. `latency_line`: `.intp_order_latency("{npz}")` when a latency calibration exists, else omitted. Notes
 always include hbt #316/#312 (partial-fill accounting in released versions) and the conflated-L2 caveat.
 NautilusTrader (`nautilus_snippet`), layout for an NT touch-family fit with every latency component fitted (a
 line that is not fitted is emitted as a comment instead; `queuetruth.export.nautilus`):
