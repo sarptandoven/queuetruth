@@ -8,7 +8,7 @@ use qt_schema::io::FileEntry;
 use qt_schema::json::{
     self, Doctor, ExportSummary, ExportTarget, FixtureEntry, FixturesSummary, IngestSummary, Verdict,
 };
-use qt_schema::specs::{DatasetRef, ExcludeOrderId, ExportSpec, IngestFormat, IngestSpec, L2Config, ReplaySpec};
+use qt_schema::specs::{DatasetRef, ExcludeOrderId, ExportSpec, IngestSpec, L2Config, ReplaySpec};
 use qt_types::{QtError, QtResult, Venue};
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
@@ -39,23 +39,12 @@ fn dataset_path(r: &DatasetRef) -> QtResult<&Path> {
     })
 }
 
-/// `ingest` for every format: MBO formats through `qt_ingest`, crypto and Tardis through `qt_crypto`.
+/// `ingest` for every format, through the source format registry (`crate::formats`): MBO formats read by
+/// `qt_ingest`, crypto and Tardis by `qt_crypto`.
 pub fn ingest(spec: &IngestSpec) -> QtResult<IngestSummary> {
-    match spec.format {
-        IngestFormat::Itch
-        | IngestFormat::Dbn
-        | IngestFormat::Etcsv
-        | IngestFormat::Parquet
-        | IngestFormat::IexDeepPlus
-        | IngestFormat::NyseIbf => qt_ingest::ingest(spec),
-        IngestFormat::Bitstamp
-        | IngestFormat::Bitfinex
-        | IngestFormat::Coinbase
-        | IngestFormat::CoinbaseLevel3
-        | IngestFormat::KrakenL3
-        | IngestFormat::HyperliquidNode
-        | IngestFormat::TardisL2 => qt_crypto::ingest(spec),
-    }
+    let f = crate::formats::get(spec.format)
+        .ok_or_else(|| QtError::Engine(format!("format {:?} is missing from the format registry", spec.format)))?;
+    (f.ingest)(spec)
 }
 
 /// `ingest` as a gate (CLI `--strict`): runs without the engine's strict error, echoes `strict = true` and reports

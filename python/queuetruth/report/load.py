@@ -129,9 +129,26 @@ class RunDir:
 #: Status of a dataset read from a vendor file (`VENDOR_FORMATS`) whose venue rule set is validated on
 #: synthetic data only: the manifest's `synthetic_only` describes the rules, not the data (Databento CME files).
 RULES_SYNTHETIC_ONLY = "rules_validated_on_synthetic_only"
-#: `source_format`s read from vendor files by `ingest` (the testkit writes `synthetic`). `nyse_ibf`: NYSE TAQ
-#: Integrated Feed files, real data replayed with the `nyse` rule set, which is validated on synthetic data only.
-VENDOR_FORMATS = frozenset({"dbn", "itch", "iex", "etcsv", "nyse_ibf"})
+#: `source_format`s read from vendor files by `ingest` (the testkit writes `synthetic`; `parquet` re-ingests one of
+#: our datasets). `nyse_ibf`: NYSE TAQ Integrated Feed files, real data replayed with the `nyse` rule set, which is
+#: validated on synthetic data only; the crypto and Tardis captures likewise. `python/tests/test_format_lists.py`
+#: checks this set against the format registry (`_core.formats()`, entries with `vendor`).
+VENDOR_FORMATS = frozenset(
+    {
+        "dbn",
+        "itch",
+        "iex",
+        "etcsv",
+        "nyse_ibf",
+        "bitstamp",
+        "bitfinex",
+        "coinbase",
+        "coinbase_level3",
+        "kraken_l3",
+        "hyperliquid_node",
+        "tardis_l2",
+    }
+)
 
 
 @dataclass
