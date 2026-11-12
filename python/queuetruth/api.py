@@ -910,29 +910,8 @@ class WhyExplanation(BaseModel):
 
 
 def _instrument_units(root: Path, iid: int, ts: int | None) -> dict[str, Any]:
-    """symbol / price_exp / size_exp / tick_size / session_tz of an instrument on the session of `ts` (any session
-    otherwise)."""
-    try:
-        t = pq.read_table(root / "instruments.parquet")
-    except (OSError, pa.ArrowInvalid):
-        return {}
-    rows = [r for r in t.to_pylist() if int(r.get("instrument_id", -1)) == int(iid)]
-    if not rows:
-        return {}
-    pick = rows[0]
-    if ts is not None:
-        for r in rows:
-            mid = r.get("midnight_utc_ns")
-            if mid is not None and int(mid) <= ts < int(mid) + 86_400 * _NS:
-                pick = r
-                break
-    return {
-        "symbol": pick.get("symbol"),
-        "price_exp": pick.get("price_exp"),
-        "size_exp": pick.get("size_exp"),
-        "tick_size": pick.get("tick_size"),
-        "session_tz": pick.get("session_tz"),
-    }
+    """`queuetruth.units.instrument_units` (kept for older callers)."""
+    return units.instrument_units(root, iid, ts)
 
 
 def fmt_utc(ns: int | None, digits: int = 6, date: bool = False) -> str:
@@ -952,16 +931,11 @@ def fmt_utc(ns: int | None, digits: int = 6, date: bool = False) -> str:
 
 
 def fmt_scaled(v: float | int | None, exp: int | None) -> str:
-    """A fixed-point integer `v * 10**exp` as a decimal string (no exponent; trailing zeros trimmed)."""
-    if v is None:
-        return "-"
-    if exp is None or exp == 0:
-        return f"{v:g}" if isinstance(v, float) else str(v)
-    from decimal import Decimal
-
-    d = Decimal(str(v)).scaleb(int(exp))
-    text = format(d.normalize(), "f")
-    return text if "." not in text else text.rstrip("0").rstrip(".")
+    """Deprecated: use `queuetruth.units.format_scaled` (or `format_price` for a price)."""
+    warnings.warn(
+        "queuetruth.api.fmt_scaled is deprecated; use queuetruth.units.format_scaled", DeprecationWarning, stacklevel=2
+    )
+    return units.format_scaled(v, exp)
 
 
 def fmt_dur(ns: int | None) -> str:
@@ -1048,7 +1022,7 @@ def _conclusion(x: WhyExplanation) -> str:
     ev = t.events
 
     def size(v: float | int) -> str:
-        return fmt_scaled(v, x.size_exp)
+        return units.format_scaled(v, x.size_exp)
 
     start = t.ts_live
     fill_i = next((i for i, e in enumerate(ev) if e.fill_qty > 0), None)
@@ -1385,7 +1359,7 @@ def why_explain(
             # `live` + `order_key` stay in the spec: the core removes the order's own MBO records (A1).
             run = sp.model_copy(update={"shadows": s.PathRef(path=str(sched)), "shadow_id": sid, "out": None})
         trace = _native("why", run, m.WhyTrace)
-        inst = _instrument_units(root, trace.instrument_id, trace.ts_live)
+        inst = units.instrument_units(root, trace.instrument_id, trace.ts_live)
         x = WhyExplanation(trace=trace, excluded_order_ids=[o for _, o in excluded], notes=notes, **inst)
         if model is not None or zoo is not None:
             sid = trace.subject.shadow_id or sp.shadow_id or ""

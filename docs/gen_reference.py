@@ -155,7 +155,7 @@ internal.
 Spec and summary models live in `queuetruth.schemas` and are documented field by field in [Schemas](schemas.md).
 """
 
-PY_MODULES = ["stats", "eval", "model", "live", "score", "export", "report", "frames", "client"]
+PY_MODULES = ["units", "stats", "eval", "model", "live", "score", "export", "report", "frames", "client"]
 
 
 def spec43_names() -> set[str]:

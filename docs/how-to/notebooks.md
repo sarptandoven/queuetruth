@@ -97,7 +97,7 @@ Python call returns, its dict, a run directory or the summary file.
 from queuetruth import frames
 
 board = frames.leaderboard("zoo")
-one_second = board[board["horizon_ns"] == 1_000_000_000]
+one_second = board[board["horizon"] == "1s"]
 print(one_second[["model_id", "fill_rate_bias", "ci_lo", "ci_hi", "exact_fill_rate"]].to_string(index=False))
 ```
 
@@ -118,10 +118,15 @@ print(sorted(c for c in lb.columns if c.startswith("overfill_bias")))
 | `load_run(path, backend=None, verify=False)` | `RunFrames`: table name to DataFrame (`read(name, columns, filters)` for part of a table, `table(name)` for the `pyarrow.Table`, `file_path(name)`, `model()` for the validated Pydantic summary, `verify()`, `unlisted`) |
 | `read(path, expect=None, columns=None, backend=None, filters=None)` | one table; `expect` checks its `qt.schema`; `columns` and `filters` (pyarrow's form, `[("instrument_id", "==", 13)]`) are pushed down to the Parquet reader, so a few columns of a full-day table cost only those columns |
 | `to_frame(table, backend=None)` | a `pyarrow.Table`, record batch or list of row dicts as a DataFrame |
-| `leaderboard(zoo)` | `model_id`, `horizon_ns`, `fill_rate_bias`, `ci_lo`, `ci_hi`, `exact_fill_rate`, `model_fill_rate`, `brier`, `logloss`, `overfill_bias`, `qty_bias`, `mcnemar_b`, `mcnemar_c`, `mcnemar_p_exact`, and the scoring population shared by every model: `n_leaderboard` and `n_excluded_hbt_312` (shadows dropped from every row because a faithful hftbacktest model aborted on them) |
-| `held_out(calibration)` | `arm` (`fitted` or `default`), `model_id`, `horizon_ns`, `brier`, `logloss`, `fill_rate_bias`, `beats_default` |
+| `leaderboard(zoo)` | `model_id`, `horizon_ns` with `horizon` as text (`1s`), `fill_rate_bias`, `ci_lo`, `ci_hi`, `exact_fill_rate`, `model_fill_rate`, `brier`, `logloss`, `overfill_bias`, `qty_bias`, `mcnemar_b`, `mcnemar_c`, `mcnemar_p_exact`, and the scoring population shared by every model: `n_leaderboard` and `n_excluded_hbt_312` (shadows dropped from every row because a faithful hftbacktest model aborted on them) |
+| `held_out(calibration)` | `arm` (`fitted` or `default`), `model_id`, `horizon_ns`, `horizon`, `brier`, `logloss`, `fill_rate_bias`, `beats_default` |
 | `scorecards(scores)` | one row per scorecard (a mapping gives the `label`): the 2x2 table, `fill_rate_bias` with CI and `direction`, `qty_bias`, McNemar, `discordance_p`, `gates_passed`, `headline` |
-| `records(doc, field)` | any list field of a summary (`markouts`, `by_queue_decile`, `stratified`, ...), nested objects as dotted columns; the columns are the union over all elements, null where an element lacks one |
+| `records(doc, field, instruments=None)` | any list field of a summary (`markouts`, `by_queue_decile`, `stratified`, ...), nested objects as dotted columns; the columns are the union over all elements, null where an element lacks one. Human columns sit next to the raw ones: `horizon` after `horizon_ns`, `symbol` after `instrument_id`, `<ts>_local` (venue-local time) after `ts_*`, `<price>_decimal` after integer prices; symbols, price scales and zones come from `instruments` (a dataset) or the dataset the summary names |
+
+Every result map keyed by horizon answers the human key too: `row.fill_rate_bias["1s"]`,
+`row.fill_rate_bias[1_000_000_000]` and `row.fill_rate_bias["1000000000"]` are the same entry, and the JSON files
+keep their nanosecond keys. `queuetruth.units` reads and writes these forms (`parse_duration("1min")`,
+`format_duration(1_500_000_000)` is `1.5s`, `local_time(ts_ns, "America/New_York")`, `format_price(ticks, -4)`).
 
 Biases and rates are fractions, not percentage points. Integer values are never rounded: on pandas, integer and
 boolean columns use the nullable dtypes (`Int64`, `UInt64`, `boolean`), so a null never turns an int64 price or id

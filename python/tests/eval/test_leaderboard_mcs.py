@@ -271,8 +271,7 @@ def test_too_few_bootstrap_blocks_give_null_fields_and_a_warning(predictions: Bu
             assert res == {}
             # one note for both horizons (diagnostics stay short, audit 2026-11-12)
             assert notes == [
-                f"mcs: at 1s, 10s, {n_dates} bootstrap block(s) (30min) < 5: "
-                "no model confidence set (MCS fields null)"
+                f"mcs: at 1s, 10s, {n_dates} bootstrap block(s) (30min) < 5: no model confidence set (MCS fields null)"
             ]
             _, board = evaluate_zoo(sub, h_max_ns=HMAX, bootstrap_b=5, seed=0, planned_life=life)
             got, _ = annotate_mcs(board, sub, life, h_max_ns=HMAX, bootstrap_b=100)

@@ -38,10 +38,12 @@ __all__ = [
     "HorizonDict",
     "format_duration",
     "format_price",
+    "format_scaled",
     "horizon_key",
     "horizon_label",
     "horizon_words",
     "humanize_note",
+    "instrument_units",
     "local_datetime",
     "local_time",
     "parse_duration",
@@ -286,6 +288,43 @@ def format_price(ticks: Any, price_exp: int | None, tick_size: Any = None) -> st
     if want > have:
         text = format(d.quantize(Decimal(1).scaleb(-want)), "f")
     return text
+
+
+def format_scaled(v: Any, exp: int | None) -> str:
+    """A fixed-point integer `v * 10**exp` (a size, a quantity) as a decimal string without an exponent, trailing
+    zeros trimmed (`1500, -3` -> `1.5`); with `exp` None or 0 the value as it is; `None` is `"-"`."""
+    if v is None:
+        return "-"
+    if exp is None or exp == 0:
+        return f"{v:g}" if isinstance(v, float) else str(v)
+    text = format(Decimal(str(v)).scaleb(int(exp)).normalize(), "f")
+    return text if "." not in text else text.rstrip("0").rstrip(".")
+
+
+def instrument_units(dataset: Any, instrument_id: int, ts_ns: int | None = None) -> dict[str, Any]:
+    """`symbol`, `price_exp`, `size_exp`, `tick_size` and `session_tz` of an instrument, from a dataset directory's
+    `instruments.parquet`, on the session that holds `ts_ns` (else the instrument's first row); `{}` when the table or
+    the instrument is missing. The values that turn its integers into human units."""
+    from pathlib import Path
+
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    try:
+        t = pq.read_table(Path(dataset) / "instruments.parquet")
+    except (OSError, pa.ArrowInvalid):
+        return {}
+    rows = [r for r in t.to_pylist() if int(r.get("instrument_id", -1)) == int(instrument_id)]
+    if not rows:
+        return {}
+    pick = rows[0]
+    if ts_ns is not None:
+        for r in rows:
+            mid = r.get("midnight_utc_ns")
+            if mid is not None and int(mid) <= ts_ns < int(mid) + 86_400_000_000_000:
+                pick = r
+                break
+    return {k: pick.get(k) for k in ("symbol", "price_exp", "size_exp", "tick_size", "session_tz")}
 
 
 # ---- times ------------------------------------------------------------------------------------------------------

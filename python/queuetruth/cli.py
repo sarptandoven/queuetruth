@@ -66,8 +66,29 @@ def _short(a: list[Any]) -> str:
     return ", ".join(items) if len(items) == len(a) else f"{len(a)} items"
 
 
+def _ns_field(key: str, v: Any) -> str | None:
+    """A nanosecond field (`*_ns`, `*_ns.<horizon>` or `ts_*`) in human units: a time since the epoch as UTC wall time
+    with the zone named, a duration as `1s`; None when the field is not one."""
+    leaf = key.rsplit(".", 1)[-1]
+    is_ns = leaf.endswith("_ns") or leaf.startswith("ts_") or leaf == "ts"
+    if not is_ns:
+        return None
+
+    def one(x: Any) -> str | None:
+        if isinstance(x, bool) or not isinstance(x, int):
+            return None
+        if leaf.startswith("ts") or abs(x) >= 10**17:
+            return units.local_time(x, None)
+        return units.format_duration(x)
+
+    if isinstance(v, list) and v and len(v) <= 8:
+        items = [one(x) for x in v]
+        return ", ".join(i for i in items if i is not None) if all(i is not None for i in items) else None
+    return one(v)
+
+
 def render_human(path: list[str], doc: Any) -> str:
-    """Terminal rendering of a summary (same layout as the Rust binary)."""
+    """Terminal rendering of a summary (same layout as the Rust binary), with nanosecond fields in human units."""
     if path == ["schema", "show"] or not isinstance(doc, dict):
         return json.dumps(doc, indent=2, ensure_ascii=False)
     if path == ["schema", "list"]:
@@ -78,7 +99,7 @@ def render_human(path: list[str], doc: Any) -> str:
     for k, v in doc.items():
         if k in ("schema", "schema_version", "spec", "warnings", "files"):
             continue
-        sv = _scalar(v)
+        sv = _ns_field(k, v) or _scalar(v)
         if sv is not None:
             lines.append(f"{k}: {sv}")
         elif isinstance(v, list):
@@ -87,7 +108,7 @@ def render_human(path: list[str], doc: Any) -> str:
             for k2, v2 in v.items():
                 if k2 in ("schema", "schema_version"):
                     continue
-                s2 = _scalar(v2)
+                s2 = _ns_field(f"{k}.{k2}", v2) or _scalar(v2)
                 if s2 is None:
                     s2 = _short(v2) if isinstance(v2, list) else f"{len(v2)} fields" if isinstance(v2, dict) else ""
                 lines.append(f"{k}.{k2}: {s2}")
@@ -306,8 +327,6 @@ def _why_rows(x: Any, verbose: bool) -> list[int | None]:
 
 
 def _render_why(x: Any, verbose: bool) -> str:
-    from queuetruth.api import fmt_scaled
-
     t = x.trace
     tz = getattr(x, "session_tz", None)
 
@@ -315,7 +334,7 @@ def _render_why(x: Any, verbose: bool) -> str:
         return units.format_price(v, x.price_exp, x.tick_size)
 
     def sz(v: float | int | None) -> str:
-        return fmt_scaled(v, x.size_exp)
+        return units.format_scaled(v, x.size_exp)
 
     def at(v: int | None, date: bool = False) -> str:
         return units.local_time(v, tz, digits=6, date=date, named=False)

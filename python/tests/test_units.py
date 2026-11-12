@@ -177,7 +177,7 @@ def test_side_word() -> None:
 
 
 def test_old_names_still_work_with_a_warning() -> None:
-    from queuetruth.api import fmt_dur
+    from queuetruth.api import fmt_dur, fmt_scaled, fmt_utc
     from queuetruth.eval.leaderboard import duration_text
     from queuetruth.forecast.cli import parse_duration as forecast_parse
     from queuetruth.sandbox._util import parse_duration as sandbox_parse
@@ -191,7 +191,9 @@ def test_old_names_still_work_with_a_warning() -> None:
         assert gap_text(1_000_000_000) == stats_text(1_000_000_000) == "1s"
         assert forecast_parse("5m", "--min-lead") == 300_000_000_000
         assert sandbox_parse("100ms", "latency_ns") == 100_000_000
-    assert len(caught) == 6
+        assert fmt_scaled(1500, -3) == u.format_scaled(1500, -3) == "1.5"
+        assert fmt_utc(1_700_000_000_123_456_789) == "22:13:20.123456"
+    assert len(caught) == 8
     assert all(issubclass(w.category, DeprecationWarning) for w in caught)
 
 

@@ -31,6 +31,8 @@ _NS_HORIZON = re.compile(
     rf"|\b\d{{9,}}\b(?!\.)[^\n\d]{{0,12}}\b(?:ns|horizon)\b|\b\d{{9,}}=(?:better|tie|worse|mixed)",
     re.IGNORECASE,
 )
+#: A `*_ns` field of a dump printed as a raw integer of 6 or more digits.
+_NS_FIELD = re.compile(r"\b\w*_ns(?:\.\w+)?: -?\d{6,}\b")
 #: An epoch timestamp in nanoseconds (2001 to 2286): 19 digits starting with 1 or 2.
 _EPOCH_NS = re.compile(r"(?<![\w.])[12]\d{18}(?![\w.])")
 
@@ -53,7 +55,7 @@ def offenders(text: str, prices: set[str]) -> list[str]:
     for line in text.splitlines():
         if "/" in line and re.search(r"(?:/[\w.-]+){2,}", line):
             line = re.sub(r"(?:[A-Za-z]:)?(?:/[\w.@+-]+)+/?", "<path>", line)  # file paths may hold digits
-        for rx, what in ((_NS_HORIZON, "ns horizon"), (_EPOCH_NS, "epoch ns")):
+        for rx, what in ((_NS_HORIZON, "ns horizon"), (_EPOCH_NS, "epoch ns"), (_NS_FIELD, "ns field")):
             for m in rx.finditer(line):
                 bad.append(f"{what} {m.group()!r}: {line.strip()[:160]}")
         for tok in re.findall(r"(?<![\w.])-?\d{7,}(?![\w.])", line):
@@ -138,6 +140,7 @@ def test_the_scan_catches_raw_units() -> None:
     assert offenders("fill-rate bias at 60000000000: +1.2 pp", prices)
     assert offenders("markouts: horizon 1000000000 ns", prices)
     assert offenders("trust: beats_default: 100000000=tie,1000000000=better", prices)
+    assert offenders("equivalence.markout_horizon_ns: 1000000000", prices)
     assert not offenders("filled after M of order 1002000006984", prices)
     assert offenders("live 1781533800123456789", prices)
     assert offenders("price 5000250000000", prices)
@@ -151,4 +154,3 @@ def test_cli_text_and_html_show_human_units(corpus: dict[str, Any]) -> None:
     found = {name: offenders(text, prices) for name, text in corpus.items()}
     found = {k: v for k, v in found.items() if v}
     assert not found, "\n".join(f"{k}:\n  " + "\n  ".join(v[:8]) for k, v in found.items())
-

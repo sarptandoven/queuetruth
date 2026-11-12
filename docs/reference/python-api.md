@@ -261,6 +261,30 @@ Interactive replay session: `.advance_to(ts)`, `.bbo(inst)`, `.depth(inst, n)`, 
 | `take_results` | `(self) -> pa.Table` | Results of the shadows that ended since the last call (`qt.shadow_results`). |
 | `with_orders` | `(spec: s.ReplaySpec \| dict[str, Any]) -> Session` | A session that also takes shadow orders while it runs. Every partition replays as `replay` would replay it with this spec (latency model and seed, fill rule, hidden-print policy, exclusions, the dataset's feed gaps and trading halts); `shadows` and `amends` stay unset, orders come from `submit`, `cancel` and `amend`, each at or after `position`. The session reads the data once however many orders it takes, and its fills and results equal those of one `replay` with every order in its input. |
 
+## `queuetruth.units`
+
+Human units at every boundary (plan section 3, principle 7): durations, horizons, prices, times and sides.
+
+| Name | Kind | Binding | Signature | Description |
+|---|---|---|---|---|
+| `DurationError` | class |  | | A duration or horizon that does not parse. `hint` says what to write instead. |
+| `format_duration` | function |  | `(ns: Any, *, sig: int \| None = None, signed: bool = False) -> str` | A duration for people: `1_000_000_000` -> `"1s"`, `1_500_000_000` -> `"1.5s"`, `60_000_000_000` -> `"1min"`, `250_000_000` -> `"250ms"`, `0` -> `"0s"`. |
+| `format_price` | function |  | `(ticks: Any, price_exp: int \| None, tick_size: Any = None) -> str` | A price for people: `150.12` (at least as many decimals as the tick size has, so `150.10` shows as `150.10` with a 0.01 tick; never rounded). An unknown scale prints the raw integer with its unit (`1501200 (price units, scale unknown)`); `None` is `"-"`. |
+| `horizon_key` | function |  | `(h: Any) -> str` | The key of a horizon in the JSON documents (decimal nanoseconds): `"1s"`, `1_000_000_000` and `"1000000000"` -> `"1000000000"`. `DurationError` when `h` is not a duration. |
+| `horizon_label` | function |  | `(h: Any) -> str` | The human key of a horizon: `"1000000000"` -> `"1s"`, `60_000_000_000` -> `"1min"`. |
+| `horizon_words` | function |  | `(h: Any) -> str` | A horizon in words, in the largest unit that holds it whole: `"1min"` -> `"1 minute"`, `10_000_000_000` -> `"10 seconds"`, `"1.5s"` -> `"1500 milliseconds"`. |
+| `HorizonDict` | class |  | | A `{horizon: value}` map whose keys stay the JSON form (decimal nanoseconds, so it serialises and compares exactly as before) and that also answers human keys: `m["1s"]`, `m[1_000_000_000]` and `m["1000000000"]` are the same entry. `labels()` is a copy keyed `"1s"`. |
+| `humanize_note` | function |  | `(text: str, tz: str \| None = None) -> str` | A warning or note written with raw integers (as stored in a summary's `warnings`) in human units, for display only: an epoch-nanosecond time after `ts`, `at`, `from`, `until` or `to` becomes local time with the zone named; a `<horizon_ns>=<better\|tie\|worse\|mixed\|n/a>` pair gets its horizon as `1s`. Anything else is unchanged. |
+| `local_datetime` | function |  | `(ts_ns: Any, tz: str \| None) -> dt.datetime` | An epoch-nanosecond timestamp as an aware `datetime` in zone `tz` (UTC when `tz` is unknown), to the microsecond. |
+| `local_time` | function |  | `(ts_ns: Any, tz: str \| None, *, digits: int = 6, date: bool = True, named: bool = True) -> str` | An epoch-nanosecond timestamp as venue-local wall time with the zone named: `2026-03-02 09:30:00.000123 America/New_York`. `digits` fraction digits (0 to 9, truncated); `date=False` leaves out the date; `named=False` leaves out the zone (for a table whose header names it, `zone_name(tz)`). An unknown or missing zone is written in UTC and says so; `None` is `"-"`. |
+| `parse_duration` | function |  | `(value: Any, *, what: str = duration, bare_ns: bool = True) -> int` | Nanoseconds of a duration: `"1s"`, `"250ms"`, `"1min"`, `"1m"`, `"60 s"`, `"1.5s"`, `"100us"`, an `int` count of nanoseconds or its string. Case and surrounding spaces are ignored. Negative values, fractions of a nanosecond and values beyond the int64 range are `DurationError`. With `bare_ns=False` a string without a unit (other than `"0"`) is refused, for flags where `"5"` would be ambiguous. |
+| `price_from_ticks` | function |  | `(ticks: Any, price_exp: int) -> Decimal` | The exact decimal price of a fixed-point integer price: `ticks * 10**price_exp` (`1_501_200, -4` -> `Decimal("150.12")`). |
+| `side_word` | function |  | `(side: Any) -> str` | `buy` or `sell` for a side code (`B` / `A`, `bid` / `ask`, `1` / `-1`, `BUY` / `SELL`); any other value is returned as text, unchanged, and `None` is `"-"`. |
+| `zone` | function |  | `(tz: str \| None) -> dt.tzinfo \| None` | The `tzinfo` of an IANA zone name (`UTC` for `"UTC"`), or None when the name is unknown or empty. |
+| `zone_name` | function |  | `(tz: str \| None) -> str` | The name `local_time` writes for zone `tz`: the IANA name, or `UTC` when it is UTC, unknown or missing. |
+
+Constants: `I64_MAX`, `UNITS`.
+
 ## `queuetruth.stats`
 
 Statistics used by evaluation and the scorer (SPEC 4.3 `queuetruth.stats`, 5.5.7, 5.6, 5.7.5).
@@ -454,7 +478,7 @@ hftbacktest / NautilusTrader config text and the IntpOrderLatency npz (SPEC 4.3 
 | Name | Kind | Binding | Signature | Description |
 |---|---|---|---|---|
 | `annotate` | function |  | `(cal: CalibrationResult) -> CalibrationResult` | A copy of `cal` with the structured `trust` field (schema 1.1) and its `warnings` ending with the `beats_default` and `verdict` lines (replacing older ones). The assessment is recomputed from the lines and the numbers: an earlier structured field (e.g. the Rust part's, which has no held-out comparison) is replaced. |
-| `assess` | function |  | `(cal: CalibrationResult) -> Trust` | Exportability of a calibration (see the module doc). The structured `trust` field (schema 1.1) decides when present: its `verdict` / `reasons` and `beats_default` labels win, with texts from the `trust:` lines or the recomputed reasons; without it the assessment is computed from the lines and the numbers. |
+| `assess` | function |  | `(cal: CalibrationResult, fmt: Callable[[int], str] = <function dur at 0x7fb5e060b9c0>) -> Trust` | Exportability of a calibration (see the module doc). The structured `trust` field (schema 1.1) decides when present: its `verdict` / `reasons` and `beats_default` labels win, with texts from the `trust:` lines or the recomputed reasons; without it the assessment is computed from the lines and the numbers. `fmt` writes the horizons in the reason texts (`dur`, the form stored in the calibration's warnings; displays pass `queuetruth.units.format_duration`). |
 | `export_snippets` | function |  | `(cal: CalibrationResult, latency_npz: str \| None = None) -> Exports` | The `exports` object of a calibration result (snippets + notes; `latency_npz` kept or set). |
 | `ExportNote` | class |  | | A caveat that accompanies an exported snippet (hftbacktest #312/#316, conflated L2, omitted lines). Emitted by `run_export` so `queuetruth export hftbacktest\|nautilus` prints it on stderr (`warning: ...`) next to the text, which keeps the exact SPEC 5.10 layout. |
 | `ExportRefused` | class |  | | `QT-CALIB-001`: the calibration is degenerate, at a grid edge or does not beat the default out of sample. Exit code 1 (the export completed its check and the check failed), like a failed gate. |
@@ -497,7 +521,7 @@ Run outputs as pandas or polars DataFrames, for notebooks and ad-hoc analysis.
 | `leaderboard` | function |  | `(zoo: Any, backend: str \| None = None) -> Any` | The zoo leaderboard as one row per model and horizon (`qt.zoo_summary`: a `ZooSummary`, its dict, a zoo output directory or its `summary.json`). |
 | `load_run` | function |  | `(path: str \| Path, backend: str \| None = None, verify: bool = False) -> RunFrames` | Opens a run output directory (or its summary JSON file) as a `RunFrames`. |
 | `read` | function |  | `(path: str \| Path, expect: str \| None = None, columns: Sequence[str] \| None = None, backend: str \| None = None, filters: Any = None) -> Any` | Reads one queuetruth Parquet table as a DataFrame. |
-| `records` | function |  | `(doc: Any, field: str, backend: str \| None = None) -> Any` | A list-of-objects field of any summary document as a DataFrame, one row per element. |
+| `records` | function |  | `(doc: Any, field: str, backend: str \| None = None, *, instruments: Any = None, human: bool = True) -> Any` | A list-of-objects field of any summary document as a DataFrame, one row per element. |
 | `resolve_backend` | function |  | `(backend: str \| None = None) -> str` | The backend to use: `backend`, else env `QT_FRAMES_BACKEND`, else `"auto"` (pandas, then polars). |
 | `RunFrames` | class |  | | One run output directory: its summary document and its Parquet tables as DataFrames. |
 | `scorecards` | function |  | `(scores: Any, backend: str \| None = None) -> Any` | Scorecards side by side, one row each (`qt.scorecard_summary`). |
