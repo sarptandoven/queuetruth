@@ -45,6 +45,8 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ### Fixed
 
+- `rustix` 1.1.5 to 1.1.6 in `Cargo.lock` (RUSTSEC-2026-0486: its xattr functions marked unwritten bytes as
+  initialized when given a zero-length buffer). Reached only through `tempfile`; 1.1.6 was released on 2026-10-27.
 - `atlas.py combine` no longer runs out of memory on a full window. It read every day's cells and P&L cells into
   one table: about 1.2 GB per IEX day, so 20 days needed about 25 GB, and the first site rebuild after the backfill
   stopped the 16 GB runner two minutes in. It now reads the days one (mode, shadow population) slice at a time, with
