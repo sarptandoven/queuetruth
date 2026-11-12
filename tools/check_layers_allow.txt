@@ -18,6 +18,8 @@ queuetruth.backtesters.touchfill -> queuetruth.atlas.touch  # layer
 queuetruth.cert.certify -> queuetruth.score._io.resolve_ref  # private
 queuetruth.cert.verify -> queuetruth.score._io.resolve_ref  # private
 queuetruth.check.cli -> queuetruth.live.reconcile_cli._options  # private
+queuetruth.check.estimate -> queuetruth.atlas  # layer
+queuetruth.check.estimate -> queuetruth.atlas.touch  # layer
 queuetruth.check.run -> queuetruth.api  # cycle
 queuetruth.check.run -> queuetruth.live.importers.vectorbt._table  # private
 queuetruth.check.run -> queuetruth.pm.cli  # layer

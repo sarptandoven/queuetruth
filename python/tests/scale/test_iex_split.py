@@ -138,6 +138,22 @@ def test_buckets_are_the_subset_filter_of_their_symbols(tmp_path: Path, engine: 
     assert [b["file_sha256"] for b in m2["buckets"]] == [b["file_sha256"] for b in m["buckets"]]
 
 
+def test_only_bucket_writes_that_bucket_byte_for_byte(tmp_path: Path, engine: str) -> None:
+    """`--only-bucket K` (one unit's input for `queuetruth verify atlas --rerun`) writes bucket K exactly as the full
+    split does and nothing else."""
+    raw = iex_capture()
+    full = _split(tmp_path / "full", raw, 3, engine=engine)
+    src = tmp_path / "full" / "20261009_IEXTP1_DPLS1.0.pcap.gz"
+    a = _args(input=str(src), buckets=3, out=tmp_path / "one", engine=engine, only_bucket=1)
+    assert iex_split.run_split(a) == 0
+    one = json.loads((tmp_path / "one" / MMDD / "split_manifest.json").read_text())
+    assert one["ok"] and one["routing"]["only_bucket"] == 1
+    assert one["buckets"] == [full["buckets"][1]]
+    assert sorted(p.name for p in (tmp_path / "one" / MMDD).glob("*.pcap.gz*")) == [full["buckets"][1]["file"]]
+    a = _args(input=str(src), buckets=3, out=tmp_path / "bad", engine=engine, only_bucket=3)
+    assert iex_split.run_split(a) == iex_split.EXIT_INPUT
+
+
 def test_symbol_filter_and_bad_input(tmp_path: Path, engine: str) -> None:
     m = _split(tmp_path, iex_capture(gap_at=None, duplicate_at=None), 2, symbols="AAPL,TSLA", engine=engine)
     assert m["ok"] and {s for b in m["buckets"] for s in b["symbols"]} == {"AAPL", "TSLA"}

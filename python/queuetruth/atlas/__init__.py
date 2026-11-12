@@ -23,4 +23,28 @@ def lookup(**kwargs: Any) -> Any:
     return _lookup(**kwargs)
 
 
-__all__ = ["lookup"]
+def open_source(source: Any = None, **kwargs: Any) -> Any:
+    """The atlas data API at a directory or URL (default: the public atlas, through the cache; nothing is downloaded
+    without consent), as `queuetruth.atlas._lookup.open_source`: `.manifest`, `.has(path)` and `.get(path)` (each
+    file checked against the manifest's sha256 and its model)."""
+    from queuetruth.atlas._lookup import open_source as _open
+
+    return _open(source, **kwargs)
+
+
+def tier_name(tier: str) -> str:
+    """A liquidity tier in plain words (`T1_top100` -> `the 100 most traded symbols`)."""
+    from queuetruth.atlas._common import TIER_WORDS
+
+    return TIER_WORDS.get(tier, tier)
+
+
+def confirm_on_terminal(interactive: bool, what: str = "atlas", local: str = "--from DIR") -> Any:
+    """The consent callback of `queuetruth atlas`: asks on a terminal before a download, else stops with
+    `QT-USAGE-001` and the `--yes` hint. `what` names the command and `local` its local-copy flag in the messages."""
+    from queuetruth.atlas._cli import _confirm
+
+    return _confirm(interactive, what, local)
+
+
+__all__ = ["confirm_on_terminal", "lookup", "open_source", "tier_name"]

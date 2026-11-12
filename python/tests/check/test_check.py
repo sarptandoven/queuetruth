@@ -271,9 +271,12 @@ def test_l2_dataset_and_missing_dataset(tmp_path: Path, files: dict[str, Path]) 
 
 
 def test_cli_without_data_names_what_is_needed(run: Any, files: dict[str, Path]) -> None:
+    """Without --data `check` estimates from the atlas (tests/check/test_check_atlas.py); a tick-time log names what
+    the estimate needs (a bar length) and the exact path (--data), before anything is downloaded."""
     code, out, err = run("check", str(files["hftbacktest"]))
     assert code == 2 and out == ""
-    assert err.startswith("QT-USAGE-001: check: without --data") and "--data DIR" in err and "atlas" in err
+    assert err.startswith("QT-USAGE-001: check: cannot tell the backtest's bar length") and "tick-driven" in err
+    assert "--bar 1m, 5m or 1h" in err and "--data" in err
     code, out, _ = run("check", str(files["hftbacktest"]), "--json")
     doc = json.loads(out)
     assert code == 2 and doc["schema"] == "qt.error" and doc["code"] == "QT-USAGE-001"

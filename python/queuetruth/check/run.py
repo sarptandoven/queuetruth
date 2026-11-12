@@ -29,7 +29,7 @@ import json
 import math
 import statistics
 import tempfile
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -51,18 +51,13 @@ DEFAULT_WINDOW = "1h"
 DEFAULT_MARKOUT = "1min"
 #: Resting time-in-force values (`queuetruth.live.canonical.RESTING_TIF`) for the limit-order count.
 _RESTING = ("gtc", "day", "post_only", "gtx", "gtd")
-_NO_DATA = (
-    "check: without --data there is nothing exact to compare the backtest against yet. Pass order-level (MBO) data "
-    "that covers the backtest's days with --data DIR (a dataset written by `queuetruth ingest` or `queuetruth "
-    "fixtures synth`). An estimate that needs no data, from the atlas touch tables, comes in a later release; "
-    "until then check prints no number without data."
-)
 
 
 @dataclass
 class CheckResult:
     """The answer of `check`: `summary` is the one-line answer, `doc` the full `qt.check` document, `orders` one
-    row per checked order in human units, `out` the output directory."""
+    row per checked order in human units, `out` the output directory. Without data `doc` is the atlas estimate
+    (`qt.check_estimate`, `doc["mode"] == "atlas"`) and `orders` holds one row per tier and side."""
 
     doc: dict[str, Any]
     orders: list[dict[str, Any]] = field(default_factory=list)
@@ -87,12 +82,20 @@ class CheckResult:
 
     def text(self, *, max_symbols: int = 5, max_examples: int = 3) -> str:
         """The terminal report: the answer first, then the 2x2 table, the worst symbols and `why` hints."""
+        if self.doc.get("mode") == "atlas":
+            from queuetruth.check.estimate import text as estimate_text
+
+            return estimate_text(self.doc)
         from queuetruth.check.render import text
 
         return text(self.doc, max_symbols=max_symbols, max_examples=max_examples)
 
     def to_html(self) -> str:
         """A self-contained HTML report."""
+        if self.doc.get("mode") == "atlas":
+            from queuetruth.check.estimate import html as estimate_html
+
+            return estimate_html(self.doc)
         from queuetruth.check.render import html
 
         return html(self.doc, self.orders)
@@ -235,13 +238,24 @@ def check(
     window: str | int = DEFAULT_WINDOW,
     markout: str | int = DEFAULT_MARKOUT,
     options: dict[str, Any] | None = None,
+    tier: str | None = None,
+    bar: str | None = None,
+    atlas: str | Path | None = None,
+    yes: bool = False,
+    confirm: Callable[[str], bool] | None = None,
+    refresh: bool = False,
+    seed: int | None = None,
 ) -> CheckResult:
-    """How wrong is a backtest: its own resting limit orders replayed in the exact queue of `data`.
+    """How wrong is a backtest: its own resting limit orders replayed in the exact queue of `data`, or without
+    `data` an estimate from the atlas touch tables (`queuetruth.check.estimate`).
 
     `backtest`: the backtester's output (one path or several of one run): hftbacktest order snapshots,
     NautilusTrader reports or order events, Backtrader `QtOrderLog` lines, VectorBT order records, LEAN result and
     order events, or a Freqtrade backtest result. `backtester` names it when the files do not say. `data`: an
-    order-level dataset covering the backtest's days; without it `QT-USAGE-001` (the atlas estimate comes later).
+    order-level dataset covering the backtest's days; without it the answer is the atlas estimate for a bar backtest:
+    `tier` (for symbols the atlas does not hold), `bar` (when the log does not say), `atlas` (a directory or URL of
+    the atlas data API), `yes` / `confirm` (consent to download it), `refresh` and `seed` go to
+    `queuetruth.check.estimate.estimate`.
     Symbols map from the dataset's symbology; `instrument_map` (CSV, venue = the dataset's venue) overrides that.
     `window` (default 1h) is how long after entry a fill counts; `markout` (default 1 min) the P&L horizon.
     `options` go to the importer (e.g. `timeframe`, `data_tz`, `column`). `out` (default: a new temporary
@@ -249,7 +263,21 @@ def check(
     `orders.csv`."""
     paths = _paths(backtest)
     if data is None:
-        raise QtError("QT-USAGE-001", _NO_DATA, "queuetruth check BACKTEST --data DATASET")
+        from queuetruth.check.estimate import estimate
+
+        return estimate(
+            paths,
+            backtester=backtester,
+            tier=tier,
+            bar=bar,
+            atlas=atlas,
+            yes=yes,
+            confirm=confirm,
+            refresh=refresh,
+            out=out,
+            options=options,
+            seed=seed,
+        )
     window_ns, markout_ns = _ns(window, "window"), _ns(markout, "markout")
     if backtester is not None and backtester not in BACKTESTERS:
         raise QtError("QT-USAGE-001", f"check: backtester must be one of {list(BACKTESTERS)}, got {backtester!r}")
