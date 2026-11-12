@@ -52,6 +52,14 @@ check(backtest: str | Path | Sequence[str | Path], data: str | Path | None = Non
 
 `queuetruth check`: how wrong is a backtest, in one command.
 
+### `compare`
+
+```python
+compare(backtest: str | Path | Sequence[str | Path], live: str | Path | Sequence[str | Path], *, data: str | Path | None = None, backtester: str | None = None, venue: str | None = None, out: str | Path | None = None, instrument_map: str | Path | None = None, window: str | int | None = None, account: str | None = None, options: dict[str, Any] | None = None) -> CompareResult
+```
+
+`queuetruth compare`: my backtest against my live run, order by order.
+
 ### `data`
 
 Subpackage `queuetruth.data`, listed below.

@@ -13,6 +13,11 @@ projects' public source (Backtrader 1.9.78.123, VectorBT 0.28.1); the fixtures i
 `tests/fixtures/live/backtesters/` are written from that source by `make_fixtures.py`, not exported from a real
 run, so check the counts against your own records the first time.
 
+**The everyday path.** `queuetruth compare --backtest BACKTEST --live LIVE` runs this comparison in one command: it
+reads the backtester and the kind of live records from the files, imports a venue export when needed and
+answers first. See [Compare my backtest with my live run](compare-backtest-and-live.md). This page shows the
+steps underneath, for scripts and for options `compare` does not expose.
+
 These importers and `queuetruth reconcile` need queuetruth 0.3.0 or later. For a QuantConnect LEAN backtest, see
 [section 7](#7-quantconnect-lean): the same report, from LEAN's result and order-events JSON.
 

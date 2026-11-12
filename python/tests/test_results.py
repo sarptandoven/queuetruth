@@ -39,6 +39,7 @@ def _load(rel: str) -> Any:
 
 F = _load("demo/demo_fixtures.py")
 sb = _load("check/synth_backtests.py")
+ss = _load("compare/synth_sims.py")
 _write_api = _load("atlas/test_atlas_lookup.py")._write_api
 
 pytestmark = pytest.mark.requires_core
@@ -124,6 +125,19 @@ def test_check_without_data_from_the_atlas(tmp_path: Path) -> None:
     assert res.doc["mode"] == "atlas"
     assert_shape(res, tmp_path, columns=set())
     assert res.interval is not None and "95% interval" in res.interval
+
+
+# ---- compare -----------------------------------------------------------------------------------------------------
+
+
+def test_compare(tmp_path: Path) -> None:
+    live = DATA / "own_orders" / "live"
+    sim = ss.write_hftbacktest(tmp_path / "hbt.jsonl", ss.sim_orders(live))
+    res = qt.compare(backtest=sim, live=live, data=DATA, window="1min", out=tmp_path / "c")
+    df = assert_shape(res, tmp_path, columns={"outcome"})
+    assert len(df) == len(res.orders)
+    assert res.interval is not None and res.interval.startswith("Backtest fills that also filled live")
+    assert qt.compare(backtest=sim, live=live, window=60_000_000_000, out=tmp_path / "d").doc["window"] == "1min"
 
 
 # ---- fit ---------------------------------------------------------------------------------------------------------
@@ -239,6 +253,7 @@ def test_demo(itch_gz: Path, tmp_path: Path) -> None:
 def test_verbs_have_typed_signatures() -> None:
     check = inspect.signature(qt.check).parameters
     assert {"backtest", "data", "horizon", "window", "backtester"} <= set(check)
+    assert {"backtest", "live", "data", "window"} <= set(inspect.signature(qt.compare).parameters)
     fit = inspect.signature(qt.fit).parameters
     assert {"backtester", "data", "live", "split"} <= set(fit)
     assert {"backtester", "minutes", "symbols", "yes"} <= set(inspect.signature(qt.demo).parameters)

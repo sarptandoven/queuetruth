@@ -1,9 +1,10 @@
 """queuetruth: fill-realism and queue-truth kit (SPEC 4.3). Re-exports the Python API.
 
-`queuetruth.score`, `queuetruth.report`, `queuetruth.export`, `queuetruth.check` and `queuetruth.fit` are both
-subpackages and API functions (`qt.score(spec)`, `qt.report(spec)`, `qt.export(spec)`, `qt.check(backtest,
-data=...)`, `qt.fit(backtester, data=...)`): the subpackage modules are callable and delegate to the
-`queuetruth.api` function of the same name, so `import queuetruth.score as s` and `qt.score(spec)` both work.
+`queuetruth.score`, `queuetruth.report`, `queuetruth.export`, `queuetruth.check`, `queuetruth.fit` and
+`queuetruth.compare` are both subpackages and API functions (`qt.score(spec)`, `qt.report(spec)`, `qt.export(spec)`,
+`qt.check(backtest, data=...)`, `qt.fit(backtester, data=...)`, `qt.compare(backtest, live)`): the subpackage
+modules are callable and delegate to the `queuetruth.api` function of the same name, so `import queuetruth.score as
+s` and `qt.score(spec)` both work.
 `qt.HazardModel` is imported on first use (it needs scikit-learn), and so are `qt.backtesters` (the backtester plugin
 registry), `qt.backtrader` and `qt.lean` (fill models and logs for those frameworks, which stay optional),
 `qt.atlas` (`qt.atlas.lookup`) and `qt.demo` (a subpackage and the function `qt.demo(backtester=...)`).
@@ -66,13 +67,14 @@ def __dir__() -> list[str]:
     return sorted({*globals(), *_LAZY, *_LAZY_MODULES})
 
 
-_CALLABLE_NAMES = ("score", "report", "export", "check", "fit", "demo")
+_CALLABLE_NAMES = ("score", "report", "export", "check", "fit", "compare", "demo")
 #: The function a callable subpackage runs, where it is not the `queuetruth.api` function of the same name (`demo`
-#: is a product, above `queuetruth.api`), and the function whose typed signature it shows (`qt.check`, `qt.fit`:
-#: the `queuetruth.api` functions forward `**kwargs`).
+#: is a product, above `queuetruth.api`), and the function whose typed signature it shows (`qt.check`, `qt.fit`,
+#: `qt.compare`: the `queuetruth.api` functions forward `**kwargs`).
 _TARGETS = {
     "check": "queuetruth.check.run:check",
     "fit": "queuetruth.fit.run:fit",
+    "compare": "queuetruth.compare.run:compare",
     "demo": "queuetruth.demo.result:demo",
 }
 
@@ -115,7 +117,8 @@ report = importlib.import_module("queuetruth.report")
 export = importlib.import_module("queuetruth.export")
 check = importlib.import_module("queuetruth.check")
 fit = importlib.import_module("queuetruth.fit")
-for _m in (score, report, export, check, fit):
+compare = importlib.import_module("queuetruth.compare")
+for _m in (score, report, export, check, fit, compare):
     _m.__class__ = _CallableModule
 del _m
 
@@ -129,6 +132,7 @@ __all__ = [
     "calibrate",
     "calibrate_live",
     "check",
+    "compare",
     "data",
     "demo",
     "export",

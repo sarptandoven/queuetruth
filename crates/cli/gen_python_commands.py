@@ -47,6 +47,7 @@ def parsers() -> list[tuple[list[str], argparse.ArgumentParser]]:
     from queuetruth.atlas._cli import verify_parser
     from queuetruth.cert.cli import parser as cert_parser
     from queuetruth.check.cli import parser as check_parser
+    from queuetruth.compare.cli import parser as compare_parser
     from queuetruth.data.cli import parser as data_parser
     from queuetruth.demo.cli import parser as demo_parser
     from queuetruth.fit.cli import parser as fit_parser
@@ -68,6 +69,7 @@ def parsers() -> list[tuple[list[str], argparse.ArgumentParser]]:
         ([], check_parser()),
         ([], data_parser()),
         ([], fit_parser()),
+        ([], compare_parser()),
     ]
 
 
