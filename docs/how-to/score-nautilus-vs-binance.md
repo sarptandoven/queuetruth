@@ -251,10 +251,11 @@ queuetruth export replay-schedule --target nautilus --live live/ --data bn-l2 --
 The file's docstring shows how to use it: add `ScheduleReplayStrategy(ScheduleReplayConfig(events_path=...))` to
 your `BacktestEngine` (with your venue, data, fill model and latency model already configured), run the engine, and
 the strategy writes the events file when it stops. Map the schedule's instrument ids to Nautilus instrument ids with
-`ScheduleReplayConfig(instrument_ids={"1": "BTCUSDT-PERP.BINANCE"})`. The strategy is generated against
-NautilusTrader's documented API at a pinned commit and is not run in queuetruth's tests (no NautilusTrader code is
-used); check the names against your installed version. `--target hftbacktest` writes the equivalent replay script for
-hftbacktest 2.4.4, which the tests do run end to end.
+`ScheduleReplayConfig(instrument_ids={"1": "BTCUSDT-PERP.BINANCE"})`. The same file runs on NautilusTrader 1.x and
+2.x: it picks the names of the installed version when it is imported. CI runs it in a real `BacktestEngine` on
+nautilus_trader 1.231.0 and 2.0.0rc9 and imports its events (`integrations/nautilus/tests/test_replay_strategy.py`;
+no NautilusTrader code is copied). `--target hftbacktest` writes the equivalent replay script for hftbacktest 2.4.4,
+which the tests also run end to end.
 
 If you drive Nautilus yourself instead, give each order the schedule row's `shadow_id` as its client order id: the
 importer turns `<venue>:<account>:<id>` into the `order_key` and strips a `.leg<k>` suffix; any other id becomes

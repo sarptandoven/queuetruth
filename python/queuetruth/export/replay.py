@@ -414,7 +414,9 @@ def configure_asset(asset):
     """EDIT ME (or pass --snippet): add your queue model, exchange model, latency and fees to `asset` (data, tick
     and lot size are already set) and return it, e.g.
 
-        return asset.power_prob_queue_model3(2.0).partial_fill_exchange().constant_order_latency(0, 0)
+        return asset.power_prob_queue_model3(2.0).no_partial_fill_exchange().constant_order_latency(0, 0)
+
+    (partial_fill_exchange stops the released hftbacktest 2.4.4 with error 14, hftbacktest #312.)
 
     Returning None makes the script require --snippet, so a forgotten edit cannot silently pick a model."""
     return None
@@ -716,9 +718,10 @@ def hftbacktest_replay_script(
 _NT_TEMPLATE = '''"""queuetruth {version} | NautilusTrader schedule replay | {n_orders} orders, {n_actions} actions
 Source: {source}
 
-Generated configuration/code for NautilusTrader, written against its documented Strategy API (develop 5247ad5:
-Strategy, StrategyConfig, clock.set_time_alert_ns, order_factory.limit, submit_order / modify_order / cancel_order,
-on_order_event). Verify the names for your installed version. No NautilusTrader code is copied (LGPL).
+Generated code for NautilusTrader 1.x (checked on 1.231.0) and 2.x (checked on 2.0.0rc7 and 2.0.0rc9), written
+against its documented Strategy API (Strategy, StrategyConfig, clock.set_time_alert_ns, order_factory.limit,
+submit_order / modify_order / cancel_order, on_order_event). It picks the names of the installed version when it is
+imported. No NautilusTrader code is copied (LGPL).
 
 `ScheduleReplayStrategy` ignores market data and replays a FIXED live order schedule: leg 1 of each live order is a
 limit order submitted at its time (post-only when the live order was), later legs and priority-keeping amends are
@@ -741,17 +744,27 @@ then, in the queuetruth environment:
     # queuetruth score --live <live dir> --sim-log nt-sim --data <dataset> --out sc-nautilus
 
 Instrument ids: INSTRUMENT_IDS maps the schedule's instrument_id to a Nautilus InstrumentId string; override it with
-`ScheduleReplayConfig(instrument_ids={{"1": "BTCUSDT-PERP.BINANCE"}})`.
+`ScheduleReplayConfig(instrument_ids={{"1": "BTCUSDT-PERP.BINANCE"}})`. Other keyword arguments of
+`ScheduleReplayConfig` (for example `order_id_tag`) go to NautilusTrader's StrategyConfig.
 """
 
 import json
 from decimal import Decimal
 from pathlib import Path
 
-from nautilus_trader.config import StrategyConfig
-from nautilus_trader.model.enums import OrderSide, TimeInForce
-from nautilus_trader.model.identifiers import InstrumentId
-from nautilus_trader.trading.strategy import Strategy
+import nautilus_trader
+
+#: True on NautilusTrader 2.x (Rust core, PyO3 names), False on 1.x (Cython).
+NT2 = int(str(nautilus_trader.__version__).split(".")[0]) >= 2
+
+if NT2:
+    from nautilus_trader.model import InstrumentId, OrderSide, StrategyId, TimeInForce
+    from nautilus_trader.trading import Strategy, StrategyConfig
+else:
+    from nautilus_trader.config import StrategyConfig
+    from nautilus_trader.model.enums import OrderSide, TimeInForce
+    from nautilus_trader.model.identifiers import InstrumentId
+    from nautilus_trader.trading.strategy import Strategy
 
 #: schedule instrument_id -> Nautilus InstrumentId string.{iid_note}
 INSTRUMENT_IDS = {instrument_ids}
@@ -766,20 +779,44 @@ RECORDED = (
 )
 
 
-class ScheduleReplayConfig(StrategyConfig, frozen=True):
-    """Where to write the events; optional instrument id overrides (`{{"<instrument_id>": "SYMBOL.VENUE"}}`)."""
+if NT2:
 
-    events_path: str = "qt_nautilus_events.jsonl"
-    instrument_ids: dict[str, str] | None = None
+    class ScheduleReplayConfig:
+        """Where to write the events; optional instrument id overrides (`{{"<instrument_id>": "SYMBOL.VENUE"}}`).
+        On 2.x StrategyConfig cannot be subclassed, so the replay options live here and the other keyword arguments
+        build the StrategyConfig."""
+
+        def __init__(self, events_path="qt_nautilus_events.jsonl", instrument_ids=None, **strategy_config):
+            self.events_path = events_path
+            self.instrument_ids = instrument_ids
+            if isinstance(strategy_config.get("strategy_id"), str):
+                strategy_config["strategy_id"] = StrategyId(strategy_config["strategy_id"])
+            self.strategy_config = strategy_config
+
+        def nautilus_config(self):
+            return StrategyConfig(**self.strategy_config)
+
+else:
+
+    class ScheduleReplayConfig(StrategyConfig, frozen=True):
+        """Where to write the events; optional instrument id overrides (`{{"<instrument_id>": "SYMBOL.VENUE"}}`)."""
+
+        events_path: str = "qt_nautilus_events.jsonl"
+        instrument_ids: dict[str, str] | None = None
+
+        def nautilus_config(self):
+            return self
 
 
 class ScheduleReplayStrategy(Strategy):
-    """Replays ACTIONS; records order events for queuetruth."""
+    """Replays ACTIONS; records order events for queuetruth. State lives in containers that are mutated, never
+    rebound, because 2.x runs a shallow copy of the strategy object."""
 
     def __init__(self, config: ScheduleReplayConfig) -> None:
-        super().__init__(config)
+        super().__init__(config.nautilus_config())
+        self._replay = config
         self._ids = {{**{{str(k): v for k, v in INSTRUMENT_IDS.items()}}, **(config.instrument_ids or {{}})}}
-        self._next = 0
+        self._state = {{"next": 0}}
         self._cid = {{}}  # live order_key -> ClientOrderId
         self._key = {{}}  # ClientOrderId value -> live order_key
         self._rows = []
@@ -791,12 +828,13 @@ class ScheduleReplayStrategy(Strategy):
 
     def _run_due(self, event=None) -> None:
         now = self.clock.timestamp_ns()
-        while self._next < len(ACTIONS) and ACTIONS[self._next][0] <= now:
-            self._do(ACTIONS[self._next], now)
-            self._next += 1
-        if self._next < len(ACTIONS):
-            when = max(ACTIONS[self._next][0], now + 1)
-            self.clock.set_time_alert_ns(name=f"qt-replay-{{self._next}}", alert_time_ns=when, callback=self._run_due)
+        st = self._state
+        while st["next"] < len(ACTIONS) and ACTIONS[st["next"]][0] <= now:
+            self._do(ACTIONS[st["next"]], now)
+            st["next"] += 1
+        if st["next"] < len(ACTIONS):
+            when = max(ACTIONS[st["next"]][0], now + 1)
+            self.clock.set_time_alert_ns(f"qt-replay-{{st['next']}}", when, self._run_due)
 
     def _skip(self, reason: str) -> None:
         self.skipped[reason] = self.skipped.get(reason, 0) + 1
@@ -830,16 +868,19 @@ class ScheduleReplayStrategy(Strategy):
             self.submit_order(order)
             return
         cid = self._cid.get(key)
+        # 2.x: the order object order_factory returned stays INITIALIZED, so always read the cache's order
         order = self.cache.order(cid) if cid is not None else None
         if order is None or not order.is_open:
             self._skip(f"{{kind}}_order_not_open")
             return
+        # 2.x takes the ClientOrderId, 1.x the order
+        target = order.client_order_id if NT2 else order
         if kind == "modify":
             self.modify_order(
-                order, quantity=instrument.make_qty(Decimal(qty)), price=instrument.make_price(Decimal(price))
+                target, quantity=instrument.make_qty(Decimal(qty)), price=instrument.make_price(Decimal(price))
             )
         else:
-            self.cancel_order(order)
+            self.cancel_order(target)
 
     # -- events --------------------------------------------------------------------------------------------
     def on_order_event(self, event) -> None:
@@ -866,13 +907,15 @@ class ScheduleReplayStrategy(Strategy):
         self._rows.append(row)
 
     def on_stop(self) -> None:
-        p = Path(self.config.events_path)
+        p = Path(self._replay.events_path)
         p.parent.mkdir(parents=True, exist_ok=True)
         with p.open("w", encoding="utf-8") as fh:
             for r in self._rows:
                 fh.write(json.dumps(r, sort_keys=True) + "\\n")
         Path(str(p) + ".summary.json").write_text(
-            json.dumps({{"actions_done": self._next, "actions": len(ACTIONS), "skipped": self.skipped}}, indent=2)
+            json.dumps(
+                {{"actions_done": self._state["next"], "actions": len(ACTIONS), "skipped": self.skipped}}, indent=2
+            )
             + "\\n"
         )
 '''
@@ -957,7 +1000,7 @@ def replay_schedule(
         notes = [
             "add ScheduleReplayStrategy to your BacktestEngine; it writes the events file when it stops",
             "import: queuetruth.live.import_sim('nautilus', [events.jsonl], OUT, venue=<live venue>)",
-            "generated against NautilusTrader's documented API (develop 5247ad5); verify names for your version",
+            "runs on NautilusTrader 1.x and 2.x (checked on 1.231.0, 2.0.0rc7 and 2.0.0rc9)",
         ]
     missing = [iid for iid, x in u.items() if target == "hftbacktest" and (x.tick_size is None or x.lot_size is None)]
     if missing:

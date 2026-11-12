@@ -167,7 +167,7 @@ asset = (
     BacktestAsset()
     # ... your existing .data(...), .tick_size(...), .lot_size(...), fee model ...
     .power_prob_queue_model3({n})
-    .partial_fill_exchange()
+    .no_partial_fill_exchange()
 )
 ```
 

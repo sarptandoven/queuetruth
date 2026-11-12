@@ -7,7 +7,7 @@
   queuetruth-hftbacktest score DIR [--hbt-orders FILE] [--out DIR] [--horizons 1s,10s,60s,5m] [--format text|json]
       hftbacktest's fills against the exact queue, order by order and per horizon
   queuetruth-hftbacktest calibrate --data DATASET --train WINDOW [--test WINDOW] --out DIR [--orders ORDERS.parquet]
-      [--families power3,power2,power] [--exchange partial|no_partial] [--force] [--format text|json]
+      [--families power3,power2,power] [--exchange no_partial|partial] [--force] [--format text|json]
       fit the ProbQueue n, check it out of sample, write the code to paste (`DIR/hbt_queue_model.py`)
 
 Windows are `YYYY-MM-DD[,YYYY-MM-DD...]` or `blocks:LO-HI/N`. `--json` is an alias of `--format json`. Exit codes
@@ -140,7 +140,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out", required=True, help="output directory")
     p.add_argument("--orders", default=None, help="orders to fit on (qt.shadow_spec); default: sampled")
     p.add_argument("--families", default=",".join(FAMILIES), help="power families to fit (default: all three)")
-    p.add_argument("--exchange", choices=("partial", "no_partial", "no-partial"), default="partial")
+    p.add_argument(
+        "--exchange",
+        choices=("no_partial", "no-partial", "partial"),
+        default="no_partial",
+        help="no_partial (default; runs on the released hftbacktest 2.4.4) or partial (2.4.4 stops on it, #312)",
+    )
     p.add_argument("--horizon", default="60s", help="horizon whose held-out log loss picks the winner")
     p.add_argument("--n-orders", type=int, default=2000, help="orders to sample without --orders")
     p.add_argument("--seed", type=int, default=0)

@@ -100,7 +100,8 @@ so a fill is recorded at the end of its step; the referee compares first-fill ti
 error 14 (`InvalidOrderStatus`) when an order that completed through a fill equal to its leaves is hit again. It
 happens on the synthetic dataset too. `run` then raises `QT-USAGE-001` with the code (pass `allow_stop=True` to get
 the output instead), and `score` scores only the orders entered before the stop, on the horizons that end before it,
-with a warning. To score a whole day, use `no_partial_fill_exchange()` or a build with the fix (see the
+with a warning. To score a whole day, use `no_partial_fill_exchange()` (the default of `calibrate` and of
+`queuetruth export hftbacktest`) or a build with the fix (see the
 [hftbacktest integration](https://github.com/sarptandoven/queuetruth/tree/main/integrations/hftbacktest)).
 
 ## 2. Calibrate the queue model
@@ -137,7 +138,7 @@ Options worth knowing:
 |---|---|---|
 | `orders` | sampled | the orders the fit uses (`qt.shadow_spec`); without it, `n_orders` (2,000) are sampled with queuetruth's default placements and `seed` |
 | `train`, `test` | | dates (`2026-10-12,2026-10-13`) or blocks of each session (`blocks:0-3/5`, `blocks:4-4/5`); without `test` the held-out scores are on all data, with a warning |
-| `exchange` | `partial` | `partial` (`partial_fill_exchange`) or `no_partial` (`no_partial_fill_exchange`) |
+| `exchange` | `no_partial` | `no_partial` (`no_partial_fill_exchange`, runs on hftbacktest 2.4.4) or `partial` (`partial_fill_exchange`, stops 2.4.4 with error 14, #312) |
 | `families` | `power3`, `power2`, `power` | the power families to fit |
 | `force` | `False` | export the best refused fit under `NOT VALIDATED` |
 
