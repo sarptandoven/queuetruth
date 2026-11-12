@@ -13,6 +13,7 @@ pub(crate) const PYTHON_GROUPS: &[(&str, &str)] = &[
     ("ledger", "trial ledger: every run and variant tried, hash-chained"),
     ("pm", "prediction-market kit (Kalshi, Polymarket) on your own captures"),
     ("cert", "signing keys and rendering"),
+    ("verify", "verify a published result: the Fill-Realism Atlas"),
 ];
 
 /// Long descriptions (`--help`) by command path.
@@ -23,7 +24,8 @@ pub(crate) const PYTHON_LONG_ABOUT: &[(&[&str], &str)] = &[
     (&["pm"], "Prediction-market kit (Kalshi, Polymarket): your own captures -> books, queue calibration and reward-aware market-making PnL. Self-hosted use on your own data only; see `queuetruth.pm.terms`."),
     (&["reconcile"], "A trading bot's simulator arm (Freqtrade backtest or dry run, Hummingbot paper bot) against its live run, or a Backtrader, VectorBT or LEAN backtest against a canonical live log: paired orders, why each differs, and the sim-vs-live scorecard."),
     (&["atlas"], "The Fill-Realism Atlas answer for your library, liquidity tier or symbol: how far each setting fills from the exact replay of the real queue, with its 95% interval, and the closest setting's config to paste. Reads the atlas data API from a local directory or the public site (asks before it downloads)."),
-    (&["check"], "How wrong is my backtest: replays the backtest's own resting limit orders (hftbacktest, NautilusTrader, Backtrader, VectorBT, LEAN or Freqtrade output) in the exact queue of an order-level dataset and compares them order by order: fills, phantom fills, time to fill and the P&L gap."),
+    (&["verify", "atlas"], "Checks a published Fill-Realism Atlas without a checkout: every file of the data API against the sha256 in its manifest, the atlas root against the day roots, and with --day one day's leaves and Merkle proofs. With --unit and --rerun, runs that unit again and compares its leaf with the published one. Asks before it downloads anything."),
+    (&["check"], "How wrong is my backtest: replays the backtest's own resting limit orders (hftbacktest, NautilusTrader, Backtrader, VectorBT, LEAN or Freqtrade output) in the exact queue of an order-level dataset and compares them order by order: fills, phantom fills, time to fill and the P&L gap. Without --data, estimates from the Fill-Realism Atlas touch tables how many of a bar backtest's fills the real queue would give, and how much they overstate P&L."),
     (&["fit"], "The parameter that fixes your backtester's fill model: fitted on order-level data (exact queue) or on your live fills, compared with the library default on held-out data. The paste-ready snippet is written only when the fit beats the default; otherwise it says why and what would make it pass."),
 ];
 
@@ -521,17 +523,42 @@ pub(crate) const PYTHON_COMMANDS: &[Cmd] = &[
         hidden: false,
     },
     Cmd {
+        path: &["verify", "atlas"],
+        imp: Implementation::Python,
+        about: "check the published atlas: file hashes, the atlas root, a day's proofs, and re-run one unit",
+        flags: &[
+            Flag { long: "from", kind: Kind::Str, to: "_cli.source", required: false, help: "a site or atlas/v1 directory, or the URL of a data API (default: the public atlas, cached)", short: None, value_name: Some("DIR_OR_URL") },
+            Flag { long: "atlas-manifest", kind: Kind::Str, to: "_cli.atlas_manifest", required: false, help: "the site's data/atlas_manifest.json (default: read next to the API)", short: None, value_name: Some("FILE") },
+            Flag { long: "day", kind: Kind::Str, to: "_cli.day", required: false, help: "one day: a date of the atlas (its reduced day is downloaded from the release), a day directory or file", short: None, value_name: Some("DATE_OR_DIR") },
+            Flag { long: "unit", kind: Kind::Str, to: "_cli.unit", required: false, help: "one unit of --day, e.g. 10092026-b000-u0001", short: None, value_name: Some("UNIT_ID") },
+            Flag { long: "rerun", kind: Kind::Flag, to: "_cli.rerun", required: false, help: "run --unit again and compare its leaf (needs a checkout at the day's build and the unit's bucket)", short: None, value_name: None },
+            Flag { long: "split", kind: Kind::Str, to: "_cli.split", required: false, help: "the directory holding the unit's bucket (default: stream the public day file and keep that bucket)", short: None, value_name: Some("DIR") },
+            Flag { long: "checkout", kind: Kind::Str, to: "_cli.checkout", required: false, help: "the queuetruth checkout whose scripts/scale/unit.py re-runs the unit (default: the current one)", short: None, value_name: Some("DIR") },
+            Flag { long: "yes", kind: Kind::Flag, to: "_cli.yes", required: false, help: "download what the checks need without asking", short: Some('y'), value_name: None },
+            Flag { long: "refresh", kind: Kind::Flag, to: "_cli.refresh", required: false, help: "download the newest manifest even when a copy is cached", short: None, value_name: None },
+            Flag { long: "json", kind: Kind::Flag, to: "_cli.json", required: false, help: "print the qt.atlas_verify document (same as --format json)", short: None, value_name: None },
+        ],
+        positional: &[],
+        globals: Globals::None,
+        hidden: false,
+    },
+    Cmd {
         path: &["check"],
         imp: Implementation::Python,
         about: "how wrong a backtest is: its own limit orders replayed in the real queue",
         flags: &[
-            Flag { long: "data", kind: Kind::Str, to: "_cli.data", required: false, help: "order-level (MBO) dataset covering the backtest's days", short: None, value_name: Some("DIR") },
+            Flag { long: "data", kind: Kind::Str, to: "_cli.data", required: false, help: "order-level (MBO) dataset covering the backtest's days (without it: the atlas estimate)", short: None, value_name: Some("DIR") },
             Flag { long: "backtester", kind: Kind::Enum(&["hftbacktest", "nautilus", "backtrader", "vectorbt", "lean", "freqtrade"]), to: "_cli.backtester", required: false, help: "the backtester (default: read from the file)", short: None, value_name: None },
             Flag { long: "instrument-map", kind: Kind::Str, to: "_cli.instrument_map", required: false, help: "instrument_map.csv (default: built from the dataset's symbols; needed only when they do not match)", short: None, value_name: Some("FILE") },
             Flag { long: "out", kind: Kind::Str, to: "_cli.out", required: false, help: "output directory (default qt-check)", short: None, value_name: Some("DIR") },
             Flag { long: "window", kind: Kind::Str, to: "_cli.window", required: false, help: "how long after entry a fill counts, e.g. 10min (default 1h)", short: None, value_name: Some("DURATION") },
             Flag { long: "markout", kind: Kind::Str, to: "_cli.markout", required: false, help: "P&L horizon: fills marked to the mid this long after (default 1min)", short: None, value_name: Some("DURATION") },
             Flag { long: "option", kind: Kind::StrAppend, to: "_cli.option", required: false, help: "importer option, e.g. timeframe=5m, data_tz=America/New_York, column=LABEL (repeatable)", short: None, value_name: Some("KEY=VALUE") },
+            Flag { long: "tier", kind: Kind::Str, to: "_cli.tier", required: false, help: "without --data: liquidity tier of symbols the atlas does not hold, T1 to T5 or ALL", short: None, value_name: Some("TIER") },
+            Flag { long: "bar", kind: Kind::Str, to: "_cli.bar", required: false, help: "without --data: the backtest's bar length, 1m, 5m or 1h", short: None, value_name: Some("BAR") },
+            Flag { long: "atlas", kind: Kind::Str, to: "_cli.atlas", required: false, help: "without --data: a site or atlas/v1 directory, or a data API URL (default: the public atlas, cached)", short: None, value_name: Some("DIR_OR_URL") },
+            Flag { long: "yes", kind: Kind::Flag, to: "_cli.yes", required: false, help: "without --data: download the atlas without asking", short: Some('y'), value_name: None },
+            Flag { long: "refresh", kind: Kind::Flag, to: "_cli.refresh", required: false, help: "without --data: download the newest atlas manifest", short: None, value_name: None },
             Flag { long: "json", kind: Kind::Flag, to: "_cli.json", required: false, help: "print the full summary as JSON (as --format json)", short: None, value_name: None },
             Flag { long: "html", kind: Kind::Flag, to: "_cli.html", required: false, help: "also write a self-contained report to <out>/check.html", short: None, value_name: None },
         ],

@@ -1406,7 +1406,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if (rc := reconcile_main(args)) is not None:
         return rc
-    from queuetruth.atlas._cli import maybe_main as atlas_main  # `atlas` (Python-only grammar)
+    from queuetruth.atlas._cli import maybe_main as atlas_main  # `atlas`, `verify atlas` (Python-only grammar)
 
     if (rc := atlas_main(args)) is not None:
         return rc
