@@ -535,7 +535,8 @@ def test_charts_are_accessible_static_svg_with_the_table_values(zoo_atlas: Path,
             '<g class="over"><title>NautilusTrader default (touch fill) (nt_prob_touch[mode=faithful;p=1]): +1.90 pp '
             "[+1.50, +2.30]</title>" in drawn
         )
-        assert f'<g class="plain"><title>NautilusTrader queue position (queue_position=True) ({QPOS}): +0.04 pp' in drawn
+        qpos = f'<g class="plain"><title>NautilusTrader queue position (queue_position=True) ({QPOS}): +0.04 pp'
+        assert qpos in drawn
         assert f'<g class="under"><title>hftbacktest Power2 queue model (n=2) ({PB2}): -0.88 pp [-1.20, -0.56]' in drawn
         assert '<line class="zero"' in drawn and ">0</text>" in drawn and "-2</text>" in drawn and "+2</text>" in drawn
     # wide: the label right-aligned in its own column, left of every gridline, with its dot, whisker and value on
