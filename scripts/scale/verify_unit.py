@@ -16,6 +16,9 @@ re-run at the `git_head` the day manifest's `builds` names: the script says when
 A flagged unit's leaf now carries `exactness_by_symbol` (`symbol_exactness.py`); a root published before that holds
 the leaf without it, so the re-run leaf is also compared in that form and reported as `pre-attribution`. Exit 0 when
 everything matches, 1 otherwise.
+
+`queuetruth verify atlas --day D --unit U --rerun` runs the same checks from the published atlas without the day's
+files at hand (`queuetruth.atlas.verify`).
 """
 
 from __future__ import annotations
@@ -32,44 +35,11 @@ sys.path.insert(0, str(HERE))
 import common as K  # noqa: E402
 from unit import run_unit  # noqa: E402
 
+# the checks live in the package (`queuetruth verify atlas` runs them without a checkout); kept here by name
+from queuetruth.atlas.verify import check_atlas, check_build  # noqa: E402
+from queuetruth.atlas.verify import diff_fields as _diff  # noqa: E402
 
-def _diff(a: object, b: object, path: str = "") -> list[str]:
-    if isinstance(a, dict) and isinstance(b, dict):
-        out = []
-        for k in sorted(set(a) | set(b)):
-            out += _diff(a.get(k), b.get(k), f"{path}.{k}" if path else k)
-        return out
-    return [] if a == b else [path]
-
-
-def check_build(day: dict, here: dict) -> list[str]:
-    """Lines saying whether this checkout is the build the day's units ran with (`day_manifest.json` `builds`)."""
-    builds = day.get("builds") or []
-    if not builds:
-        return ["the day manifest names no build (written before builds were recorded)"]
-    heads = [b.get("git_head") for b in builds]
-    if here.get("git_head") in heads:
-        return [f"this checkout is {here.get('git_head')}, a build the day ran with"]
-    return [
-        f"this checkout is {here.get('git_head') or 'not a git checkout'}; the day ran with "
-        + ", ".join(f"{h} ({b.get('units')} units)" for h, b in zip(heads, builds, strict=True)),
-        "a leaf holds sha256 digests of Parquet files the build wrote, so another build may not reproduce it: "
-        f"git checkout {heads[0]} && make develop",
-    ]
-
-
-def check_atlas(day: dict, atlas: dict) -> tuple[bool, str]:
-    """Whether the atlas lists this day's root for its date and its root recomputes from the listed day roots."""
-    listed = [d for d in atlas.get("days", []) if d.get("date") == day.get("date")]
-    if not listed:
-        return False, f"the atlas manifest lists no day {day.get('date')}"
-    if listed[0].get("merkle_root") != day.get("merkle_root"):
-        listed_root, day_root = listed[0].get("merkle_root"), day.get("merkle_root")
-        return False, f"the atlas lists day root {listed_root}, the day manifest has {day_root}"
-    root = K.merkle_root([d["merkle_root"] for d in atlas["days"]])
-    if root != atlas.get("atlas_root"):
-        return False, f"the atlas root does not recompute from its day roots ({root} != {atlas.get('atlas_root')})"
-    return True, f"the atlas lists this day root, and its root {root} recomputes from the day roots"
+__all__ = ["check_atlas", "check_build", "main"]
 
 
 def main(argv: list[str] | None = None) -> int:
