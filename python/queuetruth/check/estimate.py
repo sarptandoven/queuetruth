@@ -20,7 +20,8 @@ gives (`atlas/v1/touch.json`, docs/concepts/touch-tables.md). This module applie
 
 No number is invented: a tier, side or bar length that is not in the tables, or a cell without a value or interval,
 stops with the reason. The answer is an estimate for orders like the atlas's shadows (small orders joining the back
-of the queue, resting as day orders) on IEX DEEP+, not an exact replay of these orders; `data=` gives that.
+of the queue, resting as day orders) on the venue the atlas manifest names (IEX DEEP+ for the published atlas), not
+an exact replay of these orders; `data=` gives that.
 """
 
 from __future__ import annotations
@@ -372,6 +373,8 @@ def estimate(
     lo, hi = (int(x) for x in np.percentile(real, [2.5, 97.5], method="nearest"))
     per = pnl / n_rest
     plo, phi = (float(x) for x in np.percentile(per, [2.5, 97.5]))
+    #: where the tables come from, as the atlas manifest names it (the published atlas: "IEX DEEP+")
+    venue_name = str(m.get("venue_name") or tables.source)
     doc: dict[str, Any] = {
         "schema": SCHEMA,
         "schema_version": 1,
@@ -401,7 +404,7 @@ def estimate(
             "bar after the fill, in ticks), averaged over the backtest's resting orders, drawn the same way"
         ),
         "rests_on": [
-            f"the Fill-Realism Atlas touch tables, {tables.source.upper()} DEEP+ only (one venue), "
+            f"the Fill-Realism Atlas touch tables, {venue_name} only (one venue), "
             f"{len(tables.days)} day(s) from {tables.days[0] if tables.days else '?'} to "
             f"{tables.days[-1] if tables.days else '?'}, atlas root {tables.atlas_root}",
             "orders like the atlas's shadows: small, joining the back of the queue, resting as day orders; bars from "
@@ -411,6 +414,7 @@ def estimate(
         ],
         "atlas": {
             "source": src.where,
+            "venue_name": venue_name,
             "atlas_root": m.get("atlas_root"),
             "built_at": m.get("built_at"),
             "touch_days": list(tables.days),
@@ -459,7 +463,7 @@ def _answer(doc: dict[str, Any]) -> str:
     a = doc["atlas"]
     days = a["touch_days"]
     s += (
-        f" An estimate from the Fill-Realism Atlas touch tables (IEX DEEP+, one venue, {len(days)} day"
+        f" An estimate from the Fill-Realism Atlas touch tables ({a['venue_name']}, one venue, {len(days)} day"
         f"{'' if len(days) == 1 else 's'}) for orders like the atlas's shadow orders, not an exact replay of yours: "
         "pass --data for that."
     )
