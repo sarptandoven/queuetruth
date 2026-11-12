@@ -14,7 +14,12 @@ Steps (each one is existing machinery; this module only picks and joins them):
      orders are linked to the live orders by their keys (the backtest ran on the live schedule).
 3. With `data` (an order-level dataset of the same days), the scorer also marks every fill to the dataset's mid
    (markouts, the P&L gap per order) and replays the live orders in the exact queue (the `exact` arm).
-4. Restate everything in the user's words, answer first (`CompareResult`).
+4. Restate everything in the user's words, answer first (`CompareResult`). The share of the backtest's fills that
+   happened live and McNemar on the discordant fills are clustered by instrument and day (`queuetruth.compare.stats`;
+   with fewer than 5 clusters the orders are counted as independent and the line says so). With `data` and a
+   latency measured on the live log, the latency is fitted before the queue: the exact arm is replayed again from
+   the send time with no latency and with the median latency, and the answer says which share of the gap the
+   latency explains (`calibrate-live --latency-from-log`'s order).
 
 Instrument maps: none is needed to pair and score two logs of the same venue. With `data` the live instruments are
 mapped to the dataset's symbols (`queuetruth.check.symbols`); only a name that maps to none needs `instrument_map`,
@@ -45,7 +50,7 @@ SCHEMA = "qt.compare"
 #: The markout horizons of the answer (100 ms, 1 s, 10 s), as `score` prints them.
 HORIZONS_NS = (100_000_000, 1_000_000_000, 10_000_000_000)
 #: Subdirectories `compare` writes (cleared when `out` holds an earlier comparison).
-_OUTPUTS = ("live", "sim", "score", "exact", "backtest", "live-import", "score-data")
+_OUTPUTS = ("live", "sim", "score", "exact", "backtest", "live-import", "score-data", "exact-send", "exact-latency")
 _OUT_FILES = ("compare.json", "orders.csv", "compare.html", "instrument_map.csv", "reconcile.json")
 _OUT_FILES += ("reconcile_orders.csv", "backtest_instrument_map.csv")
 
@@ -86,9 +91,10 @@ class CompareResult(Result):
         f = self.doc.get("fills") or {}
         if f.get("share") is None or f.get("ci_lo") is None:
             return None
+        label = (f.get("interval") or {}).get("label")
         return (
             f"Backtest fills that also filled live: {_pct(f['share'])} (95% CI {_pct(f['ci_lo'])} to "
-            f"{_pct(f['ci_hi'])})."
+            f"{_pct(f['ci_hi'])}{', ' + label if label else ''})."
         )
 
     def _rows(self) -> list[dict[str, Any]]:
@@ -183,15 +189,15 @@ def _local(v: Any, tz: str) -> str | None:
     return units.local_time(ns, tz, named=False)
 
 
-def _wilson(k: int, n: int) -> tuple[float | None, float | None]:
-    """The 95% Wilson interval (`queuetruth.stats.wilson`, exact 0 and 1 edges); no interval without orders."""
-    if n <= 0:
-        return None, None
-    from queuetruth.stats import wilson
+#: Per-order fields `compare` keeps out of the order table: the entry time (epoch ns) and the (instrument, venue-local
+#: day) cluster of the clustered intervals (`queuetruth.compare.stats`).
+_TS = "_entry_ns"
+_CLUSTER = "_cluster"
 
-    ci = wilson(k, n, edges="exact")
-    assert ci is not None
-    return float(ci[0]), float(ci[1])
+
+def _day(ts: int | None, tz: str) -> str | None:
+    """The venue-local date of an epoch-nanosecond time (`queuetruth.units.local_datetime`)."""
+    return None if ts is None else units.local_datetime(ts, tz).date().isoformat()
 
 
 def _ms(v: Any) -> str:
@@ -385,10 +391,12 @@ def _require_ids(live_dir: Path) -> None:
 # ---- the two paths ----------------------------------------------------------------------------------------------
 
 
-def _score(live_dir: Path, sim: dict[str, Any], out: Path, window_ns: int | None, data: str | None) -> Any:
+def _score(
+    live_dir: Path, sim: dict[str, Any], out: Path, window_ns: int | None, data: str | None, **extra: Any
+) -> Any:
     from queuetruth.ops.score import score
 
-    spec: dict[str, Any] = {"live": {"path": str(live_dir)}, "sim": sim, "out": str(out)}
+    spec: dict[str, Any] = {"live": {"path": str(live_dir)}, "sim": sim, "out": str(out), **extra}
     if window_ns is not None:
         spec["window_ns"] = int(window_ns)
     if data is not None:
@@ -557,6 +565,32 @@ def _shortfall(score_dir: Path | None, summary: dict[str, Any] | None) -> tuple[
     return out, cur, h
 
 
+#: The horizon of the per-order markout gap `compare --watch` follows (1 s, the scorer's primary markout).
+WATCH_MARKOUT_NS = 1_000_000_000
+
+
+def _markout_gaps(score_dir: Path | None, horizon_ns: int = WATCH_MARKOUT_NS) -> dict[str, float]:
+    """(order key -> backtest minus live first-fill markout in ticks of mid at `horizon_ns`) for the orders both
+    arms filled, from `score_markouts.parquet` (the per-order values behind the scorer's `markout_diff`)."""
+    if score_dir is None or not (score_dir / "score_markouts.parquet").is_file():
+        return {}
+    import pyarrow.parquet as pq
+
+    first: dict[tuple[str, str], tuple[int, float]] = {}
+    for r in pq.read_table(score_dir / "score_markouts.parquet").to_pylist():
+        if str(r["ref"]) != "mid" or int(r["horizon_ns"]) != horizon_ns or r.get("mo_ticks") is None:
+            continue
+        k = (str(r["order_key"]), str(r["arm"]))
+        seq = int(r["fill_seq"])
+        if k not in first or seq < first[k][0]:
+            first[k] = (seq, float(r["mo_ticks"]))
+    return {
+        key: first[(key, "sim")][1] - v
+        for (key, arm), (_, v) in first.items()
+        if arm == "live" and (key, "sim") in first
+    }
+
+
 def _reconcile_rows(report: Any, tz: str, gaps: dict[str, float]) -> list[dict[str, Any]]:
     rows = []
     for r in report.orders:
@@ -564,6 +598,7 @@ def _reconcile_rows(report: Any, tz: str, gaps: dict[str, float]) -> list[dict[s
         outcome = "both" if bq > 0 and lq > 0 else "backtest_only" if bq > 0 else "live_only" if lq > 0 else "neither"
         key = r.live_key or r.sim_key
         gap = gaps.get(str(r.live_key)) if r.live_key else None
+        ts = _epoch_ns(r.live_placed or r.live_first_fill or r.sim_first_fill)
         rows.append(
             {
                 "order": key,
@@ -585,6 +620,8 @@ def _reconcile_rows(report: Any, tz: str, gaps: dict[str, float]) -> list[dict[s
                 "price_gap": r.sim_price_advantage_quote,
                 "pnl_gap": gap,
                 "tz": tz,
+                _TS: ts,
+                _CLUSTER: (r.instrument, _day(ts, tz)),
             }
         )
     return rows
@@ -629,6 +666,8 @@ def _score_rows(run: _Run, tz: str, gaps: dict[str, float]) -> list[dict[str, An
                 "price_gap": None,
                 "pnl_gap": gaps.get(k),
                 "tz": tz,
+                _TS: _epoch_ns(r["ts_entry"]),
+                _CLUSTER: (names.get(k), _day(_epoch_ns(r["ts_entry"]), tz)),
             }
         )
     for k in sorted(sim_keys - scored - set(names)):
@@ -663,19 +702,84 @@ def _tz(data: str | None, symbols: set[str]) -> str:
 
 
 def _fills_line(rows: list[dict[str, Any]]) -> tuple[str, dict[str, Any]]:
+    """The share of the backtest's fills that also filled live, with its interval clustered by instrument and day
+    (`queuetruth.compare.stats.share`; with fewer than 5 clusters the Wilson interval, labelled)."""
+    from queuetruth.compare import stats as cs
+
     bt = [r for r in rows if r["outcome"] in ("both", "backtest_only")]
     both = sum(1 for r in bt if r["outcome"] == "both")
-    lo, hi = _wilson(both, len(bt))
+    cl = cs.clusters([r.get(_CLUSTER) for r in bt])
+    sh = cs.share([r["outcome"] == "both" for r in bt], cl, "compare/fills_share")
+    lo, hi = sh["ci_lo"], sh["ci_hi"]
     n_live = sum(1 for r in rows if r["outcome"] in ("both", "live_only"))
     fills = {"backtest": len(bt), "both": both, "live": n_live, "share": both / len(bt) if bt else None}
-    fills.update({"ci_lo": lo, "ci_hi": hi})
+    fills.update({"ci_lo": lo, "ci_hi": hi, "interval": sh["interval"]})
     if not bt:
         return f"The backtest made no fills to compare; live filled {n_live} order(s).", fills
     return (
         f"{both} of the backtest's {len(bt)} fills also filled live ({_pct(fills['share'])}, 95% CI {_pct(lo)} to "
-        f"{_pct(hi)}, orders counted as independent); live filled {n_live} order(s) in all.",
+        f"{_pct(hi)}, {cl.label()}); live filled {n_live} order(s) in all.",
         fills,
     )
+
+
+#: Outcomes of an order both runs placed (or one run placed and the other did not): each side filled or not.
+_PAIRED = ("both", "backtest_only", "live_only", "neither")
+
+
+def _discordance(rows: list[dict[str, Any]]) -> tuple[str | None, dict[str, Any] | None]:
+    """McNemar on the discordant fills of the paired orders (`queuetruth.compare.stats.discordance`)."""
+    from queuetruth.compare import stats as cs
+
+    sel = [r for r in rows if r.get("outcome") in _PAIRED]
+    if not sel:
+        return None, None
+    d = cs.discordance(
+        [r["outcome"] in ("both", "backtest_only") for r in sel],
+        [r["outcome"] in ("both", "live_only") for r in sel],
+        cs.clusters([r.get(_CLUSTER) for r in sel]),
+        "compare/discordance",
+    )
+    return cs.discordance_line(d), d
+
+
+def _arm_orders(score_dir: Path, tz: str) -> list[dict[str, Any]]:
+    """One row per scored order of a scorecard (`score_orders.parquet`): its outcome on each side, its cluster and
+    its entry time, as `_score_rows` keeps them."""
+    import pyarrow.parquet as pq
+
+    p = score_dir / "score_orders.parquet"
+    if not p.is_file():
+        return []
+    out = []
+    for r in pq.read_table(p).to_pylist():
+        cls = str(r["class"])
+        ts = _epoch_ns(r.get("ts_entry"))
+        out.append(
+            {
+                "order": str(r["order_key"]),
+                "outcome": {"sim_only": "backtest_only"}.get(cls, cls),
+                _TS: ts,
+                _CLUSTER: (r.get("instrument_id"), _day(ts, tz)),
+            }
+        )
+    return out
+
+
+def _exact_discordance(exact_dir: Path, tz: str) -> tuple[str | None, dict[str, Any] | None]:
+    """The exact queue against live, paired by order, as `_discordance` (the exact arm in the backtest's place)."""
+    from queuetruth.compare import stats as cs
+
+    sel = [r for r in _arm_orders(exact_dir, tz) if r["outcome"] in _PAIRED]
+    if not sel:
+        return None, None
+    d = cs.discordance(
+        [r["outcome"] in ("both", "backtest_only") for r in sel],
+        [r["outcome"] in ("both", "live_only") for r in sel],
+        cs.clusters([r.get(_CLUSTER) for r in sel]),
+        "compare/exact_discordance",
+    )
+    return cs.discordance_line(d, "the exact queue"), d
 
 
 def _one_sided(rows: list[dict[str, Any]]) -> tuple[list[str], dict[str, Any]]:
@@ -752,6 +856,71 @@ def _latency(live_dir: Path) -> tuple[str, dict[str, Any] | None]:
     )
 
 
+def _bias(doc: dict[str, Any] | None) -> tuple[float | None, float | None, float | None]:
+    b = (doc or {}).get("bias") or {}
+    return b.get("fill_rate_bias"), b.get("ci_lo"), b.get("ci_hi")
+
+
+def _gap_words(v: float) -> str:
+    pp = abs(v) * 100
+    return "as often as" if pp < 0.05 else f"{pp:.1f} pp {'more' if v > 0 else 'less'} often than"
+
+
+def _latency_first(
+    run: _Run, out: Path, window_ns: int | None, data: str | None, lat: dict[str, Any] | None
+) -> tuple[str | None, dict[str, Any] | None]:
+    """Latency fitted before the queue (the order of `calibrate-live --latency-from-log`, hftbacktest #332): the
+    live orders replayed in the exact queue entering at their send time, once with no latency and once with the
+    median entry latency measured on the live log. The second is the queue gap with the latency taken out; the
+    difference is what the latency explains. Needs `data` and a measured latency."""
+    med = ((lat or {}).get("entry_ns") or {}).get("p50")
+    if data is None or med is None:
+        return None, None
+    w = window_ns or ((run.exact or {}).get("spec") or {}).get("window_ns")
+    gw = round(float(med))
+    try:
+        no = _score(run.live_dir, {"kind": "exact"}, out / "exact-send", w, data, entry="send_plus_latency",
+                    latency={"gateway_ns": 0})  # fmt: skip
+        fit = _score(run.live_dir, {"kind": "exact"}, out / "exact-latency", w, data, entry="send_plus_latency",
+                     latency={"gateway_ns": gw})  # fmt: skip
+    except QtError as e:
+        run.notes.append(f"latency first: the exact queue could not be scored with the fitted latency ({e.message})")
+        return None, None
+    g0, _, _ = _bias(no)
+    g1, lo, hi = _bias(fit)
+    doc: dict[str, Any] = {
+        "latency_ns": gw,
+        "latency": units.format_duration(gw, sig=3),
+        "gap_without_latency": g0,
+        "gap_with_latency": g1,
+        "ci_lo": lo,
+        "ci_hi": hi,
+        "share_explained": None,
+        "run_ids": {"without_latency": no.get("run_id"), "with_latency": fit.get("run_id")},
+    }
+    if g0 is None or g1 is None:
+        return "latency first: not computable (the exact queue has no fill gap to split).", doc
+    ci = f" (95% CI {lo * 100:+.1f} to {hi * 100:+.1f} pp)" if lo is not None and hi is not None else ""
+    head = (
+        f"latency first: with the live latency applied before the queue (median {_ms(gw)}, fitted from the live "
+        f"log), the exact queue fills {_gap_words(g1)} live{ci}; entering at the send time with no latency it fills "
+        f"{_gap_words(g0)} live"
+    )
+    if abs(g0) < 5e-4:
+        return f"{head}, so there is no gap for the latency to explain.", doc
+    share = (g0 - g1) / g0
+    doc["share_explained"] = share
+    if share < 0:
+        part = "the latency explains none of that gap (it widens it)"
+    elif share > 1.005:
+        part = "the latency explains all of that gap and more (with it the gap changes sign)"
+    elif share >= 0.995:
+        part = "the latency explains all of that gap"
+    else:
+        part = f"the latency explains {share * 100:.0f}% of that gap, the queue the rest"
+    return f"{head}: {part}.", doc
+
+
 def _exact_line(doc: dict[str, Any] | None) -> str | None:
     if not doc:
         return None
@@ -786,6 +955,35 @@ def compare(
     (e.g. `"1h"`) is how long after entry a fill counts (default: the reconciler's, 60 s for `score`). `options`
     go to the backtest's importer (e.g. `timeframe="1h"`). `out` (default a new temporary directory) receives
     `compare.json`, `orders.csv` and the logs and scorecards behind them."""
+    return _compare(
+        backtest,
+        live,
+        data=data,
+        backtester=backtester,
+        venue=venue,
+        out=out,
+        instrument_map=instrument_map,
+        window=window,
+        account=account,
+        options=options,
+    )[0]
+
+
+def _compare(
+    backtest: str | Path | Sequence[str | Path],
+    live: str | Path | Sequence[str | Path],
+    *,
+    data: str | Path | None = None,
+    backtester: str | None = None,
+    venue: str | None = None,
+    out: str | Path | None = None,
+    instrument_map: str | Path | None = None,
+    window: str | int | None = None,
+    account: str | None = None,
+    options: dict[str, Any] | None = None,
+) -> tuple[CompareResult, list[dict[str, Any]]]:
+    """`compare`, and one row per paired order with what the order table leaves out (its outcome, entry time,
+    cluster and P&L gap) for `queuetruth.compare.watch`."""
     bpaths = _paths(backtest, "backtest")
     lpaths = _paths(live, "live")
     kind = detect_backtest(bpaths, backtester)
@@ -821,13 +1019,17 @@ def compare(
         tz = _tz(data_s, set(n for _, n in _log_instruments(run.live_dir)))
         rows = _score_rows(run, tz, gaps)
     first, fills = _fills_line(rows)
+    disc_line, disc = _discordance(rows)
     one, one_doc = _one_sided(rows)
     pnl_lines, pnl = _pnl_lines(run, cur)
     stats_doc = run.data_score or run.score
     prac = _practitioner(stats_doc, data_s is not None)
     lat_line, lat = _latency(run.live_dir)
     exact = _exact_line(run.exact)
-    lines = [first, *one, *pnl_lines, *prac, lat_line, *([exact] if exact else [])]
+    ex_line, ex_disc = (None, None) if run.exact is None else _exact_discordance(outp / "exact", tz)
+    lf_line, lf = _latency_first(run, outp, window_ns, data_s, lat)
+    lines = [first, *one, *([disc_line] if disc_line else []), *pnl_lines, *prac, lat_line]
+    lines += [x for x in (exact, ex_line, lf_line) if x]
     s = stats_doc or {}
     window_eff = int(window_ns or (s.get("spec") or {}).get("window_ns") or 0) or None
     doc: dict[str, Any] = {
@@ -859,6 +1061,9 @@ def compare(
         "score": None if run.score is None else {k: run.score.get(k) for k in ("run_id", "two_by_two", "bias")},
         "notes": list(dict.fromkeys(run.notes)),
         "files": {},
+        "discordance": disc,
+        "exact_discordance": ex_disc,
+        "latency_first": lf,
     }
     files = doc["files"]
     files["orders"] = str(_write_orders(outp / "orders.csv", rows))
@@ -870,9 +1075,23 @@ def compare(
         files["score_data"] = str(run.data_score_dir)
     if run.exact is not None:
         files["exact"] = str(outp / "exact")
+    if lf is not None:
+        files["exact_latency"] = str(outp / "exact-latency")
     files["compare"] = str(outp / "compare.json")
     write_doc(doc, outp)
-    return CompareResult(doc, rows, outp)
+    mk = _markout_gaps(run.data_score_dir) if run.data_score is not None else {}
+    paired = [
+        {
+            **{k: r.get(k) for k in ("order", "outcome", "pnl_gap", _TS, _CLUSTER)},
+            "markout_gap": mk.get(str(r["order"])),
+        }
+        for r in rows
+        if r["outcome"] in _PAIRED
+    ]
+    for r in rows:
+        r.pop(_TS, None)
+        r.pop(_CLUSTER, None)
+    return CompareResult(doc, rows, outp), paired
 
 
 ORDER_COLUMNS = (

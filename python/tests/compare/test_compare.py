@@ -142,17 +142,26 @@ def test_bar_backtesters_against_a_venue_export_match_reconcile(tmp_path: Path, 
         "inputs": [str(STREAM)],
         "log": str(tmp_path / "c" / "live"),
     }
+    # one or two instrument-day clusters: the Wilson interval, labelled with the reason
+    k = res.doc["fills"]["interval"]["n_clusters"]
+    unit = "cluster" if k == 1 else "clusters"
     assert res.summary == (
-        "5 of the backtest's 6 fills also filled live (83%, 95% CI 44% to 97%, orders counted as independent); live "
-        "filled 5 order(s) in all."
+        "5 of the backtest's 6 fills also filled live (83%, 95% CI 44% to 97%, orders counted as independent: "
+        f"{k} instrument-day {unit}, fewer than 5); live filled 5 order(s) in all."
     )
     lines = res.doc["lines"]
     assert lines[1] == "Fills only the backtest made: 1 (1 the live order rested and did not fill)."
+    k2 = res.doc["discordance"]["interval"]["n_clusters"]  # every paired order, not only the backtest's fills
     assert lines[2] == (
+        "discordant fills: the backtest fills more orders than live: 1 backtest-only against 0 live-only, p = 1, "
+        f"orders counted as independent: {k2} instrument-day {'cluster' if k2 == 1 else 'clusters'}, fewer than 5."
+    )
+    assert res.doc["discordance"]["test"] == "mcnemar_exact" and res.doc["discordance"]["p"] == 1.0
+    assert lines[3] == (
         "P&L gap BTCUSDT: on fills both made the backtest's prices were better by 0.19623456789 (quote); fills only "
         "the backtest made are 608 of notional (quote)."
     )
-    assert lines[3].startswith("time to fill: still unfilled after 1s (Kaplan-Meier, cancels censored)")
+    assert lines[4].startswith("time to fill: still unfilled after 1s (Kaplan-Meier, cancels censored)")
     assert any(x.startswith("markouts: need --data") for x in lines)
     assert any(x.startswith("latency: not measured: no live order has both") for x in lines)
     assert res.doc["fills"]["backtest"] == 6 and res.doc["fills"]["both"] == 5
@@ -238,6 +247,11 @@ def test_event_driven_simulators_are_scored_as_the_simulator_arm(
     n_bt, n_live = tbt["sim_only"], tbt["live_only"]
     assert lines[1] == f"Fills only the backtest made: {n_bt} ({n_bt} the live order did not fill within the window)."
     assert lines[2] == f"Fills only live made: {n_live} ({n_live} the backtest order did not fill within the window)."
+    assert lines[3].startswith(
+        f"discordant fills: the backtest fills {'more' if n_bt > n_live else 'fewer'} orders than live: {n_bt} "
+        f"backtest-only against {n_live} live-only, p = "
+    )
+    assert res.doc["discordance"]["backtest_only"] == n_bt and res.doc["discordance"]["live_only"] == n_live
     assert "P&L gap: needs --data (each fill is marked to the dataset's mid)." in lines
     assert any(x.startswith("time to fill: still unfilled after 1s") and "log-rank p =" in x for x in lines)
     lat = next(x for x in lines if x.startswith("latency:"))
@@ -251,7 +265,9 @@ def test_with_data_markouts_pnl_per_order_and_the_exact_arm(tmp_path: Path, sims
     mk = next(x for x in lines if x.startswith("markouts:"))
     assert "100ms" in mk and "1s" in mk and "10s" in mk and "95% CI" in mk
     assert any(x.startswith("P&L gap per order (marked to the dataset's mid): ") for x in lines)
-    assert lines[-1].startswith("exact queue: the live orders replayed in the dataset's real queue fill ")
+    assert lines[-3].startswith("exact queue: the live orders replayed in the dataset's real queue fill ")
+    assert lines[-2].startswith("discordant fills: the exact queue ")
+    assert lines[-1].startswith("latency first: with the live latency applied before the queue (median 30us, ")
     assert {r["horizon_ns"] for r in res.doc["markout_diff"]} <= {100_000_000, 1_000_000_000, 10_000_000_000}
     assert res.doc["exact"]["n_orders"] == 200 and (tmp_path / "c" / "exact" / "summary.json").is_file()
     gaps = [r["pnl_gap"] for r in res.orders if r.get("pnl_gap") is not None]

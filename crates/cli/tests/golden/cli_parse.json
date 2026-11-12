@@ -5551,6 +5551,94 @@
   {
     "argv": [
       "queuetruth",
+      "compare",
+      "--backtest",
+      "hbt.jsonl",
+      "--live",
+      "live",
+      "--data",
+      "synth",
+      "--out",
+      "qt-compare",
+      "--watch",
+      "--interval",
+      "5min",
+      "--alert-pp",
+      "1.5",
+      "--alert-ticks",
+      "0.5",
+      "--alert-pnl",
+      "2"
+    ],
+    "command": {
+      "path": [
+        "compare"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "backtest": [
+            "hbt.jsonl"
+          ],
+          "live": [
+            "live"
+          ],
+          "data": "synth",
+          "out": "qt-compare",
+          "watch": true,
+          "interval": "5min",
+          "alert_pp": 1.5,
+          "alert_ticks": 0.5,
+          "alert_pnl": 2.0
+        }
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "compare",
+      "--backtest",
+      "hbt.jsonl",
+      "--live",
+      "live",
+      "--once"
+    ],
+    "command": {
+      "path": [
+        "compare"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "backtest": [
+            "hbt.jsonl"
+          ],
+          "live": [
+            "live"
+          ],
+          "once": true
+        }
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
       "advanced",
       "ingest",
       "--format",

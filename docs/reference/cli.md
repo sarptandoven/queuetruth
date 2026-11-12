@@ -487,6 +487,24 @@ Options:
       --html
           also write a self-contained report to <out>/compare.html
 
+      --watch
+          compare again whenever new live records arrive; print the drift since the baseline window (state in <out>/watch.json); exit 1 after an alert
+
+      --once
+          one watch check, then exit 0 (no alert), 1 (alert) or 2
+
+      --interval <DURATION>
+          how often --watch checks (default 60s)
+
+      --alert-pp <PP>
+          alert when the fill-share gap moved at least this many percentage points (default 2)
+
+      --alert-ticks <TICKS>
+          alert when the 1s markout gap moved at least this many ticks (default 0.25)
+
+      --alert-pnl <AMOUNT>
+          alert when the P&L gap per order moved at least this much, in the P&L currency (default: no alert)
+
   -h, --help
           Print help (see a summary with '-h')
 

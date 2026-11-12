@@ -5,7 +5,8 @@ run is (`queuetruth.compare.detect`), then runs the existing comparison for that
 the backtester's reconciler for trading bots and bar backtesters, the scorer with the simulator arm for
 event-driven simulators, and with `data` also the markouts, the P&L gap per order and the exact arm. It answers
 first: how many of the backtest's fills happened live, the fills only one side made and why, the P&L gap, time to
-fill, markouts and latency.
+fill, markouts and latency. `queuetruth.compare.watch` runs it again as live records arrive and reports the drift
+since a baseline window (`queuetruth compare --watch`).
 """
 
 from __future__ import annotations
