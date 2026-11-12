@@ -45,6 +45,7 @@
           "$ref": "#/$defs/DatasetIdRef"
         }
       ],
+      "description": "Dataset directory.",
       "title": "Dataset"
     },
     "out": {
@@ -57,28 +58,33 @@
         }
       ],
       "default": null,
+      "description": "Output shadow spec file (Parquet).",
       "title": "Out"
     },
     "n": {
       "default": 3000,
+      "description": "Number of shadows.",
       "minimum": 0,
       "title": "N",
       "type": "integer"
     },
     "seed": {
       "default": 0,
+      "description": "Random seed.",
       "minimum": 0,
       "title": "Seed",
       "type": "integer"
     },
     "stratify": {
       "default": true,
+      "description": "Stratify the sampled real orders by instrument and outcome.",
       "title": "Stratify",
       "type": "boolean"
     },
     "placement": {
       "const": "behind_real",
       "default": "behind_real",
+      "description": "Where each shadow joins: behind_real.",
       "title": "Placement",
       "type": "string"
     }

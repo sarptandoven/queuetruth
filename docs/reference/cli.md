@@ -1056,16 +1056,16 @@ Usage: queuetruth advanced shadows sample [OPTIONS] --data <PATH> --n <N> --out 
 Options:
       --data <PATH>                 dataset directory
       --n <N>                       number of shadows
-      --out <VALUE>                 output shadow spec file
-      --placements <O:W,...>        OFFSET:WEIGHT,... [default: 0:0.6,-1:0.2,-2:0.1,1:0.1]
-      --qty <RULES>                 lots:N:WEIGHT,median:WEIGHT [default: lots:1:0.5,median:0.5]
-      --lifetime <DURATION>         shadow lifetime [default: 5m]
+      --out <VALUE>                 output shadow spec file (Parquet)
+      --placements <O:W,...>        placement offsets in ticks from the best price of the shadow's side, with their weights [default: 0:0.6,-1:0.2,-2:0.1,1:0.1]
+      --qty <RULES>                 size rules with their weights: a fixed number of lots, or the median order size [default: lots:1:0.5,median:0.5]
+      --lifetime <DURATION>         shadow lifetime: it is cancelled after this [default: 5m]
       --latency-ns <DURATION>       shadow latency [default: 0]
-      --window-open-s <N>           seconds after the open excluded [default: 300]
-      --window-close-s <N>          seconds before the close excluded [default: 600]
+      --window-open-s <N>           seconds after the open when no shadow is placed [default: 300]
+      --window-close-s <N>          seconds before the close when no shadow is placed [default: 600]
       --allow-past-end              do not shorten the placement window so that every life fits in the data
-      --allocation <allocation>     allocation across instrument-days [default: equal] [possible values: equal, proportional, per-partition]
-      --sides <A,...>               sides to sample (B,A) [default: B,A]
+      --allocation <allocation>     how the shadows are spread across instrument-days [default: equal] [possible values: equal, proportional, per-partition]
+      --sides <A,...>               sides to sample [default: B,A]
   -h, --help                        Print help
       --log-level <log_level>       stderr log level (default warn) [possible values: error, warn, info, debug]
       --output-format <human|json>  output format (also --format human|json) [possible values: human, json]
@@ -1084,7 +1084,7 @@ Usage: queuetruth advanced shadows mirror-real [OPTIONS] --data <PATH> --out <VA
 
 Options:
       --data <PATH>                 dataset directory
-      --out <VALUE>                 output shadow spec file
+      --out <VALUE>                 output shadow spec file (Parquet)
       --n <N>                       number of shadows [default: 3000]
       --no-stratify                 do not stratify by instrument and outcome
   -h, --help                        Print help

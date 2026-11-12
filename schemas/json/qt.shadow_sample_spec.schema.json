@@ -104,6 +104,7 @@
           "$ref": "#/$defs/DatasetIdRef"
         }
       ],
+      "description": "Dataset directory.",
       "title": "Dataset"
     },
     "out": {
@@ -116,21 +117,25 @@
         }
       ],
       "default": null,
+      "description": "Output shadow spec file (Parquet).",
       "title": "Out"
     },
     "n": {
+      "description": "Number of shadows.",
       "minimum": 0,
       "title": "N",
       "type": "integer"
     },
     "seed": {
       "default": 0,
+      "description": "Random seed.",
       "minimum": 0,
       "title": "Seed",
       "type": "integer"
     },
     "allocation": {
       "default": "equal",
+      "description": "How the shadows are spread across instrument-days.",
       "enum": [
         "equal",
         "proportional",
@@ -144,10 +149,12 @@
         "minimum": 0,
         "type": "integer"
       },
+      "description": "Shadows per instrument-day with allocation per_partition, by instrument id or instrument id and date; other instrument-days get n.",
       "title": "Partition Quotas",
       "type": "object"
     },
     "sides": {
+      "description": "Sides to sample.",
       "items": {
         "enum": [
           "B",
@@ -159,6 +166,7 @@
       "type": "array"
     },
     "placements": {
+      "description": "Placement offsets in ticks from the best price of the shadow's side, with their weights.",
       "items": {
         "$ref": "#/$defs/Placement"
       },
@@ -166,6 +174,7 @@
       "type": "array"
     },
     "qty": {
+      "description": "Size rules with their weights: a fixed number of lots, or the median order size.",
       "items": {
         "$ref": "#/$defs/QtyRule"
       },
@@ -174,30 +183,35 @@
     },
     "window_open_s": {
       "default": 300,
+      "description": "Seconds after the open when no shadow is placed.",
       "minimum": 0,
       "title": "Window Open S",
       "type": "integer"
     },
     "window_close_s": {
       "default": 600,
+      "description": "Seconds before the close when no shadow is placed.",
       "minimum": 0,
       "title": "Window Close S",
       "type": "integer"
     },
     "lifetime_ns": {
       "default": 300000000000,
+      "description": "Shadow lifetime: it is cancelled after this.",
       "minimum": 0,
       "title": "Lifetime Ns",
       "type": "integer"
     },
     "latency_ns": {
       "default": 0,
+      "description": "Shadow latency.",
       "minimum": 0,
       "title": "Latency Ns",
       "type": "integer"
     },
     "clamp_to_data_end": {
       "default": true,
+      "description": "Shorten the placement window so that every life fits in the data; false keeps the window and lives may run past the end.",
       "title": "Clamp To Data End",
       "type": "boolean"
     }
