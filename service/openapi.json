@@ -3843,6 +3843,13 @@
           "limits": {
             "$ref": "#/components/schemas/Limits"
           },
+          "live_venues": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Live Venues",
+            "type": "array"
+          },
           "schema": {
             "const": "qt.meta",
             "default": "qt.meta",

@@ -12,6 +12,8 @@ Sources (nothing is hand-copied):
 - reference/mcp.md: `queuetruth.mcp.tools.TOOLS`, `queuetruth.mcp.server.ZOO_TOOLS` and `RUN_TOOLS`, and
   `queuetruth.mcp.metrics.METRICS`.
 - reference/schemas.md: schemas/json/*.schema.json and schemas/arrow/*.json.
+- reference/importers.md: the importer registry (`queuetruth.live.importers.builtins()`), with each typed options
+  model.
 
 The conventions paragraphs at the top of each page are text constants in this file. Needs the compiled extension.
 """
@@ -558,12 +560,58 @@ def gen_schemas() -> str:
     return "\n".join(out).rstrip() + "\n"
 
 
+IMPORTERS_INTRO = """# Importers
+
+Every importer `queuetruth live import` can run, from the importer registry. Each one is declared next to its code
+as an `ImporterDef` (name, kind, typed options model, the formats and files it reads, a docs page); the CLI choices,
+`LiveImportSpec.venue`, its JSON Schema enum, the Rust `LiveVenue`, the service's `qt.meta` and this page are all
+generated from it. Plugins add importers through the `queuetruth.importers` entry-point group
+([Add a backtester](../how-to/add-a-backtester.md) shows the entry-point setup); they are listed by
+`queuetruth.live.importers.registry()`, not here.
+
+Kinds: `venue` reads a venue's own records of your account; `sim` reads a simulator's or backtester's output (log
+venue `sim:<name>`, for `score --sim-log`); `bot` reads a trading bot's live run (log venue = the exchange).
+
+Options go in `--option KEY=VALUE` (CLI) or as keyword arguments (`queuetruth.import_live(spec, **options)`);
+`--tz` and the `--fix-*` flags fill `tz` and `fix`. Values are passed to the importer as given; a wrong type or an
+unknown option fails `QT-CONFIG-001` and lists the importer's options. Every importer also takes `account` and the
+instrument map (`--account`, `--instrument-map`)."""
+
+
+def gen_importers() -> str:
+    from queuetruth.live import importers
+
+    defs = importers.builtins()
+    out = [GENERATED, "", IMPORTERS_INTRO, "", "| `--venue` | Kind | What it reads | Guide |", "|---|---|---|---|"]
+    for d in defs:
+        out.append(
+            f"| [`{d.cli_venue}`](#{d.cli_venue}) | {d.kind} | {md_escape(d.description)} | "
+            f"[guide](../{d.docs}) |"
+        )
+    out.append("")
+    for d in defs:
+        out += [f"## {d.cli_venue}", "", md_escape(d.description) + ".", ""]
+        out += [f"- `LiveImportSpec.venue`: `{d.venue}`; kind `{d.kind}`; options model `{d.options.__name__}`."]
+        out += ["- Reads: " + "; ".join(md_escape(f) for f in d.formats) + "."]
+        out += ["- Typical files: " + ", ".join(f"`{p}`" for p in d.patterns) + "."]
+        out += [f"- Guide: [{d.docs.split('#')[0]}](../{d.docs}).", ""]
+        rows = importers.option_rows(d)
+        if not rows:
+            out += ["No options of its own.", ""]
+            continue
+        out += ["| Option | Type | Meaning |", "|---|---|---|"]
+        out += [f"| `{n}` | {md_escape(t)} | {md_escape(desc)} |" for n, t, desc in rows]
+        out.append("")
+    return "\n".join(out).rstrip() + "\n"
+
+
 PAGES: dict[str, Callable[[], str]] = {
     "cli.md": gen_cli,
     "python-api.md": gen_python,
     "http-api.md": gen_http,
     "mcp.md": gen_mcp,
     "schemas.md": gen_schemas,
+    "importers.md": gen_importers,
 }
 
 

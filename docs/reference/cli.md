@@ -762,7 +762,7 @@ Options:
       --fix-data-dictionary <VALUE>    QuickFIX data dictionary XML (custom tags and enums; repeatable)
       --fix-session-venue <KEY=VALUE>  SESSION=VENUE: venue of a FIX session (file stem or counterparty CompID; repeatable)
       --fix-instrument-tag <N>         tag holding the instrument instead of Symbol(55), e.g. 107
-      --option <KEY=VALUE>             importer option KEY=VALUE (sim-* venues: venue, size_exp, key_from_client_id; freqtrade, hummingbot: dry_run, log_tz, timeframe, pair_with, ...; sim-backtrader, sim-vectorbt, sim-lean: pair_with, timeframe, instrument, ...)
+      --option <KEY=VALUE>             importer option KEY=VALUE, repeatable (the importer's own options, e.g. timeframe=5m, dry_run=true; every importer's are listed in docs/reference/importers.md)
   -h, --help                           Print help
       --log-level <log_level>          stderr log level (default warn) [possible values: error, warn, info, debug]
       --output-format <human|json>     output format (also --format human|json) [possible values: human, json]

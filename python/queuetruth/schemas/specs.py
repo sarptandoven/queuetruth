@@ -15,6 +15,8 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from queuetruth.schemas._live_venues import LIVE_IMPORT_VENUES
+
 DATE_PATTERN = r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
 DateStr = Annotated[str, Field(pattern=DATE_PATTERN)]
 NonNegInt = Annotated[int, Field(ge=0)]
@@ -444,26 +446,9 @@ class LiveImportSpec(SpecModel):
     #: adds the trading bots `freqtrade` and `hummingbot` (live arm; venue = the exchange) and their `sim_*` arms;
     #: 1.3 adds the backtesters `sim_backtrader` and `sim_vectorbt` (simulator arm only; additive), then
     #: `sim_lean` (QuantConnect LEAN backtests, simulator arm only; additive).
-    venue: Literal[
-        "binance",
-        "bybit",
-        "okx",
-        "coinbase",
-        "kraken",
-        "deribit",
-        "hyperliquid",
-        "ibkr_flex",
-        "fix44",
-        "sim_hftbacktest",
-        "sim_nautilus",
-        "freqtrade",
-        "hummingbot",
-        "sim_freqtrade",
-        "sim_hummingbot",
-        "sim_backtrader",
-        "sim_vectorbt",
-        "sim_lean",
-    ]
+    #: The built-in importers of `queuetruth.live.importers` (generated into `queuetruth.schemas._live_venues` by
+    #: `make generate`); `queuetruth.live.live_import_spec` also accepts a venue a plugin importer registers.
+    venue: Literal[LIVE_IMPORT_VENUES]  # type: ignore[valid-type]
     inputs: Annotated[list[FileRef], Field(min_length=1)]
     out: str | None = None
     account: str | None = None

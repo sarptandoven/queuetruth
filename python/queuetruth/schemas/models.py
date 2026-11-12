@@ -1918,6 +1918,9 @@ class Meta(QtDoc):
     limits: Limits
     formats: list[str]
     zero_egress: bool
+    #: `LiveImportSpec.venue` values of the importers the server has (`queuetruth.live.importers.registry()`, plugins
+    #: included); added later, so empty from older servers.
+    live_venues: list[str] = Field(default_factory=list)
 
 
 class Health(QtDoc):

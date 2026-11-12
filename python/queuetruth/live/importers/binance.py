@@ -34,7 +34,15 @@ from queuetruth.live._common import (
     text_or_none,
 )
 from queuetruth.live.builder import ImportResult, LogBuilder
-from queuetruth.live.importers._base import ImportOptions, json_records, new_builder, obj_field, side_of
+from queuetruth.live.importers._base import (
+    ImporterDef,
+    ImporterOptions,
+    ImportOptions,
+    json_records,
+    new_builder,
+    obj_field,
+    side_of,
+)
 
 VENUE = "binance"
 _TYPES = {
@@ -266,3 +274,22 @@ def import_binance(paths: list[str], opts: ImportOptions) -> ImportResult:
         else:
             b.skip(f"record type {m.get('e') or 'unknown'}")
     return b.finish()
+
+
+# ---- registry entry (queuetruth.live.importers.registry()) ------------------------------------------------------
+
+IMPORTER = ImporterDef(
+    name="binance",
+    kind="venue",
+    run=import_binance,
+    options=ImporterOptions,
+    formats=(
+        "user-data stream executionReport JSON lines",
+        "WebSocket API request/response captures",
+        "REST myTrades and allOrders JSON",
+    ),
+    patterns=("*.jsonl", "*.json"),
+    description="Binance Spot: orders and fills of your own account",
+    docs="how-to/import-live-logs.md#binance",
+    rank=10,
+)
