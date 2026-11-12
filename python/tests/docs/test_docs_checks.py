@@ -69,3 +69,30 @@ def test_validated_rows_have_known_status_and_evidence() -> None:
         assert r["evidence"], r["area"]
         for _, link in r["evidence"]:
             assert (ROOT / "docs" / link.split("#")[0]).exists(), link
+
+
+def test_site_links_must_name_a_page_and_heading(tmp_path: Path) -> None:
+    cd = _load("check_docs")
+    site = cd.DOCS_SITE
+    page = tmp_path / "README.md"
+    page.write_text(
+        f"[home]({site}) [ok]({site}how-to/check-my-backtest/) [anchor]({site}RESULTS/#the-headline-number)\n"
+        f"[gone]({site}how-to/no-such-page/)\n"
+        f"[bad anchor]({site}RESULTS/#no-such-heading)\n"
+        f"[draft]({site}launch/social/)\n",
+        encoding="utf-8",
+    )
+    res = cd.Result()
+    cd.check_site_links(page, res)
+    assert len(res.failures) == 3
+    assert "no-such-page" in res.failures[0] and ":2:" in res.failures[0]
+    assert "#no-such-heading" in res.failures[1]
+    assert "launch/social" in res.failures[2]
+
+
+def test_readme_and_launch_site_links_resolve() -> None:
+    cd = _load("check_docs")
+    res = cd.Result()
+    for p in [ROOT / "README.md", *sorted((ROOT / "docs" / "launch").glob("*.md"))]:
+        cd.check_site_links(p, res)
+    assert res.failures == []

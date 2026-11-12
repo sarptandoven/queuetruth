@@ -47,7 +47,7 @@ print(res.text())
 - `my-orders.parquet` is a `qt.shadow_spec` table: your orders (`queuetruth shadows from-live`), or orders placed
   like yours (`queuetruth shadows sample --placements 0:0.7,-1:0.3 ...`).
 - `my_asset.py` defines `asset`, an hftbacktest `BacktestAsset` with your queue model, exchange model, latency and
-  fees, for example `asset = BacktestAsset().power_prob_queue_model3(2.0).partial_fill_exchange()`. The replay sets
+  fees, for example `asset = BacktestAsset().power_prob_queue_model3(2.0).no_partial_fill_exchange()`. The replay sets
   data, tick and lot size itself. A `queuetruth export hftbacktest` snippet, or the code `calibrate` writes, works as
   is (`run(prep, code=cal.code)`).
 - Instead of `run`, you can run the command `prepare` prints in the hftbacktest venv yourself.
@@ -75,7 +75,8 @@ tolerance of one step.
 14 when an order completes through a fill equal to its leaves and is then hit again (see
 [UPSTREAM.md](https://github.com/sarptandoven/queuetruth/blob/main/integrations/hftbacktest/UPSTREAM.md)). `run` raises `QT-USAGE-001` naming the code (`allow_stop=True` returns instead), and
 `score` scores only the orders entered before the stop, on horizons that end before it, with a warning. Use
-`no_partial_fill_exchange()` or a build with the fix to score a whole day.
+`no_partial_fill_exchange()` (the default of `calibrate` and `queuetruth export hftbacktest`) or a build with the fix
+to score a whole day.
 
 ## 2. Calibrate
 
@@ -103,9 +104,13 @@ asset = (
     BacktestAsset()
     # ... your existing .data(...), .tick_size(...), .lot_size(...), fee model ...
     .power_prob_queue_model3(<estimate>)
-    .partial_fill_exchange()
+    .no_partial_fill_exchange()
 )
 ```
+
+The exchange is `no_partial_fill_exchange` by default, which runs on the released hftbacktest 2.4.4.
+`calibrate(..., exchange="partial")` fits and writes `.partial_fill_exchange()` instead, with a header line on #312;
+use it only on a build with the fix.
 
 Without `orders`, 2,000 orders are sampled with queuetruth's defaults; sample orders like yours if your placements
 differ. Windows are dates (`2026-10-12,2026-10-13`) or blocks of each session (`blocks:0-3/5` to train on the first
@@ -135,7 +140,8 @@ make test-hftbacktest-plugin          # or: uv run --frozen --no-sync pytest int
 ```
 
 The tests run on queuetruth's synthetic dataset. Those that run hftbacktest use `QT_HBT_PY` (default
-`.scratch/hbt-venv/bin/python`, from `integrations/hftbacktest/setup_venvs.sh`) and skip with the reason without it.
+`.scratch/hbt-venv/bin/python`, from `integrations/hftbacktest/setup_venvs.sh` or `make hbt-crosscheck`; the older name
+`QT_HBT_PYTHON` is still read) and skip with the reason without it. CI runs them with hftbacktest 2.4.4.
 
 ## Limits
 

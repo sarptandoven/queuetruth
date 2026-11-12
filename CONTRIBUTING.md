@@ -76,12 +76,25 @@ with its reason printed.
 | `requires_core` | the compiled extension (`make develop`) |
 | `requires_postgres` | PostgreSQL binaries (`QT_PG_BIN`) or `QT_PG_DSN` |
 | `requires_docker` | a running Docker daemon |
-| `requires_hftbacktest` | the separate hftbacktest venv (`make hbt-crosscheck`) |
+| `requires_hftbacktest` | the separate hftbacktest venv (`make hbt-crosscheck`, or `QT_HBT_PY` naming its python) |
 | `requires_gray_reference` | `tests/fixtures/reference/gray_cmprsk.json` |
 | `integration` | cross-component tests; deselected by default, run with `-m integration` |
 | `realdata` | real market data under `.realdata/`; never run in CI |
 
 Run one area with, for example, `uv run --frozen --no-sync pytest python/tests/score -k mcnemar`.
+
+The integration suites run against the real engines in their own venvs, as the `integrations` CI job does:
+
+```sh
+make hbt-crosscheck PYTHON_BIN=python3.13   # .scratch/hbt-venv: hftbacktest 2.4.4 with the setup_venvs.sh pins
+export QT_HBT_PY=$PWD/.scratch/hbt-venv/bin/python
+make test-hftbacktest-plugin test-extra
+# one venv per nautilus_trader release line, each with queuetruth installed (maturin build, then the wheel)
+make test-nautilus QT_NT_PYTHON=$PWD/.scratch/nt-1.231.0/bin/python:$PWD/.scratch/nt-2.0.0rc9/bin/python
+```
+
+`QT_HBT_PY` names the hftbacktest venv's python (`QT_HBT_PYTHON` is the older name and still works). The exact
+install commands and versions are in the `integrations` job of `.github/workflows/ci.yml`.
 
 ## Ground rules
 

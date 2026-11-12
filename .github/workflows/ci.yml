@@ -92,6 +92,64 @@ jobs:
       - name: docs runnable blocks (needs the extension built above)
         run: uv run --frozen --no-sync python docs/check_docs.py --require-core
 
+  # The integration suites against the real engines, each in its own venv at exact versions: hftbacktest 2.4.4 with
+  # the numba, llvmlite and numpy pins of integrations/hftbacktest/setup_venvs.sh, nautilus_trader 1.231.0 and the
+  # newest 2.x pre-release (bump NT_VERSIONS when a newer one is out). Also the test directories outside python/.
+  integrations:
+    name: integrations (hftbacktest 2.4.4, nautilus_trader 1.231.0 and 2.0.0rc9)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      NT_VERSIONS: "1.231.0 2.0.0rc9"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master 2026-10-16
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        id: py
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: venv + sync + develop
+        run: |
+          uv venv --python "${{ steps.py.outputs.python-path }}" .venv
+          make sync develop
+      - name: queuetruth wheel for the engine venvs (reuses the develop build)
+        run: uv run --frozen --no-sync maturin build --release --locked --out .scratch/wheel
+      - name: nautilus_trader venvs (with queuetruth at its locked dependency versions)
+        env:
+          PY: ${{ steps.py.outputs.python-path }}
+        run: |
+          uv export -q --frozen --no-dev --no-emit-workspace --no-hashes --no-annotate --no-header \
+            -o .scratch/qt-constraints.txt
+          nt_pythons=""
+          for nt in $NT_VERSIONS; do
+            uv venv -q --clear --python "$PY" ".scratch/nt-$nt"
+            # --no-config: the project's exclude-newer window would hide a fresh pre-release
+            uv pip install -q --no-config --python ".scratch/nt-$nt" --prerelease allow -c .scratch/qt-constraints.txt \
+              "nautilus_trader==$nt" pytest==9.1.1 jsonschema==4.26.0 pandas==2.3.3 .scratch/wheel/queuetruth-*.whl
+            nt_pythons="$nt_pythons${nt_pythons:+:}$PWD/.scratch/nt-$nt/bin/python"
+          done
+          echo "QT_NT_PYTHON=$nt_pythons" >> "$GITHUB_ENV"
+          echo "QT_HBT_PY=$PWD/.scratch/hbt-venv/bin/python" >> "$GITHUB_ENV"
+      - name: hftbacktest venv (setup_venvs.sh) and the core tests that run hftbacktest or nautilus_trader
+        run: make hbt-crosscheck PYTHON_BIN="${{ steps.py.outputs.python-path }}"
+      - name: NautilusTrader cross-check harness, once per release line
+        run: |
+          for py in ${QT_NT_PYTHON//:/ }; do
+            QT_NT_PYTHON="$py" uv run --frozen --no-sync pytest python/tests/nt_crosscheck
+          done
+      - name: test-nautilus (queuetruth-nautilus in each nautilus_trader venv)
+        run: make test-nautilus
+      - name: test-hftbacktest-plugin (queuetruth-hftbacktest, hftbacktest 2.4.4)
+        run: make test-hftbacktest-plugin
+      - name: test-extra (scripts/scale, scripts/nightly, tools/livefill, actions/referee, integrations/hftbacktest)
+        run: make test-extra
+
   service:
     name: service (ubuntu, postgres 16)
     runs-on: ubuntu-24.04

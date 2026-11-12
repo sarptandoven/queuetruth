@@ -21,14 +21,14 @@ if str(INTEG) not in sys.path:
     sys.path.insert(0, str(INTEG))
 
 
-def _venv(env: str, default: Path) -> Path | None:
-    p = Path(os.environ.get(env, str(default)))
+def _venv(env: str, default: Path, alias: str | None = None) -> Path | None:
+    p = Path(os.environ.get(env) or (alias and os.environ.get(alias)) or str(default))
     return p if p.exists() else None
 
 
 @pytest.fixture(scope="session")
 def hbt_stock_py() -> Path:
-    p = _venv("QT_HBT_PY", REPO / ".scratch" / "hbt-venv" / "bin" / "python")
+    p = _venv("QT_HBT_PY", REPO / ".scratch" / "hbt-venv" / "bin" / "python", alias="QT_HBT_PYTHON")
     if p is None:
         pytest.skip("released hftbacktest venv missing (set QT_HBT_PY or run integrations/hftbacktest/setup_venvs.sh)")
     return p

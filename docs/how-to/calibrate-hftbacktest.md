@@ -292,21 +292,27 @@ step 4 of the synthetic walkthrough). Otherwise the file has this layout (`<...>
 # data: coinbase (assumed, dataset <first 12 hex of the dataset id>)
 # fit: n = <estimate> (alloc); <events> events from <shadows> shadows; bootstrap CI [<lo>, <hi>]; profile CI [<lo>, <hi>]
 # held-out: <the beats-default sentence>
+# exchange: no_partial_fill_exchange, which runs on the released hftbacktest 2.4.4. The fit simulated
+# partial_fill_exchange; ... (hftbacktest #312) ...
 # Paste into your existing BacktestAsset chain (keep your data/tick/lot/fee settings).
 from hftbacktest import BacktestAsset
 asset = (
     BacktestAsset()
     # ... your existing .data(...), .tick_size(...), .lot_size(...), fee model ...
     .power_prob_queue_model3(<estimate>)
-    .partial_fill_exchange()
+    .no_partial_fill_exchange()
 )
 ```
 
 The value is printed with 6 significant digits. The builder follows the family: `power_prob_queue_model`,
 `power_prob_queue_model2`, `power_prob_queue_model3`; `databento` with `-1 < k <= 0` maps to
 `power_prob_queue_model3(1/(1+k))`, an expected-value approximation of the Monte Carlo estimator (a note says
-so); for `k > 0` the queue-model line is omitted with a note. The exchange line follows the fit's `--exchange`
-(`partial` by default; `--exchange no-partial` gives `.no_partial_fill_exchange()`). Keep `--mode faithful` (the
+so); for `k > 0` the queue-model line is omitted with a note. The exchange line is `.no_partial_fill_exchange()`,
+which runs on the released hftbacktest 2.4.4: with `.partial_fill_exchange()` 2.4.4 stops the backtest with error 14
+(hftbacktest #312). When the fit simulated `partial` (`--exchange partial`, the default of `calibrate`), the header
+says so; the two differ only when a fill is smaller than the order. In Python,
+`hftbacktest_snippet(cal, exchange="partial")` writes `.partial_fill_exchange()` for a build with the fix. Keep
+`--mode faithful` (the
 default) for parameters you will use in hftbacktest: the fit then reproduces hftbacktest's own behaviour, quirks
 included. Layouts are checked in `test_hftbacktest_golden` and `test_hftbacktest_builders`
 (`python/tests/export/test_export_text.py`); `test_hftbacktest_snippet_runs_in_hftbacktest` builds the chain in a
