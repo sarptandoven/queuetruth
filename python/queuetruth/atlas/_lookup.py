@@ -23,10 +23,11 @@ import urllib.parse
 import urllib.request
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from queuetruth.atlas import _common as C
 from queuetruth.errors import QtError
+from queuetruth.results import Result
 
 #: The data API of the public atlas (`.github/workflows/atlas.yml` deploys the site with GitHub Pages).
 DEFAULT_URL = "https://sarptandoven.github.io/queuetruth/atlas/v1/"
@@ -238,9 +239,12 @@ def _row(x: dict[str, Any], days: int | None) -> dict[str, Any]:
     }
 
 
-class AtlasResult:
+class AtlasResult(Result):
     """The answer of `lookup`: `.summary` (the answer in plain words), `.rows` and `.configs` (lists of dicts),
-    `.table()` (a pandas DataFrame), `.doc` (the `qt.atlas_answer` document) and `.text()` (what the CLI prints)."""
+    `.table()` (a pandas DataFrame), `.doc` (the `qt.atlas_answer` document) and `.text()` (what the CLI prints).
+    The shared result shape (`queuetruth.results.Result`): also `to_html()`, `save(path)` and a notebook view."""
+
+    title: ClassVar[str] = "queuetruth atlas"
 
     def __init__(self, doc: dict[str, Any]) -> None:
         from queuetruth.atlas.answer import AtlasAnswer
@@ -260,27 +264,53 @@ class AtlasResult:
     def configs(self) -> list[dict[str, Any]]:
         return list(self.doc["configs"])
 
-    def table(self) -> Any:
-        """The rows as a pandas DataFrame: library, setting, horizon, bias in pp with its interval, verdict, n."""
-        import pandas as pd
+    @property
+    def interval(self) -> str | None:
+        """The closest setting's fill-rate bias with its 95% interval (else the first row's), in words."""
+        pick = (self.configs or self.rows or [None])[0]
+        if pick is None:
+            return None
+        b = pick["fill_rate_bias_pp"]
+        if b.get("value") is None:
+            return None
+        ci = f" (95% CI {C.pp(b['lo'])} to {C.pp(b['hi'])} pp)" if b.get("lo") is not None else ""
+        return f"{pick['label']}: fill-rate bias {C.pp(b['value'])} pp{ci} at {self.doc['horizon']}."
 
-        return pd.DataFrame(
-            [
-                {
-                    "library": C.LIBRARY_NAMES[r["library"]],
-                    "setting": r["label"],
-                    "horizon": r["horizon"],
-                    "bias_pp": r["fill_rate_bias_pp"]["value"],
-                    "ci_lo_pp": r["fill_rate_bias_pp"]["lo"],
-                    "ci_hi_pp": r["fill_rate_bias_pp"]["hi"],
-                    "verdict": r["verdict"],
-                    "n": r["n"],
-                    "days": r["days"],
-                    "model_id": r["model_id"],
-                }
-                for r in self.rows
-            ]
-        )
+    def _rows(self) -> list[dict[str, Any]]:
+        return [
+            {
+                "library": C.LIBRARY_NAMES[r["library"]],
+                "setting": r["label"],
+                "horizon": r["horizon"],
+                "bias_pp": r["fill_rate_bias_pp"]["value"],
+                "ci_lo_pp": r["fill_rate_bias_pp"]["lo"],
+                "ci_hi_pp": r["fill_rate_bias_pp"]["hi"],
+                "verdict": r["verdict"],
+                "n": r["n"],
+                "days": r["days"],
+                "model_id": r["model_id"],
+            }
+            for r in self.rows
+        ]
+
+    def table(self, backend: str | None = None) -> Any:
+        """The rows as a pandas DataFrame: library, setting, horizon, bias in pp with its interval, verdict, n."""
+        return super().table(backend)
+
+    def _html_sections(self) -> list[str]:
+        from queuetruth.report.page import code_block, section
+
+        blocks = [
+            code_block(str(c["config"]), f"{C.LIBRARY_NAMES[c['library']]}: {c['label']}")
+            for c in self.configs
+            if c.get("config")
+        ]
+        out = [section("configs", "The config to paste", blocks)] if blocks else []
+        src = f"{self.doc['venue_name']}, {self.doc['window']}, built {self.doc['built_at']}."
+        if self.doc.get("attribution"):
+            src += f" {self.doc['attribution']}"
+        out.append(section("source", "Source", [f"<p>{_esc_html(src)}</p>"]))
+        return out
 
     def text(self) -> str:
         return render(self.doc)
@@ -290,6 +320,12 @@ class AtlasResult:
 
     def __repr__(self) -> str:
         return f"AtlasResult({self.summary!r})"
+
+
+def _esc_html(s: str) -> str:
+    import html
+
+    return html.escape(s, quote=True)
 
 
 def lookup(

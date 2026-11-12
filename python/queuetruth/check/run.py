@@ -32,7 +32,7 @@ import tempfile
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 from zoneinfo import ZoneInfo
 
 from queuetruth import units
@@ -47,6 +47,7 @@ from queuetruth.check.symbols import (
 )
 from queuetruth.dataset import MANIFEST_FILE, open_dataset
 from queuetruth.errors import QtError
+from queuetruth.results import Result
 
 SCHEMA = "qt.check"
 DEFAULT_WINDOW = "1h"
@@ -56,10 +57,13 @@ _RESTING = ("gtc", "day", "post_only", "gtx", "gtd")
 
 
 @dataclass
-class CheckResult:
+class CheckResult(Result):
     """The answer of `check`: `summary` is the one-line answer, `doc` the full `qt.check` document, `orders` one
     row per checked order in human units, `out` the output directory. Without data `doc` is the atlas estimate
-    (`qt.check_estimate`, `doc["mode"] == "atlas"`) and `orders` holds one row per tier and side."""
+    (`qt.check_estimate`, `doc["mode"] == "atlas"`) and `orders` holds one row per tier and side. The shared result
+    shape (`queuetruth.results.Result`): `table()`, `to_html()`, `save(path)` and a compact notebook view."""
+
+    title: ClassVar[str] = "queuetruth check"
 
     doc: dict[str, Any]
     orders: list[dict[str, Any]] = field(default_factory=list)
@@ -70,17 +74,23 @@ class CheckResult:
         """The answer in one plain sentence."""
         return str(self.doc["answer"])
 
-    def to_dict(self) -> dict[str, Any]:
-        """The `qt.check` document (JSON-ready)."""
-        return self.doc
+    @property
+    def interval(self) -> str | None:
+        """The 95% interval of the fill gap (exact replay) or of the real fills (atlas estimate), in words."""
+        if self.doc.get("mode") == "atlas":
+            rf = self.doc.get("real_fills") or {}
+            if rf.get("ci_lo") is None:
+                return None
+            return f"Real fills: about {rf['expected']:,.0f} (95% interval {rf['ci_lo']:,} to {rf['ci_hi']:,})."
+        fg = self.doc.get("fill_gap") or {}
+        if fg.get("ci_lo") is None or fg.get("ci_hi") is None:
+            return None
+        return (
+            f"Backtest minus real fills: {fg['orders']:+,} orders (95% CI {fg['ci_lo']:+,.0f} to {fg['ci_hi']:+,.0f})."
+        )
 
-    def table(self) -> Any:
-        """One row per checked order as a pandas DataFrame (symbols, decimal prices, venue-local times)."""
-        try:
-            import pandas as pd
-        except ImportError as e:
-            raise QtError("QT-CONFIG-001", "CheckResult.table needs pandas", "pip install pandas") from e
-        return pd.DataFrame(self.orders)
+    def _rows(self) -> list[dict[str, Any]]:
+        return self.orders
 
     def text(self, *, max_symbols: int = 5, max_examples: int = 3) -> str:
         """The terminal report: the answer first, then the 2x2 table, the worst symbols and `why` hints."""
@@ -93,7 +103,7 @@ class CheckResult:
         return text(self.doc, max_symbols=max_symbols, max_examples=max_examples)
 
     def to_html(self) -> str:
-        """A self-contained HTML report."""
+        """A self-contained HTML report (what `queuetruth check --html` writes)."""
         if self.doc.get("mode") == "atlas":
             from queuetruth.check.estimate import html as estimate_html
 
@@ -102,21 +112,18 @@ class CheckResult:
 
         return html(self.doc, self.orders)
 
-    def _repr_html_(self) -> str:
-        return self.to_html()
-
     def __str__(self) -> str:
         return self.summary
 
 
 def _ns(v: Any, what: str) -> int:
-    if isinstance(v, int) and not isinstance(v, bool):
-        if v <= 0:
-            raise QtError("QT-USAGE-001", f"check: {what} must be positive, got {v}")
-        return v
-    from queuetruth.pm.cli import duration_ns
-
-    n = duration_ns(str(v))
+    """Nanoseconds of a positive duration in any `queuetruth.units` form (`"1s"`, `"250ms"`, `"1min"`, an int)."""
+    if isinstance(v, bool):
+        raise QtError("QT-USAGE-001", f"check: {what} must be a duration such as 1s or 1min, got {v!r}")
+    try:
+        n = units.parse_duration(v, what=what, bare_ns=isinstance(v, int))
+    except units.DurationError as e:
+        raise QtError("QT-USAGE-001", f"check: {e}", "use a duration such as 1s, 500ms or 1min") from None
     if n <= 0:
         raise QtError("QT-USAGE-001", f"check: {what} must be positive, got {v!r}")
     return n
@@ -236,8 +243,9 @@ def check(
     backtester: str | None = None,
     instrument_map: str | Path | None = None,
     out: str | Path | None = None,
+    horizon: str | int = DEFAULT_MARKOUT,
     window: str | int = DEFAULT_WINDOW,
-    markout: str | int = DEFAULT_MARKOUT,
+    markout: str | int | None = None,
     options: dict[str, Any] | None = None,
     tier: str | None = None,
     bar: str | None = None,
@@ -258,10 +266,17 @@ def check(
     the atlas data API), `yes` / `confirm` (consent to download it), `refresh` and `seed` go to
     `queuetruth.check.estimate.estimate`.
     Symbols map from the dataset's symbology; `instrument_map` (CSV, venue = the dataset's venue) overrides that.
-    `window` (default 1h) is how long after entry a fill counts; `markout` (default 1 min) the P&L horizon.
+    `horizon` (default 1min) is the P&L horizon: fills are marked to the mid that long after them; `window`
+    (default 1h) is how long after entry a fill counts. Both take any `queuetruth.units` duration (`"1s"`,
+    `"500ms"`, `"1min"`). `markout` is the old name of `horizon` (deprecated).
     `options` go to the importer (e.g. `timeframe`, `data_tz`, `column`). `out` (default: a new temporary
     directory) receives `backtest/` (the imported log), `instrument_map.csv`, `score/`, `check.json` and
     `orders.csv`."""
+    if markout is not None:
+        import warnings
+
+        warnings.warn("check: `markout` is now `horizon`", DeprecationWarning, stacklevel=2)
+        horizon = markout
     paths = _paths(backtest)
     if data is None:
         from queuetruth.check.estimate import estimate
@@ -279,7 +294,7 @@ def check(
             options=options,
             seed=seed,
         )
-    window_ns, markout_ns = _ns(window, "window"), _ns(markout, "markout")
+    window_ns, markout_ns = _ns(window, "window"), _ns(horizon, "horizon")
     if backtester is not None and backtester not in BACKTESTERS:
         raise QtError("QT-USAGE-001", f"check: backtester must be one of {list(BACKTESTERS)}, got {backtester!r}")
     kind = backtester or detect_all(paths)

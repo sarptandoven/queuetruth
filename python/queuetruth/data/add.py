@@ -23,13 +23,14 @@ import shutil
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from queuetruth import units
 from queuetruth.data.infer import NEEDS_DATE, TITLES, Detected, detect
 from queuetruth.data.merge import merge
 from queuetruth.dataset import MANIFEST_FILE, DatasetWriter, open_dataset
 from queuetruth.errors import QtError
+from queuetruth.results import Result
 
 SCHEMA = "qt.data_add"
 CREATED_BY = "queuetruth data add"
@@ -39,9 +40,12 @@ Say = Callable[[str], None]
 
 
 @dataclass
-class DataResult:
+class DataResult(Result):
     """The answer of `data add` / `data fetch iex`: `summary` is the one-line answer, `doc` the full document, `rows`
-    one row per session date and symbol in human units."""
+    one row per session date and symbol in human units. The shared result shape (`queuetruth.results.Result`):
+    `table()`, `to_html()`, `save(path)` and a compact notebook view."""
+
+    title: ClassVar[str] = "queuetruth data"
 
     doc: dict[str, Any]
     rows: list[dict[str, Any]] = field(default_factory=list)
@@ -60,13 +64,8 @@ class DataResult:
         """The document (JSON-ready)."""
         return self.doc
 
-    def table(self) -> Any:
-        """One row per session date and symbol as a pandas DataFrame (venue-local times)."""
-        try:
-            import pandas as pd
-        except ImportError as e:
-            raise QtError("QT-CONFIG-001", "DataResult.table needs pandas", "pip install pandas") from e
-        return pd.DataFrame(self.rows)
+    def _rows(self) -> list[dict[str, Any]]:
+        return self.rows
 
     def text(self) -> str:
         """The terminal summary: the answer first, then one line per session date, the checks and the inputs."""

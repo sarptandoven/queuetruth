@@ -29,11 +29,12 @@ import warnings
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import pyarrow.parquet as pq
 
 from queuetruth.errors import QtError
+from queuetruth.results import Result
 from queuetruth.fit import split as sp
 from queuetruth.schemas.models import CalibrationResult
 from queuetruth.schemas.specs import WindowSpec
@@ -73,9 +74,13 @@ DEFAULT_N_SHADOWS = 1000
 
 
 @dataclass
-class FitResult:
+class FitResult(Result):
     """The answer of `fit`: `summary` is the one-line answer, `doc` the `qt.fit` document, `calibration` the
-    `qt.calibration_result` behind it, `snippet` the paste-ready text (None when the fit is refused)."""
+    `qt.calibration_result` behind it, `snippet` the paste-ready text (None when the fit is refused). The shared
+    result shape (`queuetruth.results.Result`): `table()` (the held-out comparison, one row per horizon),
+    `to_html()`, `save(path)` and a compact notebook view."""
+
+    title: ClassVar[str] = "queuetruth fit"
 
     doc: dict[str, Any]
     calibration: CalibrationResult
@@ -100,6 +105,39 @@ class FitResult:
     def to_dict(self) -> dict[str, Any]:
         """The `qt.fit` document (JSON-ready)."""
         return self.doc
+
+    @property
+    def interval(self) -> str | None:
+        """The fitted value with its 95% interval, in words."""
+        from queuetruth.fit.render import _ci, num
+
+        p = self.doc["param"]
+        if p.get("value") is None:
+            return None
+        return f"{p['name']} = {num(p['value'])} ({_ci(self.doc)}); library default {num(p['default'])}."
+
+    def _rows(self) -> list[dict[str, Any]]:
+        from queuetruth import units
+
+        return [
+            {
+                "horizon": units.format_duration(int(r["horizon_ns"])),
+                **{k: v for k, v in r.items() if k not in ("horizon", "horizon_ns")},
+            }
+            for r in self.doc.get("held_out") or []
+        ]
+
+    def _html_sections(self) -> list[str]:
+        from queuetruth.report.page import code_block, section, ul
+
+        out = []
+        reasons = [str(x["text"]) for x in self.doc["verdict"]["reasons"]]
+        remedies = [str(x) for x in self.doc["verdict"].get("remedies") or []]
+        verdict = "PASS" if self.passed else "REFUSED"
+        out.append(section("verdict", f"Verdict: {verdict}", [ul(reasons + remedies)] if reasons + remedies else []))
+        if self.snippet is not None:
+            out.append(section("snippet", "Paste this", [code_block(self.snippet, "snippet")]))
+        return out
 
     def text(self) -> str:
         """The terminal report: the answer first, then the held-out table, the verdict and the snippet."""

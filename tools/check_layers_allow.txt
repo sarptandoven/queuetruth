@@ -21,7 +21,6 @@ queuetruth.check.estimate -> queuetruth.atlas  # layer
 queuetruth.check.estimate -> queuetruth.atlas.touch  # layer
 queuetruth.check.run -> queuetruth.api  # cycle
 queuetruth.check.run -> queuetruth.live.importers.vectorbt._table  # private
-queuetruth.check.run -> queuetruth.pm.cli  # layer
 queuetruth.cli -> queuetruth.api._call  # private
 queuetruth.cli -> queuetruth.api._qt_error  # private
 queuetruth.cli -> queuetruth.atlas._cli  # layer
