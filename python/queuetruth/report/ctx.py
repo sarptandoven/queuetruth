@@ -45,3 +45,15 @@ class Ctx:
         if instrument_id is None:
             return None
         return self.inputs.provenance.price_exp.get(int(instrument_id))
+
+    def tz(self, *instrument_ids: int | None) -> str | None:
+        """The session time zone the instruments share (from the datasets' instrument tables), else None (times are
+        then shown in UTC, named)."""
+        zones = {self.inputs.provenance.session_tz.get(int(i)) for i in instrument_ids if i is not None}
+        if not zones:
+            zones = set(self.inputs.provenance.session_tz.values()) or {None}
+        return zones.pop() if len(zones) == 1 else None
+
+    def symbol(self, instrument_id: int | None) -> str | None:
+        """The symbol of an instrument, when a dataset's instrument table names it."""
+        return None if instrument_id is None else self.inputs.provenance.symbol.get(int(instrument_id))

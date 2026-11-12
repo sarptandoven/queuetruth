@@ -59,9 +59,9 @@ from queuetruth.sandbox._util import (
     config_error,
     date_of_days,
     digest,
+    duration,
     local_time,
     money,
-    parse_duration,
     parse_time,
     to_fixed,
     usage_error,
@@ -138,14 +138,14 @@ def normalize_spec(raw: dict[str, Any], midnight_utc_ns: int | None) -> dict[str
                 raise config_error(f"give {alias} or {key}, not both")
             out[key] = out.pop(alias)
         if isinstance(out.get(key), str):
-            out[key] = parse_duration(out[key], key)
+            out[key] = duration(out[key], key)
     if "markout_horizons" in out:
         if "markout_horizons_ns" in out:
             raise config_error("give markout_horizons or markout_horizons_ns, not both")
         out["markout_horizons_ns"] = out.pop("markout_horizons")
     if isinstance(out.get("markout_horizons_ns"), list):
         out["markout_horizons_ns"] = [
-            parse_duration(h, "markout_horizons_ns") if isinstance(h, str) else h for h in out["markout_horizons_ns"]
+            duration(h, "markout_horizons_ns") if isinstance(h, str) else h for h in out["markout_horizons_ns"]
         ]
     for alias, key in _TIME_ALIASES.items():
         if alias in out:
@@ -780,7 +780,7 @@ class Sandbox:
             if self.step >= self.spec.max_steps:
                 raise usage_error(f"max_steps ({self.spec.max_steps}) reached", "call finish")
             if by is not None:
-                d = parse_duration(by, "by")
+                d = duration(by, "by")
                 if d <= 0:
                     raise usage_error("by must be a positive duration")
                 target = self.clock_ns + d

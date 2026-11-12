@@ -8,9 +8,11 @@ import hashlib
 import math
 import numbers
 import re
+import warnings
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from queuetruth import units
 from queuetruth.errors import QtError
 from queuetruth.schemas.runid import canonical_json
 
@@ -23,8 +25,7 @@ H = 3600 * S
 DAY_NS = 86_400 * S
 I64_MAX = 2**63 - 1
 UNDEF_PRICE = I64_MAX
-_UNITS = {"ns": NS, "us": US, "ms": MS, "s": S, "m": MIN, "h": H}
-_DUR = re.compile(r"^\s*([0-9]+)\s*(ns|us|ms|s|m|h)\s*$")
+_SANDBOX_DUR = re.compile(r"^\s*[0-9]+\s*(ns|us|ms|s|m|h)\s*$")
 _TOD = re.compile(r"^\s*([0-9]{1,2}):([0-9]{2})(?::([0-9]{2})(?:\.([0-9]{1,9}))?)?\s*$")
 
 
@@ -60,26 +61,30 @@ def wire(value: Any) -> Any:
     return repr(value)
 
 
+def duration(value: Any, what: str) -> int:
+    """A duration in ns: an integer (ns) or a string `<integer><unit>` with unit ns, us, ms, s, m or h (`250us`,
+    `100ms`, `1s`, `5m`), read by `queuetruth.units.parse_duration`. The sandbox takes this whole-number subset of the
+    grammar, so an instruction logged by any version replays the same: a string without a unit (`"5"` is ambiguous:
+    SPEC 4.4's CLI footgun), a fraction (`1.5s`) or another unit (`1d`) is refused. Errors are `QT-CONFIG-001`."""
+    if isinstance(value, str) and not _SANDBOX_DUR.match(value):
+        raise config_error(
+            f"{what}: duration {value!r} needs a whole number and a unit",
+            "write e.g. 250us, 100ms, 1s, 5m (or an integer in ns)",
+        )
+    try:
+        return units.parse_duration(value, what=what, bare_ns=False)
+    except units.DurationError as e:
+        raise config_error(e.message, e.hint) from None
+
+
 def parse_duration(value: Any, what: str) -> int:
-    """A duration in ns: an integer (ns) or a string `<integer><unit>` with unit ns, us, ms, s, m or h. A string
-    without a unit is refused (`"5"` is ambiguous: SPEC 4.4's CLI footgun)."""
-    if isinstance(value, bool):
-        raise config_error(f"{what}: expected a duration, got {value!r}")
-    if isinstance(value, int):
-        if value < 0:
-            raise config_error(f"{what}: must be >= 0 (got {value})")
-        return value
-    if isinstance(value, str):
-        m = _DUR.match(value)
-        if not m:
-            raise config_error(
-                f"{what}: duration {value!r} needs a unit", "write e.g. 250us, 100ms, 1s, 5m (or an integer in ns)"
-            )
-        v = int(m.group(1)) * _UNITS[m.group(2)]
-        if v > I64_MAX:
-            raise config_error(f"{what}: duration {value!r} overflows i64 ns")
-        return v
-    raise config_error(f"{what}: expected a duration (integer ns or e.g. '100ms'), got {type(value).__name__}")
+    """Deprecated: use `queuetruth.units.parse_duration` (this name stays, with the sandbox's error code)."""
+    warnings.warn(
+        "queuetruth.sandbox._util.parse_duration is deprecated; use queuetruth.units.parse_duration",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return duration(value, what)
 
 
 def parse_time(value: Any, midnight_utc_ns: int, what: str) -> int:
@@ -104,13 +109,8 @@ def parse_time(value: Any, midnight_utc_ns: int, what: str) -> int:
 
 
 def fmt_duration(ns: int) -> str:
-    """A duration in the largest unit that states it exactly (`1ms`, `250us`, `5s`, `0`)."""
-    if ns == 0:
-        return "0"
-    for unit, size in (("h", H), ("m", MIN), ("s", S), ("ms", MS), ("us", US)):
-        if ns % size == 0:
-            return f"{ns // size}{unit}"
-    return f"{ns}ns"
+    """A duration in its shortest exact form (`1ms`, `250us`, `5s`, `1min`, `0s`): `units.format_duration`."""
+    return units.format_duration(int(ns))
 
 
 def local_time(ts: int, midnight_utc_ns: int) -> str:
@@ -247,6 +247,7 @@ __all__ = [
     "days_of_date",
     "dec",
     "digest",
+    "duration",
     "fmt_duration",
     "fmt_fixed",
     "local_time",

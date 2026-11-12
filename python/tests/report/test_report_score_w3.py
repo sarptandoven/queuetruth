@@ -53,7 +53,7 @@ def test_markouts_in_bps_and_net_of_fees(tmp_path: Path, monkeypatch: Any) -> No
     write_table(pa.Table.from_pylist(rows + extra, schema=t.schema), p, SCHEMAS["qt.score_tests"])
     s = _section(_render(tmp_path, [root]), "markouts")
     assert "Maker markouts in bps and net of fees" in s
-    assert '<td>live</td><td>mid</td><td>1 s</td><td class="n">1.25</td>' in s
+    assert '<td>live</td><td>mid</td><td>1s</td><td class="n">1.25</td>' in s
     assert "-0.0042" in s
 
 

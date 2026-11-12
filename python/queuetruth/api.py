@@ -33,6 +33,7 @@ import pyarrow.compute as pc
 import pyarrow.parquet as pq
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from queuetruth import units
 from queuetruth.dataset import open_dataset, read_manifest_doc
 from queuetruth.errors import QtError
 from queuetruth.ledger import recorded as _ledger_recorded
@@ -398,7 +399,8 @@ def _evaluate(
     cut = _cut_by_data_end(out, h_max_ns)
     if cut:
         notes.append(
-            f"data end: {cut[0]:,} of {cut[1]:,} never-cancel shadows end with the data before {fmt_dur(h_max_ns)}, "
+            f"data end: {cut[0]:,} of {cut[1]:,} never-cancel shadows end with the data before "
+            f"{units.format_duration(h_max_ns)}, "
             "so the longer horizons score fewer orders than the leaderboard population; shadows sample keeps "
             "every life inside the data unless --allow-past-end"
         )
@@ -881,7 +883,8 @@ class WhyExplanation(BaseModel):
 
     - `trace`: the exact engine's `qt.why_trace`; with a model, each event's `note` also carries `model_ahead=<x>`
       and the first divergent event `first_divergence: ...`.
-    - `symbol`, `price_exp`, `size_exp`, `tick_size`: the instrument's units, for display.
+    - `symbol`, `price_exp`, `size_exp`, `tick_size`, `session_tz`: the instrument's units and its venue's time
+      zone, for display.
     - `model_id`, `model_queue_ahead`: the zoo model's queue-ahead estimate as of each trace event (aligned with
       `trace.events`; None before the model's first estimate).
     - `first_divergence`: index of the first event after which model and exact queue ahead differ by at least
@@ -897,6 +900,7 @@ class WhyExplanation(BaseModel):
     price_exp: int | None = None
     size_exp: int | None = None
     tick_size: int | None = None
+    session_tz: str | None = None
     model_id: str | None = None
     model_queue_ahead: list[float | None] = Field(default_factory=list)
     first_divergence: int | None = None
@@ -907,31 +911,33 @@ class WhyExplanation(BaseModel):
 
 
 def _instrument_units(root: Path, iid: int, ts: int | None) -> dict[str, Any]:
-    """symbol / price_exp / size_exp / tick_size of an instrument on the session of `ts` (any session otherwise)."""
+    """`queuetruth.units.instrument_units` over the dataset at `root` (kept for older callers)."""
+    return units.instrument_units(_units_source(root), iid, ts)
+
+
+def _units_source(root: Path) -> Any:
+    """The opened dataset for `units.instrument_units` (one without instruments when it cannot be read)."""
     try:
-        t = pq.read_table(root / "instruments.parquet")
-    except (OSError, pa.ArrowInvalid):
-        return {}
-    rows = [r for r in t.to_pylist() if int(r.get("instrument_id", -1)) == int(iid)]
-    if not rows:
-        return {}
-    pick = rows[0]
-    if ts is not None:
-        for r in rows:
-            mid = r.get("midnight_utc_ns")
-            if mid is not None and int(mid) <= ts < int(mid) + 86_400 * _NS:
-                pick = r
-                break
-    return {
-        "symbol": pick.get("symbol"),
-        "price_exp": pick.get("price_exp"),
-        "size_exp": pick.get("size_exp"),
-        "tick_size": pick.get("tick_size"),
-    }
+        return open_dataset(root, missing_ok=True)
+    except QtError:
+        return _NoInstruments()
+
+
+class _NoInstruments:
+    """A dataset that cannot be read: no instrument (units as `{}`, as for a missing table)."""
+
+    def instrument(self, instrument_id: int, *, ts: int | None = None) -> None:
+        return None
 
 
 def fmt_utc(ns: int | None, digits: int = 6, date: bool = False) -> str:
-    """`HH:MM:SS.ffffff` (UTC) of an epoch-ns timestamp; with `date`, `YYYY-MM-DD HH:MM:SS.ffffff`."""
+    """Deprecated: use `queuetruth.units.local_time(ns, tz)`, which names the zone. `HH:MM:SS.ffffff` (UTC) of an
+    epoch-ns timestamp; with `date`, `YYYY-MM-DD HH:MM:SS.ffffff`."""
+    warnings.warn(
+        "queuetruth.api.fmt_utc is deprecated; use queuetruth.units.local_time(ns, tz)",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     if ns is None:
         return "-"
     sec, frac = divmod(int(ns), _NS)
@@ -941,33 +947,21 @@ def fmt_utc(ns: int | None, digits: int = 6, date: bool = False) -> str:
 
 
 def fmt_scaled(v: float | int | None, exp: int | None) -> str:
-    """A fixed-point integer `v * 10**exp` as a decimal string (no exponent; trailing zeros trimmed)."""
-    if v is None:
-        return "-"
-    if exp is None or exp == 0:
-        return f"{v:g}" if isinstance(v, float) else str(v)
-    from decimal import Decimal
-
-    d = Decimal(str(v)).scaleb(int(exp))
-    text = format(d.normalize(), "f")
-    return text if "." not in text else text.rstrip("0").rstrip(".")
+    """Deprecated: use `queuetruth.units.format_scaled` (or `format_price` for a price)."""
+    warnings.warn(
+        "queuetruth.api.fmt_scaled is deprecated; use queuetruth.units.format_scaled", DeprecationWarning, stacklevel=2
+    )
+    return units.format_scaled(v, exp)
 
 
 def fmt_dur(ns: int | None) -> str:
-    """Duration in readable units (`250 ms`, `52.2 s`, `4 min 51 s`)."""
-    if ns is None:
-        return "-"
-    a = abs(int(ns))
-    if a < 1_000:
-        return f"{ns} ns"
-    if a < 1_000_000:
-        return f"{ns / 1e3:.3g} us"
-    if a < _NS:
-        return f"{ns / 1e6:.3g} ms"
-    if a < 60 * _NS:
-        return f"{ns / _NS:.3g} s"
-    mins, rest = divmod(a, 60 * _NS)
-    return f"{'-' if ns < 0 else ''}{mins} min {rest // _NS} s"
+    """Deprecated: use `queuetruth.units.format_duration(ns, sig=3)` (`250ms`, `52.2s`, `4.85min`)."""
+    warnings.warn(
+        "queuetruth.api.fmt_dur is deprecated; use queuetruth.units.format_duration(ns, sig=3)",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return units.format_duration(ns, sig=3)
 
 
 _FILL_REASONS = {
@@ -1044,7 +1038,7 @@ def _conclusion(x: WhyExplanation) -> str:
     ev = t.events
 
     def size(v: float | int) -> str:
-        return fmt_scaled(v, x.size_exp)
+        return units.format_scaled(v, x.size_exp)
 
     start = t.ts_live
     fill_i = next((i for i, e in enumerate(ev) if e.fill_qty > 0), None)
@@ -1064,9 +1058,11 @@ def _conclusion(x: WhyExplanation) -> str:
                 f"order {e.order_id} ({size(e.size)}, {'ahead of' if e.is_ahead else 'behind'} you)" for e in execs[:3]
             )
             what.append(f"{'executing ' if prints else ''}{who}{'' if prints else ' traded'}")
-        trig = f" at {fmt_utc(fe.ts_event, 3, date=True)} UTC" + (f" when {', '.join(what)}" if what else "")
+        trig = f" at {units.local_time(fe.ts_event, x.session_tz, digits=3)}" + (
+            f" when {', '.join(what)}" if what else ""
+        )
         why_txt = "; ".join(_FILL_REASONS.get(r, r.replace("_", " ")) for r in reasons)
-        span = fmt_dur(fe.ts_event - start) if start is not None else "-"
+        span = units.format_duration(fe.ts_event - start, sig=3) if start is not None else "-"
         text = (
             f"Filled {size(t.outcome.filled_qty)} of {size(t.qty)}{trig}: {why_txt}. Queue ahead went "
             f"{size(q0)} -> {size(q1)} over {span}" + (f" ({story})." if story else ".")
@@ -1075,7 +1071,7 @@ def _conclusion(x: WhyExplanation) -> str:
         text = f"Not filled (end state {t.outcome.end_state}); nothing happened at the order's price while it was live."
     else:
         q0, q1, story = _queue_story(t, None, size)
-        span = fmt_dur(ev[-1].ts_event - start) if start is not None else "-"
+        span = units.format_duration(ev[-1].ts_event - start, sig=3) if start is not None else "-"
         text = (
             f"Not filled (end state {t.outcome.end_state}): queue ahead went {size(q0)} -> {size(q1)} over {span}"
             + (f" ({story})" if story else "")
@@ -1093,8 +1089,10 @@ def _conclusion(x: WhyExplanation) -> str:
         elif x.first_divergence is not None and x.first_divergence < len(ev):
             d = ev[x.first_divergence]
             est = x.model_queue_ahead[x.first_divergence]
+            when = units.local_time(d.ts_event, x.session_tz, digits=3, date=False)
             text += (
-                f" Model {x.model_id} first diverged at {fmt_utc(d.ts_event, 3)}: it had "
+                f" Model {x.model_id} first diverged at {when}: "
+                f"it had "
                 f"{size(round(est, 6)) if est is not None else '-'} ahead where the exact queue had "
                 f"{size(d.queue_ahead_after)} (after {d.action} of order {d.order_id}, "
                 f"{'ahead of' if d.is_ahead else 'behind'} you)."
@@ -1377,8 +1375,8 @@ def why_explain(
             # `live` + `order_key` stay in the spec: the core removes the order's own MBO records (A1).
             run = sp.model_copy(update={"shadows": s.PathRef(path=str(sched)), "shadow_id": sid, "out": None})
         trace = _native("why", run, m.WhyTrace)
-        units = _instrument_units(root, trace.instrument_id, trace.ts_live)
-        x = WhyExplanation(trace=trace, excluded_order_ids=[o for _, o in excluded], notes=notes, **units)
+        inst = units.instrument_units(_units_source(root), trace.instrument_id, trace.ts_live)
+        x = WhyExplanation(trace=trace, excluded_order_ids=[o for _, o in excluded], notes=notes, **inst)
         if model is not None or zoo is not None:
             sid = trace.subject.shadow_id or sp.shadow_id or ""
             tol = divergence_tol if divergence_tol is not None else max(1.0, 0.1 * float(trace.qty))
@@ -1388,8 +1386,9 @@ def why_explain(
                 stale = _zoo_ts_live(Path(zoo), sid)
                 if tp.exists() and stale is not None and trace.ts_live is not None and stale != trace.ts_live:
                     notes.append(
-                        f"model: {zoo} ran {sid} with another schedule (went live at {fmt_utc(stale)}, here at "
-                        f"{fmt_utc(trace.ts_live)}); its trajectory is not used"
+                        f"model: {zoo} ran {sid} with another schedule (went live at "
+                        f"{units.local_time(stale, x.session_tz)}, here at "
+                        f"{units.local_time(trace.ts_live, x.session_tz)}); its trajectory is not used"
                         + ("; running the model on this order" if model else "")
                     )
                 elif tp.exists():

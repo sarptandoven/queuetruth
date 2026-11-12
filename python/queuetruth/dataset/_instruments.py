@@ -75,6 +75,8 @@ class Instrument:
     tick_size: int | None
     lot_size: int | None = None
     currency: str | None = None
+    #: IANA zone of the venue's session (`America/New_York`), for local times.
+    session_tz: str | None = None
     #: The full `qt.instruments` row (`session_date` as a day number).
     row: dict[str, Any] = field(default_factory=dict, compare=False, repr=False)
 
@@ -84,12 +86,14 @@ class Instrument:
         return str(self.symbol) if self.symbol else f"#{self.instrument_id}"
 
     def units(self) -> dict[str, Any]:
-        """`{symbol, price_exp, size_exp, tick_size}`."""
+        """`{symbol, price_exp, size_exp, tick_size, session_tz}`: what turns the instrument's integers into human
+        units (`queuetruth.units`)."""
         return {
             "symbol": self.symbol,
             "price_exp": self.price_exp,
             "size_exp": self.size_exp,
             "tick_size": self.tick_size,
+            "session_tz": self.session_tz,
         }
 
     @classmethod
@@ -100,6 +104,7 @@ class Instrument:
 
         sym = r.get("symbol")
         cur = r.get("currency")
+        tz = r.get("session_tz")
         return cls(
             int(r["instrument_id"]),
             None if sym is None else str(sym),
@@ -108,6 +113,7 @@ class Instrument:
             opt("tick_size"),
             opt("lot_size"),
             None if cur is None else str(cur),
+            None if tz is None else str(tz),
             row=r,
         )
 

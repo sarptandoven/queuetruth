@@ -17,7 +17,7 @@ from typing import Any
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from queuetruth.dataset import MANIFEST_FILE, Manifest, read_manifest_doc
+from queuetruth.dataset import MANIFEST_FILE, Manifest, open_dataset, read_manifest_doc
 from queuetruth.errors import QtError
 from queuetruth.eval.leaderboard import without_degenerate_cis
 from queuetruth.schemas.arrow import SCHEMAS
@@ -158,6 +158,9 @@ class Provenance:
 
     entries: list[tuple[str, str]] = field(default_factory=list)  # (source description, status)
     price_exp: dict[int, int | None] = field(default_factory=dict)
+    #: instrument id -> symbol and session time zone, from the datasets' `instruments.parquet` (human units).
+    symbol: dict[int, str] = field(default_factory=dict)
+    session_tz: dict[int, str] = field(default_factory=dict)
     vendor_ids: set[str] = field(default_factory=set)  # dataset ids ingested from a vendor file
 
     def add(self, what: str, status: str) -> None:
@@ -290,6 +293,22 @@ def _spec_path(spec: dict[str, Any], key: str) -> str | None:
     return None
 
 
+def _note_instruments(prov: Provenance, path: Path) -> None:
+    """Symbols and session time zones of a dataset's instruments (display only; an unreadable dataset or table is
+    skipped). `path` is the dataset directory."""
+    if not (path / "instruments.parquet").is_file():
+        return
+    try:
+        sessions = open_dataset(path, missing_ok=True).sessions
+    except QtError:
+        return
+    for s in sessions:
+        if s.instrument.symbol:
+            prov.symbol.setdefault(s.instrument_id, s.instrument.symbol)
+        if s.instrument.session_tz:
+            prov.session_tz.setdefault(s.instrument_id, s.instrument.session_tz)
+
+
 def _provenance(runs: list[RunDir], files: list[FileRec]) -> Provenance:
     prov = Provenance()
     seen_paths: set[str] = set()
@@ -353,6 +372,7 @@ def _provenance(runs: list[RunDir], files: list[FileRec]) -> Provenance:
                             )
                         )
                         note_manifest(man, _display(ds, "manifest.json"))
+                _note_instruments(prov, Path(ds))
             lv = _spec_path(spec, "live")
             if lv and lv not in seen_paths:
                 seen_paths.add(lv)

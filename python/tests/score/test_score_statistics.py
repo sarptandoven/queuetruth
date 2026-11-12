@@ -213,20 +213,20 @@ def test_headline_review_f3_f6_f8():
     under = {"fill_rate_bias": -0.115, "ci_lo": -0.15, "ci_hi": -0.08, "direction": "sim_underfills"}
     h = headline(under, {"p_exact": 6.6e-06}, 400, window_ns=60_000_000_000, gates=False)
     assert h == (
-        "sim underfills live by 11.5 pp fill rate within 60 s (95% CI [-15.0, -8.0]); McNemar p = 6.6e-06; "
+        "sim underfills live by 11.5 pp fill rate within 1min (95% CI [-15.0, -8.0]); McNemar p = 6.6e-06; "
         "400 orders; no gates configured"
     )
     assert "-11.5 pp" not in h
     eq = {"fill_rate_margin": 0.02, "tost_p": 0.038, "fill_rate_equivalent": True}
     same = {"fill_rate_bias": 0.001, "ci_lo": -0.01, "ci_hi": 0.012, "direction": "no_significant_bias"}
     assert headline(same, {"p_exact": 0.9}, 50, window_ns=1_500_000_000, equiv=eq, gates=True) == (
-        "no significant fill-rate difference within 1.5 s: +0.1 pp (95% CI [-1.0, +1.2]); equivalent within ±2 pp "
+        "no significant fill-rate difference within 1.5s: +0.1 pp (95% CI [-1.0, +1.2]); equivalent within ±2 pp "
         "(TOST p = 0.038); McNemar p = 0.9; 50 orders"
     )
     neq = {"fill_rate_margin": 0.02, "tost_p": 0.4, "fill_rate_equivalent": False}
     assert "not shown equivalent within ±2 pp (TOST p = 0.4)" in headline(same, {"p_exact": 0.9}, 50, equiv=neq)
     v = assemble(table(10, 50, 0, 40, days=5), [], spec(window_ns=120_000_000_000)).parts["verdict"]
-    assert "within 120 s" in v["headline"] and v["headline"].endswith("; no gates configured")
+    assert "within 2min" in v["headline"] and v["headline"].endswith("; no gates configured")
     assert v["gates_passed"] is True  # exit-code semantics unchanged
     g = assemble(table(10, 50, 0, 40, days=5), [], spec(gates={"max_abs_fill_rate_bias": 0.5})).parts["verdict"]
     assert "no gates configured" not in g["headline"] and g["gates_passed"] is True

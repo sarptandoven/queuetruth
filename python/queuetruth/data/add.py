@@ -24,8 +24,8 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
-from zoneinfo import ZoneInfo
 
+from queuetruth import units
 from queuetruth.data.infer import NEEDS_DATE, TITLES, Detected, detect
 from queuetruth.data.merge import merge
 from queuetruth.dataset import MANIFEST_FILE, DatasetWriter, open_dataset
@@ -83,10 +83,10 @@ def _date_of_days(days: int) -> str:
 
 
 def _clock(ns: int | None, tz: str) -> str | None:
+    """Venue-local `HH:MM:SS` of an epoch-ns time (`queuetruth.units.local_time`; the table header names the zone)."""
     if ns is None:
         return None
-    t = dt.datetime.fromtimestamp(ns // 1_000_000_000, tz=ZoneInfo(tz))
-    return t.strftime("%H:%M:%S")
+    return units.local_time(ns, tz, digits=0, date=False, named=False)
 
 
 def _is_dataset(p: Path) -> bool:

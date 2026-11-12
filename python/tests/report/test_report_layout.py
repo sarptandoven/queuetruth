@@ -191,7 +191,7 @@ def test_answer_sentences_match_the_summaries(bundle: Any, rendered: tuple[Any, 
     fb = best["fill_rate_bias"][H60]
     exact = best["exact_fill_rate"][H60]
     s0 = ans[0]["s"]
-    assert s0.startswith(f"At 60 s, the exact replay fills {F.pct(exact)} of ")
+    assert s0.startswith(f"At 1min, the exact replay fills {F.pct(exact)} of ")
     assert rc.esc(best["model_id"]) in s0
     assert f"fills {F.pct(best['model_fill_rate'][H60])} ({F.pp(fb['value'])}, 95% CI {F.pp(fb['ci_lo'])} to " in s0
     noise = fb["ci_lo"] <= 0 <= fb["ci_hi"]
@@ -268,7 +268,7 @@ def test_answer_without_base_rates_or_optimistic_models(tmp_path: Path) -> None:
     d = _zoo_with(tmp_path, old)
     _, html = _render(tmp_path / "a", [d])
     a = _answers(html)
-    assert a[0]["s"].startswith("At 60 s, ") and "the exact replay fills" not in a[0]["s"]
+    assert a[0]["s"].startswith("At 1min, ") and "the exact replay fills" not in a[0]["s"]
     assert "has the smallest fill-rate bias" in a[0]["s"]
     # the widened CIs contain 0 but reach beyond the margin: inconclusive, never a green "within noise"
     assert a[0]["label"] == "INCONCLUSIVE (WIDE CI)" and a[0]["cls"] == "info"
@@ -276,7 +276,7 @@ def test_answer_without_base_rates_or_optimistic_models(tmp_path: Path) -> None:
     assert a[1]["s"].startswith("No: no model fills significantly more often than the exact FIFO replay")
     assert a[1]["label"] == "NONE OPTIMISTIC" and a[1]["cls"] == "good"
     lb = pp.section(html, "leaderboard")
-    assert "fill rate 60 s</th>" not in lb  # no rate column without rates
+    assert "fill rate 1min</th>" not in lb  # no rate column without rates
     assert pp.leaderboard_rows(html)[0] != "exact fill rate (truth)"
 
 
@@ -299,7 +299,7 @@ def test_answer_never_reads_a_missing_ci_as_within_noise(tmp_path: Path) -> None
         in (a[0]["s"])
     )
     assert "and lies within" not in a[0]["s"] and "6 of 6 models have no CI." in a[0]["s"]
-    assert a[1]["s"] == "Cannot tell: no model has a 95% CI at 60 s."
+    assert a[1]["s"] == "Cannot tell: no model has a 95% CI at 1min."
     assert not any(x["cls"] == "good" for x in a)
 
     def some_ci(doc: dict) -> None:  # the closest model keeps a narrow CI; two others lose theirs
@@ -403,7 +403,7 @@ def test_answer_when_no_shadow_is_labelled_at_the_sort_horizon(tmp_path: Path) -
     _, html = _render(tmp_path / "a", [_zoo_with(tmp_path, unlabelled)])
     a = _answers(html)
     assert len(a) == 1 and a[0]["label"] == "NO LABELS" and a[0]["cls"] == "muted"
-    assert a[0]["s"] == "No shadow has an exact label at 60 s, so no model's fill-rate bias can be measured there."
+    assert a[0]["s"] == "No shadow has an exact label at 1min, so no model's fill-rate bias can be measured there."
 
 
 def test_answer_scorecard_states(tmp_path: Path) -> None:

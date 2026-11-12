@@ -190,3 +190,14 @@ def test_bounded_reader_moved_without_changing_its_limits(tmp_path: Path) -> Non
     pq.write_table(pa.table({"a": [1, 2, 3]}), p)
     assert read_parquet_bounded(p).num_rows == 3
     assert expansion_limit(1, 0) == MAX_RATIO
+
+
+def test_instrument_units_through_the_dataset() -> None:
+    from queuetruth import units
+
+    ds = open_dataset(SYNTH)
+    s = ds.sessions[0]
+    got = units.instrument_units(ds, s.instrument_id, s.open_ns)
+    assert got == units.instrument_units(SYNTH, s.instrument_id, s.open_ns)
+    assert set(got) == {"symbol", "price_exp", "size_exp", "tick_size", "session_tz"} and got["session_tz"]
+    assert units.instrument_units(ds, 999_999) == {}

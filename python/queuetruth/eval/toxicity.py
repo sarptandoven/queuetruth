@@ -1305,7 +1305,10 @@ def _ci_text(doc: dict[str, Any]) -> str:
 def render_toxicity(doc: dict[str, Any]) -> str | None:
     """Answer-first terminal view of a `qt.zoo_toxicity` document: each model's PnL error at the rank horizon (ranked
     by |bias|), the exact arm's markout per fill mechanism, and the answer in plain words."""
-    from queuetruth.api import fmt_dur
+    from queuetruth.units import format_duration
+
+    def fmt_dur(ns: Any) -> str:
+        return format_duration(ns, sig=3)
 
     models = doc.get("models")
     rk = doc.get("rankings") or {}

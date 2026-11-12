@@ -1,4 +1,4 @@
-"""Leaderboard order and wording (trader review C1, top-10 item 4): sorted by |fill-rate bias| at 60 s (configurable),
+"""Leaderboard order and wording (trader review C1, top-10 item 4): sorted by |fill-rate bias| at 1min (configurable),
 Brier only as a tie-break, one plain-English sentence per model."""
 
 from __future__ import annotations
@@ -59,15 +59,15 @@ def test_bias_sentences() -> None:
     by = {e["model_id"]: e for e in _board()}
     assert (
         bias_sentence(by["hbt_power3[n=2]"], 60 * S)
-        == "At 60 s, hbt_power3[n=2] fills 0.7 pp less often than the exact replay (95% CI -1.3 to -0.3 pp)."
+        == "At 1min, hbt_power3[n=2] fills 0.7 pp less often than the exact replay (95% CI -1.3 to -0.3 pp)."
     )
     assert (
         bias_sentence(by["front_of_queue"], 60 * S)
-        == "At 60 s, front_of_queue fills 0.2 pp more often than the exact replay, within noise (95% CI -0.4 to "
+        == "At 1min, front_of_queue fills 0.2 pp more often than the exact replay, within noise (95% CI -0.4 to "
         "+0.9 pp)."
     )
     assert bias_sentence(by["databento_mc[k=-0.8]"], S).startswith(
-        "At 1 s, databento_mc[k=-0.8] fills as often as the exact replay (bias 0.0 pp)"
+        "At 1s, databento_mc[k=-0.8] fills as often as the exact replay (bias 0.0 pp)"
     )
     assert "has no fill-rate bias" in bias_sentence(by["no_estimate"], S)
     # 0.1.1: with the two rates the bias reads against its base rate
@@ -79,11 +79,11 @@ def test_bias_sentences() -> None:
     assert rates_at(rated, 60 * S) == (0.103, 0.110) and rates_at(by["front_of_queue"], 60 * S) == (None, None)
     assert (
         bias_sentence(rated, 60 * S)
-        == "At 60 s, hbt_power3[n=2] fills 10.3% of orders vs 11.0% in the exact replay, 0.7 pp less often (95% CI "
+        == "At 1min, hbt_power3[n=2] fills 10.3% of orders vs 11.0% in the exact replay, 0.7 pp less often (95% CI "
         "-1.3 to -0.3 pp)."
     )
     flat = {**by["databento_mc[k=-0.8]"], "model_fill_rate": {str(S): 0.0004}, "exact_fill_rate": {str(S): 0.0004}}
     assert bias_sentence(flat, S).startswith(
-        "At 1 s, databento_mc[k=-0.8] fills 0.04% of orders, as often as the exact replay (0.04%, bias 0.0 pp)"
+        "At 1s, databento_mc[k=-0.8] fills 0.04% of orders, as often as the exact replay (0.04%, bias 0.0 pp)"
     )
-    assert duration_text(300 * S) == "5 min" and duration_text(S // 10) == "100 ms"
+    assert duration_text(300 * S) == "5min" and duration_text(S // 10) == "100ms"
