@@ -96,7 +96,7 @@ A fill at activation is one synthetic row with action `N`, `order_id` 0 and note
 `why` replays the order alone with the same engine, so for a shadow without amends its outcome equals that
 shadow's `qt.shadow_results` row from `replay` (`why_and_session_on_synth_small` in `crates/replay/tests/gate.rs`;
 the event rows themselves are checked on a hand-built scenario in `why_trace_builder_on_s1`,
-`crates/replay/tests/misc.rs`). v0.1 `why` does not apply shadow amends and replays without feed or gateway
+`crates/replay/tests/misc.rs`). `why` does not apply shadow amends and replays without feed or gateway
 latency, so compare it with a replay run without `--latency`.
 
 ## Compare with a queue model
@@ -144,8 +144,7 @@ queuetruth why --data synth --live synth/own_orders/live --order-key "$key" --ma
 ```
 
 `subject.shadow_id` is the leg id (the `order_key` for the first leg) and `subject.order_key` is the key you gave.
-A key with no schedulable leg (market, IOC or FOK orders, or no entry time) fails with `QT-CONFIG-001`
-(`test_shadows_from_live_and_live_why` in `python/tests/api/test_api_native.py`).
+A key with no schedulable leg (market, IOC or FOK orders, or no entry time) fails with `QT-CONFIG-001`.
 
 On an MBO venue your live order is itself in the tape. Like the scorer, `why --live` removes the order's own records
 from the tape before it traces the twin (audit ruling A1, see
@@ -200,3 +199,12 @@ directory, the exact queue trajectory in the inputs, or else a note with the `qu
 queuetruth score --live synth/own_orders/live --sim-model "hbt_power3[n=2]" --data synth --out sc
 queuetruth report --in sc --max-why 3 --out why-report.html
 ```
+
+<details>
+<summary>Evidence: the tests behind this page</summary>
+
+<ul>
+<li>One of your live orders: <code>test_shadows_from_live_and_live_why</code> in <code>python/tests/api/test_api_native.py</code></li>
+</ul>
+
+</details>

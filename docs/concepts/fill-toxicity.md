@@ -6,6 +6,9 @@ every fill of the exact arm and of every model with the mechanism that produced 
 after each fill, and splits each model's PnL error into the fills it wrongly grants, the fills it wrongly denies and
 the fills it gets at the wrong time.
 
+**Deeper note:** [The impact warning](impact-warning.md), which flags shadows large enough to have changed what
+others did.
+
 ## Run it
 
 `zoo-toxicity` reads a finished zoo run (with `zoo_fills.parquet`, so not `--no-fills`) and the dataset it ran on.

@@ -48,7 +48,7 @@ Every summary repeats the dataset's data-quality verdict (`clean`, `warnings`, `
 ## HTTP problem types
 
 The service answers errors with RFC 9457 `application/problem+json` documents whose `type` is
-`https://queuetruth.dev/problems/<slug>`. The table lists every slug the v0.1 service emits (from
+`https://queuetruth.dev/problems/<slug>`. The table lists every slug the service emits (from
 `service/queuetruth_service`), with the `code` it carries.
 
 | Status | Slug | Code | When |
@@ -73,4 +73,4 @@ The service answers errors with RFC 9457 `application/problem+json` documents wh
 | 503 | <a id="problem-unavailable"></a>`unavailable` | `QT-ENGINE-001` | A dependency (database, object store) is down. |
 
 Other HTTP errors raised by the framework carry the slug `http-error`. The `queuetruth.dev` problem URLs are
-identifiers; they are not guaranteed to resolve to a web page in v0.1.
+identifiers; they are not guaranteed to resolve to a web page.

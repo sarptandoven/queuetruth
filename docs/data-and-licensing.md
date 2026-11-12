@@ -189,7 +189,7 @@ Vendors re-issue history, and the same file name can hold different data later. 
   runs to 01:00 UTC, so each UTC date starts with the final hour of the previous session; and MBO, definition and
   status files gain midnight-UTC snapshot records. A replay of a pre-re-issue file and of a post-re-issue file of
   the same day will differ.
-- **DBN version 4** is in development, with a changed record header. The v0.1 reader is built on the `dbn` 0.71
+- **DBN version 4** is in development, with a changed record header. The reader is built on the `dbn` 0.71
   crate and decodes DBN versions 1 to 3; expect DBN v4 files to need a reader update.
 
 What to do:

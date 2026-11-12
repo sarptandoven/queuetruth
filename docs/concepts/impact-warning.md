@@ -104,6 +104,10 @@ are smaller than `queue_min_qty`.
 
 ## Run it
 
+`$QT_FIXTURES` is the `tests/fixtures` directory of a queuetruth source checkout: after `git clone
+https://github.com/sarptandoven/queuetruth`, run `export QT_FIXTURES=$PWD/queuetruth/tests/fixtures`. The docs check
+sets it for you.
+
 `zoo` and `score` add the warning line by themselves. `score` counts live orders rather than legs (an order is
 flagged when any of its legs is) and names the first flagged order keys, because its replay runs in a temporary
 directory. For the per-shadow table, run the module on a replay or a zoo output directory. The dataset and, for a zoo
