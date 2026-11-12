@@ -138,6 +138,9 @@ install commands and versions are in the `integrations` job of `.github/workflow
 
 1. Open an issue first for anything larger than a small fix, so the approach can be agreed before you write it.
 2. Keep the pull request to one change. Fill in the template: what changed, why, and how it was tested.
+   If users will notice the change, add a changelog fragment, `changelog.d/<slug>.<section>.md` (see
+   [changelog.d/README.md](changelog.d/README.md)), instead of editing `CHANGELOG.md`: parallel pull requests then
+   never conflict on the changelog. `python tools/changelog.py check` (in `make lint`) validates it.
 3. Run `make lint test` (and `make test-e2e` or `make check-docs` when you touched those areas) before pushing.
 4. Sign off every commit (see below).
 
