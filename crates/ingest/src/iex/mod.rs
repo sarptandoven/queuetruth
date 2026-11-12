@@ -7,7 +7,8 @@
 //!
 //! Layers: [`capture`] (pcap / pcapng) -> [`transport`] (Ethernet / IPv4 / UDP, IEX-TP header and message blocks)
 //! -> [`feed`] (sequencing and duplicates per channel and session) -> [`message`] (DEEP+ layouts) -> [`mapper`]
-//! (MBO records and trade prints). [`synth`] builds synthetic captures for tests.
+//! (MBO records and trade prints). [`synth`] builds synthetic captures for tests. [`split`] is the symbol splitter of
+//! the scale pipeline (`scripts/scale/iex_split.py`), a port of its Python reader.
 //!
 //! IEX's terms for redistributing HIST data require this attribution: "Data provided for free by IEX. By accessing
 //! or using IEX Historical Data, you agree to the IEX Historical Data Terms of Use."
@@ -17,6 +18,7 @@ pub mod capture;
 pub mod feed;
 pub mod mapper;
 pub mod message;
+pub mod split;
 pub mod synth;
 pub mod transport;
 

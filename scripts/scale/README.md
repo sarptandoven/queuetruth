@@ -15,7 +15,7 @@ itch_split.py ─▶ split/<date>/ (K buckets) ─▶ plan.py ─▶ units ─�
 | script | does |
 |---|---|
 | `itch_split.py` | streams a day (`--date` for a public EMI day with pinned hashes, or `--url`), routes each symbol's messages from its `R` on to bucket `crc32(symbol) mod K` and locate 0 to all buckets; checks the stream against the pinned values; per bucket the file and content sha256 and per symbol `[locate, messages, executions]` |
-| `iex_split.py` | the same for an IEX DEEP+ day (`--input` capture or `--url`, gzip or raw, pcap or pcapng): every symbol's messages to bucket `crc32(symbol) mod K`, System Events to all buckets, each bucket renumbered per (channel, session) with the source's gaps carried, so it is byte-identical to the `IexCutFilter` subset of its symbols; the manifest names the unit ingest spec (`iex_deep_plus`, venue `iex`), per symbol `[instrument id, messages, executions]`, test securities and the Trading Status spans |
+| `iex_split.py` | the same for an IEX DEEP+ day (`--input` capture or `--url`, gzip or raw, pcap or pcapng): every symbol's messages to bucket `crc32(symbol) mod K`, System Events to all buckets, each bucket renumbered per (channel, session) with the source's gaps carried, so it is byte-identical to the `IexCutFilter` subset of its symbols; the manifest names the unit ingest spec (`iex_deep_plus`, venue `iex`), per symbol `[instrument id, messages, executions]`, test securities and the Trading Status spans; `--engine fast` (the default, Rust through `queuetruth._core`, gzip by Python on `--threads` writer threads) and `--engine python` (the pure-Python reference) write the same bytes |
 | `plan.py` | universe, exclusions with reasons (Nasdaq test symbols), per-symbol shadow quotas (`scale`, `fixed`, `breadth`), cost model, first-fit-decreasing units within a bucket, `run_id`; the units compute the P&L error unless `--no-pnl`; `--sample-budget-core-h B` (or `--sample-per-tier N`) keeps a hash-chosen, equal-size symbol sample per liquidity tier when the day predicts more than `B` core-hours, recorded as `symbol_sample` |
 | `unit.py` | one unit: bucket sha256 check, ingest of its symbols, replay exactness checks, `per_partition` shadow sample, native zoo per population and mode, `block_stats`, the P&L terms of `zoo-toxicity` summed per symbol-day (`pnl_stats`: one exact replay with quotes per population, `evaluate_toxicity` per mode), 1% audit sample of predictions, `shard_manifest.json` with telemetry |
 | `aggregate.py` | verifies every shard (leaf hash, unit spec hash, output content digests), Merkle root, `zoo_errors_by_group`, `leaderboard` (two-way dates x symbols cluster bootstrap, BH), `per_symbol` (day-cluster CI, empirical-Bayes shrinkage, BH), summed exactness |
@@ -40,6 +40,11 @@ uv run --frozen --no-sync python scripts/scale/local_day.py --source iex --date 
     --input 20261009_IEXTP1_DPLS1.0.pcap.gz --workers 4 --threads 2 --site
 ```
 
+The split runs in Rust (`iex_split.py --engine fast`, built by `make develop`): on real 2026-10-09 bucket files it
+was 10 to 14 times as fast as the pure-Python engine (`--engine python`, the reference, about 81k messages/s, which
+took 185 minutes for an 898M-message day), with byte-identical buckets and manifest; the whole 2026-10-09 day
+(331M messages, streamed from IEX) split in 5.6 minutes on a 4-core machine against 61 minutes on a runner.
+
 The planner reads an `iex_split.py` manifest like an ITCH one: the units ingest with `format: iex_deep_plus`, the
 regular session comes from the `R` and `M` System Events, test securities are excluded, and the Trading Status
 spans become `non_t_spans` (`trading_ok`). Plans of ITCH days keep their run ids.
@@ -60,9 +65,15 @@ GitHub Actions. `local_day.py --no-combine` stops each day after its reduce, sin
 **Backfill** (`.github/workflows/atlas-backfill.yml`). A manual run fills the window at once instead of a day per
 session: `iex_latest.py --count N --kept FILE` lists the N newest published sessions the `atlas-days` release does not
 hold yet as a job matrix, each day runs on its own runner (up to `max_parallel` at a time) with the same steps, and
-`atlas.yml` is then dispatched with `site_only` to rebuild the site over the newest 20 kept days. A day takes 3 to 4
-hours for a 10 to 15 GB file; one that fails or times out (the job limit is 6 hours) is not kept, and running the
-backfill again runs only the days still missing. It runs only from the default branch, since it writes the
+`atlas.yml` is then dispatched with `site_only` to rebuild the site over the newest 20 kept days. The first
+backfill's 20 days (290 to 570 million messages) took 2.3 to 4.7 hours each with two units at a time and the split in
+Python (now in Rust, above): the split 55 to
+142 minutes and the units 81 to 140, the same size of day running up to twice as long on a slower runner. Both
+workflows now run IEX units of at most 100 predicted core-seconds, four at a time (`--unit-core-s 100
+--unit-mem-gib 3.5`): on 2026-10-09 all 359 such units peaked below 2.9 GB, against about 6.2 GB for units of 300,
+and the day's tables were the same (per-symbol cells identical, tier sums equal up to the order of floating-point
+additions). A day that fails or times out (the job limit is 6 hours) is not kept, and running the backfill again runs
+only the days still missing. It runs only from the default branch, since it writes the
 production release, and each day checks again that it is still missing before it runs. `local_day.py` exits non-zero
 for a day no atlas can use (no valid unit, no cells, or every symbol-day flagged under `--flag-policy exclude`;
 `atlas.day_problem`), so such a day

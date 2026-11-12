@@ -18,6 +18,17 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ### Changed
 
+- `scripts/scale/iex_split.py` splits an IEX DEEP+ day 10 to 14 times as fast. The capture is read, routed and
+  renumbered in Rust (`queuetruth._core.IexSplit`, a port of the Python reader in `crates/ingest/src/iex/split.rs`)
+  with the GIL released; a reader thread downloads, hashes and inflates the input, and writer threads (`--threads`,
+  default the CPU count) gzip the buckets with Python's `gzip`. The bucket files and `split_manifest.json` are byte
+  for byte those of the Python engine (only `timings` differ), which stays as the reference behind `--engine python`;
+  `python/tests/scale/test_iex_split_engines.py` compares the two on generated pcap and pcapng captures cut at random.
+  Re-splitting real 2026-10-09 bucket files on a 4-core machine ran at 1.0M to 1.7M messages/s against 79k to 167k,
+  and the whole 2026-10-09 day (331M messages, streamed from IEX) split in 5.6 minutes with every one of its 32 bucket
+  files byte-identical to the split a runner made of it with the Python engine, which took 61 minutes there (an
+  898M-message day took 185 and timed its job out). On the few
+  malformed inputs where the Python engine stops with an uncaught exception, the fast engine exits 2 (input error).
 - `scripts/scale/local_day.py --no-combine` stops after the reduce. `atlas.yml` and the backfill use it, since their
   site step combines the kept days anyway; it saves about 11 minutes per IEX day.
 - `local_day.py` exits non-zero for a day no atlas can use: no valid unit, no cells, or (under `--flag-policy
@@ -26,6 +37,24 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   exits 0 and do not run a kept day again, so such a day used to be stopped only by the single-day combine failing;
   now it is stopped with or without the combine. `atlas.py combine` names a day without valid units or cells.
 - `atlas.yml`: a failed `iex_latest.py` lookup fails its step (`pipefail`; the `tee` used to hide it).
+- `atlas.yml` and the backfill run IEX units of at most 100 predicted core-seconds, four at a time
+  (`--unit-core-s 100 --unit-mem-gib 3.5`, the `IEX_UNIT_*` variables), instead of units of 300 two at a time.
+  Units of 300 peaked near 6.2 GB on every backfill day, so only two fit a 16 GB runner; on 2026-10-09 all 359 units
+  of 100 peaked below 2.9 GB, four at a time. The day's tables do not change: per-symbol cells were identical and the
+  tier sums equal up to the order of floating-point additions (at most 4e-14 relative).
+
+### Fixed
+
+- `atlas.py combine` no longer runs out of memory on a full window. It read every day's cells and P&L cells into
+  one table: about 1.2 GB per IEX day, so 20 days needed about 25 GB, and the first site rebuild after the backfill
+  stopped the 16 GB runner two minutes in. It now reads the days one (mode, shadow population) slice at a time, with
+  one light pass for what spans the slices; the per-symbol table is grouped with numpy instead of a Python object per
+  row. It is also faster, with the same numbers: the day bootstrap's quantiles are taken on blocks of columns instead
+  of one Python call per column (`np.nanquantile` on a 2-D array), and `blocks.cluster_bootstrap` groups its rows
+  and cluster cells through one integer per row (`_unique_rows`) instead of sorting rows, and reads its count column
+  once instead of once per group. Every output file is byte-identical to before (two real days, under both flag
+  policies): 4.6 GB at peak and 13 minutes against 12.7 GB and 19 minutes. The 20 kept days combine in 42 minutes
+  at 9.3 GB.
 
 ## [0.3.0] - 2026-11-07
 

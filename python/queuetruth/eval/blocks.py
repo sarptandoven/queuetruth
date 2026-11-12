@@ -390,9 +390,9 @@ def _groups(t: pa.Table, names: Sequence[str]) -> tuple[list[tuple[Any, ...]], n
         codes.append(c)
         uniq.append(u)
     mat = np.stack(codes, axis=1)
-    gu, ginv = np.unique(mat, axis=0, return_inverse=True)
+    gu, ginv = _unique_rows(len(mat), [lambda j=j: mat[:, j] for j in range(len(names))])
     keys = [tuple(_py(uniq[j][row[j]]) for j in range(len(names))) for row in gu]
-    return keys, np.asarray(ginv).reshape(-1)
+    return keys, ginv
 
 
 def _py(v: Any) -> Any:
@@ -520,6 +520,7 @@ def cluster_bootstrap(
         for c, k in zip(clusters, sizes, strict=True)
     ]
     keys, ginv = _groups(stats, group)
+    count_all = _np(stats, _COUNT.get(metric, "n"))
     order = np.argsort(ginv, kind="stable")
     bounds = np.cumsum(np.bincount(ginv, minlength=len(keys)))
     starts = np.concatenate([[0], bounds[:-1]])
@@ -530,9 +531,8 @@ def cluster_bootstrap(
         total = float(den.sum())
         value = float(num.sum()) / total if total > 0 else float("nan")
         # collapse to the occupied cluster cells, then weigh each by the product of its draw counts
-        cell = np.stack([c[rows] for c in codes], axis=1)
-        cu, cinv = np.unique(cell, axis=0, return_inverse=True)
-        cinv = np.asarray(cinv).reshape(-1)
+        cells = [c[rows] for c in codes]
+        cu, cinv = _unique_rows(len(rows), [lambda x=x: x for x in cells])
         cn = np.bincount(cinv, weights=num, minlength=len(cu))
         cd = np.bincount(cinv, weights=den, minlength=len(cu))
         if len(draws) == 2:
@@ -566,7 +566,7 @@ def cluster_bootstrap(
                 "ci_hi": hi if np.isfinite(hi) else None,
                 "se": float(np.std(finite, ddof=1)) if finite.size > 1 else None,
                 "p_boot": bootstrap_p_two_sided(reps) if metric not in ("exact_fill_rate", "model_fill_rate") else None,
-                "n": round(float(_np(stats, _COUNT.get(metric, "n"))[rows].sum())),
+                "n": round(float(count_all[rows].sum())),
                 **{f"n_{c}": int(np.unique(cu[:, j]).size) for j, c in enumerate(clusters)},
             }
         )
