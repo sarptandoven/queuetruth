@@ -39,8 +39,9 @@ import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
+from queuetruth.dataset import MANIFEST_FILE, check_rel_path, dataset_id, json_text, open_dataset, write_text_atomic
 from queuetruth.errors import QtError
-from queuetruth.sandbox._util import config_error, date_of_days, days_of_date, sha256_text
+from queuetruth.sandbox._util import config_error, date_of_days, days_of_date
 from queuetruth.schemas.arrow import SCHEMAS
 from queuetruth.schemas.io import sha256_file, write_table
 
@@ -169,12 +170,12 @@ def open_source(
     root = Path(root)
     if not root.is_dir():
         raise QtError("QT-INPUT-001", f"{root}: dataset directory not found")
-    real(root)
-    man_shown = root / "manifest.json"
-    manifest = _read_json(real(man_shown), man_shown, "manifest.json")
-    if manifest.get("schema") != "qt.dataset_manifest":
+    man_shown = root / MANIFEST_FILE
+    ds = open_dataset(root, contain=real)
+    manifest = ds.manifest.to_dict()
+    if not ds.manifest.is_dataset:
         raise QtError("QT-INPUT-002", f"{man_shown}: not a qt.dataset_manifest")
-    if manifest.get("kind") != "mbo":
+    if ds.book_kind != "mbo":
         raise config_error(
             "the sandbox needs an order-level (MBO) dataset: exact fills come from the exact replay",
             "L2-only datasets support simulation and markouts only (SPEC 5.1.6a)",
@@ -183,7 +184,7 @@ def open_source(
     if not ipath.exists():
         raise QtError("QT-INPUT-001", f"{ipath}: not found")
     ireal = real(ipath)
-    instruments = pq.read_table(ireal)
+    instruments = ds.table("instruments")
     rows = instruments.to_pylist()
     for r in rows:
         sd = r.get("session_date")
@@ -233,9 +234,7 @@ def open_source(
     files = tuple(str(f["path"]) for f in p.get("files") or [])
     mbo_real = []
     for f in files:
-        rel = Path(f)
-        if rel.is_absolute() or any(part in ("..", "") for part in rel.parts):
-            raise QtError("QT-INPUT-002", f"{man_shown}: partition file path {f!r}")
+        rel = check_rel_path(f, f"{man_shown}: partition file path")
         if not (root / rel).is_file():
             raise QtError("QT-INPUT-001", f"{root / rel}: partition file listed in manifest.json is missing")
         mbo_real.append(real(root / rel))
@@ -257,7 +256,7 @@ def open_source(
             f"{ipath}: no qt.instruments row for instrument_id {part.instrument_id} on {part.date}",
             "the sandbox needs the instrument's tick size, units and session times",
         )
-    rule_set = str(manifest.get("rule_set") or manifest.get("venue") or "generic")
+    rule_set = ds.manifest.rule_set
     if rule_set not in RULES:
         raise config_error(f"unknown rule set {rule_set!r} in manifest.json")
     dq_path = root / "data_quality.json"
@@ -517,9 +516,7 @@ def _gap_doc(src: SourceDataset, cut: int | None) -> dict[str, Any] | None:
 
 
 def _write_json(path: Path, doc: dict[str, Any]) -> None:
-    tmp = path.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
-    os.replace(tmp, path)
+    write_text_atomic(path, json_text(doc))
 
 
 class Tape:
@@ -651,8 +648,7 @@ class Tape:
             ]
         else:
             man["partitions"] = []
-        shas = sorted(sha for _, _, sha in self._parts)
-        man["dataset_id"] = sha256_text("\n".join(shas) + "\n" + str(man.get("source_format", "")))
+        man["dataset_id"] = dataset_id([sha for _, _, sha in self._parts], str(man.get("source_format", "")))
         _write_json(self.root / "manifest.json", man)
 
     def _write_dq(self, cut: int | None) -> None:

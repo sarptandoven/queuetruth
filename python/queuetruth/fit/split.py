@@ -116,16 +116,15 @@ def _sessions(ds: DatasetView, orders: Sequence[Order]) -> dict[tuple[int, int],
     out: dict[tuple[int, int], tuple[int, int, int]] = {}
     for o in orders:
         day, midnight = ds.day(o.instrument_id, o.ts)
-        rows = ds._inst.get(int(o.instrument_id)) if o.instrument_id is not None else None
-        row = next((r for r in rows or [] if int(r.get("midnight_utc_ns") or 0) == midnight), None)
-        if row is None or row.get("open_s") is None or row.get("close_s") is None:
+        ses = ds.dataset.session_at(int(o.instrument_id), o.ts) if o.instrument_id is not None else None
+        if ses is None or ses.open_s is None or ses.close_s is None:
             raise QtError(
                 "QT-DATA-001",
                 "a time split needs the instruments' trading session (open_s, close_s in instruments.parquet); "
                 f"instrument {o.instrument_id} on {_iso(day)} has none",
                 "split by dates with --train DATES --test DATES",
             )
-        out[(int(o.instrument_id), day)] = (midnight, int(row["open_s"]), int(row["close_s"]))  # type: ignore[arg-type]
+        out[(int(o.instrument_id), day)] = (midnight, ses.open_s, ses.close_s)  # type: ignore[arg-type]
     return out
 
 

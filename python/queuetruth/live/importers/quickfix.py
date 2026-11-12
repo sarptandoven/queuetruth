@@ -47,8 +47,8 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from queuetruth.dataset import MAX_RATIO, SLACK
 from queuetruth.errors import QtError
-from queuetruth.live.importers._parquet import MAX_RATIO, SLACK
 from queuetruth.live.importers.fixwire import SOH, Framed, detect_delimiter, fix_int, frame, normalise, utc_ts
 
 #: File kinds recognised by name.

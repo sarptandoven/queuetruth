@@ -86,6 +86,7 @@ import pyarrow.compute as pc
 import pyarrow.parquet as pq
 from pydantic import Field, field_validator
 
+from queuetruth.dataset import open_dataset, read_manifest_doc
 from queuetruth.errors import QtError
 from queuetruth.eval import _cols as C
 from queuetruth.eval.zoo import PARTICLE_FAMILIES, _planned_life, aborted_shadows, common_population, family
@@ -1405,10 +1406,9 @@ def _read(path: Path, what: str, hint: str | None = None) -> pa.Table:
 
 def _manifest(dataset: Path) -> dict[str, Any] | None:
     try:
-        doc = json.loads((dataset / "manifest.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+        return read_manifest_doc(dataset)
+    except QtError:
         return None
-    return doc if isinstance(doc, dict) else None
 
 
 def _last_event_ts(manifest: dict[str, Any]) -> dict[tuple[int, int], int]:
@@ -1541,7 +1541,7 @@ def run_zoo_toxicity(spec: ToxicitySpec | dict[str, Any]) -> Any:
             pq.read_table(out_tmp / "shadow_fills.parquet"),
             pq.read_table(out_tmp / "trades.parquet"),
             pq.read_table(out_tmp / "bbo.parquet"),
-            pq.read_table(dataset / "instruments.parquet"),
+            open_dataset(dataset).table("instruments"),
             window_ns=window,
             horizons_ns=sp.horizons_ns,
             rank_horizon_ns=sp.rank_horizon_ns,
