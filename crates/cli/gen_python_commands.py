@@ -45,6 +45,7 @@ def parsers() -> list[tuple[list[str], argparse.ArgumentParser]]:
     sys.path.insert(0, str(REPO / "python"))
     from queuetruth.cert.cli import parser as cert_parser
     from queuetruth.check.cli import parser as check_parser
+    from queuetruth.data.cli import parser as data_parser
     from queuetruth.demo.cli import parser as demo_parser
     from queuetruth.forecast.cli import build_parser as forecast_parser
     from queuetruth.ledger.cli import parser as ledger_parser
@@ -60,6 +61,7 @@ def parsers() -> list[tuple[list[str], argparse.ArgumentParser]]:
         ([], cert_parser()),
         ([], reconcile_parser()),
         ([], check_parser()),
+        ([], data_parser()),
     ]
 
 

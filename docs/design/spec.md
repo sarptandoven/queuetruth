@@ -863,7 +863,9 @@ required unless marked `?` (nullable/optional). `Files` = list of `{name, rows?,
 Schema 1.1 document fields (all optional, absent in 1.0 documents; JSON
 `schema_version` stays the integer 1):
 - `qt.dataset_manifest`: `rule_set?` (`generic`/`nasdaq`/`cme`/`coinbase`/`crypto_l3`; 1.2: `iex`), `source_vintage?` [{sha256,
-  dbn_version?, dataset?, dbn_schema?, start_ns?, end_ns?}] (DBN metadata).
+  dbn_version?, dataset?, dbn_schema?, start_ns?, end_ns?}] (DBN metadata); 1.2: `attribution?` [{source, text,
+  terms_url, url?}] (the data provider's required citation and terms, written by `queuetruth data fetch iex`; omitted
+  when absent, so other manifests keep their bytes).
 - `qt.replay_summary`: `shadow_diagnostics?` {hidden_print_fills, hidden_at_px_with_display_ahead, taker_fills,
   crossed_unfilled, behind_exec_with_ahead, excluded_requested, excluded_matched, excluded_records, twins_linked,
   twin_fills_with_queue_ahead, twin_fills_off_display} (twin counters: 5.2.4a).

@@ -4,8 +4,8 @@
 for free and that may be redistributed: IEX's DEEP+ feed from IEX HIST. The last section does the same on a public
 Nasdaq TotalView-ITCH sample day.
 
-**You need:** about 10 GB of download bandwidth (the raw file is streamed and filtered, never stored), under 300 MB
-of free disk for the subset, and queuetruth built from this repository.
+**You need:** about 10 GB of download bandwidth (the raw file is streamed and filtered, never stored), 2 GB of free
+disk (the dataset of a few symbols takes a few hundred MB), and queuetruth 0.4.0 or later.
 
 > Data provided for free by IEX. By accessing or using IEX Historical Data, you agree to the IEX Historical Data
 > Terms of Use.
@@ -50,53 +50,43 @@ semantics, so datasets carry `venue = nasdaq`, `rule_set = iex` and `source_venu
 What DEEP+ does not show: non-displayed orders and the hidden parts of reserve orders. Their executions arrive as Trade
 messages with no resting order and become hidden prints. Routed executions are not reported at all.
 
-## 1. Stream a subset of one day
+## 1. Fetch a subset of one day
 
-Pick a date from the [HIST listing](https://iextrading.com/api/1.0/hist) (any `DPLS` entry) and a few symbols. The
-script streams the gzipped capture once, keeps only the requested symbols' messages (and the System Events) and
-writes a small pcap plus a manifest with the source URL, the sha256 of the stream, the full stream's gap and
-duplicate counts and IEX's attribution line:
+Pick a date from the [HIST listing](https://iextrading.com/api/1.0/hist) (any `DPLS` entry) and a few symbols:
 
-<!-- check-docs: skip (streams about 9 GB from IEX; takes about 30 minutes) -->
+<!-- check-docs: skip (streams a whole IEX day, several GB) -->
 ```sh
-python3 -I scripts/iex/stream_subset.py --date 20261009 --symbols SPY,AAPL,NVDA,TSLA
+queuetruth data fetch iex --date 2026-10-09 --symbols SPY,AAPL,NVDA,TSLA --out iex-20261009
 ```
 
-Outputs land in `.realdata/iex/` (gitignored). The subset renumbers the kept messages contiguously and carries every
-gap of the source stream over as a jump of the same size, so the ingest below reports exactly the source's gaps and
-none caused by the filter. `--self-test` checks the filter on a synthetic capture without a download.
+It asks before downloading (or pass `--yes`), streams the gzipped capture once, keeps only the requested symbols'
+messages (and the System Events), ingests them and checks the data quality ([Add order-level data](add-data.md)).
+The kept messages are renumbered contiguously and every gap of the source stream is carried over as a jump of the
+same size, so the dataset reports exactly the source's gaps and none caused by the filter. IEX's attribution line
+and the URL read go into the dataset's `manifest.json`. From Python:
 
-## 2. Ingest
-
-<!-- check-docs: skip (needs the subset from step 1) -->
-```sh
-queuetruth ingest --format iex-deep-plus --venue iex \
-  --in .realdata/iex/20261009_DPLS.subset.SPY-AAPL-NVDA-TSLA.pcap.gz --out iex-20261009
-```
-
-or from Python:
-
-<!-- check-docs: skip (needs the subset from step 1) -->
+<!-- check-docs: skip (streams a whole IEX day, several GB) -->
 ```python
 import queuetruth as qt
 
-qt.ingest({
-    "format": "iex_deep_plus",
-    "venue": "iex",
-    "inputs": [{"path": ".realdata/iex/20261009_DPLS.subset.SPY-AAPL-NVDA-TSLA.pcap.gz"}],
-    "out": "iex-20261009",
-})
+qt.data.fetch_iex("2026-10-09", ["SPY", "AAPL", "NVDA", "TSLA"], out="iex-20261009", yes=True)
 ```
 
+The results below were made with the repository script `scripts/iex/stream_subset.py`, which writes the same kind of
+filtered pcap and a manifest (source URL, sha256 of the stream, the full stream's gap and duplicate counts) without
+ingesting it; `queuetruth data add` then reads that pcap.
+
+## 2. What the dataset holds
+
 Instrument ids are assigned per symbol in order of first appearance in the file. Records go to the US/Eastern date of
-their timestamp; the tick defaults to 0.01 (pass `--tick-size` to change it). `data_quality.json` lists the IEX
+their timestamp; the tick defaults to 0.01 (`queuetruth ingest --tick-size` sets another). `data_quality.json` lists the IEX
 counters: `iex_modify_maintain_priority` and `iex_modify_reset_priority` (volumes, information only), and anomalies
 such as `iex_unknown_order_ref` or `iex_modify_maintain_unrepresentable` (a maintain-priority modify that also changed
 the price or raised the size, which queuetruth records cannot express; written as a priority loss and counted).
 
 ## 3. Replay with the rank oracle
 
-<!-- check-docs: skip (needs the dataset from step 2) -->
+<!-- check-docs: skip (needs the dataset from step 1) -->
 ```sh
 queuetruth replay --data iex-20261009 --out iex-20261009-replay --rank-oracle
 ```
@@ -145,8 +135,7 @@ terms (see [Data and licensing](../data-and-licensing.md)) and download a file y
 
 <!-- check-docs: skip (needs a downloaded ITCH file) -->
 ```sh
-queuetruth ingest --format itch --in 01302020.NASDAQ_ITCH50.gz --venue nasdaq --date 2020-01-30 \
-    --symbols AAPL,MSFT,SPY,TSLA --out nasdaq-20200130
+queuetruth data add 01302020.NASDAQ_ITCH50.gz --symbols AAPL,MSFT,SPY,TSLA --out nasdaq-20200130
 queuetruth replay --data nasdaq-20200130 --out replay-20200130 --rank-oracle --parity-trades
 ```
 

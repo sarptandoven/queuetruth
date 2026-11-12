@@ -1209,6 +1209,7 @@ def main(argv: list[str] | None = None) -> int:
         "cert",
         "reconcile",
         "check",
+        "data",
     )
     i = 0
     while i < len(args) and args[i].startswith("-") and args[i] != "--":
@@ -1242,6 +1243,10 @@ def main(argv: list[str] | None = None) -> int:
     from queuetruth.check.cli import maybe_main as check_main  # `check` (Python-only grammar)
 
     if (rc := check_main(args)) is not None:
+        return rc
+    from queuetruth.data.cli import maybe_main as data_main  # `data add`, `data fetch` (Python-only grammar)
+
+    if (rc := data_main(args)) is not None:
         return rc
     json_out = _wants_json(args)
     try:

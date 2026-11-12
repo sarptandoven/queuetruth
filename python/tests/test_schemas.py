@@ -612,7 +612,7 @@ def test_v1_1_documents_accept_v0_1() -> None:
             "qt.scorecard_summary",
             ["n_twin_unmatched", "twin_match_rate", "discordance_clustered", "n_taker_fills", "fills_only", "pnl_gap"],
         ),
-        ("qt.dataset_manifest", ["rule_set", "source_vintage"]),
+        ("qt.dataset_manifest", ["rule_set", "source_vintage", "attribution"]),
         (
             "qt.live_import_summary",
             ["coverage", "entry_fallback_share", "unmapped_instruments", "instrument_scales"],

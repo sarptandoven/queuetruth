@@ -43,6 +43,10 @@ check(*args: Any, **kwargs: Any) -> Any
 
 `queuetruth check`: how wrong is a backtest, in one command.
 
+### `data`
+
+Subpackage `queuetruth.data`, listed below.
+
 ### `export` **SPEC 4.3**
 
 ```python
@@ -252,6 +256,20 @@ Interactive replay session: `.advance_to(ts)`, `.bbo(inst)`, `.depth(inst, n)`, 
 | `take_fills` | `(self) -> pa.Table` | Shadow fills since the last call (`qt.shadow_fills`); if building the table fails, they stay for the next. |
 | `take_results` | `(self) -> pa.Table` | Results of the shadows that ended since the last call (`qt.shadow_results`). |
 | `with_orders` | `(spec: s.ReplaySpec \| dict[str, Any]) -> Session` | A session that also takes shadow orders while it runs. Every partition replays as `replay` would replay it with this spec (latency model and seed, fill rule, hidden-print policy, exclusions, the dataset's feed gaps and trading halts); `shadows` and `amends` stay unset, orders come from `submit`, `cancel` and `amend`, each at or after `position`. The session reads the data once however many orders it takes, and its fills and results equal those of one `replay` with every order in its input. |
+
+## `queuetruth.data`
+
+`queuetruth data`: bring order-level data in, in one command.
+
+| Name | Kind | Binding | Signature | Description |
+|---|---|---|---|---|
+| `add` | function |  | `(files: str \| Path \| Sequence[str \| Path], out: str \| Path, *, format: str \| None = None, venue: str \| None = None, date: str \| None = None, symbols: Sequence[str] \| None = None, attribution: list[dict[str, Any]] \| None = None, say: Say \| None = None) -> DataResult` | Ingests `files` into the dataset `out` (module docstring). An existing dataset at `out` keeps its days and gains the new ones (a day it already holds is `QT-INPUT-002`). `format`, `venue` and `date` override what is inferred (`date` is YYYY-MM-DD; for formats whose records carry dates it puts every record in that session); `symbols` keeps only those symbols; `attribution` entries are recorded in the dataset manifest. |
+| `DataResult` | class |  | | The answer of `data add` / `data fetch iex`: `summary` is the one-line answer, `doc` the full document, `rows` one row per session date and symbol in human units. |
+| `detect` | function |  | `(path: str \| Path, *, format: str \| None = None, venue: str \| None = None, date: str \| None = None) -> Detected` | What `path` is (module docstring). Given values win; `QT-USAGE-001` names what could not be inferred and why; `QT-INPUT-001` for a missing path. |
+| `Detected` | class |  | | One input: what it is and how that was decided (`how`: format, venue and date, each in plain words). |
+| `fetch_iex` | function |  | `(date: str \| dt.date, symbols: Sequence[str] \| str, out: str \| Path \| None = None, *, yes: bool = False, confirm: Callable[[FetchPlan], bool] \| None = None, progress: Progress \| None = None, say: Callable[[str], None] \| None = None, url: str \| None = None, min_free_bytes: int = 2147483648) -> DataResult` | Fetches one IEX DEEP+ day's `symbols` into the dataset `out` (default `iex-<date>`; an existing dataset gains the day). Downloads only with `yes` or when `confirm(plan)` returns True, else `QT-USAGE-001`. `url` streams another location (a mirror, or a local test server) instead of IEX's bucket. |
+| `FetchPlan` | class |  | | What `fetch_iex` would do (no I/O): the day, symbols, URL and output dataset. |
+| `plan_fetch` | function |  | `(date: str \| dt.date, symbols: Sequence[str] \| str, out: str \| Path \| None = None, *, url: str \| None = None) -> FetchPlan` | The plan of a fetch (module docstring); `QT-USAGE-001` for a bad date or symbol, or a day in the future. |
 
 ## `queuetruth.stats`
 

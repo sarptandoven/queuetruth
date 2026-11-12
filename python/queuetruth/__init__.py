@@ -39,9 +39,13 @@ from queuetruth.errors import QtApiError, QtError
 #: Attributes imported on first access (PEP 562): `HazardModel` pulls in scikit-learn (about 1 s), which no CLI
 #: command but `fit-hazard` needs.
 _LAZY = {"HazardModel": "queuetruth.model"}
+#: Subpackages imported on first access: `qt.data` (`queuetruth data add`, `data fetch iex`).
+_LAZY_MODULES = {"data": "queuetruth.data"}
 
 
 def __getattr__(name: str) -> Any:
+    if name in _LAZY_MODULES:
+        return importlib.import_module(_LAZY_MODULES[name])
     target = _LAZY.get(name)
     if target is None:
         raise AttributeError(f"module 'queuetruth' has no attribute {name!r}")
@@ -51,7 +55,7 @@ def __getattr__(name: str) -> Any:
 
 
 def __dir__() -> list[str]:
-    return sorted({*globals(), *_LAZY})
+    return sorted({*globals(), *_LAZY, *_LAZY_MODULES})
 
 
 _CALLABLE_NAMES = ("score", "report", "export", "check")
@@ -96,6 +100,7 @@ __all__ = [
     "calibrate",
     "calibrate_live",
     "check",
+    "data",
     "export",
     "extract_features",
     "fit_hazard",
