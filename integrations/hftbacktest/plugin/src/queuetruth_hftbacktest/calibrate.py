@@ -11,7 +11,10 @@ the one with the largest training likelihood (the families' likelihoods have dif
 
 The winner's code is queuetruth's own `queuetruth export hftbacktest` snippet (`hbt_queue_model.py` in `out`): a
 `BacktestAsset` chain with the fitted `.power_prob_queue_model*(n)` and the exchange model of the fit, under a
-header with the fit, its intervals and the held-out verdict. It defines `asset`, so it also works as the `snippet`
+header with the fit, its intervals and the held-out verdict. The exchange is `no_partial`
+(`.no_partial_fill_exchange()`) by default, the one that runs on the released hftbacktest 2.4.4; `exchange="partial"`
+fits and writes `.partial_fill_exchange()`, which 2.4.4 stops on with error 14 (hftbacktest #312), so use it only on
+a build with the fix. It defines `asset`, so it also works as the `snippet`
 of `queuetruth_hftbacktest.run`, which runs it in hftbacktest itself on orders `score` then checks.
 
 When every family is refused, `HbtCalibration.code` raises `CalibrationRefused` (`QT-CALIB-001`); with
@@ -264,7 +267,7 @@ def calibrate(
     out: str | Path,
     orders: str | Path | None = None,
     families: tuple[str, ...] | list[str] = FAMILIES,
-    exchange: str = "partial",
+    exchange: str = "no_partial",
     horizon_ns: int = HORIZON_NS,
     n_orders: int = 2000,
     seed: int = 0,
@@ -274,7 +277,8 @@ def calibrate(
 ) -> HbtCalibration:
     """Fit hftbacktest's ProbQueue `n` per family on `train`, score it on `test`, pick the winner and write its code
     (module doc). `orders` (a `qt.shadow_spec` file) are the orders the fit uses; without them `n_orders` are sampled
-    with `seed`. `exchange` is `partial` (`partial_fill_exchange`) or `no_partial`. Writes `cal-<family>/`, the
+    with `seed`. `exchange` is `no_partial` (`no_partial_fill_exchange`, runs on the released hftbacktest 2.4.4) or
+    `partial` (`partial_fill_exchange`: 2.4.4 stops on it with error 14, hftbacktest #312). Writes `cal-<family>/`, the
     sampled `shadows.parquet`, `hbt_calibration.json` and `hbt_queue_model.py` to `out`."""
     import queuetruth as qt
 
@@ -335,6 +339,12 @@ def calibrate(
             }
             summ = qt.export(spec, force=forced)
         code = summ.text
+        if exchange == "partial" and code is not None and "    .no_partial_fill_exchange()\n" in code:
+            # queuetruth 0.4 writes no_partial unless asked: ask for the fitted partial exchange (with its #312 note)
+            from queuetruth.export import hftbacktest_snippet, load_calibration
+
+            code = hftbacktest_snippet(load_calibration(best.path), exchange="partial")
+            (out / "hbt_queue_model.py").write_text(code, encoding="utf-8")
     res = HbtCalibration(
         fits=fits, best=best, forced=forced, horizon_ns=int(horizon_ns), out=out, shadows=shadows, _code=code
     )

@@ -4,8 +4,12 @@ Builder per family: power -> `power_prob_queue_model(n)`, power2 -> `power_prob_
 `power_prob_queue_model3(n)`, databento with `-1 < k <= 0` -> `power_prob_queue_model3(1/(1+k))` (expected-value
 approximation of the Monte Carlo estimator), log -> `log_prob_queue_model()`, log2 -> `log_prob_queue_model2()`,
 risk_adverse -> `risk_adverse_queue_model()`. Families without an hbt equivalent (databento with `k > 0`, the NT
-touch families, latency-only results) omit the builder line and say so in the notes. The exchange follows the fit's
-`exchange` (`partial` default); `.intp_order_latency("<npz>")` is added when the result carries a latency npz.
+touch families, latency-only results) omit the builder line and say so in the notes. The exchange is
+`no_partial_fill_exchange` by default, the one that runs on the released hftbacktest 2.4.4: with
+`partial_fill_exchange` 2.4.4 stops the backtest with error 14 (hftbacktest #312). `exchange="partial"` keeps
+`partial_fill_exchange` as an explicit choice; the header then says what #312 does, and a fit that simulated
+`partial` while the snippet uses `no_partial` says so too. `.intp_order_latency("<npz>")` is added when the result
+carries a latency npz.
 
 Header (trader review D1, D2): after the SPEC 5.10 run and data lines, the fit (estimate, events, CIs) and the
 held-out comparison with the default (`queuetruth.export.trust`) are stated; a calibration the export refuses also
@@ -16,6 +20,7 @@ from __future__ import annotations
 
 import math
 
+from queuetruth.errors import QtError
 from queuetruth.export import trust
 from queuetruth.export._text import (
     VERSION,
@@ -39,6 +44,9 @@ FIXED_BUILDERS = {
     "risk_adverse": "risk_adverse_queue_model",
 }
 EXCHANGES = {"partial": "partial_fill_exchange", "no_partial": "no_partial_fill_exchange"}
+#: The exchange a snippet uses unless the caller asks for another: the one that runs on the released hftbacktest.
+DEFAULT_EXCHANGE = "no_partial"
+HBT_312_URL = "https://github.com/nkaz001/hftbacktest/issues/312"
 
 NOTE_316 = (
     "hftbacktest #316/#312: released versions apply partial fills of resting orders to position only when the order "
@@ -125,15 +133,40 @@ def param_text(cal: CalibrationResult) -> str:
     return f"{cal.param_name or 'parameter'} = {g6(cal.estimate)}"
 
 
-def hftbacktest_snippet(cal: CalibrationResult) -> str:
-    """Paste-ready hftbacktest `BacktestAsset` chain (SPEC 5.10 layout plus the fit / held-out header lines)."""
+def exchange_lines(fitted: str, chosen: str) -> list[str]:
+    """Header lines on the exchange model: why `partial` stops the released hftbacktest (#312), and that the
+    snippet's exchange differs from the fit's. Empty when both are `no_partial`."""
+    if chosen == "partial":
+        return [
+            "# exchange: partial_fill_exchange, chosen explicitly. The released hftbacktest 2.4.4 stops the backtest",
+            "# on it with error 14 (hftbacktest #312): run it on a build with the fix, or use",
+            "# .no_partial_fill_exchange().",
+            f"# #312: {HBT_312_URL}",
+        ]
+    if fitted == "partial":
+        return [
+            "# exchange: no_partial_fill_exchange, which runs on the released hftbacktest 2.4.4. The fit simulated",
+            "# partial_fill_exchange; the two differ only when a fill is smaller than the order (no_partial fills it",
+            "# whole). 2.4.4 stops on partial_fill_exchange with error 14 (hftbacktest #312): use it only on a build",
+            f"# with the fix. #312: {HBT_312_URL}",
+        ]
+    return []
+
+
+def hftbacktest_snippet(cal: CalibrationResult, exchange: str | None = None) -> str:
+    """Paste-ready hftbacktest `BacktestAsset` chain (SPEC 5.10 layout plus the fit / held-out header lines).
+    `exchange` is `no_partial` (default, runs on the released hftbacktest 2.4.4) or `partial` (hftbacktest #312)."""
+    chosen = DEFAULT_EXCHANGE if exchange is None else exchange.replace("-", "_")
+    if chosen not in EXCHANGES:
+        raise QtError("QT-CONFIG-001", f"exchange: expected partial or no_partial, got {exchange!r}")
+    fitted = spec_value(cal, "exchange", "partial")
     call, _ = builder_call(cal)
-    exchange = EXCHANGES.get(spec_value(cal, "exchange", "partial"), "partial_fill_exchange")
     lines = [
         f"# queuetruth {VERSION} | calibration {cal.run_id} | {cal.family} fitted on {window_text(cal.train)}; "
         f"held-out {window_text(cal.test)}",
         f"# data: {data_sources_text(cal)}",
         *trust.header_lines(cal, param_text(cal)),
+        *exchange_lines(fitted, chosen),
         "# Paste into your existing BacktestAsset chain (keep your data/tick/lot/fee settings).",
         "from hftbacktest import BacktestAsset",
         "asset = (",
@@ -142,7 +175,7 @@ def hftbacktest_snippet(cal: CalibrationResult) -> str:
     ]
     if call is not None:
         lines.append(f"    .{call}")
-    lines.append(f"    .{exchange}()")
+    lines.append(f"    .{EXCHANGES[chosen]}()")
     if cal.exports.latency_npz is not None:
         lines.append(f"    .intp_order_latency({_py_str(cal.exports.latency_npz)})")
     lines.append(")")

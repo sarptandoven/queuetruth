@@ -1,6 +1,7 @@
 """Schedule-replay adapters (trader review F11): schedule -> actions, units, the generated hftbacktest script (run end
-to end in a separate hftbacktest 2.4.4 venv when one exists) and the generated NautilusTrader strategy (driven by a stub
-of the documented NT API, since nautilus_trader is not installed and its code is LGPL); both outputs are imported
+to end in a separate hftbacktest 2.4.4 venv when one exists) and the generated NautilusTrader strategy (driven here by
+a stub of the documented 1.x and 2.x names, since nautilus_trader is not installed and its code is LGPL; the real
+1.231.0 and 2.x engines run it in integrations/nautilus/tests/test_replay_strategy.py); both outputs are imported
 with `queuetruth.live.import_sim`."""
 
 from __future__ import annotations
@@ -148,8 +149,10 @@ class _Enum:
         self.name = name
 
 
-def _stub_nautilus(monkeypatch, fills):
-    """Minimal stand-ins for the NT names the generated module uses; the 'venue' accepts and fills orders."""
+def _stub_nautilus(monkeypatch, fills, version="1.231.0"):
+    """Minimal stand-ins for the NT names the generated module uses, at the 1.x or the 2.x paths of `version`; the
+    'venue' accepts and fills orders. 2.x takes a ClientOrderId in modify_order and cancel_order, 1.x the order."""
+    nt2 = version.startswith("2.")
     mods = {
         n: types.ModuleType(n)
         for n in (
@@ -162,6 +165,7 @@ def _stub_nautilus(monkeypatch, fills):
             "nautilus_trader.trading.strategy",
         )
     }
+    mods["nautilus_trader"].__version__ = version
 
     class StrategyConfig:
         def __init_subclass__(cls, frozen=False, **kw):
@@ -239,11 +243,20 @@ def _stub_nautilus(monkeypatch, fills):
             order.is_open = True
             self._emit("OrderAccepted", order, venue_order_id=f"V{order.client_order_id.value}")
 
-        def modify_order(self, order, quantity=None, price=None):
+        def _order(self, target):
+            if nt2:
+                assert isinstance(target, _Ev) and hasattr(target, "value"), "2.x takes a ClientOrderId"
+                return self.orders[target.value]
+            assert hasattr(target, "client_order_id"), "1.x takes the order"
+            return target
+
+        def modify_order(self, target, quantity=None, price=None):
+            order = self._order(target)
             order.quantity, order.price = quantity, price
             self._emit("OrderUpdated", order, quantity=quantity, price=price, venue_order_id=None)
 
-        def cancel_order(self, order):
+        def cancel_order(self, target):
+            order = self._order(target)
             order.is_open = False
             self._emit("OrderCanceled", order)
 
@@ -263,22 +276,43 @@ def _stub_nautilus(monkeypatch, fills):
                 commission="0.01 USD",
             )
 
-    mods["nautilus_trader.config"].StrategyConfig = StrategyConfig
-    mods["nautilus_trader.model.enums"].OrderSide = types.SimpleNamespace(BUY=_Enum("BUY"), SELL=_Enum("SELL"))
-    mods["nautilus_trader.model.enums"].TimeInForce = types.SimpleNamespace(GTC=_Enum("GTC"))
-    mods["nautilus_trader.model.identifiers"].InstrumentId = InstrumentId
-    mods["nautilus_trader.trading.strategy"].Strategy = Strategy
+    side = types.SimpleNamespace(BUY=_Enum("BUY"), SELL=_Enum("SELL"))
+    tif = types.SimpleNamespace(GTC=_Enum("GTC"))
+    if nt2:  # 2.x: flat modules; StrategyConfig takes no class keywords (`frozen=True` raises TypeError)
+
+        class StrategyConfig2:
+            def __init_subclass__(cls):
+                super().__init_subclass__()
+
+            def __init__(self, **kw):
+                self.kw = kw
+
+        StrategyConfig = StrategyConfig2
+        for n in ("nautilus_trader.config", "nautilus_trader.model.enums", "nautilus_trader.model.identifiers"):
+            del mods[n]
+        model, trading = mods["nautilus_trader.model"], mods["nautilus_trader.trading"]
+        model.OrderSide, model.TimeInForce, model.InstrumentId, model.StrategyId = side, tif, InstrumentId, str
+        trading.Strategy, trading.StrategyConfig = Strategy, StrategyConfig
+        del mods["nautilus_trader.trading.strategy"]
+    else:
+        mods["nautilus_trader.config"].StrategyConfig = StrategyConfig
+        mods["nautilus_trader.model.enums"].OrderSide = side
+        mods["nautilus_trader.model.enums"].TimeInForce = tif
+        mods["nautilus_trader.model.identifiers"].InstrumentId = InstrumentId
+        mods["nautilus_trader.trading.strategy"].Strategy = Strategy
     for n, m in mods.items():
         monkeypatch.setitem(sys.modules, n, m)
     return Strategy
 
 
-def test_nautilus_strategy_replays_and_imports(tmp_path, monkeypatch):
+@pytest.mark.parametrize("version", ["1.231.0", "2.0.0rc9"])
+def test_nautilus_strategy_replays_and_imports(tmp_path, monkeypatch, version):
     text = nautilus_replay_strategy(LEGS, amends=AMENDS, units=UNITS, instrument_ids={1: "SYM1.SIM"})
     assert "from nautilus_trader.trading.strategy import Strategy" in text
+    assert "from nautilus_trader.trading import Strategy, StrategyConfig" in text
     assert "class ScheduleReplayStrategy(Strategy):" in text and "def on_order_event(self, event)" in text
     assert _literal(text, "INSTRUMENT_IDS") == {"1": "SYM1.SIM"}
-    _stub_nautilus(monkeypatch, None)
+    _stub_nautilus(monkeypatch, None, version)
     mod = types.ModuleType("qt_replay_strategy")
     exec(compile(text, "qt_replay_strategy.py", "exec"), mod.__dict__)
     events_path = tmp_path / "nt_events.jsonl"
@@ -334,7 +368,7 @@ EXCH, LOCAL, BUY, SELL = 1 << 31, 1 << 30, 1 << 29, 1 << 28
 
 
 def _hbt_python(repo_root: Path) -> Path | None:
-    env = os.environ.get("QT_HBT_PYTHON")
+    env = os.environ.get("QT_HBT_PY") or os.environ.get("QT_HBT_PYTHON")  # QT_HBT_PYTHON: the older name
     if env:
         return Path(env)
     for name in ("hbt-venv", "w3trust-hbt"):
@@ -363,7 +397,7 @@ def test_hftbacktest_replay_end_to_end(tmp_path, repo_root):
     cancel."""
     py = _hbt_python(repo_root)
     if py is None:
-        pytest.skip("hftbacktest venv missing (run `make hbt-crosscheck` or set QT_HBT_PYTHON)")
+        pytest.skip("hftbacktest venv missing (run `make hbt-crosscheck` or set QT_HBT_PY)")
     sched = tmp_path / "schedule.parquet"
     write_table(make_table("qt.shadow_spec", LEGS), sched)
     write_table(make_table("qt.shadow_amend", AMENDS), tmp_path / "schedule_amends.parquet")
@@ -448,7 +482,7 @@ def test_hftbacktest_replay_reports_fatal_error(tmp_path, repo_root):
     truncated run)."""
     py = _hbt_python(repo_root)
     if py is None:
-        pytest.skip("hftbacktest venv missing (run `make hbt-crosscheck` or set QT_HBT_PYTHON)")
+        pytest.skip("hftbacktest venv missing (run `make hbt-crosscheck` or set QT_HBT_PY)")
     sched = tmp_path / "schedule.parquet"
     write_table(make_table("qt.shadow_spec", LEGS), sched)
     script = tmp_path / "hbt_replay.py"
@@ -485,7 +519,7 @@ def test_hftbacktest_replay_reports_fatal_error(tmp_path, repo_root):
 def test_hftbacktest_script_requires_a_model(tmp_path, repo_root):
     py = _hbt_python(repo_root)
     if py is None:
-        pytest.skip("hftbacktest venv missing (run `make hbt-crosscheck` or set QT_HBT_PYTHON)")
+        pytest.skip("hftbacktest venv missing (run `make hbt-crosscheck` or set QT_HBT_PY)")
     script = tmp_path / "hbt_replay.py"
     replay_schedule("hftbacktest", script, schedule=LEGS, units=UNITS)
     _hbt_data(tmp_path / "data.npz")

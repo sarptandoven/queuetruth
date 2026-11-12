@@ -82,13 +82,17 @@ HBT_GOLDEN = f"""# queuetruth {V} | calibration 0123456789abcdef | power3 fitted
 # data: nasdaq (real_data, dataset abababababab)
 # fit: n = 2.34568 (alloc); 1000 events from 50 shadows; bootstrap CI [2, 2.7]; profile CI [2.1, 2.6]
 {HELD_LINE}
+# exchange: no_partial_fill_exchange, which runs on the released hftbacktest 2.4.4. The fit simulated
+# partial_fill_exchange; the two differ only when a fill is smaller than the order (no_partial fills it
+# whole). 2.4.4 stops on partial_fill_exchange with error 14 (hftbacktest #312): use it only on a build
+# with the fix. #312: https://github.com/nkaz001/hftbacktest/issues/312
 # Paste into your existing BacktestAsset chain (keep your data/tick/lot/fee settings).
 from hftbacktest import BacktestAsset
 asset = (
     BacktestAsset()
     # ... your existing .data(...), .tick_size(...), .lot_size(...), fee model ...
     .power_prob_queue_model3(2.34568)
-    .partial_fill_exchange()
+    .no_partial_fill_exchange()
     .intp_order_latency("lat/latency.npz")
 )
 """
@@ -155,9 +159,25 @@ def test_hftbacktest_builders(family, pname, est, exch, line):
     lines = _code_lines(text)
     assert lines[:3] == ["from hftbacktest import BacktestAsset", "asset = (", "    BacktestAsset()"]
     assert lines[3] == line
-    assert lines[4] == ("    .no_partial_fill_exchange()" if exch == "no_partial" else "    .partial_fill_exchange()")
+    assert lines[4] == "    .no_partial_fill_exchange()"
     assert lines[5] == ")" and "intp_order_latency" not in text
+    assert ("The fit simulated\n# partial_fill_exchange" in text) == (exch == "partial")
     compile(text, "snippet", "exec")
+
+
+@pytest.mark.parametrize("fitted", ["partial", "no_partial"])
+def test_hftbacktest_partial_exchange_is_an_explicit_choice(fitted):
+    """`no_partial` runs on the released hftbacktest 2.4.4 and is the default; `partial` is kept as an explicit
+    choice, with hftbacktest #312 stated in the header."""
+    c = cal(spec={"exchange": fitted})
+    text = hftbacktest_snippet(c, exchange="partial")
+    assert _code_lines(text)[4] == "    .partial_fill_exchange()"
+    assert "# exchange: partial_fill_exchange, chosen explicitly." in text and "error 14 (hftbacktest #312" in text
+    assert _code_lines(hftbacktest_snippet(c, exchange="no-partial"))[4] == "    .no_partial_fill_exchange()"
+    if fitted == "no_partial":
+        assert "# exchange:" not in hftbacktest_snippet(c)
+    with pytest.raises(QtError, match="QT-CONFIG-001"):
+        hftbacktest_snippet(c, exchange="full")
 
 
 @pytest.mark.parametrize(
@@ -166,7 +186,7 @@ def test_hftbacktest_builders(family, pname, est, exch, line):
 def test_hftbacktest_builder_omitted_with_note(family, est):
     c = cal(family=family, param_name="k", estimate=est)
     text = hftbacktest_snippet(c)
-    assert "_queue_model" not in text and "    .partial_fill_exchange()" in text
+    assert "_queue_model" not in text and "    .no_partial_fill_exchange()" in text
     assert "nan" not in text.lower().replace("nautilus", "")
     notes = hftbacktest_notes(c)
     assert any("omitted" in n for n in notes)
@@ -522,7 +542,7 @@ def test_snippet_header_states_window_events_and_held_out():
 
 
 def _hbt_python(repo_root: Path) -> Path | None:
-    env = os.environ.get("QT_HBT_PYTHON")
+    env = os.environ.get("QT_HBT_PY") or os.environ.get("QT_HBT_PYTHON")  # QT_HBT_PYTHON: the older name
     if env:
         return Path(env)
     for name in ("hbt-venv", "w3trust-hbt"):
@@ -534,11 +554,11 @@ def _hbt_python(repo_root: Path) -> Path | None:
 
 @pytest.mark.parametrize("family", ["power", "power2", "power3", "databento", "log", "log2", "risk_adverse"])
 def test_hftbacktest_snippet_runs_in_hftbacktest(family, tmp_path, repo_root):
-    """Executes the snippet in hftbacktest 2.4.4 (separate venv: `make hbt-crosscheck` or QT_HBT_PYTHON) and runs a
+    """Executes the snippet in hftbacktest 2.4.4 (separate venv: `make hbt-crosscheck` or QT_HBT_PY) and runs a
     tiny backtest with it, including the generated IntpOrderLatency npz."""
     py = _hbt_python(repo_root)
     if py is None:
-        pytest.skip("hftbacktest venv missing (run `make hbt-crosscheck` or set QT_HBT_PYTHON)")
+        pytest.skip("hftbacktest venv missing (run `make hbt-crosscheck` or set QT_HBT_PY)")
     live = _live(tmp_path)
     npz = tmp_path / "lat.npz"
     write_latency_npz(str(live), str(npz))
