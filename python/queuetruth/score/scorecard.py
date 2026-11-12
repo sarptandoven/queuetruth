@@ -76,6 +76,7 @@ from queuetruth.schemas.arrow import ENGINE_VERSION
 from queuetruth.schemas.io import write_table
 from queuetruth.schemas.models import DataQuality, ScorecardSummary
 from queuetruth.schemas.runid import run_id, spec_echo
+from queuetruth.schemas.schedule import amend_table, schedule_table
 from queuetruth.schemas.specs import PathRef, ReplaySpec, ScorecardSpec, ZooSpec
 from queuetruth.score._dataset import DatasetView
 from queuetruth.score._io import (
@@ -455,10 +456,10 @@ def traced_trajectory(
     ids = {str(r["shadow_id"]) for r in legs}
     with tempfile.TemporaryDirectory(prefix="qt-score-traced-") as tmp:
         work = Path(tmp)
-        write_table(make_table("qt.shadow_spec", legs), work / "schedule.parquet")
+        write_table(schedule_table(legs), work / "schedule.parquet")
         am = [a for a in amends if str(a["shadow_id"]) in ids]
         if am:
-            write_table(make_table("qt.shadow_amend", am), work / "amends.parquet")
+            write_table(amend_table(am), work / "amends.parquet")
         sub = zs.model_copy(
             update={
                 "shadows": PathRef(path=str(work / "schedule.parquet")),
@@ -554,10 +555,10 @@ def build_scorecard(
         sched_path = amend_path = None
         if schedule:
             sched_path = work / "schedule.parquet"
-            write_table(make_table("qt.shadow_spec", schedule), sched_path)
+            write_table(schedule_table(schedule), sched_path)
             if amends:
                 amend_path = work / "amends.parquet"
-                write_table(make_table("qt.shadow_amend", amends), amend_path)
+                write_table(amend_table(amends), amend_path)
         ex_oc: dict[str, Outcome] = {}
         raced: set[str] = set()
         twins = None
@@ -592,7 +593,7 @@ def build_scorecard(
                 eng_sched, n_moved = align_to_twins(eng_sched, twins, twin_entry_points(ds.root, twins.ids))
                 eng_sched, n_ties = order_twin_ties(ds.root, eng_sched, twins)
             if n_slid or n_moved or n_ties:
-                write_table(make_table("qt.shadow_spec", eng_sched), sched_path)
+                write_table(schedule_table(eng_sched), sched_path)
             if n_slid:
                 warnings.append(
                     f"self_exclusion: {n_slid} order(s) matched by venue order id to a twin displayed at another price "
@@ -953,7 +954,7 @@ def build_scorecard(
             for g in gap:
                 g["headline"] = "BLOCKED: own resting orders are in the L2 depth; " + g["headline"]
         if schedule:
-            files.append(write(make_table("qt.shadow_spec", schedule), out / "schedule.parquet"))
+            files.append(write(schedule_table(schedule), out / "schedule.parquet"))
         if zoo_arm_spec is not None and ds is not None and ds.kind != "l2":
             entry = traced_trajectory(rn, zoo_arm_spec, order_rows, schedule, amends, out)
             if entry is not None:

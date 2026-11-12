@@ -89,6 +89,7 @@ from pydantic import Field, field_validator
 from queuetruth.dataset import open_dataset, read_manifest_doc
 from queuetruth.errors import QtError
 from queuetruth.eval import _cols as C
+from queuetruth.eval.markouts import PricePath, bps, markouts, ticks
 from queuetruth.eval.zoo import PARTICLE_FAMILIES, _planned_life, aborted_shadows, common_population, family
 from queuetruth.integrity import canonical_json
 from queuetruth.schemas import arrow as qa
@@ -325,15 +326,6 @@ def model_mechanism(reason: np.ndarray) -> np.ndarray:
 # ---- quotes and markouts -----------------------------------------------------------------------------------------
 
 
-@dataclass
-class _Day:
-    ts: np.ndarray
-    bid: np.ndarray
-    ask: np.ndarray
-    ok: np.ndarray
-    last: int
-
-
 def _groups(*keys: np.ndarray) -> list[tuple[tuple[int, ...], np.ndarray]]:
     """Row indices per distinct key tuple (one sort, contiguous slices), keys ascending."""
     n = keys[0].size
@@ -371,7 +363,7 @@ class QuoteBook:
         bid, bidv = C.ints(bbo, "bid_px")
         ask, askv = C.ints(bbo, "ask_px")
         b_date, _, known = self.day(b_iid, b_ts)
-        self._days: dict[tuple[int, int], _Day] = {}
+        self._days: dict[tuple[int, int], PricePath] = {}
         last = dict(last_event_ts or {})
         keep = np.flatnonzero(known)
         order = keep[np.lexsort((keep, b_ts[keep], b_date[keep], b_iid[keep]))]
@@ -380,13 +372,14 @@ class QuoteBook:
             cut = np.flatnonzero((np.diff(ki) != 0) | (np.diff(kd) != 0)) + 1
             for g in np.split(order, cut):
                 key = (int(b_iid[g[0]]), int(b_date[g[0]]))
-                self._days[key] = _Day(
-                    ts=b_ts[g],
-                    bid=bid[g],
-                    ask=ask[g],
-                    ok=bidv[g] & askv[g],
-                    last=int(last.get(key, int(b_ts[g][-1]))),
+                self._days[key] = PricePath(
+                    b_ts[g], bid[g], ask[g], ok=bidv[g] & askv[g], end=int(last.get(key, int(b_ts[g][-1])))
                 )
+
+    @property
+    def paths(self) -> dict[tuple[int, int], PricePath]:
+        """The mid path of each (instrument_id, session_date) with quotes."""
+        return self._days
 
     def day(self, instrument_id: np.ndarray, ts: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """(session_date days, tick_size, known) of the instrument-day of each timestamp: the `qt.instruments` row
@@ -419,12 +412,11 @@ class QuoteBook:
             d = self._days.get((key[0], key[1]))
             if d is None:
                 continue
-            j = np.searchsorted(d.ts, at[g], side="left" if strict else "right") - 1
-            jj = np.clip(j, 0, None)
-            good = (j >= 0) & d.ok[jj]
+            j = d.index(at[g], strict=strict)
+            b, a, _, good = d.rows(j, "mid")
             if end_check:
-                good &= at[g] <= d.last
-            bid[g], ask[g], ok[g] = d.bid[jj], d.ask[jj], good
+                good &= at[g] <= d.end
+            bid[g], ask[g], ok[g] = b, a, good
         return bid, ask, ok
 
 
@@ -438,7 +430,7 @@ def mid_markouts(
     horizons_ns: list[int] | tuple[int, ...],
 ) -> dict[str, np.ndarray]:
     """`mo_ticks`, `mo_bps`, `mm_ticks`, `mm_bps` of each fill at each horizon, `(n, H)` float arrays with NaN where
-    undefined (module docstring)."""
+    undefined (module docstring), from `queuetruth.eval.markouts` on the book's mid paths."""
     iid = np.asarray(instrument_id, dtype=np.int64)
     ts = np.asarray(ts, dtype=np.int64)
     d = np.asarray(side_sign, dtype=float)
@@ -451,23 +443,17 @@ def mid_markouts(
     if not known.all():
         missing = sorted({int(x) for x in iid[~known]})
         raise QtError("QT-INPUT-002", f"instruments: no instrument-day for instrument_id {missing}")
-    b0, a0, ok0 = book.quote(iid, date, ts, strict=True, end_check=False)
-    m0 = b0.astype(float) + (a0 - b0).astype(float) * 0.5
-    tk = tick.astype(float)
     pv = np.asarray(px_valid, dtype=bool)
-    absp = np.abs(p).astype(float)
-    for k, h in enumerate(horizons_ns):
-        b1, a1, ok1 = book.quote(iid, date, ts + int(h), strict=False, end_check=True)
-        mo = (b1 - p).astype(float) + (a1 - b1).astype(float) * 0.5
-        mm = (b1 - b0).astype(float) + ((a1 - b1) - (a0 - b0)).astype(float) * 0.5
-        good = ok1 & pv
-        out["mo_ticks"][good, k] = d[good] * mo[good] / tk[good]
-        gb = good & (absp > 0)
-        out["mo_bps"][gb, k] = d[gb] * mo[gb] / absp[gb] * 1e4
-        gm = ok1 & ok0
-        out["mm_ticks"][gm, k] = d[gm] * mm[gm] / tk[gm]
-        gmb = gm & (m0 > 0)
-        out["mm_bps"][gmb, k] = d[gmb] * mm[gmb] / m0[gmb] * 1e4
+    keys = list(zip(iid.tolist(), date.tolist(), strict=True))
+    mk = markouts(book.paths, ts, d, p, list(horizons_ns), keys=keys, px_valid=pv)
+    tk = tick.astype(float)[:, None]
+    absp = np.abs(p).astype(float)[:, None]
+    m0 = mk.pre[:, None]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        out["mo_ticks"] = ticks(mk.mo, tk)
+        out["mo_bps"] = np.where(absp > 0, bps(mk.mo, absp), np.nan)
+        out["mm_ticks"] = ticks(mk.mm, tk)
+        out["mm_bps"] = np.where(m0 > 0, bps(mk.mm, m0), np.nan)
     return out
 
 
@@ -1458,8 +1444,7 @@ def run_zoo_toxicity(spec: ToxicitySpec | dict[str, Any]) -> Any:
     from queuetruth import api
     from queuetruth.schemas import models as m
     from queuetruth.schemas.io import sha256_file, write_table
-    from queuetruth.schemas.runid import run_id, spec_echo
-    from queuetruth.score._io import resolve_ref
+    from queuetruth.schemas.runid import resolve_ref, run_id, spec_echo
 
     sp = api._validate(ToxicitySpec, spec)
     zoo = Path(sp.zoo.path)

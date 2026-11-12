@@ -63,6 +63,7 @@ import numpy as np
 import pyarrow as pa
 
 from queuetruth import stats
+from queuetruth.eval.markouts import PricePath
 from queuetruth.schemas.arrow import DICT_VALUES as _ALL_DICT_VALUES
 from queuetruth.schemas.arrow import SCHEMAS
 from queuetruth.score._io import config_error, input_format, make_table, rows
@@ -378,6 +379,9 @@ class Marks:
         last = dict(last_event_ts or {})
         self.ends = [last.get(k, int(b.ts[-1])) for k, b in zip(self.keys, self.books, strict=True)]
         self.past_end = past_end
+        #: each group's times as a markout path, for the as-of and end rules of `queuetruth.eval.markouts` (only its
+        #: times are read: the marks themselves stay exact integers, `2 M`, module docstring)
+        self.paths = [PricePath(b.ts, b.ts, b.ts, end=e) for b, e in zip(self.books, self.ends, strict=True)]
 
     def inst(self, iid: int | None, ts: int) -> Any:
         """Instrument-day row of `ts` (`markouts.InstrumentDays.lookup`), None when unknown."""
@@ -424,20 +428,11 @@ class Marks:
 
     def pre_many(self, book: np.ndarray, ts: np.ndarray) -> list[int | None]:
         """`2 M(t-)` of each fill: the last quote strictly before `t` (no end-of-data check)."""
-        return self._gather(book, ts, lambda b, t: np.searchsorted(self.books[b].ts, t, side="left") - 1)
+        return self._gather(book, ts, lambda b, t: self.paths[b].index(t, strict=True))
 
     def post_many(self, book: np.ndarray, ts: np.ndarray, h: int) -> list[int | None]:
-        """`2 M(t + h)` of each fill by the markout rule."""
-
-        def at(b: int, t: np.ndarray) -> np.ndarray:
-            q, end = self.books[b], self.ends[b]
-            th = t + int(h)
-            idx = np.searchsorted(q.ts, th, side="right") - 1
-            if self.past_end == "last_quote":
-                return np.where(th <= end, idx, np.searchsorted(q.ts, end, side="right") - 1)
-            return np.where(th <= end, idx, -1)
-
-        return self._gather(book, ts, at)
+        """`2 M(t + h)` of each fill by the markout rule (`queuetruth.eval.markouts.PricePath.mark_index`)."""
+        return self._gather(book, ts, lambda b, t: self.paths[b].mark_index(t + int(h), self.past_end))
 
     def pre(self, iid: int | None, t: int) -> int | None:
         """`2 M(t-)` of one time (`pre_many`)."""

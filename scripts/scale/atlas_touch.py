@@ -94,13 +94,16 @@ def first_reach(s: Any, start: Any, thr: Any) -> Any:
 
 def markout(ts: Any, px: Any, lim: Any, sign: Any, tick: int, t: Any, bar_ns: int, have: Any) -> Any:
     """Per order with `have`: `sign x (P(t + bar) - L) / tick`, P the last print (`ts`, `px`, sorted) at or before
-    one bar after `t`; 0 where `have` is false or no print came before."""
+    one bar after `t`; 0 where `have` is false or no print came before. The markout is
+    `queuetruth.eval.markouts.markouts` on the last-print path, uncensored."""
     import numpy as np
 
-    j = np.searchsorted(ts, np.where(have, t, 0) + bar_ns, side="right") - 1
-    ref = px[np.clip(j, 0, None)] if len(px) else lim
-    ref = np.where(j >= 0, ref, lim)
-    return np.where(have, sign * (ref - lim) / tick, 0.0)
+    from queuetruth.eval.markouts import PricePath, markouts, ticks
+
+    path = PricePath.prints(np.asarray(ts, dtype=np.int64), np.asarray(px, dtype=np.int64))
+    mo = markouts(path, np.where(have, t, 0), sign, lim, [bar_ns]).mo[:, 0]
+    # no print yet, or no fill: 0; `+ 0.0` keeps a zero markout of a sell at +0.0
+    return np.where(have & ~np.isnan(mo), ticks(mo, tick), 0.0) + 0.0
 
 
 def outcomes(results: Any, trades: Any, instruments: Any, spec: dict[str, Any]) -> Any:

@@ -45,8 +45,6 @@ queuetruth.dq -> queuetruth.api  # layer
 queuetruth.eval.toxicity -> queuetruth.api  # layer
 queuetruth.eval.toxicity -> queuetruth.api._planned_life  # private
 queuetruth.eval.toxicity -> queuetruth.api._validate  # private
-queuetruth.eval.toxicity -> queuetruth.score._io  # cycle
-queuetruth.eval.toxicity -> queuetruth.score._io.resolve_ref  # private
 queuetruth.export -> queuetruth.score._io.file_entry  # private
 queuetruth.export.latency -> queuetruth.score._io.file_entry  # private
 queuetruth.export.latency -> queuetruth.score._io.read_live_log  # private
@@ -98,7 +96,6 @@ queuetruth.pm.workdir -> queuetruth.score._io.read_live_log  # private
 queuetruth.report.sections_models -> queuetruth.export.trust  # layer
 queuetruth.report.why -> queuetruth.api  # layer
 queuetruth.sandbox.book -> queuetruth.score._io.make_table  # private
-queuetruth.sandbox.orders -> queuetruth.score._io.make_table  # private
 queuetruth.sandbox.scorecard -> queuetruth.score._io.rows  # private
 queuetruth.sandbox.session -> queuetruth.score._io.rows  # private
 queuetruth.schemas -> queuetruth.atlas._registry  # layer
@@ -112,7 +109,6 @@ queuetruth.score.calibrate_live -> queuetruth.export  # layer
 queuetruth.score.calibrate_live -> queuetruth.export.trust  # layer
 queuetruth.score.outcomes -> queuetruth.api  # layer
 queuetruth.score.runner -> queuetruth.api  # layer
-queuetruth.score.scorecard -> queuetruth.eval.impact  # cycle
 queuetruth.stats._seed -> queuetruth._core  # layer: seed derivation has one implementation, qt_types::stable_seed (W7 single-source contracts)
 scripts/oracle/disagreements.py -> sys.path += tests  # tests
 scripts/oracle/run_oracle.py -> sys.path += tests  # tests
