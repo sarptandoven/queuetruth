@@ -10,13 +10,14 @@ Hashing rules (the manifest contract, `docs/scale.md`):
   machine compares contents, not file bytes.
 - Merkle tree: leaves `sha256(b"\\x00" + canonical_json(leaf_doc))` in unit-id order; inner nodes
   `sha256(b"\\x01" + left + right)`; an odd node is carried up unchanged; the root of no leaves is sha256(b"").
+
+`canonical_json`, `sha256_hex`, `leaf_hash` and the Merkle functions live in `queuetruth.atlas.verify` (so
+`queuetruth verify atlas` checks with the same code) and are re-exported here.
 """
 
 from __future__ import annotations
 
 import hashlib
-import json
-import math
 import os
 import sys
 from collections.abc import Sequence
@@ -32,6 +33,16 @@ for _p in (REPO / "scripts" / "realdata", REPO / "scripts" / "repro", HERE):
 from breadth import HORIZONS, POPULATIONS, STD_PLACEMENTS, STD_QTY, TIERS  # noqa: E402
 from reproduce import build_info as _build_info  # noqa: E402
 from reproduce import free_gib, sha256_file  # noqa: E402
+
+# the hashing and the Merkle tree live in the package, so `queuetruth verify atlas` checks with the same code
+from queuetruth.atlas.verify import (  # noqa: E402
+    canonical_json,
+    leaf_hash,
+    merkle_proof,
+    merkle_root,
+    sha256_hex,
+    verify_proof,
+)
 
 S1 = 1_000_000_000
 H_MAX_NS = 300 * S1
@@ -77,25 +88,6 @@ def build_info() -> dict[str, Any]:
     return info
 
 
-def canonical_json(obj: Any) -> bytes:
-    def check(x: Any) -> None:
-        if isinstance(x, float) and not math.isfinite(x):
-            raise ValueError("canonical_json: NaN / inf are not allowed")
-        if isinstance(x, dict):
-            for v in x.values():
-                check(v)
-        elif isinstance(x, list | tuple):
-            for v in x:
-                check(v)
-
-    check(obj)
-    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
-
-
-def sha256_hex(b: bytes) -> str:
-    return hashlib.sha256(b).hexdigest()
-
-
 def table_digest(table: Any, keys: Sequence[str] = ()) -> str:
     """Row-order and writer independent sha256 of an Arrow table's contents (module docstring)."""
     import numpy as np
@@ -126,48 +118,3 @@ def table_digest(table: Any, keys: Sequence[str] = ()) -> str:
                 col = col.cast(pa.int32() if pa.types.is_date32(typ) else pa.int64())
             h.update(np.asarray(pc.fill_null(col.cast(pa.int64()), 0).to_numpy(), dtype="<i8").tobytes())
     return h.hexdigest()
-
-
-def leaf_hash(leaf_doc: dict[str, Any]) -> str:
-    return sha256_hex(b"\x00" + canonical_json(leaf_doc))
-
-
-def _level_up(level: list[bytes]) -> list[bytes]:
-    nxt = []
-    for i in range(0, len(level), 2):
-        if i + 1 < len(level):
-            nxt.append(hashlib.sha256(b"\x01" + level[i] + level[i + 1]).digest())
-        else:
-            nxt.append(level[i])
-    return nxt
-
-
-def merkle_root(leaves: Sequence[str]) -> str:
-    if not leaves:
-        return sha256_hex(b"")
-    level = [bytes.fromhex(x) for x in leaves]
-    while len(level) > 1:
-        level = _level_up(level)
-    return level[0].hex()
-
-
-def merkle_proof(leaves: Sequence[str], index: int) -> list[list[str]]:
-    """Sibling path of leaf `index`: `[["L" or "R", sibling hex], ...]` from the leaf up (carried nodes skipped)."""
-    level = [bytes.fromhex(x) for x in leaves]
-    path: list[list[str]] = []
-    i = index
-    while len(level) > 1:
-        sib = i ^ 1
-        if sib < len(level):
-            path.append(["L" if sib < i else "R", level[sib].hex()])
-        level = _level_up(level)
-        i //= 2
-    return path
-
-
-def verify_proof(leaf: str, proof: Sequence[Sequence[str]], root: str) -> bool:
-    h = bytes.fromhex(leaf)
-    for side, sib in proof:
-        s = bytes.fromhex(sib)
-        h = hashlib.sha256(b"\x01" + (s + h if side == "L" else h + s)).digest()
-    return h.hex() == root

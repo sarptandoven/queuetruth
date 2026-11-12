@@ -10,7 +10,14 @@ to the user cache directory, are checked against the sha256 in the manifest, and
 paste; `--json` (or `--format json`) prints the `qt.atlas_answer` document. A Python-only group: `queuetruth.cli.main`
 runs it before the clap grammar, which lists it (crates/cli/gen_python_commands.py).
 
-Exit codes (SPEC 0.2): 0 success, 2 any error.
+    queuetruth verify atlas [--from DIR_OR_URL] [--atlas-manifest FILE] [--day DATE_OR_DIR [--unit ID [--rerun]
+        [--split DIR] [--checkout DIR]]] [--yes] [--refresh] [--json]
+
+checks a published atlas without a checkout (`queuetruth.atlas.verify`): every API file against the manifest's
+sha256, the atlas root against the day roots, and with `--day` one day's leaves and proofs; `--unit ... --rerun`
+runs one unit again and compares its leaf. It prints what was checked, one line per check.
+
+Exit codes (SPEC 0.2): 0 success, 2 any error; `verify atlas` exits 1 when a check fails.
 """
 
 from __future__ import annotations
@@ -69,6 +76,64 @@ def parser() -> argparse.ArgumentParser:
     return root
 
 
+def verify_parser() -> argparse.ArgumentParser:
+    """The argument parser of `queuetruth verify atlas`."""
+    root = _Parser(prog="queuetruth", description="verify a published result")
+    root.add_argument("--format", "--output-format", dest="format", choices=["human", "json"], default="human")
+    root.add_argument("--quiet", action="store_true")
+    root.add_argument("--verbose", action="store_true")
+    root.add_argument("--log-level", choices=["error", "warn", "info", "debug"], default="warn")
+    root.add_argument("--threads", type=int, metavar="N")
+    root.add_argument("--seed", type=int, metavar="N")
+    sub = root.add_subparsers(dest="command", required=True, parser_class=_Parser)
+    v = sub.add_parser("verify", help="verify a published result: the Fill-Realism Atlas")
+    vs = v.add_subparsers(dest="what", required=True, parser_class=_Parser)
+    p = vs.add_parser(
+        "atlas",
+        help="check the published atlas: file hashes, the atlas root, a day's proofs, and re-run one unit",
+        description="Checks a published Fill-Realism Atlas without a checkout: every file of the data API against "
+        "the sha256 in its manifest, the atlas root against the day roots, and with --day one day's leaves and "
+        "Merkle proofs. With --unit and --rerun, runs that unit again and compares its leaf with the published one. "
+        "Asks before it downloads anything.",
+    )
+    p.add_argument(
+        "--from",
+        dest="source",
+        metavar="DIR_OR_URL",
+        help="a site or atlas/v1 directory, or the URL of a data API (default: the public atlas, cached)",
+    )
+    p.add_argument(
+        "--atlas-manifest",
+        metavar="FILE",
+        help="the site's data/atlas_manifest.json (default: read next to the API)",
+    )
+    p.add_argument(
+        "--day",
+        metavar="DATE_OR_DIR",
+        help="one day: a date of the atlas (its reduced day is downloaded from the release), a day directory or file",
+    )
+    p.add_argument("--unit", metavar="UNIT_ID", help="one unit of --day, e.g. 10092026-b000-u0001")
+    p.add_argument(
+        "--rerun",
+        action="store_true",
+        help="run --unit again and compare its leaf (needs a checkout at the day's build and the unit's bucket)",
+    )
+    p.add_argument(
+        "--split",
+        metavar="DIR",
+        help="the directory holding the unit's bucket (default: stream the public day file and keep that bucket)",
+    )
+    p.add_argument(
+        "--checkout",
+        metavar="DIR",
+        help="the queuetruth checkout whose scripts/scale/unit.py re-runs the unit (default: the current one)",
+    )
+    p.add_argument("--yes", "-y", action="store_true", help="download what the checks need without asking")
+    p.add_argument("--refresh", action="store_true", help="download the newest manifest even when a copy is cached")
+    p.add_argument("--json", action="store_true", help="print the qt.atlas_verify document (same as --format json)")
+    return root
+
+
 def command_word(argv: list[str]) -> str | None:
     """The first positional word of `argv` (skipping global flags and their values)."""
     i = 0
@@ -89,7 +154,13 @@ def maybe_main(argv: list[str]) -> int | None:
     word = command_word(argv)
     if word == "help":
         rest = [a for a in argv[argv.index("help") + 1 :] if not a.startswith("-")]
+        if rest[:2] == ["verify", "atlas"]:
+            return verify_main(["verify", "atlas", "--help"])
+        if rest[:1] == ["verify"]:
+            return verify_main(["verify", "--help"])
         return main(["atlas", "--help"]) if rest[:1] == ["atlas"] else None
+    if word == "verify":
+        return verify_main(argv)
     if word != "atlas":
         return None
     return main(argv)
@@ -101,18 +172,18 @@ def _ask(prompt: str) -> str:
     return sys.stdin.readline()
 
 
-def _confirm(interactive: bool) -> Any:
+def _confirm(interactive: bool, what: str = "atlas", local: str = "--from DIR") -> Any:
     def confirm(url: str) -> bool:
         if not interactive:
             raise QtError(
                 "QT-USAGE-001",
-                f"atlas: needs to download the atlas data API (a few MB) from {url.rsplit('/', 1)[0]}/",
-                "rerun with --yes to confirm the download, or --from DIR for a local copy",
+                f"{what}: needs to download the atlas data API (a few MB) from {url.rsplit('/', 1)[0]}/",
+                f"rerun with --yes to confirm the download, or {local} for a local copy",
             )
         from queuetruth.demo.cache import user_cache_dir
 
         print(
-            f"queuetruth atlas reads the public Fill-Realism Atlas: {url.rsplit('/', 1)[0]}/ (a few MB, checked "
+            f"queuetruth {what} reads the public Fill-Realism Atlas: {url.rsplit('/', 1)[0]}/ (a few MB, checked "
             f"against its manifest, cached in {user_cache_dir() / 'atlas'}).",
             file=sys.stderr,
         )
@@ -166,6 +237,57 @@ def main(argv: list[str]) -> int:
     return EXIT_OK
 
 
+def _json_wanted(argv: list[str]) -> bool:
+    return (
+        "--json" in argv
+        or any(a in ("--format=json", "--output-format=json") for a in argv)
+        or any(a in ("--format", "--output-format") and b == "json" for a, b in itertools.pairwise(argv))
+    )
+
+
+def verify_main(argv: list[str]) -> int:
+    """Runs `queuetruth verify atlas`; returns the exit code (1 when a check fails)."""
+    from queuetruth.errors import EXIT_GATE
+
+    json_out = _json_wanted(argv)
+    try:
+        args = verify_parser().parse_args(argv)
+    except QtError as e:
+        return _emit_error(e, json_out)
+    except SystemExit as e:  # --help
+        return int(e.code or 0)
+    json_out = args.format == "json" or args.json
+    from queuetruth.atlas.verify import verify_atlas
+
+    interactive = sys.stdin.isatty() and sys.stderr.isatty() and not json_out
+    try:
+        rep = verify_atlas(
+            args.source,
+            day=args.day,
+            unit=args.unit,
+            rerun=args.rerun,
+            split=args.split,
+            checkout=args.checkout,
+            atlas_manifest=args.atlas_manifest,
+            yes=args.yes,
+            confirm=_confirm(interactive, "verify", "--from DIR"),
+            refresh=args.refresh,
+            threads=args.threads or 1,
+        )
+    except QtError as e:
+        return _emit_error(e, json_out)
+    except KeyboardInterrupt:
+        return _emit_error(QtError("QT-USAGE-001", "interrupted"), json_out)
+    except Exception as e:  # every unexpected failure is QT-ENGINE-001 with exit code 2
+        return _emit_error(QtError("QT-ENGINE-001", f"{type(e).__name__}: {e}"), json_out)
+    if json_out:
+        print(json.dumps(rep.to_dict(), ensure_ascii=False, allow_nan=False))
+    else:
+        print(rep.text())
+    sys.stdout.flush()
+    return EXIT_OK if rep.ok else EXIT_GATE
+
+
 def _emit_error(e: QtError, json_out: bool) -> int:
     if json_out:
         print(json.dumps(e.to_document(), ensure_ascii=False, default=str))
@@ -176,4 +298,4 @@ def _emit_error(e: QtError, json_out: bool) -> int:
     return EXIT_ERROR
 
 
-__all__ = ["main", "maybe_main", "parser"]
+__all__ = ["main", "maybe_main", "parser", "verify_main", "verify_parser"]

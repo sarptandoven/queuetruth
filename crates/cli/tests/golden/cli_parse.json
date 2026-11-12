@@ -5022,6 +5022,102 @@
   {
     "argv": [
       "queuetruth",
+      "check",
+      "backtest-result.zip",
+      "--tier",
+      "T1",
+      "--bar",
+      "5m",
+      "--atlas",
+      "site",
+      "--yes",
+      "--refresh",
+      "--out",
+      "qt-check",
+      "--json"
+    ],
+    "command": {
+      "path": [
+        "check"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "out": "qt-check",
+          "tier": "T1",
+          "bar": "5m",
+          "atlas": "site",
+          "yes": true,
+          "refresh": true,
+          "json": true
+        },
+        "backtest": [
+          "backtest-result.zip"
+        ]
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "verify",
+      "atlas",
+      "--from",
+      "site",
+      "--atlas-manifest",
+      "atlas_manifest.json",
+      "--day",
+      "2026-10-09",
+      "--unit",
+      "10092026-b000-u0001",
+      "--rerun",
+      "--split",
+      "split",
+      "--checkout",
+      ".",
+      "--yes",
+      "--refresh",
+      "--json"
+    ],
+    "command": {
+      "path": [
+        "verify",
+        "atlas"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "source": "site",
+          "atlas_manifest": "atlas_manifest.json",
+          "day": "2026-10-09",
+          "unit": "10092026-b000-u0001",
+          "rerun": true,
+          "split": "split",
+          "checkout": ".",
+          "yes": true,
+          "refresh": true,
+          "json": true
+        }
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
       "fit",
       "--backtester",
       "nautilus",

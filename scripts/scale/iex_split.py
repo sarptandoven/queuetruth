@@ -572,9 +572,15 @@ def run_split(a: argparse.Namespace) -> int:
     k = a.buckets
     symbols = {s.strip().upper() for s in a.symbols.split(",") if s.strip()} if a.symbols else None
     started = time.perf_counter()
+    only = getattr(a, "only_bucket", None)
+    if only is not None and not 0 <= only < k:
+        print(f"--only-bucket {only}: not a bucket of {k}", file=sys.stderr)
+        return EXIT_INPUT
+    keep = [only is None or i == only for i in range(k)]
     files = [out / bucket_name(date, i, k) for i in range(k)]
     tmps = [f.with_suffix(f.suffix + ".tmp") for f in files]
-    raws = [open(t, "wb") for t in tmps]
+    # every bucket is routed and compressed the same way; the ones not kept are written to the null device
+    raws = [open(t if kept else os.devnull, "wb") for t, kept in zip(tmps, keep, strict=True)]
     gzs = [gzip.GzipFile(filename="", mode="wb", fileobj=r, compresslevel=a.level, mtime=0) for r in raws]
     stream: dict[str, Any] = {}
     sp: IexSplitter | FastIexSplitter
@@ -603,8 +609,9 @@ def run_split(a: argparse.Namespace) -> int:
         for t in tmps:
             t.unlink(missing_ok=True)
         return EXIT_INPUT
-    for t, f in zip(tmps, files, strict=True):
-        t.replace(f)
+    for t, f, kept in zip(tmps, files, keep, strict=True):
+        if kept:
+            t.replace(f)
     c = sp.c
     checks: dict[str, dict[str, Any]] = {}
 
@@ -635,6 +642,8 @@ def run_split(a: argparse.Namespace) -> int:
         chk("every requested symbol present", sorted(symbols - set(sp.msgs)), [])
     buckets = []
     for i, f in enumerate(files):
+        if not keep[i]:
+            continue
         buckets.append(
             {
                 "bucket": i,
@@ -680,6 +689,7 @@ def run_split(a: argparse.Namespace) -> int:
             "rule": "bucket = crc32(symbol ljust 8, ASCII) mod k; System Events to every bucket; per bucket, kept "
             "messages renumbered contiguously per (channel, session) with every source gap carried as a jump",
             "symbols": sorted(symbols) if symbols else None,
+            **({"only_bucket": only} if only is not None else {}),
             "routed_messages": c["routed"],
             "dropped_messages": c["dropped"],
             "prefiltered_messages": c["prefiltered"],
@@ -711,6 +721,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--buckets", type=int, default=32)
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--symbols", help="route only these symbols (comma separated)")
+    ap.add_argument(
+        "--only-bucket",
+        type=int,
+        metavar="K",
+        help="write only bucket K (the others are routed and discarded): one unit's input, for `queuetruth verify "
+        "atlas --rerun`; the manifest lists that bucket only",
+    )
     ap.add_argument("--level", type=int, default=1, help="gzip level of the bucket files (default 1)")
     ap.add_argument("--min-free-gib", type=float, default=2.0)
     ap.add_argument(

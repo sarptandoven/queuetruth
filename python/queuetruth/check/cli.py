@@ -2,14 +2,18 @@
 
     queuetruth check BACKTEST [BACKTEST ...] --data DATASET [--backtester NAME] [--instrument-map FILE]
         [--out DIR] [--window DURATION] [--markout DURATION] [--option KEY=VALUE ...] [--json] [--html]
+    queuetruth check BACKTEST [BACKTEST ...] [--tier T] [--bar 1m|5m|1h] [--atlas DIR_OR_URL] [--yes] [--refresh]
 
 Runs `queuetruth.check.check` and prints the answer first, then the order-by-order table, the most overfilled
-symbols and `queuetruth why` commands for a few phantom fills. `--json` (or `--format json`) prints the `qt.check`
-document instead; `--html` also writes `<out>/check.html`. Notes (importer and scorer caveats) go to stderr with
+symbols and `queuetruth why` commands for a few phantom fills. Without `--data` it estimates from the atlas touch
+tables how many of a bar backtest's fills the real queue would give (`queuetruth.check.estimate`); the atlas is
+downloaded only with consent (a prompt on a terminal, or `--yes`), as for `queuetruth atlas`. `--json` (or
+`--format json`) prints the `qt.check` (or `qt.check_estimate`) document instead; `--html` also writes
+`<out>/check.html`. Notes (importer and scorer caveats) go to stderr with
 `--verbose`. A Python-only command: `queuetruth.cli.main` runs it before the clap grammar, which lists it
 (crates/cli/gen_python_commands.py).
 
-Exit codes (SPEC 0.2): 0 success, 2 any error (`QT-USAGE-001` without `--data`).
+Exit codes (SPEC 0.2): 0 success, 2 any error.
 """
 
 from __future__ import annotations
@@ -49,10 +53,16 @@ def parser() -> argparse.ArgumentParser:
         help="how wrong a backtest is: its own limit orders replayed in the real queue",
         description="How wrong is my backtest: replays the backtest's own resting limit orders (hftbacktest, "
         "NautilusTrader, Backtrader, VectorBT, LEAN or Freqtrade output) in the exact queue of an order-level "
-        "dataset and compares them order by order: fills, phantom fills, time to fill and the P&L gap.",
+        "dataset and compares them order by order: fills, phantom fills, time to fill and the P&L gap. Without "
+        "--data, estimates from the Fill-Realism Atlas touch tables how many of a bar backtest's fills the real "
+        "queue would give, and how much they overstate P&L.",
     )
     p.add_argument("backtest", nargs="+", metavar="BACKTEST", help="the backtester's output file(s) of one run")
-    p.add_argument("--data", metavar="DIR", help="order-level (MBO) dataset covering the backtest's days")
+    p.add_argument(
+        "--data",
+        metavar="DIR",
+        help="order-level (MBO) dataset covering the backtest's days (without it: the atlas estimate)",
+    )
     p.add_argument("--backtester", choices=list(BACKTESTERS), help="the backtester (default: read from the file)")
     p.add_argument(
         "--instrument-map",
@@ -78,6 +88,19 @@ def parser() -> argparse.ArgumentParser:
         metavar="KEY=VALUE",
         help="importer option, e.g. timeframe=5m, data_tz=America/New_York, column=LABEL (repeatable)",
     )
+    p.add_argument(
+        "--tier",
+        metavar="TIER",
+        help="without --data: liquidity tier of symbols the atlas does not hold, T1 to T5 or ALL",
+    )
+    p.add_argument("--bar", metavar="BAR", help="without --data: the backtest's bar length, 1m, 5m or 1h")
+    p.add_argument(
+        "--atlas",
+        metavar="DIR_OR_URL",
+        help="without --data: a site or atlas/v1 directory, or a data API URL (default: the public atlas, cached)",
+    )
+    p.add_argument("--yes", "-y", action="store_true", help="without --data: download the atlas without asking")
+    p.add_argument("--refresh", action="store_true", help="without --data: download the newest atlas manifest")
     p.add_argument("--json", action="store_true", help="print the full summary as JSON (as --format json)")
     p.add_argument("--html", action="store_true", help="also write a self-contained report to <out>/check.html")
     return root
@@ -107,6 +130,16 @@ def main(argv: list[str]) -> int:
     except SystemExit as e:  # --help
         return int(e.code or 0)
     json_out = args.format == "json" or args.json
+    from queuetruth.atlas import confirm_on_terminal
+
+    interactive = sys.stdin.isatty() and sys.stderr.isatty() and not json_out
+    if args.data is not None:
+        given = [f for f, v in (("--tier", args.tier), ("--bar", args.bar), ("--atlas", args.atlas)) if v]
+        if given:
+            return _emit_error(
+                QtError("QT-USAGE-001", f"check: {', '.join(given)} apply only without --data (the atlas estimate)"),
+                json_out,
+            )
     try:
         from queuetruth.check.run import check
 
@@ -119,6 +152,13 @@ def main(argv: list[str]) -> int:
             window=args.window,
             markout=args.markout,
             options=_options(args.option),
+            tier=args.tier,
+            bar=args.bar,
+            atlas=args.atlas,
+            yes=args.yes,
+            confirm=confirm_on_terminal(interactive, "check", "--atlas DIR"),
+            refresh=args.refresh,
+            seed=args.seed,
         )
         if args.html:
             path = Path(args.out) / "check.html"
