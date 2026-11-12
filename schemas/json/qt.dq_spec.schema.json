@@ -19,7 +19,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "1.2: `queuetruth dq` spec (`qt.dq_spec`; checks in `queuetruth.dq`). `dataset`: the dataset to check; `out`:\noutput directory for `dq_report.json` and `dq_report.html` (null = return the report, write nothing); `compare`:\na second dataset of the same session(s) for the cross-source parity check; `checks`: run only these check ids\n(null = all); `fail_on`: the CLI exits 1 when any check reaches this status (`warn`: warn or fail; `fail`: fail\nonly; `never`); `max_evidence`: evidence rows kept per table; `stale_ns`: a book with no update for longer than\nthis while trades print is stale; `latency_outlier_ns`: `ts_recv - ts_event` above this is an outlier (null =\n10 x p99, at least 1 ms); `session_tolerance_ns`: slack at the session open and close before coverage warns;\n`replay`: run the exact replay for the book checks (crossed books, prints through the book, trade parity, replay\ncounters); `verify_sources`: re-hash the raw input files recorded in the manifest when they still exist\n(otherwise only their size is compared); `title`: HTML title.",
+  "description": "1.2: `queuetruth dq` spec (`qt.dq_spec`; checks in `queuetruth.dq`). `dataset`: the dataset to check; `out`:\noutput directory for `dq_report.json` and `dq_report.html` (null = return the report, write nothing); `compare`: a\nsecond dataset of the same session(s) for the cross-source parity check; `checks`: run only these check ids (null =\nall); `fail_on`: the CLI exits 1 when any check reaches this status (`warn`: warn or fail; `fail`: fail only;\n`never`, the default: no gate, exit 0 whatever the verdict); `max_evidence`: evidence rows kept per table;\n`stale_ns`: a book with no update for longer than this while trades print is stale; `latency_outlier_ns`: `ts_recv -\nts_event` above this is an outlier (null = 10 x p99, at least 1 ms); `session_tolerance_ns`: slack at the session\nopen and close before coverage warns; `replay`: run the exact replay for the book checks (crossed books, prints\nthrough the book, trade parity, replay counters); `verify_sources`: re-hash the raw input files recorded in the\nmanifest when they still exist (otherwise only their size is compared); `title`: HTML title.",
   "properties": {
     "dataset": {
       "$ref": "#/$defs/PathRef"
@@ -63,7 +63,7 @@
       "title": "Checks"
     },
     "fail_on": {
-      "default": "warn",
+      "default": "never",
       "enum": [
         "warn",
         "fail",

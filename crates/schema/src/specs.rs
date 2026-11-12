@@ -236,6 +236,27 @@ pub enum BootstrapBlock {
     Min30,
 }
 
+/// Bootstrap blocks of the zoo's intervals (`queuetruth.stats.ci_blocks`, evaluated in Python).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ZooBootstrapBlock {
+    /// Day blocks with >= 5 dates, else 30-minute blocks; with fewer than 5 of those, instrument x minute.
+    #[default]
+    #[serde(rename = "auto")]
+    Auto,
+    /// Session dates.
+    #[serde(rename = "day")]
+    Day,
+    /// 30-minute UTC buckets of `ts_live`.
+    #[serde(rename = "30min")]
+    Min30,
+    /// 1-minute UTC buckets of `ts_live`.
+    #[serde(rename = "1min")]
+    Min1,
+    /// Instrument x 1-minute bucket of `ts_live`.
+    #[serde(rename = "instrument_minute")]
+    InstrumentMinute,
+}
+
 /// Block bootstrap settings.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -627,6 +648,9 @@ pub struct ShadowSampleSpec {
     /// Latency.
     #[serde(default)]
     pub latency_ns: i64,
+    /// Place no later than the end of the data minus `latency_ns + lifetime_ns` (every life fits in the data).
+    #[serde(default = "t")]
+    pub clamp_to_data_end: bool,
 }
 
 fn sides_default() -> Vec<SideName> {
@@ -781,6 +805,9 @@ pub struct ZooSpec {
     /// Bootstrap resamples (Python evaluation).
     #[serde(default = "b1000")]
     pub bootstrap_b: u32,
+    /// Bootstrap blocks of the intervals (Python evaluation).
+    #[serde(default)]
+    pub bootstrap_block: ZooBootstrapBlock,
     /// 1.1 (3.11 #7): shadow amends (null = none).
     #[serde(default)]
     pub amends: Option<FileRef>,

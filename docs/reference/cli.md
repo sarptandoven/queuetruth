@@ -259,6 +259,7 @@ Options:
       --latency-ns <DURATION>       shadow latency [default: 0]
       --window-open-s <N>           seconds after the open excluded [default: 300]
       --window-close-s <N>          seconds before the close excluded [default: 600]
+      --allow-past-end              do not shorten the placement window so that every life fits in the data
       --allocation <allocation>     allocation across instrument-days [default: equal] [possible values: equal, proportional, per-partition]
       --sides <A,...>               sides to sample (B,A) [default: B,A]
   -h, --help                        Print help
@@ -337,6 +338,7 @@ Options:
       --latency <F,D,G>             shadow latency FEED,DECISION,GATEWAY (durations) [default: 0,0,0]
       --jitter-ns <DURATION>        maximum uniform latency jitter [default: 0]
       --bootstrap-b <N>             bootstrap resamples [default: 1000]
+      --bootstrap-block <BLOCK>     bootstrap blocks of the CIs [default: auto] [possible values: auto, day, 30min, 1min, instrument-minute]
       --amends <PATH>               qt.shadow_amend file of the shadows (priority-keeping size reductions)
       --exclude-order-ids <PATH>    real orders removed from the tape and the L2 view (A1): .json list, or one id / instrument_id,order_id per line
       --sort-horizon <DURATION>     leaderboard sort horizon in the terminal output (default 60s)
@@ -367,6 +369,7 @@ Options:
       --window <DURATION>           fill window from ts_live, a zoo prediction horizon (default: the zoo's h_max)
       --rank-horizon <DURATION>     markout horizon of the rankings (default 60s)
       --bootstrap-b <N>             bootstrap resamples (default 1000)
+      --bootstrap-block <BLOCK>     bootstrap blocks of the CIs [default: auto] [possible values: auto, day, 30min, 1min, instrument-minute]
       --allow-truth-mismatch        evaluate the shadows whose replay reproduces the zoo's exact arm when some do not
   -h, --help                        Print help
       --log-level <log_level>       stderr log level (default warn) [possible values: error, warn, info, debug]
@@ -610,6 +613,8 @@ Options:
           shadow latency FEED,DECISION,GATEWAY (durations)
       --jitter-ns <DURATION>
           maximum uniform latency jitter [default: 0]
+      --latency-from-log
+          fit the entry latency on the live log first (median send to ack), then the queue
       --mode <mode>
           zoo mode [default: faithful] [possible values: faithful, corrected]
       --exchange <exchange>
@@ -904,7 +909,7 @@ Options:
       --checks <A,...>
           run only these check ids
       --fail-on <fail-on>
-          exit 1 when a check reaches this status (default warn) [possible values: warn, fail, never]
+          exit 1 when a check reaches this status (default never: no gate unless asked) [possible values: warn, fail, never]
       --max-evidence <N>
           evidence rows kept per table (default 20)
       --stale-ns <DURATION>

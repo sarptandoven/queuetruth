@@ -215,9 +215,10 @@ entry's `brier[h]`. A shadow that lacks a row for some model is left out of that
 The rows are exactly the leaderboard rows: never-cancel shadows of the common population (shadows with a faithful
 hbt #312 abort are out for every model) with an exact arm whose label exists at `h`. The MCS uses `T_R`, `alpha =
 0.10`, the wild cluster bootstrap-t above with the run's `bootstrap_b` and `seed` (`test_id = "zoo_mcs"`), and the
-blocks of every leaderboard CI: session dates when there are at least 5, else 30-minute buckets of `ts_live`. A
-horizon with fewer than 5 blocks (`MCS_MIN_BLOCKS`; for example a run inside one half-hour) gets null MCS fields
-and a warning such as `mcs: at 60 s, 1 bootstrap block(s) (30min) < 5: no model confidence set (MCS fields null)`.
+blocks of every leaderboard CI: session dates when there are at least 5, else 30-minute buckets of `ts_live`, else
+instrument x minute clusters (`--bootstrap-block` forces one kind). A horizon with fewer than 5 blocks
+(`MCS_MIN_BLOCKS`) gets null MCS fields, and one warning names every such horizon, such as `mcs: at 1 s, 60 s, 3
+bootstrap block(s) (instrument_minute) < 5: no model confidence set (MCS fields null)`.
 The spec, and so the run_id, does not change. `hbt_l3_fifo` reads the order-level records and, corrected, equals
 the exact engine by construction, so it is left out of the set (its fields are null); with it the set would be that
 model alone at every horizon.

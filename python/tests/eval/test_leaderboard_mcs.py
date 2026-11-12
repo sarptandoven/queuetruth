@@ -269,9 +269,10 @@ def test_too_few_bootstrap_blocks_give_null_fields_and_a_warning(predictions: Bu
         res, notes = leaderboard_mcs(sub, life, h_max_ns=HMAX, bootstrap_b=100)
         if n_dates < MCS_MIN_BLOCKS:
             assert res == {}
+            # one note for both horizons (diagnostics stay short, audit 2026-11-12)
             assert notes == [
-                f"mcs: at {w}, {n_dates} bootstrap block(s) (30min) < 5: no model confidence set (MCS fields null)"
-                for w in ("1 s", "10 s")
+                f"mcs: at 1 s, 10 s, {n_dates} bootstrap block(s) (30min) < 5: "
+                "no model confidence set (MCS fields null)"
             ]
             _, board = evaluate_zoo(sub, h_max_ns=HMAX, bootstrap_b=5, seed=0, planned_life=life)
             got, _ = annotate_mcs(board, sub, life, h_max_ns=HMAX, bootstrap_b=100)
@@ -291,7 +292,10 @@ def test_empty_and_tiny_inputs(predictions: Builder) -> None:
     # one shadow: one block, no MCS
     one = table.filter(pa.array([s == "s020" for s in table.column("shadow_id").to_pylist()]))
     res, notes = leaderboard_mcs(one, life, h_max_ns=HMAX)
-    assert res == {} and len(notes) == 2 and all("1 bootstrap block(s)" in n for n in notes)
+    # one note names both horizons (diagnostics stay short, audit 2026-11-12)
+    assert res == {} and notes == [
+        "mcs: at 1 s, 10 s, 1 bootstrap block(s) (30min) < 5: no model confidence set (MCS fields null)"
+    ]
 
 
 def test_input_errors(predictions: Builder) -> None:
@@ -443,6 +447,7 @@ def test_mcs_mark_and_the_cli_table() -> None:
 PRE_MCS_ZOO_SPEC_FIELDS = [
     "amends",
     "bootstrap_b",
+    "bootstrap_block",  # added later for short captures; at its default it stays out of the run_id
     "dataset",
     "exchange",
     "exclude_order_ids",

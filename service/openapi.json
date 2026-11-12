@@ -1025,6 +1025,55 @@
         "title": "CiValue",
         "type": "object"
       },
+      "ClusteredLogrank": {
+        "additionalProperties": false,
+        "description": "Log-rank on the fill hazard, stratified by instrument, cluster-robust variance.",
+        "properties": {
+          "method": {
+            "title": "Method",
+            "type": "string"
+          },
+          "n_clusters": {
+            "title": "N Clusters",
+            "type": "integer"
+          },
+          "n_strata": {
+            "title": "N Strata",
+            "type": "integer"
+          },
+          "p_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P Value"
+          },
+          "statistic": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Statistic"
+          }
+        },
+        "required": [
+          "statistic",
+          "p_value",
+          "method",
+          "n_clusters",
+          "n_strata"
+        ],
+        "title": "ClusteredLogrank",
+        "type": "object"
+      },
       "CompletedPart": {
         "additionalProperties": false,
         "description": "One uploaded part and the ETag the store returned.",
@@ -1799,6 +1848,28 @@
             "title": "Horizon Ns",
             "type": "integer"
           },
+          "live_only_ci_hi": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Live Only Ci Hi"
+          },
+          "live_only_ci_lo": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Live Only Ci Lo"
+          },
           "live_only_mean": {
             "anyOf": [
               {
@@ -1809,6 +1880,50 @@
               }
             ],
             "title": "Live Only Mean"
+          },
+          "n_live_only": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Live Only"
+          },
+          "n_sim_only": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Sim Only"
+          },
+          "sim_only_ci_hi": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sim Only Ci Hi"
+          },
+          "sim_only_ci_lo": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sim Only Ci Lo"
           },
           "sim_only_mean": {
             "anyOf": [
@@ -5545,6 +5660,16 @@
           "ttf": {
             "$ref": "#/components/schemas/Ttf"
           },
+          "ttf_survival": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TtfSurvival"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "twin_match_rate": {
             "anyOf": [
               {
@@ -5992,6 +6117,181 @@
         "title": "Submitted",
         "type": "object"
       },
+      "SurvivalArm": {
+        "additionalProperties": false,
+        "description": "Kaplan-Meier time-to-fill curve of one arm (`queuetruth.score.survival`).",
+        "properties": {
+          "at": {
+            "items": {
+              "$ref": "#/components/schemas/SurvivalAt"
+            },
+            "title": "At",
+            "type": "array"
+          },
+          "curve": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "Curve",
+            "type": "array"
+          },
+          "curve_exact": {
+            "title": "Curve Exact",
+            "type": "boolean"
+          },
+          "median_ci_hi": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Median Ci Hi"
+          },
+          "median_ci_lo": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Median Ci Lo"
+          },
+          "median_ns": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Median Ns"
+          },
+          "n_censored": {
+            "title": "N Censored",
+            "type": "integer"
+          },
+          "n_filled": {
+            "title": "N Filled",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "n_filled",
+          "n_censored",
+          "at",
+          "curve",
+          "curve_exact"
+        ],
+        "title": "SurvivalArm",
+        "type": "object"
+      },
+      "SurvivalAt": {
+        "additionalProperties": false,
+        "description": "Kaplan-Meier survival (share of orders still unfilled) of one arm at one horizon, 95% block-bootstrap CI.",
+        "properties": {
+          "ci_hi": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ci Hi"
+          },
+          "ci_lo": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ci Lo"
+          },
+          "horizon_ns": {
+            "title": "Horizon Ns",
+            "type": "integer"
+          },
+          "survival": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Survival"
+          }
+        },
+        "required": [
+          "horizon_ns",
+          "survival"
+        ],
+        "title": "SurvivalAt",
+        "type": "object"
+      },
+      "SurvivalDiffAt": {
+        "additionalProperties": false,
+        "description": "`S_sim(h) - S_live(h)` at one horizon, 95% block-bootstrap CI (negative: the simulator fills sooner).",
+        "properties": {
+          "ci_hi": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ci Hi"
+          },
+          "ci_lo": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ci Lo"
+          },
+          "diff": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Diff"
+          },
+          "horizon_ns": {
+            "title": "Horizon Ns",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "horizon_ns",
+          "diff"
+        ],
+        "title": "SurvivalDiffAt",
+        "type": "object"
+      },
       "Tenant": {
         "additionalProperties": false,
         "description": "A tenant.",
@@ -6282,6 +6582,55 @@
           "cif_fill"
         ],
         "title": "Ttf",
+        "type": "object"
+      },
+      "TtfSurvival": {
+        "additionalProperties": false,
+        "description": "1.3: time-to-fill survival curves (first maker fill; cancels, taker fills and the window end censor).",
+        "properties": {
+          "arms": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SurvivalArm"
+            },
+            "propertyNames": {
+              "enum": [
+                "live",
+                "sim"
+              ]
+            },
+            "title": "Arms",
+            "type": "object"
+          },
+          "diff": {
+            "items": {
+              "$ref": "#/components/schemas/SurvivalDiffAt"
+            },
+            "title": "Diff",
+            "type": "array"
+          },
+          "horizons_ns": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Horizons Ns",
+            "type": "array"
+          },
+          "logrank": {
+            "$ref": "#/components/schemas/ClusteredLogrank"
+          },
+          "n": {
+            "title": "N",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "n",
+          "horizons_ns",
+          "arms",
+          "diff",
+          "logrank"
+        ],
+        "title": "TtfSurvival",
         "type": "object"
       },
       "TwoByTwo": {
@@ -6808,6 +7157,18 @@
             "title": "Bootstrap B",
             "type": "integer"
           },
+          "bootstrap_block": {
+            "default": "auto",
+            "enum": [
+              "auto",
+              "day",
+              "30min",
+              "1min",
+              "instrument_minute"
+            ],
+            "title": "Bootstrap Block",
+            "type": "string"
+          },
           "dataset": {
             "anyOf": [
               {
@@ -6936,6 +7297,17 @@
         "additionalProperties": false,
         "description": "Summary of `zoo`; the Rust runner leaves `leaderboard` empty (filled by `queuetruth.eval`).",
         "properties": {
+          "ci_block": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ci Block"
+          },
           "files": {
             "items": {
               "$ref": "#/components/schemas/FileEntry"
@@ -6963,6 +7335,17 @@
             },
             "title": "Models",
             "type": "array"
+          },
+          "n_ci_blocks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Ci Blocks"
           },
           "n_excluded_hbt_312": {
             "default": 0,

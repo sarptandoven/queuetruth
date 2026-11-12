@@ -1160,9 +1160,24 @@ def markouts(ctx: Ctx) -> Raw | None:
                 )
         if s.sim_only_vs_live_only_markout:
             ms = sorted(s.sim_only_vs_live_only_markout, key=lambda m: m.horizon_ns)
+            has_ci = any(m.n_sim_only is not None for m in ms)  # 1.3 summaries carry n and a CI per mean
             ser = [
-                Series("sim-only fills", [(float(m.horizon_ns), m.sim_only_mean) for m in ms], slot=2, markers=True),
-                Series("live-only fills", [(float(m.horizon_ns), m.live_only_mean) for m in ms], slot=1, markers=True),
+                Series(
+                    "sim-only fills",
+                    [(float(m.horizon_ns), m.sim_only_mean) for m in ms],
+                    slot=2,
+                    markers=True,
+                    ci=[(float(m.horizon_ns), m.sim_only_ci_lo, m.sim_only_ci_hi) for m in ms] if has_ci else None,
+                    ci_style="whisker",
+                ),
+                Series(
+                    "live-only fills",
+                    [(float(m.horizon_ns), m.live_only_mean) for m in ms],
+                    slot=1,
+                    markers=True,
+                    ci=[(float(m.horizon_ns), m.live_only_ci_lo, m.live_only_ci_hi) for m in ms] if has_ci else None,
+                    ci_style="whisker",
+                ),
             ]
             svg = line_chart(
                 ctx.uid(),
@@ -1177,19 +1192,22 @@ def markouts(ctx: Ctx) -> Raw | None:
                 hrefs=[Ref(0.0, "", "zero")],
             )
             data = table(
-                ["horizon", "sim-only mean", "live-only mean", "difference", "95% CI"],
+                ["horizon", "sim-only fills", "sim-only mean", "live-only fills", "live-only mean", "difference",
+                 "95% CI"],
                 [
                     (
                         F.dur(m.horizon_ns),
-                        F.num(m.sim_only_mean),
-                        F.num(m.live_only_mean),
+                        F.num(m.n_sim_only),
+                        f"{F.num(m.sim_only_mean)} {F.ci(m.sim_only_ci_lo, m.sim_only_ci_hi)}".strip(),
+                        F.num(m.n_live_only),
+                        f"{F.num(m.live_only_mean)} {F.ci(m.live_only_ci_lo, m.live_only_ci_hi)}".strip(),
                         F.num(m.diff),
                         F.ci(m.ci_lo, m.ci_hi),
                     )
                     for m in ms
                 ],
-                numeric=(1, 2, 3),
-            )
+                numeric=(1, 2, 3, 4, 5),
+            )  # fmt: skip
             body.append(
                 figure(
                     svg,
@@ -1211,6 +1229,87 @@ def markouts(ctx: Ctx) -> Raw | None:
 
 
 # ---- time to fill ------------------------------------------------------------------------------------------------
+
+
+def _survival_block(ctx: Ctx, s: ScorecardSummary) -> list[str]:
+    """Kaplan-Meier time-to-fill curves per arm (summary 1.3 `ttf_survival`), their table and the clustered
+    log-rank; nothing for a summary without the part."""
+    sv = s.ttf_survival
+    if sv is None:
+        return []
+    lr = sv.logrank
+    out = [
+        kv(
+            [
+                (
+                    "log-rank on the fill hazard (stratified by instrument, cluster-robust)",
+                    f"p {F.pval(lr.p_value)}, χ² {F.num(lr.statistic)}, {lr.n_clusters} clusters",
+                ),
+                *[
+                    (
+                        f"median time to fill, {arm}",
+                        f"{F.dur(a.median_ns) if a.median_ns is not None else 'not reached'} "
+                        f"{F.ci(a.median_ci_lo, a.median_ci_hi, F.dur)}".strip(),
+                    )
+                    for arm, a in sorted(sv.arms.items())
+                ],
+            ]
+        )
+    ]
+    series = []
+    for arm, slot in (("live", 1), ("sim", 2)):
+        a = sv.arms.get(arm)  # type: ignore[call-overload]
+        if a is None:
+            continue
+        pts = [(max(float(t), 1e3), float(v)) for t, v in a.curve]  # floored at 1 µs (log axis), as the QQ plot
+        series.append(
+            Series(
+                arm,
+                pts,
+                slot=slot,
+                kind="step",
+                ci=[(float(x.horizon_ns), x.ci_lo, x.ci_hi) for x in a.at],
+                ci_style="whisker",
+                tips=[f"{arm}: still unfilled at {F.dur(t)}: {F.pct(v)}" for t, v in pts],
+            )
+        )
+    if not series:
+        return out
+    svg = line_chart(
+        ctx.uid(),
+        "Time to fill, Kaplan-Meier, live vs sim",
+        "Share of orders still unfilled against time since entry (floored at 1 µs); cancels, taker fills and the "
+        "window end censor. Whiskers: 95% block-bootstrap intervals at the scored horizons.",
+        series,
+        x_fmt=F.dur_axis,
+        y_fmt=lambda v: F.num(v, 2),
+        x_log=True,
+        y_range=(0.0, 1.0),
+        x_label="time since entry (log)",
+        y_label="share still unfilled",
+    )
+    rows = []
+    for j, h in enumerate(sv.horizons_ns):
+        al, as_ = sv.arms.get("live"), sv.arms.get("sim")  # type: ignore[call-overload]
+        d = sv.diff[j] if j < len(sv.diff) else None
+        rows.append(
+            (
+                F.dur(h),
+                "" if al is None else f"{F.pct(al.at[j].survival)} {F.ci(al.at[j].ci_lo, al.at[j].ci_hi, F.pct)}",
+                "" if as_ is None else f"{F.pct(as_.at[j].survival)} {F.ci(as_.at[j].ci_lo, as_.at[j].ci_hi, F.pct)}",
+                "" if d is None else f"{F.pp(d.diff)} {F.ci(d.ci_lo, d.ci_hi, F.pp)}",
+            )
+        )
+    out.append(
+        figure(
+            svg,
+            "A sim curve below live means the simulator fills sooner than live (optimistic). The table gives the "
+            "share still unfilled at each horizon and the difference sim minus live in percentage points.",
+            items=[(x.name, x.slot, False) for x in series],
+            data=table(["horizon", "live unfilled", "sim unfilled", "sim minus live"], rows, numeric=(1, 2, 3)),
+        )
+    )
+    return out
 
 
 def time_to_fill(ctx: Ctx) -> Raw | None:
@@ -1285,6 +1384,7 @@ def time_to_fill(ctx: Ctx) -> Raw | None:
                     data=table(["arm", "horizon", "CIF fill"], rows, numeric=(2,)),
                 )
             )
+        body += _survival_block(ctx, s)
         so = run.table("qt.score_orders")
         if so is not None:
             tab = so.read()

@@ -662,7 +662,9 @@
     "ci_block": {
       "enum": [
         "day",
-        "30min"
+        "30min",
+        "1min",
+        "instrument_minute"
       ],
       "title": "Ci Block",
       "type": "string"

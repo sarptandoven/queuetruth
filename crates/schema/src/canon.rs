@@ -19,12 +19,13 @@ const REF_KEYS: [&str; 4] = ["path", "dataset_id", "upload_id", "job_file"];
 /// `gbdt` = HazardFitSpec, `max_why` = ReportSpec, `window_open_s` = ShadowSampleSpec). `family` is shared by CalibrationSpec and LiveCalibrationSpec; its
 /// entries name fields only LiveCalibrationSpec has, so they never touch a CalibrationSpec.
 /// Same table as `queuetruth.schemas.runid.V1_1_DEFAULTS`.
-pub const V1_1_DEFAULTS: [(&str, &[&str], &str); 27] = [
+pub const V1_1_DEFAULTS: [(&str, &[&str], &str); 29] = [
     ("sweep_gap_ns", &["fill_rule"], "\"exact\""),
     ("sweep_gap_ns", &["hidden_print_policy"], "null"),
     ("sweep_gap_ns", &["exclude_order_ids"], "[]"),
     ("sweep_gap_ns", &["exclude_order_ids", "*", "session_date"], "null"),
     ("write_fills", &["amends"], "null"),
+    ("write_fills", &["bootstrap_block"], "\"auto\""),
     ("write_fills", &["exclude_order_ids"], "[]"),
     ("write_fills", &["exclude_order_ids", "*", "session_date"], "null"),
     ("max_events", &["exclude_order_ids"], "[]"),
@@ -47,6 +48,7 @@ pub const V1_1_DEFAULTS: [(&str, &[&str], &str); 27] = [
     ("family", &["self_exclude"], "true"),
     ("family", &["match_window_ns"], "1000000"),
     ("window_open_s", &["partition_quotas"], "{}"),
+    ("window_open_s", &["clamp_to_data_end"], "true"),
 ];
 
 /// Removes `path` from `v` where it holds `default` (`*` = every item of a list).

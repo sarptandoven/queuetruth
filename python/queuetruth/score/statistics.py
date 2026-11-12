@@ -9,10 +9,13 @@ test id (`stats.bootstrap_seed(seed, test_id)`). McNemar on (b, c) overall and p
 Time to fill: `d = ln max(ttf_sim, 1us) - ln max(ttf_live, 1us)` over jointly filled orders (median with CI,
 Wilcoxon); Aalen-Johansen `CIF_fill` per arm (cause 1 fill, 2 cancel/expire, 0 censored) at `ttf_horizons_ns`; paired
 permutation of arm labels with `D = sum_h |CIF_sim(h) - CIF_live(h)|` (primary ttf test); log-rank on the
-cause-specific fill hazard and Gray's test (descriptive: they assume independent samples). Markouts: mean per (arm,
-horizon, ref) over fills; paired first-fill difference (sim minus live) over orders filled in both arms; sim-only
-vs live-only first-fill markouts (first ref). Taker fills (book crossed the order, audit ruling A5) are excluded from
-the maker markout aggregates and reported separately (`markout_mean_taker`, `taker_fills` rows). Markout rows that
+cause-specific fill hazard and Gray's test (descriptive: they assume independent samples). Summary 1.3
+`ttf_survival` (`queuetruth.score.survival`): Kaplan-Meier time-to-fill curves per arm with block-bootstrap
+intervals and the log-rank stratified by instrument with a cluster-robust variance (secondary test
+`ttf_logrank_clustered`). Markouts: mean per (arm, horizon, ref) over fills; paired first-fill difference (sim
+minus live) over orders filled in both arms; sim-only vs live-only first-fill markouts (first ref; 1.3: with the
+fill count and a CI per mean). Taker fills (book crossed the order, audit ruling A5) are excluded from the maker
+markout aggregates and reported separately (`markout_mean_taker`, `taker_fills` rows). Markout rows that
 carry `mo_bps` / `mo_net_ccy` (review F10) add maker means in bps of the fill price (`markout_mean_bps`, statistic
 `mean_bps`) and in currency net of fees (`markout_mean_net_ccy`, statistic `mean_net_ccy`) per arm and `<ref>:<h>`,
 with their own bootstrap streams (descriptive; no p-value).
@@ -45,6 +48,7 @@ from typing import Any
 import numpy as np
 
 from queuetruth import stats
+from queuetruth.score.survival import survival_part
 
 DAY_NS = 86_400_000_000_000
 HALF_HOUR_NS = 1_800_000_000_000
@@ -517,6 +521,7 @@ def assemble(
                 adjust=True,
             )
         )
+    surv: dict[str, Any] | None = None
     if computable:
         cap = float(
             max(
@@ -577,6 +582,24 @@ def assemble(
             np.concatenate([ev_l[:, 1], ev_s[:, 1]]).astype(int),
             np.concatenate([np.zeros(n, dtype=int), np.ones(n, dtype=int)]),
             1,
+        )
+        surv = survival_part(
+            orders, {"live": ev_l, "sim": ev_s}, horizons, blocks, int(boot_spec.b), int(boot_spec.seed)
+        )
+        lrc = surv["logrank"]
+        tests.append(
+            _Test(
+                "ttf_logrank_clustered",
+                "secondary",
+                "all",
+                "all",
+                "chi2",
+                lrc["statistic"],
+                lrc["p_value"],
+                n=n,
+                note=f"Kaplan-Meier fill hazard, cancels censored; {lrc['method']}; clusters={lrc['n_clusters']}",
+                adjust=True,
+            )
         )
         ttf["gray_p"] = fin(gt.p_value)
         tests.append(
@@ -644,6 +667,7 @@ def assemble(
         "by_queue_decile": by_decile,
         "by_liquidity": by_liq,
         "ttf": ttf,
+        "ttf_survival": surv,
         "markouts": mk_rows,
         "markout_diff": diff_rows,
         "sim_only_vs_live_only_markout": disc_rows,
@@ -893,8 +917,27 @@ def _markouts(
             lm = float(nl_.sum() / cl_.sum()) if cl_.sum() else None
             est, reps = bt.run(f"sim_only_vs_live_only_markout:{first_ref}:{h}", stat)
             lo, hi = bt.ci(reps)
+            # 1.3: each group's mean with its own interval (sim-only fills: optimistic fills the simulator grants;
+            # live-only fills: fills it misses), from its own bootstrap stream
+            _, sreps = bt.run(f"sim_only_markout:{first_ref}:{h}", _ratio(ns_, cs_))
+            _, lreps = bt.run(f"live_only_markout:{first_ref}:{h}", _ratio(nl_, cl_))
+            slo, shi = bt.ci(sreps) if cs_.sum() else (None, None)
+            llo, lhi = bt.ci(lreps) if cl_.sum() else (None, None)
             disc_rows.append(
-                {"horizon_ns": h, "sim_only_mean": sm, "live_only_mean": lm, "diff": fin(est), "ci_lo": lo, "ci_hi": hi}
+                {
+                    "horizon_ns": h,
+                    "sim_only_mean": sm,
+                    "live_only_mean": lm,
+                    "diff": fin(est),
+                    "ci_lo": lo,
+                    "ci_hi": hi,
+                    "n_sim_only": int(ms.sum()),
+                    "n_live_only": int(ml.sum()),
+                    "sim_only_ci_lo": slo,
+                    "sim_only_ci_hi": shi,
+                    "live_only_ci_lo": llo,
+                    "live_only_ci_hi": lhi,
+                }
             )
             if fin(est) is not None:
                 tests.append(

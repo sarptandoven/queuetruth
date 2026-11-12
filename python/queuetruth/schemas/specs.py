@@ -281,6 +281,9 @@ class ShadowSampleSpec(SpecModel):
     window_close_s: NonNegInt = 600
     lifetime_ns: NonNegInt = 300_000_000_000
     latency_ns: NonNegInt = 0
+    #: Place shadows no later than the end of the data minus `latency_ns + lifetime_ns`, so every life fits in the
+    #: data (a warning names the shortened window); false keeps the window as it is (lives may run past the end).
+    clamp_to_data_end: bool = True
 
 
 class MirrorSpec(SpecModel):
@@ -313,6 +316,10 @@ class ZooSpec(SpecModel):
     write_trajectory: bool = False
     threads: Annotated[int, Field(ge=1)] = 1
     bootstrap_b: Annotated[int, Field(ge=1)] = 1000
+    #: Bootstrap blocks of the intervals (`queuetruth.stats.ci_blocks`): `auto` = session dates with >= 5 dates, else
+    #: 30-minute buckets of `ts_live`, and with fewer than 5 of those, instrument x minute clusters. With fewer than 5
+    #: blocks no interval is reported.
+    bootstrap_block: Literal["auto", "day", "30min", "1min", "instrument_minute"] = "auto"
     #: 1.1 (3.11 #7): shadow amends (`qt.shadow_amend`); null = no amends (v0.1 behaviour).
     amends: FileRef | None = None
     #: 1.1 (extends 3.11 #1 to the zoo): real orders removed from the tape before the exact truth and the L2
@@ -660,21 +667,21 @@ DQ_DEFAULT_MAX_EVIDENCE = 20
 
 class DqSpec(SpecModel):
     """1.2: `queuetruth dq` spec (`qt.dq_spec`; checks in `queuetruth.dq`). `dataset`: the dataset to check; `out`:
-    output directory for `dq_report.json` and `dq_report.html` (null = return the report, write nothing); `compare`:
-    a second dataset of the same session(s) for the cross-source parity check; `checks`: run only these check ids
-    (null = all); `fail_on`: the CLI exits 1 when any check reaches this status (`warn`: warn or fail; `fail`: fail
-    only; `never`); `max_evidence`: evidence rows kept per table; `stale_ns`: a book with no update for longer than
-    this while trades print is stale; `latency_outlier_ns`: `ts_recv - ts_event` above this is an outlier (null =
-    10 x p99, at least 1 ms); `session_tolerance_ns`: slack at the session open and close before coverage warns;
-    `replay`: run the exact replay for the book checks (crossed books, prints through the book, trade parity, replay
-    counters); `verify_sources`: re-hash the raw input files recorded in the manifest when they still exist
-    (otherwise only their size is compared); `title`: HTML title."""
+    output directory for `dq_report.json` and `dq_report.html` (null = return the report, write nothing); `compare`: a
+    second dataset of the same session(s) for the cross-source parity check; `checks`: run only these check ids (null =
+    all); `fail_on`: the CLI exits 1 when any check reaches this status (`warn`: warn or fail; `fail`: fail only;
+    `never`, the default: no gate, exit 0 whatever the verdict); `max_evidence`: evidence rows kept per table;
+    `stale_ns`: a book with no update for longer than this while trades print is stale; `latency_outlier_ns`: `ts_recv -
+    ts_event` above this is an outlier (null = 10 x p99, at least 1 ms); `session_tolerance_ns`: slack at the session
+    open and close before coverage warns; `replay`: run the exact replay for the book checks (crossed books, prints
+    through the book, trade parity, replay counters); `verify_sources`: re-hash the raw input files recorded in the
+    manifest when they still exist (otherwise only their size is compared); `title`: HTML title."""
 
     dataset: PathRef
     out: str | None = None
     compare: PathRef | None = None
     checks: list[str] | None = None
-    fail_on: Literal["warn", "fail", "never"] = "warn"
+    fail_on: Literal["warn", "fail", "never"] = "never"
     max_evidence: int = Field(default=DQ_DEFAULT_MAX_EVIDENCE, ge=0, le=10_000)
     stale_ns: int = Field(default=DQ_DEFAULT_STALE_NS, gt=0)
     latency_outlier_ns: int | None = Field(default=None, gt=0)

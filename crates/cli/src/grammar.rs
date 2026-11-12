@@ -163,6 +163,7 @@ const REPLAY_TARGETS: &[&str] = &["hftbacktest", "nautilus"];
 const FIX_CHECKSUM: &[&str] = &["exclude", "keep"];
 const FDR: &[&str] = &["bh", "by"];
 const BLOCK: &[&str] = &["auto", "day", "30min"];
+const ZOO_BLOCKS: &[&str] = &["auto", "day", "30min", "1min", "instrument-minute"];
 const SIM_EXACT: &[&str] = &["exact"];
 const ALLOC_FAMILIES: &[&str] = &["power", "power2", "power3", "databento"];
 const SURVIVAL_FAMILIES: &[&str] = &["databento"];
@@ -232,6 +233,15 @@ const FORCE: Flag = f(
     "force",
     "export even when the calibration is refused (no events, degenerate, loses to the default)",
 );
+const ZOO_BLOCK: Flag = Flag {
+    value_name: Some("BLOCK"),
+    ..f(
+        "bootstrap-block",
+        Kind::Enum(ZOO_BLOCKS),
+        "bootstrap_block",
+        "bootstrap blocks of the CIs [default: auto]",
+    )
+};
 const BOOT_BLOCK: Flag = f(
     "bootstrap-block",
     Kind::Enum(BLOCK),
@@ -426,6 +436,12 @@ pub(crate) const COMMANDS: &[Cmd] = &[
                 "seconds before the close excluded",
             ),
             f(
+                "allow-past-end",
+                Kind::NoFlag,
+                "clamp_to_data_end",
+                "do not shorten the placement window so that every life fits in the data",
+            ),
+            f(
                 "allocation",
                 Kind::Enum(ALLOCATION),
                 "allocation",
@@ -502,6 +518,7 @@ pub(crate) const COMMANDS: &[Cmd] = &[
             LATENCY,
             JITTER,
             f("bootstrap-b", Kind::Int, "bootstrap_b", "bootstrap resamples"),
+            ZOO_BLOCK,
             f(
                 "amends",
                 Kind::Path,
@@ -581,6 +598,7 @@ pub(crate) const COMMANDS: &[Cmd] = &[
                 "bootstrap_b",
                 "bootstrap resamples (default 1000)",
             ),
+            ZOO_BLOCK,
             f(
                 "allow-truth-mismatch",
                 Kind::Flag,
@@ -643,6 +661,12 @@ pub(crate) const COMMANDS: &[Cmd] = &[
             f("entry", Kind::Enum(ENTRY), "entry", "entry time rule"),
             LATENCY,
             JITTER,
+            f(
+                "latency-from-log",
+                Kind::Flag,
+                "_cli.latency_from_log",
+                "fit the entry latency on the live log first (median send to ack), then the queue",
+            ),
             MODE_F,
             EXCH_F,
             L2_DEPTH,
@@ -969,7 +993,7 @@ pub(crate) const COMMANDS: &[Cmd] = &[
                 "fail-on",
                 Kind::Enum(DQ_FAIL_ON),
                 "fail_on",
-                "exit 1 when a check reaches this status (default warn)",
+                "exit 1 when a check reaches this status (default never: no gate unless asked)",
             ),
             f(
                 "max-evidence",
