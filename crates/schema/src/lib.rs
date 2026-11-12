@@ -11,6 +11,7 @@ pub mod json;
 mod live_venue;
 pub mod rows;
 pub mod specs;
+mod specs_gen;
 mod tables;
 
 pub use canon::{
