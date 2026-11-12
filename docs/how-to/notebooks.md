@@ -1,7 +1,7 @@
 # Use queuetruth from a notebook
 
 **Goal:** explore replays, zoo leaderboards, calibrations and scorecards interactively, as pandas or polars
-DataFrames, starting from one of four executed example notebooks.
+DataFrames, starting from one of the executed example notebooks: four on the workflow and one per framework.
 
 **You need:** `pip install queuetruth` plus pandas (or polars) and, for the plots, matplotlib. Colab has pandas,
 polars and matplotlib preinstalled; the setup cell installs queuetruth. `queuetruth.frames` needs queuetruth 0.2.0 or
@@ -19,6 +19,20 @@ queuetruth from PyPI when it is missing.
 | [`02_nautilus_too_optimistic.ipynb`](https://github.com/sarptandoven/queuetruth/blob/main/examples/notebooks/02_nautilus_too_optimistic.ipynb) | two public Nasdaq ITCH sample days (stored outputs), or synthetic | NautilusTrader's default `FillModel` and `queue_position=True` against exact replay on 3,000 shadows per day; which orders the default fills wrongly; fitting `prob_fill_on_limit` on one day, testing it on the other and exporting a `FillModel` line |
 | [`03_calibrate_and_export.ipynb`](https://github.com/sarptandoven/queuetruth/blob/main/examples/notebooks/03_calibrate_and_export.ipynb) | synthetic | fitting hftbacktest's `power3` exponent and NautilusTrader's touch probability against exact truth; the held-out comparison with the library default; the fail-safe export, its `QT-CALIB-001` refusals and `force`; the cancel evidence behind a fit |
 | [`04_score_simulator_vs_fills.ipynb`](https://github.com/sarptandoven/queuetruth/blob/main/examples/notebooks/04_score_simulator_vs_fills.ipynb) | synthetic, with a synthetic live log | a naive "fill on touch" simulator written in pandas, a stricter variant, a zoo model and the exact arm, each scored against the live fills; which orders disagree and how their fills mark out; a CI gate on the bias |
+| [`05_nautilustrader.ipynb`](https://github.com/sarptandoven/queuetruth/blob/main/examples/notebooks/05_nautilustrader.ipynb) | synthetic, with the synthetic atlas | the atlas's closest NautilusTrader setting (`qt.atlas.calibration`); fitting `prob_fill_on_limit` (`qt.fit`); the one line `engine.add_venue(..., **qtn.venue_options(fit))`; checking an orders report (`qt.check`) |
+| [`06_hftbacktest.ipynb`](https://github.com/sarptandoven/queuetruth/blob/main/examples/notebooks/06_hftbacktest.ipynb) | synthetic, with the synthetic atlas | the atlas's closest `BacktestAsset` setting; a `power3` fit refused because it does not beat the default; the one line `asset = qthbt.configure(asset, cal)`; checking order snapshots |
+| [`07_backtrader.ipynb`](https://github.com/sarptandoven/queuetruth/blob/main/examples/notebooks/07_backtrader.ipynb) | synthetic, with the synthetic atlas | the touch tables behind `QueueFiller`; the one line `cerebro.broker.set_filler(qt.backtrader.QueueFiller(tier="T1"))` with `OrderLog`; checking the log, from the atlas and in the exact queue |
+| [`08_lean.ipynb`](https://github.com/sarptandoven/queuetruth/blob/main/examples/notebooks/08_lean.ipynb) | synthetic, with the synthetic atlas | the touch tables behind `QueueFillModel`; the one line `security.set_fill_model(qt.lean.QueueFillModel(tier="T1"))`; checking LEAN order events, from the atlas and in the exact queue |
+| [`09_freqtrade.ipynb`](https://github.com/sarptandoven/queuetruth/blob/main/examples/notebooks/09_freqtrade.ipynb) | synthetic atlas, synthetic backtest result | the one line `queuetruth check <result>` (`qt.check(result)`): how many limit fills the real queue would give and the P&L they add |
+| [`10_vectorbt.ipynb`](https://github.com/sarptandoven/queuetruth/blob/main/examples/notebooks/10_vectorbt.ipynb) | synthetic, with the synthetic atlas | the one line `qt.check(records)` on VectorBT order records, from the atlas and in the exact queue |
+| [`11_backtesting_py.ipynb`](https://github.com/sarptandoven/queuetruth/blob/main/examples/notebooks/11_backtesting_py.ipynb) | synthetic, with the synthetic atlas | the one line `qt.check(trades)` on backtesting.py trades, from the atlas and in the exact queue |
+
+The framework notebooks (05 to 11) run without the framework: a cell that needs NautilusTrader, hftbacktest,
+Backtrader, LEAN, Freqtrade, VectorBT or backtesting.py says it was skipped and why, and the rest runs on the
+synthetic data. They read the repository's synthetic atlas (`tests/fixtures/atlas_synth`, invented numbers) from a
+checkout, or from GitHub on Colab; leave out `source=` and `atlas=` to use the published atlas. Every result in them
+reads the same way: `.summary` (the answer), `.table()`, `.to_html()`, `.save(path)`, `.doc`, and a compact view
+with the answer, its interval and the head of the table when a cell displays it.
 
 What the stored outputs show, measured when they were executed:
 
@@ -38,15 +52,15 @@ The real-data notebook publishes only aggregate statistics (fill rates, biases, 
 prices or order-level rows, and names its source, as [Data and licensing](../data-and-licensing.md) requires. Point
 it at your own data with the `QT_NB_DATASET` environment variable: an order-level dataset directory with at least
 two session dates. In a running Jupyter or Colab kernel, run `%env QT_NB_DATASET=/path/to/dataset` before the
-first code cell. `queuetruth ingest` writes one session date per run, so build a two-day dataset from two ingests
+first code cell. `queuetruth advanced ingest` writes one session date per run, so build a two-day dataset from two ingests
 with the repository's `scripts/realdata/merge_datasets.py`. For the two public Nasdaq sample days (files from
 [emi.nasdaq.com/ITCH](https://emi.nasdaq.com/ITCH/Nasdaq%20ITCH/)):
 
 <!-- check-docs: skip (needs the two Nasdaq ITCH sample files and a repository checkout) -->
 ```sh
-queuetruth ingest --format itch --in 12302019.NASDAQ_ITCH50.gz --venue nasdaq --date 2019-12-30 \
+queuetruth advanced ingest --format itch --in 12302019.NASDAQ_ITCH50.gz --venue nasdaq --date 2019-12-30 \
     --symbols AAPL,MSFT,SPY,TSLA --out nasdaq-20191230
-queuetruth ingest --format itch --in 01302020.NASDAQ_ITCH50.gz --venue nasdaq --date 2020-01-30 \
+queuetruth advanced ingest --format itch --in 01302020.NASDAQ_ITCH50.gz --venue nasdaq --date 2020-01-30 \
     --symbols AAPL,MSFT,SPY,TSLA --out nasdaq-20200130
 python scripts/realdata/merge_datasets.py --out nasdaq-2d nasdaq-20191230 nasdaq-20200130
 ```
@@ -59,6 +73,38 @@ Since 0.4.0 one command builds the same dataset (the same partition files and `d
 `queuetruth data add 12302019.NASDAQ_ITCH50.gz 01302020.NASDAQ_ITCH50.gz --symbols AAPL,MSFT,SPY,TSLA --out
 nasdaq-2d` ([Add order-level data](add-data.md)).
 
+## Every verb's result reads the same way
+
+`qt.check`, `qt.fit`, `qt.compare`, `qt.atlas.lookup`, `qt.atlas.calibration`, `qt.data.add`, `qt.data.fetch_iex`
+and `qt.demo` take typed keyword arguments in human units (durations such as `"1s"`, `"500ms"` or `"1min"`, splits
+such as `"70%"`) and return a result with:
+
+| Member | What it is |
+|---|---|
+| `.summary` | the answer in plain words, the line the CLI prints first |
+| `.table()` | the main table as a DataFrame: symbols, decimal prices, venue-local times, horizons such as `1s` |
+| `.interval` | the interval behind the answer, in words (None when the answer has none) |
+| `.to_html()` | the self-contained page (the one the CLI writes, where it writes one) |
+| `.doc` | the JSON document |
+| `.save(path)` | writes the page (`.html`), the table (`.csv`) or the document (any other name) |
+
+In a notebook, displaying a result shows the answer, its interval and the first rows of the table. On queuetruth's
+synthetic dataset:
+
+<!-- check-docs: run -->
+```python
+from pathlib import Path
+
+import queuetruth as qt
+
+if not Path("synth/manifest.json").exists():
+    qt.fixtures_synth("synth")
+res = qt.fit(backtester="nautilus", data="synth", split="70%", out="qt-fit-notebook")
+print(res.summary.split(":")[0])
+print(res.table()[["horizon", "fitted_bias_pp", "default_bias_pp", "result"]].to_string(index=False))
+print(res.save("fit.html"), res.save("fit.csv"))
+```
+
 ## Load run outputs as DataFrames
 
 Every queuetruth command writes a summary document and Parquet tables. `queuetruth.frames` reads them into pandas
@@ -66,9 +112,9 @@ or polars, whichever is installed (pandas first). Make a small zoo run to work w
 
 <!-- check-docs: run -->
 ```sh
-queuetruth fixtures synth --out synth
-queuetruth shadows sample --data synth --n 300 --out shadows.parquet
-queuetruth zoo --data synth --shadows shadows.parquet --out zoo --models "hbt_power3[n=2],nt_prob_touch[p=1]"
+queuetruth advanced fixtures synth --out synth
+queuetruth advanced shadows sample --data synth --n 300 --out shadows.parquet
+queuetruth advanced zoo --data synth --shadows shadows.parquet --out zoo --models "hbt_power3[n=2],nt_prob_touch[p=1]"
 ```
 
 `frames.load_run` opens a run directory. The result is a read-only mapping from table name to DataFrame, read on
@@ -162,6 +208,6 @@ elsewhere cannot substitute another Python), and it runs in `--workdir`, so outp
 (and `PYTHONPATH` must be an absolute path). The build fails if a cell raises, if any output contains a local path
 (the repository, the working directory or the home directory), or if a notebook is larger than `--max-kb` (default
 200). One of `--execute` and `--no-outputs` is required, so a plain run never replaces the stored outputs with empty
-ones. The stored notebooks are 44,913 to 56,938 bytes each. To reproduce the stored outputs of notebook 02, set
+ones. The stored notebooks are 16,708 to 56,938 bytes each. To reproduce the stored outputs of notebook 02, set
 `QT_NB_DATASET` to the two-day Nasdaq dataset built above; without it, notebook 02 runs on synthetic data and labels
 every result `SYNTHETIC`.

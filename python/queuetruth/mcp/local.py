@@ -1,5 +1,7 @@
 """Local access for the MCP local tools (SPEC 4.6, tools marked L): read-only output directories, and (opt-in, run
-mode) sandboxed local runs of shadow sampling, replay, zoo and why on local datasets without the service.
+mode) sandboxed local runs of the operations with an MCP tool (`queuetruth.ops.table`: shadow sampling, replay, zoo
+and the verbs) and of why, on local datasets without the service. The child calls `queuetruth.runner.run`; the path
+containment is the runner's (`queuetruth.runner.Roots`).
 
 Read tools.
 
@@ -48,25 +50,26 @@ import signal
 import sys
 import tempfile
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
-from queuetruth.dataset import MANIFEST_FILE, read_manifest_doc
+from queuetruth.dataset import read_manifest_doc
 from queuetruth.errors import QtError
+from queuetruth.ops.table import OperationDef, table
+from queuetruth.runner import MAX_TREE_ENTRIES, Roots, check_dataset_tree
 from queuetruth.schemas import specs as sp
 from queuetruth.schemas.models import DOC_MODELS, parse_document
-from queuetruth.schemas.runid import is_ref
 
 ENV_ROOT = "QT_MCP_ROOT"
 MAX_JSON_BYTES = 64 << 20
 MAX_DEPTH = 6
 MAX_SCANNED_FILES = 20_000
-#: Most entries the symlink check of one dataset directory walks (`QT-INPUT-002` beyond).
-MAX_DATASET_ENTRIES = 100_000
 MAX_ENTRIES = 2_000
+#: Most entries the symlink check of one dataset directory walks (`QT-INPUT-002` beyond; `queuetruth.runner`).
+MAX_DATASET_ENTRIES = MAX_TREE_ENTRIES
 PREFERRED_SUMMARIES = ("summary.json", "calibration.json", "model.json", "report.json", "manifest.json")
 _SCHEMA_PREFIX = re.compile(rb'^\s*\{\s*"schema"\s*:\s*"(qt\.[a-z0-9_]+)"')
 
@@ -233,25 +236,6 @@ class LocalOutputs:
         return doc
 
 
-def check_dataset_tree(
-    top: Path, inside: Callable[[Path], Path | None], what: str, *, require_manifest: bool = True
-) -> None:
-    """A dataset directory: `manifest.json` must exist when `require_manifest` (`QT-INPUT-001`; checked first, so a
-    broad directory such as the root is refused without walking it), and no entry may be a symlink for which `inside`
-    returns None (`QT-CONFIG-001`). At most `MAX_DATASET_ENTRIES` entries are walked (`QT-INPUT-002` beyond)."""
-    if require_manifest and not (top / MANIFEST_FILE).is_file():
-        raise QtError("QT-INPUT-001", f"{what}: not a dataset directory (no manifest.json)")
-    seen = 0
-    for dirpath, dirnames, filenames in os.walk(top, followlinks=False):
-        for name in (*dirnames, *filenames):
-            seen += 1
-            if seen > MAX_DATASET_ENTRIES:
-                raise QtError("QT-INPUT-002", f"{what}: more than {MAX_DATASET_ENTRIES} entries; not checked")
-            p = Path(dirpath) / name
-            if p.is_symlink() and inside(p) is None:
-                raise QtError("QT-CONFIG-001", f"{what}: {p.name!r} resolves outside the allowed roots")
-
-
 def core_why(spec_json: str) -> str:
     """`queuetruth._core.why` with `QtCoreError` mapped to `QtError`."""
     try:
@@ -273,13 +257,25 @@ def core_why(spec_json: str) -> str:
 ENV_ALLOW_RUN = "QT_MCP_ALLOW_RUN"
 ENV_RUN_ROOT = "QT_MCP_RUN_ROOT"
 ENV_DATA_ROOTS = "QT_MCP_DATA_ROOTS"
+ENV_ALLOW_NETWORK = "QT_MCP_ALLOW_NETWORK"
 DEFAULT_RUN_DIR = "qt-mcp-runs"
 STAGING_DIR = ".staging"
-#: Run kinds -> (spec model, child target, summary schema).
-RUN_KINDS: dict[str, tuple[type[sp.SpecModel], str, str]] = {
-    "shadows": (sp.ShadowSampleSpec, "queuetruth.mcp.local:_child_sample", "qt.shadow_sample_summary"),
-    "replay": (sp.ReplaySpec, "queuetruth.mcp.local:_child_replay", "qt.replay_summary"),
-    "zoo": (sp.ZooSpec, "queuetruth.mcp.local:_child_zoo", "qt.zoo_summary"),
+#: The child target of every run: `queuetruth.runner.run` on the operation named in the request.
+OP_TARGET = "queuetruth.mcp.local:_child_op"
+
+
+def run_operations() -> dict[str, OperationDef]:
+    """The operations run mode runs: every operation of the table with an MCP tool, by name."""
+    return {name: op for name, op in table().items() if op.tool is not None}
+
+
+def _schema_name(op: OperationDef) -> str | None:
+    return getattr(op.document, "SCHEMA", None)
+
+
+#: Run kinds (operation names) -> (spec model, child target, summary schema or None for a verb's document).
+RUN_KINDS: dict[str, tuple[type[Any], str, str | None]] = {
+    name: (op.spec, OP_TARGET, _schema_name(op)) for name, op in run_operations().items()
 }
 WHY_TARGET = "queuetruth.mcp.local:_child_why"
 #: Environment variables a run child inherits (everything else, `QT_*` included, is dropped).
@@ -395,8 +391,9 @@ def run_mode_unsupported() -> str | None:
     return None
 
 
-class Sandbox:
-    """Allowed input roots and the run root of run mode (every path is a realpath)."""
+class Sandbox(Roots):
+    """Allowed input roots and the run root of run mode (every path is a realpath): `queuetruth.runner.Roots` with
+    `QT_MCP_ROOT` first (relative paths start there), then `QT_MCP_DATA_ROOTS` and the run root."""
 
     def __init__(
         self,
@@ -406,12 +403,12 @@ class Sandbox:
         run_root: str | os.PathLike[str] | None = None,
     ) -> None:
         base = root if root is not None else os.environ.get(ENV_ROOT) or os.getcwd()
-        self.root = Path(os.path.realpath(Path(base).expanduser()))
+        real_base = Path(os.path.realpath(Path(base).expanduser()))
         extra = data_roots if data_roots is not None else _split_roots(os.environ.get(ENV_DATA_ROOTS))
-        run = run_root if run_root is not None else os.environ.get(ENV_RUN_ROOT) or self.root / DEFAULT_RUN_DIR
+        run = run_root if run_root is not None else os.environ.get(ENV_RUN_ROOT) or real_base / DEFAULT_RUN_DIR
         self.run_root = Path(os.path.realpath(Path(run).expanduser()))
-        roots = [self.root, *(Path(os.path.realpath(Path(r).expanduser())) for r in extra), self.run_root]
-        self.roots: tuple[Path, ...] = tuple(dict.fromkeys(roots))
+        super().__init__([real_base, *extra, self.run_root], base=real_base)
+        self.env_hint = f"{ENV_ROOT}, {ENV_DATA_ROOTS}, {ENV_RUN_ROOT}"
         for r in self.roots:
             if _too_broad(r):
                 raise QtError(
@@ -420,38 +417,6 @@ class Sandbox:
                     f"set {ENV_ROOT} (default: the working directory), {ENV_DATA_ROOTS} and {ENV_RUN_ROOT} to the "
                     "directories that hold the datasets and the run outputs",
                 )
-
-    def inside(self, path: Path) -> Path | None:
-        """The real path of `path` when it lies inside an allowed root, else None."""
-        real = Path(os.path.realpath(path))
-        return real if any(real == r or r in real.parents for r in self.roots) else None
-
-    def resolve(self, path: str, what: str) -> Path:
-        """Real path of an input (relative paths from `QT_MCP_ROOT`) inside the allowed roots, which must exist."""
-        if not isinstance(path, str) or not path or "\x00" in path:
-            raise QtError("QT-USAGE-001", f"{what}: path must be a non-empty string")
-        p = Path(path).expanduser()
-        real = self.inside(p if p.is_absolute() else self.root / p)
-        if real is None:
-            raise QtError(
-                "QT-CONFIG-001",
-                f"{what}: {path!r} is outside the allowed roots",
-                f"allowed: {', '.join(str(r) for r in self.roots)} ({ENV_ROOT}, {ENV_DATA_ROOTS}, {ENV_RUN_ROOT})",
-            )
-        if not real.exists():
-            raise QtError("QT-INPUT-001", f"{what}: {path!r}: no such file or directory")
-        return real
-
-    def check_tree(self, top: Path, what: str) -> None:
-        """`check_dataset_tree` against the allowed roots: `manifest.json` first, then no symlink leading out."""
-        check_dataset_tree(top, self.inside, what)
-
-    def rel(self, path: Path) -> str:
-        """`path` relative to `QT_MCP_ROOT` when inside it, else absolute (POSIX separators)."""
-        try:
-            return path.relative_to(self.root).as_posix() or "."
-        except ValueError:
-            return path.as_posix()
 
 
 @dataclass
@@ -462,6 +427,9 @@ class RunResult:
     summary: dict[str, Any]
     out: Path
     cached: bool
+    #: the answer line of the result (`.summary` of the shared result shape), when it has one
+    answer: str | None = None
+    warnings: list[str] = field(default_factory=list)
 
 
 def child_env(workdir: str, threads: int) -> dict[str, str]:
@@ -564,12 +532,14 @@ def _signal_name(rc: int) -> str:
 class LocalRunner:
     """Runs shadow sampling, replay, zoo and why on local datasets in limited child processes (run mode)."""
 
-    def __init__(self, sandbox: Sandbox, limits: RunLimits | None = None) -> None:
+    def __init__(self, sandbox: Sandbox, limits: RunLimits | None = None, *, allow_network: bool = False) -> None:
         missing = run_mode_unsupported()
         if missing is not None:
             raise QtError("QT-CONFIG-001", f"run mode needs {missing}, which this platform lacks", "use a POSIX host")
         self.sandbox = sandbox
         self.limits = limits or RunLimits()
+        #: whether a run may reach the network (`QT_MCP_ALLOW_NETWORK`); off, a spec that needs it is refused
+        self.allow_network = allow_network
         self._limiter: Any = None
         self._run_locks: dict[str, Any] = {}
         self.own_dir(self.sandbox.run_root / STAGING_DIR)
@@ -600,25 +570,6 @@ class LocalRunner:
 
     # ---- validation -------------------------------------------------------------------------------------------
 
-    def _resolve_refs(self, value: Any, loc: str) -> Any:
-        if isinstance(value, dict):
-            if is_ref(value):
-                if set(value) != {"path"}:
-                    key = next(iter(value))
-                    raise QtError(
-                        "QT-CONFIG-001",
-                        f'{loc}: {key} references are service ids; local runs take {{"path": ...}}',
-                        "use the remote submit tools for service datasets and uploads",
-                    )
-                real = self.sandbox.resolve(str(value["path"]), loc)
-                if real.is_dir():
-                    self.sandbox.check_tree(real, loc)
-                return {"path": str(real)}
-            return {k: self._resolve_refs(v, f"{loc}.{k}") for k, v in value.items()}
-        if isinstance(value, list):
-            return [self._resolve_refs(v, f"{loc}[{i}]") for i, v in enumerate(value)]
-        return value
-
     def _knob(self, name: str, value: int, limit: int) -> None:
         if value > limit:
             raise QtError(
@@ -627,45 +578,66 @@ class LocalRunner:
                 f"set QT_MCP_RUN_{_LIMIT_ENV.get(name, name).upper()} to raise it",
             )
 
-    def prepare(self, kind: str, spec: Any) -> sp.SpecModel:
-        """Validates a run spec: model, `out` null, path references inside the roots, compute knobs and shadow
-        counts within `RunLimits`. Returns the spec with resolved real paths."""
-        if kind not in RUN_KINDS:
+    def operation(self, kind: str) -> OperationDef:
+        """The operation of a run kind (`QT-USAGE-001` for one run mode does not run)."""
+        ops = run_operations()
+        if kind not in ops:
             raise QtError("QT-USAGE-001", f"unknown run kind {kind!r}")
-        model = RUN_KINDS[kind][0]
+        return ops[kind]
+
+    def prepare(self, kind: str, spec: Any) -> Any:
+        """Validates a run spec: model, no output location (`out` null), path references inside the roots, compute
+        knobs and shadow counts within `RunLimits`, and no network unless allowed. Returns the spec with resolved
+        real paths."""
+        op = self.operation(kind)
+        model = op.spec
         if isinstance(spec, BaseModel):
             spec = spec.model_dump(mode="json")
         if not isinstance(spec, dict):
             raise QtError("QT-USAGE-001", "spec must be a JSON object")
-        if spec.get("out") is not None:
-            raise QtError("QT-CONFIG-001", "spec.out must be null: local runs write under the run root")
+        if op.out_field is not None and spec.get(op.out_field) is not None:
+            raise QtError("QT-CONFIG-001", f"spec.{op.out_field} must be null: local runs write under the run root")
         try:
             parsed = model.model_validate(spec)
         except ValidationError as e:
             err = e.errors()[0]
             where = ".".join(str(x) for x in err.get("loc", ()))
             raise QtError("QT-USAGE-001", f"invalid {model.__name__}: {where or '<spec>'}: {err['msg']}") from e
-        resolved = model.model_validate(self._resolve_refs(parsed.model_dump(mode="json"), "spec"))
+        doc = parsed.model_dump(mode="json")
+        resolved = model.model_validate(self.sandbox.refs(doc, "spec", resolve=True, path_refs_only=True))
         data = resolved.model_dump(mode="json")
         lim = self.limits
-        dataset = Path(data["dataset"]["path"])
-        if not dataset.is_dir():
-            raise QtError("QT-INPUT-001", f"spec.dataset: {self.sandbox.rel(dataset)} is not a dataset directory")
+        dataset: Path | None = None
+        if isinstance(data.get("dataset"), dict):
+            dataset = Path(data["dataset"]["path"])
+            if not dataset.is_dir():
+                raise QtError("QT-INPUT-001", f"spec.dataset: {self.sandbox.rel(dataset)} is not a dataset directory")
         for ref in ("shadows", "amends", "parity_bbo"):
             if isinstance(data.get(ref), dict) and not Path(data[ref]["path"]).is_file():
                 raise QtError("QT-INPUT-001", f"spec.{ref}: {self.sandbox.rel(Path(data[ref]['path']))} is not a file")
-        self._knob("threads", int(data.get("threads", 1)), lim.max_threads)
-        if "particles" in data:
+        if data.get("threads") is not None:
+            self._knob("threads", int(data["threads"]), lim.max_threads)
+        if data.get("particles") is not None:
             self._knob("particles", int(data["particles"]), lim.max_particles)
-        if "bootstrap_b" in data:
+        if data.get("bootstrap_b") is not None:
             self._knob("bootstrap_b", int(data["bootstrap_b"]), lim.max_bootstrap)
         if kind == "zoo":
             self._knob("models", len(data["models"]), lim.max_models)
             self._knob("horizons_ns", len(data["horizons_ns"]), lim.max_horizons)
         if kind == "shadows":
+            assert dataset is not None
             self._knob("n", sample_bound(dataset, data), lim.max_shadows)
         elif isinstance(data.get("shadows"), dict):
             self._knob("shadows", _parquet_rows(Path(data["shadows"]["path"]), "spec.shadows"), lim.max_shadows)
+        for name in ("n_shadows", "n"):  # the verbs' own shadow counts (fit, demo)
+            if kind != "shadows" and isinstance(data.get(name), int):
+                self._knob(name, int(data[name]), lim.max_shadows)
+        if op.uses_network(resolved) and not self.allow_network:
+            raise QtError(
+                "QT-CONFIG-001",
+                f"{kind}: this spec needs the network, which this server does not allow",
+                f"give a local source in the spec, or set {ENV_ALLOW_NETWORK}=1",
+            )
         return resolved
 
     def prepare_why(self, dataset_path: str, shadows_path: str, shadow_id: str) -> dict[str, Any]:
@@ -712,7 +684,7 @@ class LocalRunner:
             return None
         try:
             doc = json.loads(path.read_text(encoding="utf-8"), parse_constant=_reject_constant)
-            if not isinstance(doc, dict) or doc.get("schema") != RUN_KINDS[kind][2]:
+            if not isinstance(doc, dict) or doc.get("schema") != _schema_name(self.operation(kind)):
                 return None
             parse_document(doc)
         except (OSError, ValueError, ValidationError):
@@ -756,13 +728,20 @@ class LocalRunner:
         _remove(trash)
 
     async def run(self, kind: str, spec: Any) -> RunResult:
-        """Validates, then reuses a finished run of the same `run_id` or runs the spec in a limited child."""
+        """Validates, then reuses a finished run of the same `run_id` or runs the spec in a limited child. An
+        operation without a `run_id` (the verbs) runs every time, into a new directory."""
         import anyio
         import anyio.to_thread
 
         from queuetruth import api
 
         resolved = await anyio.to_thread.run_sync(self.prepare, kind, spec)
+        if not self.operation(kind).run_id:
+            import time
+
+            run_id = f"{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{secrets.token_hex(4)}"
+            async with await self._slot():
+                return await self._run_new(kind, run_id, resolved, self.out_dir(kind, run_id))
         try:
             run_id = await anyio.to_thread.run_sync(api.run_id, resolved)
         except ImportError as e:
@@ -781,7 +760,7 @@ class LocalRunner:
             if not lock.locked() and lock.statistics().tasks_waiting == 0:
                 self._run_locks.pop(key, None)
 
-    async def _run_new(self, kind: str, run_id: str, resolved: sp.SpecModel, dest: Path) -> RunResult:
+    async def _run_new(self, kind: str, run_id: str, resolved: Any, dest: Path) -> RunResult:
         free = self._check_disk()
         staging_root = self.own_dir(self.sandbox.run_root / STAGING_DIR)
         self.own_dir(dest.parent)
@@ -790,13 +769,23 @@ class LocalRunner:
         staging = staging_root / f"{kind}-{run_id}-{secrets.token_hex(4)}"
         staging.mkdir()
         try:
-            out = staging / "shadows.parquet" if kind == "shadows" else staging
-            data = resolved.model_copy(update={"out": str(out)}).model_dump(mode="json")
+            op = self.operation(kind)
+            data = resolved.model_dump(mode="json")
+            if op.out_field is not None:
+                data[op.out_field] = str(staging / op.out_name if op.out_name else staging)
             fsize = max(1, min(self.limits.max_output_bytes, free - self.limits.min_free_bytes))
-            summary = await self.spawn(
-                RUN_KINDS[kind][1], data, threads=int(data.get("threads", 1)), watch_dir=staging, fsize_bytes=fsize
-            )
-            if kind == "shadows" or not (staging / "summary.json").exists():
+            req = {
+                "op": kind,
+                "spec": data,
+                "roots": [str(r) for r in self.sandbox.roots],
+                "allow_network": self.allow_network,
+            }
+            threads = int(data.get("threads") or 1)
+            got = await self.spawn(OP_TARGET, req, threads=threads, watch_dir=staging, fsize_bytes=fsize)
+            if not isinstance(got, dict) or not isinstance(got.get("document"), dict):
+                raise QtError("QT-ENGINE-001", f"{kind} did not return a document")
+            summary = got["document"]
+            if op.out_name or not (staging / "summary.json").exists():
                 (staging / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
             total = _tree_bytes(staging)
             if total > self.limits.max_output_bytes:
@@ -812,7 +801,8 @@ class LocalRunner:
                 if hit is None:
                     raise QtError("QT-ENGINE-001", f"cannot place the outputs at {dest}") from None
                 return RunResult(kind, hit, dest, True)
-            return RunResult(kind, summary, dest, False)
+            warns = [str(w) for w in got.get("warnings") or []]
+            return RunResult(kind, summary, dest, False, got.get("summary"), warns)
         finally:
             shutil.rmtree(staging, ignore_errors=True)
 
@@ -1116,22 +1106,14 @@ def _dump_doc(doc: Any) -> dict[str, Any]:
     return doc.model_dump(mode="json", by_alias=True)
 
 
-def _child_sample(spec: dict[str, Any]) -> dict[str, Any]:
-    from queuetruth import api
+def _child_op(req: dict[str, Any]) -> dict[str, Any]:
+    """A run child: `queuetruth.runner.run` on the operation of the request, with the sandbox's roots (the spec's
+    paths were resolved in the parent; the runner checks them again) and its network setting."""
+    from queuetruth.runner import RunContext, run
 
-    return _dump_doc(api.sample_shadows(spec))
-
-
-def _child_replay(spec: dict[str, Any]) -> dict[str, Any]:
-    from queuetruth import api
-
-    return _dump_doc(api.replay(spec))
-
-
-def _child_zoo(spec: dict[str, Any]) -> dict[str, Any]:
-    from queuetruth import api
-
-    return _dump_doc(api.run_zoo(spec))
+    ctx = RunContext(roots=req["roots"], path_refs_only=True, allow_network=bool(req.get("allow_network")))
+    res = run(str(req["op"]), req["spec"], context=ctx)
+    return {"document": res.document, "summary": res.summary, "warnings": res.warnings}
 
 
 def _child_why(spec: dict[str, Any]) -> dict[str, Any]:
@@ -1148,10 +1130,12 @@ def output_links(out: Path, limit: int = MAX_LINKS) -> tuple[list[tuple[str, Pat
 
 
 __all__ = [
+    "ENV_ALLOW_NETWORK",
     "ENV_ALLOW_RUN",
     "ENV_DATA_ROOTS",
     "ENV_ROOT",
     "ENV_RUN_ROOT",
+    "OP_TARGET",
     "RUN_KINDS",
     "LocalOutputs",
     "LocalRunner",
@@ -1164,5 +1148,6 @@ __all__ = [
     "output_links",
     "proc_status_rss",
     "run_mode_unsupported",
+    "run_operations",
     "sample_bound",
 ]

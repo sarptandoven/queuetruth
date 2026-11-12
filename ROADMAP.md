@@ -15,7 +15,7 @@ referenced from code and scripts.
 - Valid intervals on short captures: with fewer than five bootstrap blocks, `zoo`, `report` and `zoo-toxicity` no
   longer print zero-width intervals or mark every model significant.
 - A truth sweep of README and the docs: the atlas linked from the first screen, one table of what is validated
-  (IEX DEEP+ now covers 22 days), no stale version labels.
+  (IEX DEEP+ now covers 24 days), no stale version labels.
 - Integrations that run as documented: the hftbacktest export defaults to an exchange that runs on the released
   hftbacktest; the NautilusTrader replay strategy works on 2.x; the plugin suites run in CI against real releases.
 

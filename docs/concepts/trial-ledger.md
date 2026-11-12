@@ -23,13 +23,13 @@ the ledger on and with `QT_LEDGER=off` and checks that every output file and eve
 
 | Kind | Recorded by | `run_id` and `trial_id` | Headline `metrics` |
 |---|---|---|---|
-| `shadows-sample` | `queuetruth shadows sample`, `queuetruth.sample_shadows` | recomputed from the summary's spec echo (SPEC 7.3) | `n` |
-| `zoo` | `queuetruth zoo`, `queuetruth.run_zoo` | the summary's `run_id` | `n_shadows`, `n_models`, `n_leaderboard`, `n_excluded_hbt_312`, `brier_mean:<model>` (mean Brier over the horizons), `best_model`, `best_margin` |
-| `calibrate` | `queuetruth calibrate ...`, `queuetruth.calibrate` | the summary's `run_id` | `kind`, `family`, `param_name`, `estimate`, `loglik`, `n_events`, `n_shadows`, `trust_verdict`, `held_out_brier_mean`, `baseline_held_out_brier_mean` |
-| `calibrate-live` | `queuetruth calibrate-live`, `queuetruth.calibrate_live` | the summary's `run_id` | as `calibrate` |
-| `fit-hazard` | `queuetruth fit-hazard`, `queuetruth.fit_hazard` | the `run_id` inside `model_id` | `model_id`, `n_rows_train`, `recalibration`, `test_*` scores |
-| `score` | `queuetruth score`, `queuetruth.score` | the summary's `run_id` | `n_orders`, `n_matched`, `twin_match_rate`, `signed_bias`, `gates_passed`, `headline` |
-| `variant` | `queuetruth ledger add`, `queuetruth.ledger.register_variant` | hash of (name, params, dataset, code version, outcome) | your own |
+| `shadows-sample` | `queuetruth advanced shadows sample`, `queuetruth.sample_shadows` | recomputed from the summary's spec echo (SPEC 7.3) | `n` |
+| `zoo` | `queuetruth advanced zoo`, `queuetruth.run_zoo` | the summary's `run_id` | `n_shadows`, `n_models`, `n_leaderboard`, `n_excluded_hbt_312`, `brier_mean:<model>` (mean Brier over the horizons), `best_model`, `best_margin` |
+| `calibrate` | `queuetruth advanced calibrate ...`, `queuetruth.calibrate` | the summary's `run_id` | `kind`, `family`, `param_name`, `estimate`, `loglik`, `n_events`, `n_shadows`, `trust_verdict`, `held_out_brier_mean`, `baseline_held_out_brier_mean` |
+| `calibrate-live` | `queuetruth advanced calibrate-live`, `queuetruth.calibrate_live` | the summary's `run_id` | as `calibrate` |
+| `fit-hazard` | `queuetruth advanced fit-hazard`, `queuetruth.fit_hazard` | the `run_id` inside `model_id` | `model_id`, `n_rows_train`, `recalibration`, `test_*` scores |
+| `score` | `queuetruth advanced score`, `queuetruth.score` | the summary's `run_id` | `n_orders`, `n_matched`, `twin_match_rate`, `signed_bias`, `gates_passed`, `headline` |
+| `variant` | `queuetruth advanced ledger add`, `queuetruth.ledger.register_variant` | hash of (name, params, dataset, code version, outcome) | your own |
 
 The zoo's own selection (the best of `n_models` fill models, by how much) and a calibration's held-out score against
 the default are in `metrics`, so "which model won, out of how many, by how much" can be answered from the ledger.
@@ -186,11 +186,11 @@ came from. Either way the number is a lower bound (see the top of this page).
 
 | Command | Does |
 |---|---|
-| `queuetruth ledger list [filters] [--limit N]` | the newest records (default 20, `0` = all), oldest first |
-| `queuetruth ledger stats [filters]` | trials, configurations, records and failed runs, by kind and by study |
-| `queuetruth ledger export --out PATH [filters] [--selection [--series scores] [--allow-mixed]]` | `.jsonl` (the whole chain, byte for byte, with its series files copied to `series/` next to it, verifiable on its own; no filter), `.json` (`qt.ledger_dump`: records with their hashes and series values), `.parquet` (one row per record, series values included), or the selection inputs as `.json` |
-| `queuetruth ledger verify [--anchor SEQ:HASH]` | the full integrity check; exit 2 with `QT-LEDGER-001` when it fails |
-| `queuetruth ledger add --name NAME ...` | register a variant |
+| `queuetruth advanced ledger list [filters] [--limit N]` | the newest records (default 20, `0` = all), oldest first |
+| `queuetruth advanced ledger stats [filters]` | trials, configurations, records and failed runs, by kind and by study |
+| `queuetruth advanced ledger export --out PATH [filters] [--selection [--series scores] [--allow-mixed]]` | `.jsonl` (the whole chain, byte for byte, with its series files copied to `series/` next to it, verifiable on its own; no filter), `.json` (`qt.ledger_dump`: records with their hashes and series values), `.parquet` (one row per record, series values included), or the selection inputs as `.json` |
+| `queuetruth advanced ledger verify [--anchor SEQ:HASH]` | the full integrity check; exit 2 with `QT-LEDGER-001` when it fails |
+| `queuetruth advanced ledger add --name NAME ...` | register a variant |
 
 Filters: `--kind` (repeatable), `--study` and `--name` (globs), `--status ok|error|all`, `--since` and `--until`
 (ISO 8601 date or time, UTC when no offset, or ns), `--dataset`, `--run-id` and `--spec-hash` (prefixes). Every
@@ -202,11 +202,11 @@ command's help (the command is not listed in `queuetruth --help` yet).
 <!-- check-docs: run -->
 ```bash
 export QT_LEDGER_DIR="$PWD/ledger"
-queuetruth ledger add --name carry --params '{"tenor": "3m"}' --dataset "FX G10 2023"
-queuetruth ledger add --name carry --params '{"tenor": "6m"}' --dataset "FX G10 2023"
-queuetruth ledger stats
+queuetruth advanced ledger add --name carry --params '{"tenor": "3m"}' --dataset "FX G10 2023"
+queuetruth advanced ledger add --name carry --params '{"tenor": "6m"}' --dataset "FX G10 2023"
+queuetruth advanced ledger stats
 queuetruth --format json ledger verify > verify.json
-queuetruth ledger export --out ledger.parquet
+queuetruth advanced ledger export --out ledger.parquet
 ```
 
 ## Tamper evidence

@@ -16,12 +16,18 @@ of hftbacktest, NautilusTrader and Databento, fits their parameters, and scores 
 fills, order by order.
 
 **[The Fill-Realism Atlas](https://sarptandoven.github.io/queuetruth/)**, rebuilt from free IEX DEEP+ data: over 20
-trading days (2026-10-09 to 2026-11-06; 265,402 symbol-days, 12,440 symbols), the exact queue fills **11.97%** of
-small resting orders within 1 minute. NautilusTrader's touch fill model fills **1.50 pp more** (13% more orders; 95%
-interval +1.45 to +1.55 pp), NautilusTrader's `queue_position` model is closest at +0.06 pp, and hftbacktest's L3
-FIFO model fills 1.82 pp fewer because of hftbacktest's own rules: it skips hidden executions and counts a
+trading days (2026-10-15 to 2026-11-11; 265,351 symbol-days, 12,456 symbols), the exact queue fills **12.20%** of
+small resting orders within 1 minute. NautilusTrader's touch fill model fills **1.48 pp more** (12% more orders; 95%
+interval +1.42 to +1.53 pp), NautilusTrader's `queue_position` model is closest at +0.06 pp, and hftbacktest's L3
+FIFO model fills 1.88 pp fewer because of hftbacktest's own rules: it skips hidden executions and counts a
 trade-through only through the feed's best price ([why](https://github.com/sarptandoven/queuetruth/blob/main/scripts/scale/findings/l3-fifo-gap.md)). IEX is one
 venue with its own rules; [how the atlas is made](https://sarptandoven.github.io/queuetruth/docs/concepts/fill-realism-atlas/).
+
+Backtests on bars (Freqtrade, Backtrader, LEAN, VectorBT, backtesting.py) fill a resting limit order when a bar
+touches its price. Of those fills on 1-minute bars, about 1 in 9 had not happened in the real queue by the end of
+the bar (88.8% had; 95% interval 88.3% to 89.2%); on 1-hour bars 97.1% had. IEX prints are
+sparser than consolidated candles, so on those more of the fills are not real:
+[touch tables](https://sarptandoven.github.io/queuetruth/docs/concepts/touch-tables/).
 
 ## See it in a minute
 
@@ -84,13 +90,13 @@ Every term (shadow, zoo, exact arm, faithful and corrected) is in the
 
 | You have | You get | Read it with |
 |---|---|---|
-| Order-level data: Nasdaq TotalView-ITCH 5.0, IEX DEEP+ (free), NYSE TAQ Integrated Feed, Databento DBN MBO, Coinbase `level3`, Kraken L3, Hyperliquid node, Bitstamp, Bitfinex | exact replay, shadow orders, the zoo, calibration | `queuetruth ingest --format itch \| iex-deep-plus \| nyse-ibf \| dbn \| ...` |
+| Order-level data: Nasdaq TotalView-ITCH 5.0, IEX DEEP+ (free), NYSE TAQ Integrated Feed, Databento DBN MBO, Coinbase `level3`, Kraken L3, Hyperliquid node, Bitstamp, Bitfinex | exact replay, shadow orders, the zoo, calibration | `queuetruth data add FILES --out DATASET` (format, venue and date read from the files) |
 | An L2-only tape (Tardis `incremental_book_L2` and trades) | the queue models, markouts and a parameter fitted to your fills; never exact truth | `ingest --format tardis-l2` |
-| Your live orders and fills: Binance, Bybit, OKX, Coinbase, Kraken, Deribit, Hyperliquid, IBKR Flex, FIX 4.4 drop copies, QuickFIX logs | the sim-vs-live scorecard, `calibrate-live`, a latency fit | `queuetruth live import --venue <venue>` |
+| Your live orders and fills: Binance, Bybit, OKX, Coinbase, Kraken, Deribit, Hyperliquid, IBKR Flex, FIX 4.4 drop copies, QuickFIX logs | the sim-vs-live scorecard, `calibrate-live`, a latency fit | `queuetruth advanced live import --venue <venue>` |
 | Your backtest's output: hftbacktest or NautilusTrader | your simulator scored order by order against your live fills | `live import --venue sim-hftbacktest` or `sim-nautilus`, then `score --sim-log` |
-| A Freqtrade backtest or dry run, or a Hummingbot paper bot, next to the bot's live run | each order paired with its twin, why it differs, and the scorecard | `queuetruth reconcile --kind freqtrade` or `hummingbot` |
-| A Backtrader or VectorBT backtest (an analyzer's JSON lines, or `records_readable` CSV / JSON) and your live log | the same per-order account, and the backtest scored against live or exact queues | `queuetruth reconcile --kind backtrader` or `vectorbt`; `live import --venue sim-backtrader` or `sim-vectorbt` |
-| A QuantConnect LEAN backtest (the result JSON and its order-events JSON) and your live log | the same per-order account and scorecard | `queuetruth reconcile --kind lean`; `live import --venue sim-lean` |
+| A Freqtrade backtest or dry run, or a Hummingbot paper bot, next to the bot's live run | each order paired with its twin, why it differs, and the scorecard | `queuetruth advanced reconcile --kind freqtrade` or `hummingbot` |
+| A Backtrader or VectorBT backtest (an analyzer's JSON lines, or `records_readable` CSV / JSON) and your live log | the same per-order account, and the backtest scored against live or exact queues | `queuetruth advanced reconcile --kind backtrader` or `vectorbt`; `live import --venue sim-backtrader` or `sim-vectorbt` |
+| A QuantConnect LEAN backtest (the result JSON and its order-events JSON) and your live log | the same per-order account and scorecard | `queuetruth advanced reconcile --kind lean`; `live import --venue sim-lean` |
 
 queuetruth ships no market data. Three commands download public data, each only after you agree (a prompt, or
 `--yes`): `demo` (a sample day), `data fetch iex` (a free IEX day) and `atlas` (the atlas files); commands that read
@@ -106,7 +112,7 @@ the atlas follow the same rule. Nothing is sent anywhere. You need a licence for
   on 100% of orders at 1 s, 10 s and 60 s; its hftbacktest models are bit-exact against a transliteration of
   hftbacktest's source.
 - **You can rerun all of it.** `make reproduce` streams the public day files and rebuilds every published number
-  from the raw bytes. `queuetruth certify` and `verify-cert --rerun` re-execute a result bit for bit.
+  from the raw bytes. `queuetruth advanced certify` and `queuetruth verify cert --rerun` re-execute a result bit for bit.
 
 What each check covers and what is not tested yet:
 [How queuetruth is tested](https://sarptandoven.github.io/queuetruth/docs/testing/).
@@ -118,7 +124,7 @@ What each check covers and what is not tested yet:
 | Area | Status |
 |---|---|
 | Nasdaq TotalView-ITCH: exact book, shadow orders and scorer on 2 public days | Validated on real data |
-| IEX DEEP+: exact book on 22 public days, in the atlas | Validated on real data |
+| IEX DEEP+: exact book on 24 public days, in the atlas | Validated on real data |
 | Calibration and the learned fill model, scored on a held-out Nasdaq day | Validated on real data |
 | NautilusTrader fill models, against the real engine | Checked against the library |
 | hftbacktest queue models, against a transliteration of its source | Checked against the library |
@@ -155,9 +161,9 @@ The whole workflow on a synthetic dataset generated on your machine (no download
 about markets):
 
 ```sh
-queuetruth fixtures synth --out synth
-queuetruth shadows sample --data synth --n 1000 --out shadows.parquet
-queuetruth zoo --data synth --shadows shadows.parquet --out zoo
+queuetruth advanced fixtures synth --out synth
+queuetruth advanced shadows sample --data synth --n 1000 --out shadows.parquet
+queuetruth advanced zoo --data synth --shadows shadows.parquet --out zoo
 ```
 
 The same from Python:

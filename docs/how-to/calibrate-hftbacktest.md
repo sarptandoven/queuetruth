@@ -5,7 +5,7 @@ settings, replace a guessed `power_prob_queue_model3(n)` with an `n` fitted agai
 queue, check it on data it was not fitted on, and paste the result into your backtest.
 
 **You need:** order-level (L3 or MBO) data for the venue you backtest (Nasdaq ITCH, IEX DEEP+, Databento DBN MBO,
-or your own Coinbase, Bitstamp or Bitfinex L3 captures) as a queuetruth dataset (`queuetruth ingest`, see
+or your own Coinbase, Bitstamp or Bitfinex L3 captures) as a queuetruth dataset (`queuetruth data add`, see
 [step 1 of the recipe by hand](#1-ingest-and-check-the-data)); `pip install queuetruth-hftbacktest` (it installs
 queuetruth); and, for scoring, a separate venv with hftbacktest 2.4.4.
 
@@ -83,12 +83,12 @@ print(res.text())
 ```
 
 `my-orders.parquet` is a `qt.shadow_spec` table of the orders to test: your own orders
-(`queuetruth shadows from-live`, see [Import fills from my venue or broker](import-live-logs.md)) or orders placed
+(`queuetruth advanced shadows from-live`, see [Import fills from my venue or broker](import-live-logs.md)) or orders placed
 like yours:
 
 <!-- check-docs: skip (needs user data) -->
 ```sh
-queuetruth shadows sample --data my-dataset --n 3000 --out my-orders.parquet \
+queuetruth advanced shadows sample --data my-dataset --n 3000 --out my-orders.parquet \
     --placements 0:0.7,-1:0.3 --qty lots:1:0.5,lots:5:0.5
 ```
 
@@ -125,7 +125,7 @@ error 14 (`InvalidOrderStatus`) when an order that completed through a fill equa
 happens on the synthetic dataset too. `run` then raises `QT-USAGE-001` with the code (pass `allow_stop=True` to get
 the output instead), and `score` scores only the orders entered before the stop, on the horizons that end before it,
 with a warning. To score a whole day, use `no_partial_fill_exchange()` (the default of `calibrate` and of
-`queuetruth export hftbacktest`) or a build with the fix (see the
+`queuetruth advanced export hftbacktest`) or a build with the fix (see the
 [hftbacktest integration](https://github.com/sarptandoven/queuetruth/tree/main/integrations/hftbacktest)).
 
 ### 2. Calibrate the queue model
@@ -140,13 +140,13 @@ print(cal.text())
 print(cal.code)
 ```
 
-For each of `power3`, `power2` and `power` (`families=`), `calibrate` runs `queuetruth calibrate alloc` on the train
+For each of `power3`, `power2` and `power` (`families=`), `calibrate` runs `queuetruth advanced calibrate alloc` on the train
 window and scores the fitted `n` and the default `n = 2` on the test window. Among the fits queuetruth's trust check
 lets through, the one with the smallest held-out log loss at 60 s (`horizon_ns=`) wins. `cal.text()` starts with the
 line to use, then a table of every family: the fitted `n`, its bootstrap 95% interval, the held-out log loss and
 fill-rate bias at that horizon for the fitted value and for `n = 2`, and the trust verdict with its reasons.
 
-`cal.code` is the `queuetruth export hftbacktest` snippet of the winner, unchanged, also written to
+`cal.code` is the `queuetruth advanced export hftbacktest` snippet of the winner, unchanged, also written to
 `hbt-cal/hbt_queue_model.py`: a `BacktestAsset` chain with `.power_prob_queue_model3(<n>)` (or the winning family's
 builder) and the exchange model of the fit, under a header with the fit, its intervals and the held-out verdict. The
 value has 6 significant digits; the full-precision estimate is in `hbt-cal/cal-<family>/calibration.json`.
@@ -254,8 +254,8 @@ The data is the synthetic quickstart dataset: CME rules, 2 instruments, 2 sessio
 
 <!-- check-docs: run -->
 ```sh
-queuetruth fixtures synth --out synth
-queuetruth replay --data synth --out synth-replay --parity-trades
+queuetruth advanced fixtures synth --out synth
+queuetruth advanced replay --data synth --out synth-replay --parity-trades
 ```
 
 <!-- check-docs: run -->
@@ -274,9 +274,9 @@ assert not bad and s["parity"]["pass"] and s["data_quality"]["verdict"] != "unus
 
 <!-- check-docs: run -->
 ```sh
-queuetruth shadows sample --data synth --n 2000 --out shadows.parquet \
+queuetruth advanced shadows sample --data synth --n 2000 --out shadows.parquet \
     --placements 0:0.7,-1:0.3 --qty lots:1:0.5,lots:5:0.5
-queuetruth calibrate alloc --family power3 --data synth --shadows shadows.parquet \
+queuetruth advanced calibrate alloc --family power3 --data synth --shadows shadows.parquet \
     --train 2026-06-15 --test 2026-06-16 --out cal-power3
 ```
 
@@ -317,7 +317,7 @@ drift, so run it through the zoo next to the default and look at where it is sti
 <!-- check-docs: run -->
 ```sh
 N=$(python -c 'import json; print(json.load(open("cal-power3/calibration.json"))["estimate"])')
-queuetruth zoo --data synth --shadows shadows.parquet --out zoo-check \
+queuetruth advanced zoo --data synth --shadows shadows.parquet --out zoo-check \
     --models "hbt_power3[n=2],hbt_power3[n=$N]"
 ```
 
@@ -338,7 +338,7 @@ for r in sorted(rows, key=lambda r: (r["model_id"], int(r["stratum"]))):
 
 ### 4. Export the snippet, or see why it is refused
 
-`queuetruth export` is fail-safe: it refuses to write a parameter that is not safe to paste. A calibration is
+`queuetruth advanced export` is fail-safe: it refuses to write a parameter that is not safe to paste. A calibration is
 exportable only if it has a finite estimate from at least 30 events, carries no refusing trust flag
 (`at_grid_edge`, `flat_likelihood`, `not_identified`, `degenerate_ci`, `own_orders_in_depth`), and beats the
 library's default out of sample: at every held-out horizon it is not worse than the default on log loss and Brier
@@ -350,7 +350,7 @@ exit code 1:
 
 <!-- check-docs: run exit=1 -->
 ```sh
-queuetruth export hftbacktest --calibration cal-power3/calibration.json --out hbt_snippet.py
+queuetruth advanced export hftbacktest --calibration cal-power3/calibration.json --out hbt_snippet.py
 ```
 
 <!-- check-docs: run -->
@@ -367,9 +367,9 @@ reasons on stderr. Use it to inspect a fit, not to paste it:
 
 <!-- check-docs: run -->
 ```sh
-queuetruth export hftbacktest --calibration cal-power3/calibration.json --out hbt_forced.py --force
+queuetruth advanced export hftbacktest --calibration cal-power3/calibration.json --out hbt_forced.py --force
 head -8 hbt_forced.py
-queuetruth export l2-npz --data synth --instrument-id 1 --date 2026-06-16 --out synth_l2_20260616.npz
+queuetruth advanced export l2-npz --data synth --instrument-id 1 --date 2026-06-16 --out synth_l2_20260616.npz
 ```
 
 The snippet text is also stored in `calibration.json` under `exports.hftbacktest.python` (with the same header when
@@ -384,8 +384,8 @@ The commands below need your data, so the docs check only checks their syntax.
 
 <!-- check-docs: skip (needs user data) -->
 ```sh
-queuetruth ingest --format coinbase --in coinbase_full_20261012.jsonl.gz --venue coinbase --out cb-ds
-queuetruth replay --data cb-ds --out cb-replay --parity-trades
+queuetruth data add coinbase_full_20261012.jsonl.gz --input-format coinbase --venue coinbase --out cb-ds
+queuetruth advanced replay --data cb-ds --out cb-replay --parity-trades
 ```
 
 Source formats: `itch`, `dbn`, `etcsv`, `parquet`, `bitstamp`, `bitfinex`, `coinbase` (and `tardis-l2`, which is
@@ -401,7 +401,7 @@ behind with sizes of 1 to 5 lots:
 
 <!-- check-docs: skip (needs user data) -->
 ```sh
-queuetruth shadows sample --data cb-ds --n 20000 --out cb-shadows.parquet \
+queuetruth advanced shadows sample --data cb-ds --n 20000 --out cb-shadows.parquet \
     --placements 0:0.7,-1:0.3 --qty lots:1:0.5,lots:5:0.5
 ```
 
@@ -412,7 +412,7 @@ cancelling orders, run `zoo` (step 4) and read the `cancel_bearing/` metrics in 
 cancel is a competing risk.
 
 If you already trade this venue, you can use your real orders instead:
-`queuetruth shadows from-live --live live/ --out cb-shadows.parquet` (see
+`queuetruth advanced shadows from-live --live live/ --out cb-shadows.parquet` (see
 [Import fills from my venue or broker](import-live-logs.md) for building `live/`). On an MBO venue your real orders
 are also in the tape. `calibrate alloc` has no flag to remove them, so each shadow sits behind its own twin; the zoo
 can (`zoo --exclude-order-ids FILE`, one MBO order id or `instrument_id,order_id` per line).
@@ -422,7 +422,7 @@ can (`zoo --exclude-order-ids FILE`, one MBO order id or `instrument_id,order_id
 <!-- check-docs: skip (needs user data) -->
 ```sh
 for fam in power power2 power3 databento; do
-  queuetruth calibrate alloc --family $fam --data cb-ds --shadows cb-shadows.parquet \
+  queuetruth advanced calibrate alloc --family $fam --data cb-ds --shadows cb-shadows.parquet \
       --train 2026-10-12,2026-10-13 --test 2026-10-14 --out cal-$fam
 done
 ```
@@ -471,7 +471,7 @@ Brier comparison.
 <!-- check-docs: skip (needs user data) -->
 ```sh
 N=$(python -c 'import json; print(json.load(open("cal-power3/calibration.json"))["estimate"])')
-queuetruth zoo --data cb-ds --shadows cb-shadows.parquet --out zoo-check \
+queuetruth advanced zoo --data cb-ds --shadows cb-shadows.parquet --out zoo-check \
     --models "hbt_power3[n=2],hbt_power3[n=$N],hbt_risk_adverse" --write-trajectory
 queuetruth report --in zoo-check --out zoo-check.html
 ```
@@ -488,8 +488,8 @@ If you have a live order log with local send, exchange and local receive timesta
 
 <!-- check-docs: skip (needs user data) -->
 ```sh
-queuetruth calibrate latency --live live/ --out cal-latency
-queuetruth export latency-npz --live live/ --out order_latency.npz
+queuetruth advanced calibrate latency --live live/ --out cal-latency
+queuetruth advanced export latency-npz --live live/ --out order_latency.npz
 ```
 
 `cal-latency/calibration.json` (kind `latency`) holds p10, p50, p90 and p99 of the entry, response, cancel and
@@ -506,7 +506,7 @@ the bare file name `latency.npz`, so point it at `cal-latency/latency.npz`.
 
 <!-- check-docs: skip (needs user data) -->
 ```sh
-queuetruth export hftbacktest --calibration cal-power3/calibration.json --out hbt_snippet.py
+queuetruth advanced export hftbacktest --calibration cal-power3/calibration.json --out hbt_snippet.py
 ```
 
 If the calibration is refused, the command exits 1 with `QT-CALIB-001` and the reasons, and writes nothing (see
@@ -556,7 +556,7 @@ view and run your backtest on it:
 
 <!-- check-docs: skip (needs user data) -->
 ```sh
-queuetruth export l2-npz --data cb-ds --instrument-id 1 --date 2026-10-14 --out cb_l2_20261014.npz
+queuetruth advanced export l2-npz --data cb-ds --instrument-id 1 --date 2026-10-14 --out cb_l2_20261014.npz
 ```
 
 `--l2-depth`, `--l2-cadence-ns` and `--l2-trades` must match the fit (defaults: 10 levels, no conflation, trades
@@ -565,7 +565,7 @@ before depth); `--feed-latency-ns` sets `local_ts = ts_recv + latency`.
 ## Limits
 
 - One hftbacktest order per scheduled order. `prepare` leaves out later legs of a re-priced live order; to replay
-  those, use `queuetruth export replay-schedule` and `queuetruth score --sim-log` directly.
+  those, use `queuetruth advanced export replay-schedule` and `queuetruth advanced score --sim-log` directly.
 - The per-horizon comparison is of first fills, at the replay step's time resolution.
 - A fitted `n` is specific to the venue, feed, depth and orders it was fitted on: refit when they change.
 

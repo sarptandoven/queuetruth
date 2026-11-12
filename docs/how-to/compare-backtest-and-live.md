@@ -15,7 +15,7 @@ mid, which gives the markouts and the P&L gap per order, and the live orders are
 
 `compare` is the everyday front door. It reads which backtester wrote the backtest and what the live records are,
 then runs the comparison queuetruth already has for that pair. Nothing is computed twice: the pairing and the
-reasons are `queuetruth reconcile`'s, the scorecard, time to fill, markouts and P&L gap are `queuetruth score`'s.
+reasons are `queuetruth advanced reconcile`'s, the scorecard, time to fill, markouts and P&L gap are `queuetruth advanced score`'s.
 
 | Backtest | Live records | What `compare` runs |
 |---|---|---|
@@ -196,7 +196,7 @@ Files in the output directory (default `qt-compare`):
 | `orders.csv` | one row per order: symbol, side, prices as decimals, times in the venue's local time (`tz`), both outcomes, the reason, the price and P&L gap |
 | `compare.json` | the `qt.compare` document: every answer line and the numbers behind it |
 | `compare.html` | with `--html`, the report page |
-| `reconcile.json`, `reconcile_orders.csv`, `live/`, `sim/`, `score/` | for bots and bar backtesters, the reconciliation as `queuetruth reconcile` writes it |
+| `reconcile.json`, `reconcile_orders.csv`, `live/`, `sim/`, `score/` | for bots and bar backtesters, the reconciliation as `queuetruth advanced reconcile` writes it |
 | `live-import/`, `backtest/`, `score/`, `exact/` | for event-driven simulators, the imported logs and the scorecards |
 
 ## When `compare` asks for something
@@ -209,6 +209,6 @@ Files in the output directory (default `qt-compare`):
   dataset's symbols (`BTC/USDT` matches `BTCUSDT`); a name that matches none is named in the error, and
   `--instrument-map FILE` says which dataset instrument it is.
 - **Keys.** An hftbacktest or NautilusTrader backtest whose orders carry no live order key was not run on the
-  live schedule; the error says so. Run it on the schedule `queuetruth export replay-schedule` writes.
+  live schedule; the error says so. Run it on the schedule `queuetruth advanced export replay-schedule` writes.
 
-`queuetruth reconcile` and `queuetruth score` stay available with every option for scripted use.
+`queuetruth advanced reconcile` and `queuetruth advanced score` stay available with every option for scripted use.

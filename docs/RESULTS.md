@@ -582,7 +582,7 @@ rule (earlier: `prob_touch` +0.22 vs +2.33 pp at 1 s; `queue_l2_prob_touch` 0.89
 
 The NautilusTrader touch probability is the parameter that moves the held-out day: fitted `p = 0.29` cuts the 1 s
 overfill from +2.8 pp to +0.4 pp and more than halves the 1 s Brier score. For the power and Databento families the
-fitted and default values score about the same on day two, and `queuetruth export` refuses the fitted power3 `n`
+fitted and default values score about the same on day two, and `queuetruth advanced export` refuses the fitted power3 `n`
 (`QT-CALIB-001`: worse than the default `n = 2` at the 60 s and 5 min horizons, better at 1 s and 10 s); the driver records the
 refusal and writes the snippet with `--force` under its NOT VALIDATED header.
 
@@ -732,7 +732,7 @@ The day-one book replay is now limited by the order book itself: the engine appl
 reader's. The replay outputs of the day (`--rank-oracle --bbo change`) are byte-identical before and after. The other
 day-one targets of RD-13 were not re-measured here and stand as recorded on the loaded machine (etcsv ingest 1.69M
 rec/s, target 1.5M; zoo 17 models x 3,000 shadows 9.0 s faithful / 8.2 s corrected at 4 threads, target <= 90 s).
-Not re-measured either: the `qt.replay` vs `queuetruth replay` binding overhead (1.18x on the loaded machine, target
+Not re-measured either: the `qt.replay` vs `queuetruth advanced replay` binding overhead (1.18x on the loaded machine, target
 <= 1.05x), the day-one end-to-end budget (<= 15 min, <= 2 GB RSS) and the zoo single-thread target.
 
 ## 8. Reproduce

@@ -55,7 +55,7 @@ nothing about any real venue; it is only for learning the workflow.
 
 <!-- check-docs: run -->
 ```sh
-queuetruth fixtures synth --out synth
+queuetruth advanced fixtures synth --out synth
 (cd synth && shasum -a 256 -c MANIFEST.sha256 > /dev/null && echo "synth: all files verified")
 ```
 
@@ -72,7 +72,7 @@ time. `shadows sample` draws them from the dataset: by default 60% join the best
 
 <!-- check-docs: run -->
 ```sh
-queuetruth shadows sample --data synth --n 1000 --out qt-shadows.parquet
+queuetruth advanced shadows sample --data synth --n 1000 --out qt-shadows.parquet
 ```
 
 **Run the zoo.** One pass feeds every record to the exact FIFO engine, which knows where each shadow sits in the
@@ -82,7 +82,7 @@ of the default set run on the L2 view. For every model and shadow you get the pr
 
 <!-- check-docs: run -->
 ```sh
-queuetruth zoo --data synth --shadows qt-shadows.parquet --out qt-zoo
+queuetruth advanced zoo --data synth --shadows qt-shadows.parquet --out qt-zoo
 ls qt-zoo
 ```
 
@@ -92,7 +92,7 @@ minus exact truth, in percentage points, `*` where the 95% interval excludes 0),
 orders vs 57.0% in the exact replay, 0.8 pp less often"). Every model is scored on the same shadows. Faithful
 hftbacktest models stop on some orders where hftbacktest itself would have aborted the backtest (its issue #312);
 those shadows are left out of every model and one warning line counts them (`--verbose` prints each model's count;
-see [The L2 model zoo](concepts/l2-model-zoo.md)). `queuetruth zoo --list-models` lists the model ids.
+see [The L2 model zoo](concepts/l2-model-zoo.md)). `queuetruth advanced zoo --list-models` lists the model ids.
 
 **Read these numbers as a demonstration of the workflow, not as evidence.** The synthetic order flow is not built to
 make queue position matter, so this leaderboard says nothing about real markets. The evidence about real markets is the leaderboard on two public
@@ -146,7 +146,7 @@ Replay the dataset with the shadows to get each order's exact fill timeline and 
 
 <!-- check-docs: run -->
 ```sh
-queuetruth replay --data synth --shadows qt-shadows.parquet --out qt-replay
+queuetruth advanced replay --data synth --shadows qt-shadows.parquet --out qt-replay
 ```
 
 `qt-replay/` holds `summary.json`, `shadow_results.parquet` (one row per shadow: when it went live, queue ahead at
@@ -264,7 +264,7 @@ prints pp. `front_of_queue` overfills this log by several pp, so the gate fails 
 <!-- check-docs: run -->
 ```sh
 set +e
-queuetruth score --live synth/own_orders/live --data synth --sim-model front_of_queue --out sc \
+queuetruth advanced score --live synth/own_orders/live --data synth --sim-model front_of_queue --out sc \
     --fail-abs-bias 0.02 --format json > sc.json
 rc=$?
 set -e

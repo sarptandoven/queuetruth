@@ -104,9 +104,9 @@ the summary's `unmapped_instruments` and its orders cannot be scheduled. Decimal
 
 <!-- check-docs: run -->
 ```sh
-queuetruth live import --venue fix44 --fix-venue-name cme --account desk1 \
+queuetruth advanced live import --venue fix44 --fix-venue-name cme --account desk1 \
     --instrument-map instrument_map.csv --in quickfix-logs --out live
-queuetruth live validate --live live
+queuetruth advanced live validate --live live
 ```
 
 The warnings report the session (application messages, one possible-duplicate resend dropped), the log format it
@@ -134,9 +134,9 @@ the scorer replays:
 <!-- check-docs: run -->
 ```sh
 python -c "from queuetruth.live import latency_stats; s = latency_stats('live'); print(s['entry_ns'], s['ack_rtt_ns'])"
-queuetruth calibrate latency --live live --out cal-latency
-queuetruth export latency-npz --live live --out order_latency.npz
-queuetruth shadows from-live --live live --out schedule.parquet
+queuetruth advanced calibrate latency --live live --out cal-latency
+queuetruth advanced export latency-npz --live live --out order_latency.npz
+queuetruth advanced shadows from-live --live live --out schedule.parquet
 ```
 
 `entry_ns` is the ack's TransactTime minus your send time and `response_ns` your receive time minus the ack's
@@ -171,9 +171,9 @@ The same from the command line:
 
 <!-- check-docs: skip (needs your QuickFIX files) -->
 ```sh
-queuetruth live import --venue fix44 --fix-venue-name cme --account desk1 --instrument-map instrument_map.csv \
+queuetruth advanced live import --venue fix44 --fix-venue-name cme --account desk1 --instrument-map instrument_map.csv \
     --fix-data-dictionary FIX44-venue.xml --in /var/log/quickfix --in /var/lib/quickfix/store --out live
-queuetruth live validate --live live
+queuetruth advanced live validate --live live
 ```
 
 Read the warnings before scoring. An inbound sequence gap that was never resent is reported; a CumQty jump across it
@@ -187,9 +187,9 @@ Market, IOC and FOK orders are imported but not scheduled.
 <!-- check-docs: skip (needs market data) -->
 ```sh
 # order-level, for example a CME product from Databento DBN MBO
-queuetruth ingest --format dbn --in glbx-mdp3-20261015.mbo.dbn.zst --venue cme --out ds
+queuetruth data add glbx-mdp3-20261015.mbo.dbn.zst --input-format dbn --venue cme --out ds
 # or L2 only, for example a crypto venue through Tardis
-queuetruth ingest --format tardis-l2 --venue generic --in book_l2.csv.gz --in trades.csv.gz --out ds
+queuetruth data add book_l2.csv.gz trades.csv.gz --input-format tardis-l2 --venue generic --out ds
 ```
 
 Then make the instrument map's `instrument_id` match `ds/instruments.parquet`, and record the data vintage (see
@@ -199,9 +199,9 @@ Then make the instrument map's `instrument_id` match `ds/instruments.parquet`, a
 
 <!-- check-docs: skip (needs your live log and market data) -->
 ```sh
-queuetruth score --live live --data ds --sim exact --out sc-exact                    # order-level data only
-queuetruth score --live live --data ds --sim-model "hbt_power3[n=2]" --out sc-power3  # any zoo model
-queuetruth score --live live --data ds --sim-log my-backtest-log --out sc-mine        # your simulator's output
+queuetruth advanced score --live live --data ds --sim exact --out sc-exact                    # order-level data only
+queuetruth advanced score --live live --data ds --sim-model "hbt_power3[n=2]" --out sc-power3  # any zoo model
+queuetruth advanced score --live live --data ds --sim-log my-backtest-log --out sc-mine        # your simulator's output
 queuetruth report --in sc-exact --in sc-power3 --in sc-mine --out scorecards.html
 ```
 
@@ -214,7 +214,7 @@ queuetruth report --in sc-exact --in sc-power3 --in sc-mine --out scorecards.htm
   and fill logic from your entry latency; `--entry send-plus-latency` starts it at your send time plus the measured
   latency.
 - `--sim-log` takes your backtester's output as a canonical log with the same `order_key`s.
-  `queuetruth export replay-schedule --target hftbacktest|nautilus --live live --data ds --out FILE` writes a
+  `queuetruth advanced export replay-schedule --target hftbacktest|nautilus --live live --data ds --out FILE` writes a
   program that replays this schedule in your simulator, and `live import --venue sim-hftbacktest|sim-nautilus`
   reads its output back ([Score my Nautilus backtest](score-nautilus-vs-binance.md)).
 
@@ -225,7 +225,7 @@ then the order counts and the 2x2 table; [Scorecard statistics](../concepts/scor
 
 <!-- check-docs: skip (needs your live log and market data) -->
 ```sh
-queuetruth score --live live --data ds --sim-log my-backtest-log --out sc \
+queuetruth advanced score --live live --data ds --sim-log my-backtest-log --out sc \
     --fail-abs-bias 0.02 --fail-not-equivalent
 ```
 

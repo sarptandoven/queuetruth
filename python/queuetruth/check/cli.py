@@ -150,7 +150,7 @@ def main(argv: list[str]) -> int:
             instrument_map=args.instrument_map,
             out=args.out,
             window=args.window,
-            markout=args.markout,
+            horizon=args.markout,
             options=_options(args.option),
             tier=args.tier,
             bar=args.bar,

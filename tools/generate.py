@@ -13,17 +13,18 @@ The steps, in order (a later step reads what an earlier one writes):
 
 1. importers: the importer registry -> `LiveImportSpec.venue` values and the CLI's live-import rules
 2. schemas: JSON Schemas, Arrow schemas, samples, run id known answers and the Rust `LiveVenue`
-3. openapi: service/openapi.json
-4. python-commands: the clap rows of the Python-only command groups
-5. extension: rebuilds `queuetruth._core` (`make develop`) when a step above changed a Rust file; the steps
+3. rust-specs: the Rust spec structs (`crates/schema/src/specs_gen.rs`) from the JSON Schemas and samples
+4. openapi: service/openapi.json
+5. python-commands: the clap rows of the Python-only command groups
+6. extension: rebuilds `queuetruth._core` (`make develop`) when a step above changed a Rust file; the steps
    below read the CLI grammar through it (write mode only)
-6. cli-golden: the CLI parse golden files (`QT_BLESS=1 cargo test -p queuetruth-cli --test cli_parse`)
-7. reference: docs/reference/*.md (CLI, Python API, HTTP API, MCP, schemas, importers)
-8. validated: docs/validated.md and the README status block
-9. readme-chart: docs/assets/fill-bias-1s.svg from docs/RESULTS.md
-10. zoo-fixtures: the O-ZOO-2 / O-ZOO-4 parity fixtures (python/tests/zoo/gen_fixtures.py)
-11. synth-fixtures: the synthetic tapes, own orders and referee fixtures (`make fixtures`)
-12. nyse-fixtures: the synthetic NYSE Integrated Feed days (`QT_BLESS=1 cargo test -p queuetruth-ingest`)
+7. cli-golden: the CLI parse golden files (`QT_BLESS=1 cargo test -p queuetruth-cli --test cli_parse`)
+8. reference: docs/reference/*.md (CLI, Python API, HTTP API, MCP, schemas, importers)
+9. validated: docs/validated.md and the README status block
+10. readme-chart: docs/assets/fill-bias-1s.svg from docs/RESULTS.md
+11. zoo-fixtures: the O-ZOO-2 / O-ZOO-4 parity fixtures (python/tests/zoo/gen_fixtures.py)
+12. synth-fixtures: the synthetic tapes, own orders and referee fixtures (`make fixtures`)
+13. nyse-fixtures: the synthetic NYSE Integrated Feed days (`QT_BLESS=1 cargo test -p queuetruth-ingest`)
 
 Not run here, on purpose: scripts/reference/gen_all.py (reference values from SciPy, statsmodels and R, frozen and
 recorded with their versions in PROVENANCE.json), and the one-off fixture writers that need an outside tool
@@ -89,6 +90,12 @@ STEPS: tuple[Step, ...] = (
             "crates/schema/src/live_venue.rs",
         ),
         fix="make schemas",
+    ),
+    Step(
+        "rust-specs",
+        "Rust spec structs from the JSON Schemas, crates/schema/src/specs_gen.rs",
+        _py("scripts/gen_rust_specs.py"),
+        ("crates/schema/src/specs_gen.rs",),
     ),
     Step(
         "openapi",

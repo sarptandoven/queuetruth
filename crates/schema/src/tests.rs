@@ -1011,6 +1011,115 @@ fn json_mirrors_round_trip_committed_samples() {
     );
 }
 
+/// The bytes of a spec serialized through its generated struct (field order included; `Value` equality ignores it).
+fn spec_text<T: serde::Serialize + serde::de::DeserializeOwned>(name: &str, v: &Value) -> String {
+    let t: T = serde_json::from_value(v.clone()).unwrap_or_else(|e| panic!("{name}: deserialize: {e}\n{v}"));
+    serde_json::to_string_pretty(&t).unwrap_or_else(|e| panic!("{name}: serialize: {e}"))
+}
+
+fn spec_roundtrip_text(name: &str, v: &Value) -> Option<String> {
+    Some(match name {
+        "qt.ingest_spec" => spec_text::<specs::IngestSpec>(name, v),
+        "qt.replay_spec" => spec_text::<specs::ReplaySpec>(name, v),
+        "qt.shadow_sample_spec" => spec_text::<specs::ShadowSampleSpec>(name, v),
+        "qt.mirror_spec" => spec_text::<specs::MirrorSpec>(name, v),
+        "qt.zoo_spec" => spec_text::<specs::ZooSpec>(name, v),
+        "qt.calibration_spec" => spec_text::<specs::CalibrationSpec>(name, v),
+        "qt.feature_spec" => spec_text::<specs::FeatureSpec>(name, v),
+        "qt.hazard_fit_spec" => spec_text::<specs::HazardFitSpec>(name, v),
+        "qt.live_import_spec" => spec_text::<specs::LiveImportSpec>(name, v),
+        "qt.scorecard_spec" => spec_text::<specs::ScorecardSpec>(name, v),
+        "qt.report_spec" => spec_text::<specs::ReportSpec>(name, v),
+        "qt.referee_spec" => spec_text::<specs::RefereeSpec>(name, v),
+        "qt.why_spec" => spec_text::<specs::WhySpec>(name, v),
+        "qt.export_spec" => spec_text::<specs::ExportSpec>(name, v),
+        "qt.live_calibration_spec" => spec_text::<specs::LiveCalibrationSpec>(name, v),
+        _ => return None,
+    })
+}
+
+/// Every spec sample, and its `minimal` form, serializes through the generated struct to the same bytes as the
+/// committed sample and `defaults` documents (key order and number forms included).
+#[test]
+fn spec_samples_round_trip_byte_for_byte() {
+    let mut checked = 0;
+    for name in [
+        "qt.ingest_spec",
+        "qt.replay_spec",
+        "qt.shadow_sample_spec",
+        "qt.mirror_spec",
+        "qt.zoo_spec",
+        "qt.calibration_spec",
+        "qt.feature_spec",
+        "qt.hazard_fit_spec",
+        "qt.live_import_spec",
+        "qt.scorecard_spec",
+        "qt.report_spec",
+        "qt.referee_spec",
+        "qt.why_spec",
+        "qt.export_spec",
+        "qt.live_calibration_spec",
+    ] {
+        let doc = read_json(&repo().join(format!("schemas/samples/{name}.json")));
+        let pretty = |v: &Value| serde_json::to_string_pretty(v).unwrap_or_default();
+        assert_eq!(
+            spec_roundtrip_text(name, &doc["sample"]),
+            Some(pretty(&doc["sample"])),
+            "{name}: sample"
+        );
+        assert_eq!(
+            spec_roundtrip_text(name, &doc["minimal"]),
+            Some(pretty(&doc["defaults"])),
+            "{name}: defaults"
+        );
+        checked += 1;
+    }
+    assert_eq!(checked, 15);
+}
+
+/// `specs_gen.rs` is what `scripts/gen_rust_specs.py` wrote: its first line is the sha256 of the lines below it, so
+/// an edit by hand fails here (and `make generate-check` fails on any difference from the schemas).
+#[test]
+fn specs_gen_is_current() {
+    use sha2::{Digest, Sha256};
+    let path = repo().join("crates/schema/src/specs_gen.rs");
+    let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+    let (first, body) = text.split_once('\n').unwrap_or_default();
+    let want = first.strip_prefix("// sha256 of the lines below: ").unwrap_or_default();
+    assert_eq!(
+        hex::encode(Sha256::digest(body.as_bytes())),
+        want,
+        "crates/schema/src/specs_gen.rs was edited by hand: change python/queuetruth/schemas/specs.py or \
+         scripts/gen_rust_specs.py and run `make generate`"
+    );
+}
+
+/// Drift fixed with the generated structs: `partition_quotas` was a `BTreeMap`, which sorted the keys, while the
+/// schema object (a Python dict) keeps them in the order given.
+#[test]
+fn partition_quotas_keep_their_order() {
+    let v = serde_json::json!({"dataset": {"path": "d"}, "n": 1, "allocation": "per_partition",
+                               "partition_quotas": {"9": 1, "10_20200102": 2, "10": 3}});
+    let s: specs::ShadowSampleSpec = serde_json::from_value(v).unwrap_or_else(|e| panic!("{e}"));
+    let keys: Vec<&str> = s.partition_quotas.keys().map(String::as_str).collect();
+    assert_eq!(keys, ["9", "10_20200102", "10"]);
+    let text = serde_json::to_string(&s).unwrap_or_default();
+    assert!(
+        text.contains(r#""partition_quotas":{"9":1,"10_20200102":2,"10":3}"#),
+        "{text}"
+    );
+}
+
+/// The hand-written `DEFAULT_HORIZONS_NS` equals the schema default of `ZooSpec.horizons_ns`.
+#[test]
+fn default_horizons_match_the_schema() {
+    let doc = read_json(&repo().join("schemas/samples/qt.zoo_spec.json"));
+    assert_eq!(
+        doc["defaults"]["horizons_ns"],
+        serde_json::json!(specs::DEFAULT_HORIZONS_NS)
+    );
+}
+
 #[test]
 fn json_tags_are_checked() {
     let mut v = serde_json::to_value(json::DataQuality::default()).unwrap_or(Value::Null);

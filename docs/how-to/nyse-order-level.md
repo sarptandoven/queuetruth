@@ -133,7 +133,7 @@ and those days are labelled too.
 
 Two consequences. First, `--strict` cannot gate an NYSE dataset, because the label is always there; gate on the
 other reasons instead (the next section shows how). Second, the label does not reach every output yet: the zoo,
-calibration and the features engine read the dataset's feed gaps but not its verdict, so `queuetruth zoo` on NYSE
+calibration and the features engine read the dataset's feed gaps but not its verdict, so `queuetruth advanced zoo` on NYSE
 data still prints "exact fill rate" and "in the exact replay" for what is a FIFO approximation, and each shadow
 row's `dq_flags` in a replay reflects only its partition's book counters.
 
@@ -152,10 +152,10 @@ sets it for you.
 
 <!-- check-docs: run -->
 ```sh
-queuetruth ingest --format nyse-ibf --venue nyse \
+queuetruth advanced ingest --format nyse-ibf --venue nyse \
   --in "$QT_FIXTURES/nyse/EQY_US_NYSE_IBF_3_20260105.csv" --out nyse-ds
-queuetruth dq --data nyse-ds --out nyse-dq --fail-on fail
-queuetruth replay --data nyse-ds --out nyse-replay --rank-oracle
+queuetruth advanced dq --data nyse-ds --out nyse-dq --fail-on fail
+queuetruth advanced replay --data nyse-ds --out nyse-replay --rank-oracle
 ```
 
 <!-- check-docs: run -->
@@ -171,7 +171,7 @@ print("FIFO rank of each execution (0, 1, 2, 3, 4, 5+):", s["rank_oracle"]["fifo
 
 The replay's verdict is `warnings` only because of the label (2 instrument-days, `QTN` and `QTN B`; 10 displayed
 executions); its two reasons are `ingest: nyse_parity_ranks_approximate = 2` and `ingest verdict: warnings`. The
-book is clean (every invariant 0, `queuetruth dq` passes its book, sequence and trade-parity checks), and the rank
+book is clean (every invariant 0, `queuetruth advanced dq` passes its book, sequence and trade-parity checks), and the rank
 oracle finds 2 of the 10 executions behind the head of their FIFO queue, `[8, 2, 0, 0, 0, 0]`: 1011, filled before
 1010, and 1013, filled before the rest of 1012.
 
@@ -179,7 +179,7 @@ The same day on NYSE Arca, where the sell fills by time, ingests `clean` with no
 
 <!-- check-docs: run -->
 ```sh
-queuetruth ingest --format nyse-ibf --venue nyse \
+queuetruth advanced ingest --format nyse-ibf --venue nyse \
   --in "$QT_FIXTURES/nyse/EQY_US_ARCA_IBF_1_20260105.csv" --out arca-ds --strict
 ```
 
@@ -190,9 +190,9 @@ at 29.90 that would cross its stale 30.00 bid, and the reader clears its book fi
 
 <!-- check-docs: run -->
 ```sh
-queuetruth ingest --format nyse-ibf --venue nyse \
+queuetruth advanced ingest --format nyse-ibf --venue nyse \
   --in "$QT_FIXTURES/nyse/EQY_US_NYSE_IBF_4_20260105.csv" --out failover-ds
-queuetruth replay --data failover-ds --out failover-replay
+queuetruth advanced replay --data failover-ds --out failover-replay
 ```
 
 <!-- check-docs: run -->
@@ -211,7 +211,7 @@ assert replay["crossed_books_after_last"] == 0, replay
 ## Gate on the other reasons
 
 Every NYSE dataset is `warnings` because of the label, so `--strict` cannot tell it from a dataset with real faults,
-and `queuetruth dq --fail-on fail` lets feed gaps and sequence gaps through (they are warnings). This gate fails on
+and `queuetruth advanced dq --fail-on fail` lets feed gaps and sequence gaps through (they are warnings). This gate fails on
 everything `--strict` would, except the label: a counter reason of the ingest data quality other than
 `nyse_parity_ranks_approximate` (the `warning:` lines are informational, as for `--strict`), a reason of the replay's
 own book counters, or an `unusable` verdict.
@@ -244,11 +244,11 @@ the reader take the market, channels and date from the names:
 
 <!-- check-docs: skip (needs licensed NYSE files) -->
 ```sh
-queuetruth ingest --format nyse-ibf --venue nyse \
+queuetruth advanced ingest --format nyse-ibf --venue nyse \
   --in EQY_US_NYSE_IBF_1_20260701.gz --in EQY_US_NYSE_IBF_2_20260701.gz \
   --symbols "BRK A" --out nyse-20260701
-queuetruth dq --data nyse-20260701 --out nyse-20260701-dq --fail-on fail
-queuetruth replay --data nyse-20260701 --out nyse-20260701-replay --rank-oracle
+queuetruth advanced dq --data nyse-20260701 --out nyse-20260701-dq --fail-on fail
+queuetruth advanced replay --data nyse-20260701 --out nyse-20260701-replay --rank-oracle
 ```
 
 Read the ingest warnings first: the clock check, any feed gaps and failovers, and on NYSE the parity label. Then run
@@ -277,9 +277,9 @@ on the NYSE Arca file, and knows the FIFO rank of every execution it wrote:
 <!-- check-docs: run -->
 ```sh
 for m in NYSE ARCA; do
-  queuetruth ingest --format nyse-ibf --venue nyse \
+  queuetruth advanced ingest --format nyse-ibf --venue nyse \
     --in "$QT_FIXTURES/nyse/EQY_US_${m}_IBF_7_20260106.csv" --out "synth-$m"
-  queuetruth replay --data "synth-$m" --out "synth-$m-replay" --rank-oracle
+  queuetruth advanced replay --data "synth-$m" --out "synth-$m-replay" --rank-oracle
 done
 ```
 
@@ -320,7 +320,7 @@ Every number below comes from the runs above (2026-10-24) or from the tests in `
 |---|---|
 | `EQY_US_NYSE_IBF_3_20260105.csv` (52 lines) | 55 records (QTN 46, QTN B 9), 11 prints; 0 unknown references, 0 duplicate adds, 0 sequence gaps or regressions, 0 out-of-order timestamps; verdict `warnings` with the one reason `nyse_parity_ranks_approximate = 2` (`nyse_parity_executions` 10) |
 | its replay | 36 events, every invariant 0; rank oracle 10 executions, `[8, 2, 0, 0, 0, 0]`; verdict `warnings`, reasons `ingest: nyse_parity_ranks_approximate = 2` and `ingest verdict: warnings` |
-| its `queuetruth dq` | 11 checks pass, 1 warns (`dq_counters`: the label), 0 fail, 2 skipped; 11 replay trades against 11 source prints, 0 mismatches; 0 crossed or locked event ends |
+| its `queuetruth advanced dq` | 11 checks pass, 1 warns (`dq_counters`: the label), 0 fail, 2 skipped; 11 replay trades against 11 source prints, 0 mismatches; 0 crossed or locked event ends |
 | `EQY_US_ARCA_IBF_1_20260105.csv` (50 lines) | verdict `clean`, no label; `--strict` passes |
 | `EQY_US_NYSE_IBF_4_20260105.csv` (28 lines) | 22 records (QTF 17, QTG 5); 1 refresh run (`R` at sequence 24), 1 book cleared without a refresh (`QTG`, `R` at sequence 29), 1 trade cancel and 1 cross correction (INFO), 1 symbol-sequence gap of 2 messages, 1 unknown message type, 3 feed gaps; its replay: 0 crossed books |
 | An NYSE day without executions (test `the_label_follows_the_market_not_the_executions`) | labelled: `nyse_parity_ranks_approximate = 1`, verdict `warnings`, `--strict` fails |
@@ -344,8 +344,8 @@ The large day is not committed; this writes it again (about 155 MB) for your own
 ```sh
 QT_NYSE_SYNTH_OUT=$PWD/EQY_US_NYSE_IBF_1_20260106.csv \
   cargo test -p queuetruth-ingest --lib nyse::tests::write_large_synthetic_day -- --ignored --nocapture
-queuetruth ingest --format nyse-ibf --venue nyse --in EQY_US_NYSE_IBF_1_20260106.csv --out large
-queuetruth replay --data large --out large-replay --rank-oracle
+queuetruth data add EQY_US_NYSE_IBF_1_20260106.csv --input-format nyse-ibf --venue nyse --out large
+queuetruth advanced replay --data large --out large-replay --rank-oracle
 ```
 
 ## Limits
@@ -368,7 +368,7 @@ queuetruth replay --data large --out large-replay --rank-oracle
   does not carry (only attributed orders show a FirmID, counted `nyse_attributed_adds`).
 - **Where the label does not reach yet.** In a replay with shadow orders the label is in the run's `data_quality`;
   each shadow row's `dq_flags` reflects only its partition's book counters. The zoo, calibration and features
-  outputs do not carry it either, and `queuetruth zoo` calls the replay "exact" on NYSE data too.
+  outputs do not carry it either, and `queuetruth advanced zoo` calls the replay "exact" on NYSE data too.
 - **Auction allocations.** The opening, reopening and closing crosses allocate their volume by auction rules, not by
   the continuous book's parity or time. Their executions of displayed orders arrive as non-printable Order
   Executions (`F` and `C` flagged `PUBLISHER_SPECIFIC`), and replay infers shadow fills from them by FIFO as from
@@ -379,7 +379,7 @@ queuetruth replay --data large --out large-replay --rank-oracle
   approximations all the same; treat them as on this page.
 - **Before the NYSE open** orders of NYSE-listed symbols wait for the opening auction; if the displayed book locks or
   crosses meanwhile, replay counts those events in `crossed_books_after_last`, which can turn the verdict
-  `unusable` on a busy pre-opening. Check the `crossed_book` result of `queuetruth dq` on your first real day.
+  `unusable` on a busy pre-opening. Check the `crossed_book` result of `queuetruth advanced dq` on your first real day.
 - Non-displayed orders, the hidden part of reserve orders and auction-only interest are not on the feed; their
   executions arrive as hidden and cross prints.
 - The XDP binary captures that NYSE also publishes are not read, only the TAQ CSV product; the hosted service does

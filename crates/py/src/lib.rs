@@ -242,6 +242,14 @@ fn cli_parse(py: Python<'_>, argv: Vec<String>) -> PyResult<String> {
     }
 }
 
+/// Routes a command line before it is parsed (`qt_cli::route`): (argv as the commands run it, deprecation line or
+/// None).
+#[pyfunction]
+fn cli_route(argv: Vec<String>) -> (Vec<String>, Option<String>) {
+    let r = qt_cli::route(&argv);
+    (r.argv, r.deprecation)
+}
+
 /// Runs a native CLI command: (summary JSON, gate_failed).
 #[pyfunction]
 fn cli_run_native(py: Python<'_>, cmd_json: &str) -> PyResult<(String, bool)> {
@@ -404,6 +412,103 @@ fn run_id(py: Python<'_>, spec_json: &str) -> PyResult<String> {
         let v: Value =
             serde_json::from_str(spec_json).map_err(|e| QtError::Config(format!("run_id: invalid JSON: {e}")))?;
         ops::run_id(&v)
+    }))
+}
+
+fn parse_json(text: &str, what: &str) -> QtResult<Value> {
+    serde_json::from_str(text).map_err(|e| QtError::Config(format!("{what}: invalid JSON: {e}")))
+}
+
+/// Resolver over refs resolved by the caller: `refs_json` is `[[ref, sha256], ...]`, matched by canonical JSON.
+fn ref_table(refs_json: &str) -> QtResult<Vec<(String, String)>> {
+    let refs: Vec<(Value, String)> = serde_json::from_str(refs_json)
+        .map_err(|e| QtError::Config(format!("run_id: refs must be [[ref, sha256], ...]: {e}")))?;
+    refs.into_iter()
+        .map(|(r, h)| Ok((qt_schema::canonical_json(&r)?, h)))
+        .collect()
+}
+
+fn with_refs<T>(
+    spec_json: &str,
+    refs_json: &str,
+    f: impl Fn(&Value, &dyn Fn(&Value) -> QtResult<String>) -> QtResult<T>,
+) -> QtResult<T> {
+    let spec = parse_json(spec_json, "run_id")?;
+    let table = ref_table(refs_json)?;
+    let resolve = |r: &Value| -> QtResult<String> {
+        let key = qt_schema::canonical_json(r)?;
+        table
+            .iter()
+            .find(|(k, _)| *k == key)
+            .map(|(_, h)| h.clone())
+            .ok_or_else(|| QtError::Config(format!("run_id: no resolved sha256 for ref {key}")))
+    };
+    f(&spec, &resolve)
+}
+
+/// Identity document of `run_id` (SPEC 7.3: execution-only fields and defaulted 1.1 fields removed, refs replaced by
+/// `{"sha256": ...}`) with the refs resolved by the caller (`[[ref, sha256], ...]`).
+#[pyfunction]
+fn identity_document(spec_json: &str, engine_version: &str, refs_json: &str) -> PyResult<String> {
+    to_py(with_refs(spec_json, refs_json, |s, r| {
+        qt_schema::identity_document(s, engine_version, r)
+    }))
+}
+
+/// `run_id` (first 16 hex chars of the sha256 of the identity document) with the refs resolved by the caller.
+#[pyfunction]
+fn run_id_resolved(spec_json: &str, engine_version: &str, refs_json: &str) -> PyResult<String> {
+    to_py(with_refs(spec_json, refs_json, |s, r| {
+        qt_schema::run_id(s, engine_version, r)
+    }))
+}
+
+/// The spec without the 1.1 fields that hold their default (`qt_schema::V1_1_DEFAULTS`).
+#[pyfunction]
+fn drop_v1_1_defaults(spec_json: &str) -> PyResult<String> {
+    to_py(parse_json(spec_json, "drop_v1_1_defaults").and_then(|v| json_out(&qt_schema::drop_v1_1_defaults(&v)?)))
+}
+
+/// `qt_schema::V1_1_DEFAULTS` as JSON `[[discriminating key, [path...], default], ...]`.
+#[pyfunction]
+fn v1_1_defaults() -> PyResult<String> {
+    let rows: QtResult<Vec<Value>> = qt_schema::V1_1_DEFAULTS
+        .iter()
+        .map(|(k, path, d)| Ok(serde_json::json!([k, path, parse_json(d, "V1_1_DEFAULTS")?])))
+        .collect();
+    to_py(rows.and_then(|r| json_out(&r)))
+}
+
+/// `qt_types::stable_seed(run_seed, parts)`: FNV-1a 64 over the seed and the length-prefixed parts, then splitmix64.
+#[pyfunction]
+fn stable_seed(run_seed: u64, parts: Vec<Vec<u8>>) -> u64 {
+    let refs: Vec<&[u8]> = parts.iter().map(Vec::as_slice).collect();
+    qt_types::stable_seed(run_seed, &refs)
+}
+
+/// One `qt_types::splitmix64` step.
+#[pyfunction]
+fn splitmix64(x: u64) -> u64 {
+    qt_types::splitmix64(x)
+}
+
+fn calibration(cal_json: &str) -> QtResult<qt_schema::json::CalibrationResult> {
+    serde_json::from_str(cal_json).map_err(|e| QtError::Config(format!("trust: invalid calibration_result: {e}")))
+}
+
+/// The export rule of `qt_calib::trust::assess` on a `qt.calibration_result` (JSON): `{flags, horizons, fitted_id,
+/// default_id, reasons}`, flags and reasons as `[token, text]` pairs.
+#[pyfunction]
+fn trust_assess(py: Python<'_>, cal_json: &str) -> PyResult<String> {
+    to_py(py.detach(|| json_out(&qt_calib::trust::assess(&calibration(cal_json)?)?)))
+}
+
+/// `qt_calib::trust::annotate` on a `qt.calibration_result` (JSON): `{"warnings": [...], "trust": {...}}`.
+#[pyfunction]
+fn trust_annotate(py: Python<'_>, cal_json: &str) -> PyResult<String> {
+    to_py(py.detach(|| {
+        let r = qt_calib::trust::annotate(&calibration(cal_json)?)?;
+        json_out(&serde_json::json!({"warnings": r.warnings, "trust": r.trust}))
     }))
 }
 
@@ -792,6 +897,7 @@ fn qt_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(pm_families, m)?)?;
     m.add_function(wrap_pyfunction!(pm_queue_run, m)?)?;
     m.add_function(wrap_pyfunction!(cli_parse, m)?)?;
+    m.add_function(wrap_pyfunction!(cli_route, m)?)?;
     m.add_function(wrap_pyfunction!(cli_run_native, m)?)?;
     m.add_function(wrap_pyfunction!(ingest, m)?)?;
     m.add_function(wrap_pyfunction!(replay, m)?)?;
@@ -808,6 +914,14 @@ fn qt_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(synthesize_l2, m)?)?;
     m.add_function(wrap_pyfunction!(bbo_from_l2, m)?)?;
     m.add_function(wrap_pyfunction!(run_id, m)?)?;
+    m.add_function(wrap_pyfunction!(run_id_resolved, m)?)?;
+    m.add_function(wrap_pyfunction!(identity_document, m)?)?;
+    m.add_function(wrap_pyfunction!(drop_v1_1_defaults, m)?)?;
+    m.add_function(wrap_pyfunction!(v1_1_defaults, m)?)?;
+    m.add_function(wrap_pyfunction!(stable_seed, m)?)?;
+    m.add_function(wrap_pyfunction!(splitmix64, m)?)?;
+    m.add_function(wrap_pyfunction!(trust_assess, m)?)?;
+    m.add_function(wrap_pyfunction!(trust_annotate, m)?)?;
     m.add_function(wrap_pyfunction!(read_table, m)?)?;
     m.add_function(wrap_pyfunction!(fill_liquidity, m)?)?;
     m.add_function(wrap_pyfunction!(write_table, m)?)?;

@@ -4,7 +4,7 @@
 data when you can, put it in your backtest with one line, and check it against your live fills.
 
 **You need:** for step 1, nothing. For step 2, `pip install queuetruth` and order-level (MBO) data for the
-venue you backtest, as a queuetruth dataset (`queuetruth ingest`; [a free IEX DEEP+ day](iex-public-demo.md) works).
+venue you backtest, as a queuetruth dataset (`queuetruth data add`; [a free IEX DEEP+ day](iex-public-demo.md) works).
 For step 3, the `queuetruth-nautilus` plugin
 ([`integrations/nautilus`](https://github.com/sarptandoven/queuetruth/tree/main/integrations/nautilus)) next to
 `nautilus_trader` 1.231 or 2.x. For step 4, your live order and fill records.
@@ -12,12 +12,12 @@ For step 3, the `queuetruth-nautilus` plugin
 ## 1. Pick a setting from the atlas
 
 The [Fill-Realism Atlas](../concepts/fill-realism-atlas.md) measures NautilusTrader's fill models against the
-exact queue on every symbol of free IEX DEEP+ data. Over 20 trading days (2026-10-09 to 2026-11-06; 265,402
-symbol-days, 12,440 symbols), small resting orders within 1 minute:
+exact queue on every symbol of free IEX DEEP+ data. Over 20 trading days (2026-10-15 to 2026-11-11; 265,351
+symbol-days, 12,456 symbols), small resting orders within 1 minute:
 
-| setting | fill rate against the exact queue (11.97%) |
+| setting | fill rate against the exact queue (12.20%) |
 |---|---|
-| touch model, `prob_fill_on_limit=1` (the default) | +1.50 pp: 13% more orders (95% interval +1.45 to +1.55) |
+| touch model, `prob_fill_on_limit=1` (the default) | +1.48 pp: 12% more orders (95% interval +1.42 to +1.53) |
 | `queue_position=True`, `prob_fill_on_limit=1` | +0.06 pp |
 
 **Use `queue_position=True` wherever your data supports it** (an L2 book with trade prints). It needs no fit. The
@@ -31,13 +31,13 @@ changing how it fills.
 ## 2. Fit `prob_fill_on_limit` on your data
 
 `queuetruth fit --backtester nautilus` fits NautilusTrader's `prob_fill_on_limit` against the exact queue on part
-of your data (it runs `queuetruth calibrate nt-touch`) and compares it with the default `p = 1` on the part it did
+of your data (it runs `queuetruth advanced calibrate nt-touch`) and compares it with the default `p = 1` on the part it did
 not see. It writes the setting only when the fit wins there. This block runs on the synthetic dataset that ships
 with queuetruth (CME rules, two instruments, two days); its numbers say nothing about a real venue.
 
 <!-- check-docs: run -->
 ```sh
-queuetruth fixtures synth --out synth > /dev/null
+queuetruth advanced fixtures synth --out synth > /dev/null
 queuetruth fit --backtester nautilus --data synth
 ```
 
@@ -49,7 +49,7 @@ and by how much. Then come the held-out table per horizon, the verdict and what 
 queuetruth fit --backtester nautilus --data my-dataset --shadows my-orders.parquet
 ```
 
-`--shadows` takes orders placed like yours (or your own: `queuetruth shadows from-live`, see
+`--shadows` takes orders placed like yours (or your own: `queuetruth advanced shadows from-live`, see
 [Import fills from my venue or broker](import-live-logs.md)); without it `fit` samples 1,000.
 `--family nt-queue-l2-prob-touch` fits `p` for `queue_position=True` instead, and `--live` fits to your own live
 fills. The split, the verdict and every option are in [Fit my backtester's fill model](fit-my-backtester.md); the
@@ -175,11 +175,11 @@ grep -E "^# fit|FillModel\(" qt-fit/nautilus.py
 The last check is your own trading: replay your live orders, at their live times, through the NautilusTrader
 backtest with the new setting, and compare each order's outcome with what really happened. In short:
 
-1. `queuetruth live import --venue <venue>` builds the live log from your records.
-2. `queuetruth export replay-schedule --target nautilus` turns it into a fixed order schedule, and the generated
+1. `queuetruth advanced live import --venue <venue>` builds the live log from your records.
+2. `queuetruth advanced export replay-schedule --target nautilus` turns it into a fixed order schedule, and the generated
    strategy replays it in your NautilusTrader backtest.
-3. `queuetruth live import --venue sim-nautilus` reads the backtest's reports back.
-4. `queuetruth score --sim-log` scores the backtest against the live fills, order by order, with markouts.
+3. `queuetruth advanced live import --venue sim-nautilus` reads the backtest's reports back.
+4. `queuetruth advanced score --sim-log` scores the backtest against the live fills, order by order, with markouts.
 
 The full walkthrough, first on synthetic data and then on Binance records, is
 [Score my Nautilus backtest against my live fills](score-nautilus-vs-binance.md). To check a finished NautilusTrader

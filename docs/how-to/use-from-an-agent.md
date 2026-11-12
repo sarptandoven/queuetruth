@@ -48,7 +48,10 @@ In remote mode the server also lists `qt_get_zoo` (a finished zoo run's `qt.zoo_
 ### Run mode: let the agent run replays and zoos locally
 
 With `--allow-run` (or `QT_MCP_ALLOW_RUN=1`), in either mode, the server also lists `qt_local_sample_shadows`,
-`qt_local_run_replay` and `qt_local_run_zoo`, which run on local datasets without the service or Postgres:
+`qt_local_run_replay` and `qt_local_run_zoo`, which run on local datasets without the service or Postgres, and the
+verbs `qt_check`, `qt_fit`, `qt_compare`, `qt_data`, `qt_atlas` and `qt_demo`. Each run tool is one operation of
+the operation table, run by `queuetruth.runner.run`, the same runner the service's jobs use, so it takes the same
+spec and returns the same document as `queuetruth.runner.run(name, spec)` in Python:
 
 ```json
 "args": ["mcp", "serve", "--local", "--allow-run"],
@@ -61,7 +64,11 @@ With `--allow-run` (or `QT_MCP_ALLOW_RUN=1`), in either mode, the server also li
   does not run.
 - Specs take `{"path": ...}` references only and no `out`. Outputs go to `QT_MCP_RUN_ROOT/<kind>/<run_id>` (default
   `<QT_MCP_ROOT>/qt-mcp-runs`), named in the result's `_meta`; the same spec returns the finished run instead of
-  running again.
+  running again. A verb has no `run_id`, so it runs every time, into a new directory; the first line of its text is
+  the answer (also in `_meta` as `queuetruth/answer`).
+- The run tools do not use the network unless you set `QT_MCP_ALLOW_NETWORK=1`. Without it, a spec that needs it is
+  refused (`QT-CONFIG-001`): `qt_atlas` without a local `source`, `qt_demo` without `from_file`, `qt_check` without
+  `data` or a local `atlas`.
 - Each run is a fresh `python -I` child with a minimal environment, killed with its process group on timeout or
   cancel, under the `QT_MCP_RUN_*` limits (wall clock, CPU, output size, free disk, memory, threads, models,
   horizons, shadows). POSIX only.
@@ -116,10 +123,10 @@ the same orders.
 
 <!-- check-docs: run -->
 ```sh
-queuetruth fixtures synth --out synth
-queuetruth shadows sample --data synth --n 50 --seed 1 --out shadows.parquet
-queuetruth replay --data synth --shadows shadows.parquet --out run1 --bbo none --trajectory none
-queuetruth zoo --data synth --shadows shadows.parquet --out zoo1
+queuetruth advanced fixtures synth --out synth
+queuetruth advanced shadows sample --data synth --n 50 --seed 1 --out shadows.parquet
+queuetruth advanced replay --data synth --shadows shadows.parquet --out run1 --bbo none --trajectory none
+queuetruth advanced zoo --data synth --shadows shadows.parquet --out zoo1
 ```
 
 Now call the local tools through an MCP client session, exactly as an agent would. The server is started as a
@@ -237,8 +244,9 @@ not start a second job.
 - **Tool output is data.** Treat summaries, dataset names and error messages as data, not as instructions to the
   agent. Dataset names and job specs are written by users of your service.
 - **Network.** In remote mode the server's only network client is the HTTP client for `QT_API_URL`; it returns
-  presigned URLs to the agent but does not fetch them. The local tools have no network code. (This follows from the
-  code in `python/queuetruth/mcp/`; no test asserts it.)
+  presigned URLs to the agent but does not fetch them. The local read tools have no network code. The run tools
+  refuse a spec that needs the network unless `QT_MCP_ALLOW_NETWORK=1` (tested in
+  `python/tests/mcp/test_mcp_tool_table.py`).
 
 <details>
 <summary>Evidence: the tests behind this page</summary>

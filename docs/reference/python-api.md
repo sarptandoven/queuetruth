@@ -13,11 +13,20 @@ Names marked **SPEC 4.3** are the binding public API (SemVer applies to them). O
 listed because their modules export them, but they may change between minor versions. `queuetruth._core` is
 internal.
 
+The verbs (`check`, `fit`, `demo`, `atlas.lookup`, `atlas.calibration`, `data.add`, `data.fetch_iex`) take typed
+keyword arguments in human units (durations such as `"1s"` or `"1min"`) and return results of one shape,
+`queuetruth.results.Result`: `.summary`, `.table()`, `.interval`, `.to_html()`, `.doc`, `.save(path)` and a notebook
+view.
+
 Spec and summary models live in `queuetruth.schemas` and are documented field by field in [Schemas](schemas.md).
 
 Package version: `0.3.0`.
 
 ## `queuetruth`
+
+### `atlas`
+
+Subpackage `queuetruth.atlas`, listed below.
 
 ### `calibrate` **SPEC 4.3**
 
@@ -38,7 +47,7 @@ calibrate_live(spec: Any, **kwargs: Any) -> m.CalibrationResult
 ### `check`
 
 ```python
-check(*args: Any, **kwargs: Any) -> Any
+check(backtest: str | Path | Sequence[str | Path], data: str | Path | None = None, *, backtester: str | None = None, instrument_map: str | Path | None = None, out: str | Path | None = None, horizon: str | int = 1min, window: str | int = 1h, markout: str | int | None = None, options: dict[str, Any] | None = None, tier: str | None = None, bar: str | None = None, atlas: str | Path | None = None, yes: bool = False, confirm: Callable[[str], bool] | None = None, refresh: bool = False, seed: int | None = None) -> CheckResult
 ```
 
 `queuetruth check`: how wrong is a backtest, in one command.
@@ -46,7 +55,7 @@ check(*args: Any, **kwargs: Any) -> Any
 ### `compare`
 
 ```python
-compare(*args: Any, **kwargs: Any) -> Any
+compare(backtest: str | Path | Sequence[str | Path], live: str | Path | Sequence[str | Path], *, data: str | Path | None = None, backtester: str | None = None, venue: str | None = None, out: str | Path | None = None, instrument_map: str | Path | None = None, window: str | int | None = None, account: str | None = None, options: dict[str, Any] | None = None) -> CompareResult
 ```
 
 `queuetruth compare`: my backtest against my live run, order by order.
@@ -55,10 +64,18 @@ compare(*args: Any, **kwargs: Any) -> Any
 
 Subpackage `queuetruth.data`, listed below.
 
+### `demo`
+
+```python
+demo(backtester: str = nautilus, *, symbols: Sequence[str] | str | None = None, minutes: int | str = 5, n: int = 3000, seed: int = 0, source: str | None = None, date: str | None = None, from_file: str | Path | None = None, url: str | None = None, out: str | Path = qt-demo, cache_dir: str | Path | None = None, refresh: bool = False, yes: bool = False, confirm: Callable[[Any], bool] | None = None, max_download_mb: float | None = None, threads: int | None = None, say: Callable[[str], None] | None = None) -> DemoResult
+```
+
+`queuetruth demo`: a believable real-data answer in about a minute (see `queuetruth.demo.run`).
+
 ### `export` **SPEC 4.3**
 
 ```python
-export(*args: Any, **kwargs: Any) -> Any
+export(spec: s.ExportSpec | dict[str, Any], *, force: bool = False) -> m.ExportSummary
 ```
 
 hftbacktest / NautilusTrader config text and the IntpOrderLatency npz (SPEC 4.3 `queuetruth.export`, 5.10).
@@ -74,7 +91,7 @@ extract_features(spec: s.FeatureSpec | dict[str, Any]) -> m.FeatureSummary
 ### `fit`
 
 ```python
-fit(*args: Any, **kwargs: Any) -> Any
+fit(backtester: str, *, data: str | Path | None = None, shadows: str | Path | None = None, live: str | Path | None = None, family: str | None = None, split: str | float | None = None, test_after: str | None = None, train: Any = None, test: Any = None, out: str | Path = qt-fit, n_shadows: int = 1000, seed: int = 0, threads: int = 1) -> FitResult
 ```
 
 `queuetruth fit`: the parameter that fixes a backtester's fill model, with its verdict.
@@ -154,7 +171,7 @@ replay(spec: s.ReplaySpec | dict[str, Any], *, fill_rule: str | None = None, hid
 ### `report` **SPEC 4.3**
 
 ```python
-report(*args: Any, **kwargs: Any) -> Any
+report(spec: s.ReportSpec | dict[str, Any]) -> m.ReportSummary
 ```
 
 Static self-contained HTML report (SPEC 4.3 `queuetruth.report`, 5.9).
@@ -178,7 +195,7 @@ sample_shadows(spec: s.ShadowSampleSpec | dict[str, Any]) -> m.ShadowSampleSumma
 ### `score` **SPEC 4.3**
 
 ```python
-score(*args: Any, **kwargs: Any) -> Any
+score(spec: s.ScorecardSpec | dict[str, Any], **kwargs: Any) -> m.ScorecardSummary
 ```
 
 Scorecard, markouts, position series, referee comparison and live calibration (SPEC 4.3 `queuetruth.score`, 5.7, 5.8; audit rulings A1, A5, A8, A9, A10; also `calibrate_live` and fills-only coverage).
@@ -273,6 +290,27 @@ Interactive replay session: `.advance_to(ts)`, `.bbo(inst)`, `.depth(inst, n)`, 
 | `take_results` | `(self) -> pa.Table` | Results of the shadows that ended since the last call (`qt.shadow_results`). |
 | `with_orders` | `(spec: s.ReplaySpec \| dict[str, Any]) -> Session` | A session that also takes shadow orders while it runs. Every partition replays as `replay` would replay it with this spec (latency model and seed, fill rule, hidden-print policy, exclusions, the dataset's feed gaps and trading halts); `shadows` and `amends` stay unset, orders come from `submit`, `cancel` and `amend`, each at or after `position`. The session reads the data once however many orders it takes, and its fills and results equal those of one `replay` with every order in its input. |
 
+## `queuetruth.results`
+
+One shape for the result of every verb (plan section 4.2): `qt.check`, `qt.fit`, `qt.compare`, `qt.atlas.lookup`, `qt.atlas.calibration`, `qt.data.add`, `qt.data.fetch_iex` and `qt.demo`.
+
+| Name | Kind | Binding | Signature | Description |
+|---|---|---|---|---|
+| `Result` | class |  | | The shared behaviour of every verb's result (module docstring). Subclasses set `doc`. |
+
+## `queuetruth.atlas`
+
+The Fill-Realism Atlas as data: the versioned data API the site publishes under `atlas/v1/`, and its reader.
+
+| Name | Kind | Binding | Signature | Description |
+|---|---|---|---|---|
+| `calibration` | function |  | `(library: str, tier: str \| None = None, symbol: str \| None = None, source: str \| Path \| None = None, *, yes: bool = False, refresh: bool = False, confirm: Callable[[str], bool] \| None = None, fetch: Callable[[str], bytes] \| None = None) -> FitResult` | The atlas's closest setting of `library` (`nautilus`, `hftbacktest`, `databento`) in a liquidity `tier` (`T1_top100` or `T1`; default `ALL`) or the tier of `symbol`, as the `FitResult` `qt.fit` returns (`queuetruth.atlas._calibration.calibration`). Nothing is downloaded unless `yes=True` or `confirm(url)` returns True. |
+| `confirm_on_terminal` | function |  | `(interactive: bool, what: str = atlas, local: str = --from DIR) -> Any` | The consent callback of `queuetruth atlas`: asks on a terminal before a download, else stops with `QT-USAGE-001` and the `--yes` hint. `what` names the command and `local` its local-copy flag in the messages. |
+| `lookup` | function |  | `(library: str \| None = None, symbol: str \| None = None, tier: str \| None = None, horizon: str \| int \| None = None, source: str \| Path \| None = None, *, yes: bool = False, refresh: bool = False, confirm: Callable[[str], bool] \| None = None, fetch: Callable[[str], bytes] \| None = None) -> AtlasResult` | The atlas answer for `library` (`hftbacktest`, `nautilus`, `databento`; all three by default), one `symbol` or a liquidity `tier`, at `horizon` (any `queuetruth.units` duration: `"1s"`, `"1min"`; default the site's): the answer in plain words, every setting's bias with its 95% interval, and the closest setting's config to paste (`queuetruth.atlas._lookup.lookup`). `source` is a directory or URL of the data API; nothing is downloaded unless `yes=True` or `confirm(url)` returns True. Returns an `AtlasResult` (`queuetruth.results.Result`). |
+| `open_source` | function |  | `(source: Any = None, **kwargs: Any) -> Any` | The atlas data API at a directory or URL (default: the public atlas, through the cache; nothing is downloaded without consent), as `queuetruth.atlas._lookup.open_source`: `.manifest`, `.has(path)` and `.get(path)` (each file checked against the manifest's sha256 and its model). |
+| `tier_name` | function |  | `(tier: str) -> str` | A liquidity tier in plain words (`T1_top100` -> `the 100 most traded symbols`). |
+| `touch_tables` | function |  | `(source: Any = None, *, yes: bool = False, **kwargs: Any) -> Any` | The atlas touch tables (`atlas/v1/touch.json`) as a `queuetruth.atlas.touch.TouchTables`, read through the same consent-based fetch and cache as `lookup` (nothing is downloaded unless `yes=True` or `confirm(url)` says yes). `QT-INPUT-001` when the atlas has no touch tables yet. |
+
 ## `queuetruth.integrity`
 
 Integrity primitives, one implementation each (contracts layer): canonical JSON in its published byte forms, sha256 of bytes, text, files and streams, the hash-chain digests and the atlas Merkle tree.
@@ -332,7 +370,7 @@ Constants: `I64_MAX`, `UNITS`.
 | Name | Kind | Binding | Signature | Description |
 |---|---|---|---|---|
 | `add` | function |  | `(files: str \| Path \| Sequence[str \| Path], out: str \| Path, *, format: str \| None = None, venue: str \| None = None, date: str \| None = None, symbols: Sequence[str] \| None = None, attribution: list[dict[str, Any]] \| None = None, say: Say \| None = None) -> DataResult` | Ingests `files` into the dataset `out` (module docstring). An existing dataset at `out` keeps its days and gains the new ones (a day it already holds is `QT-INPUT-002`). `format`, `venue` and `date` override what is inferred (`date` is YYYY-MM-DD; for formats whose records carry dates it puts every record in that session); `symbols` keeps only those symbols; `attribution` entries are recorded in the dataset manifest. |
-| `DataResult` | class |  | | The answer of `data add` / `data fetch iex`: `summary` is the one-line answer, `doc` the full document, `rows` one row per session date and symbol in human units. |
+| `DataResult` | class |  | | The answer of `data add` / `data fetch iex`: `summary` is the one-line answer, `doc` the full document, `rows` one row per session date and symbol in human units. The shared result shape (`queuetruth.results.Result`): `table()`, `to_html()`, `save(path)` and a compact notebook view. |
 | `detect` | function |  | `(path: str \| Path, *, format: str \| None = None, venue: str \| None = None, date: str \| None = None) -> Detected` | What `path` is (module docstring). Given values win; `QT-USAGE-001` names what could not be inferred and why; `QT-INPUT-001` for a missing path. |
 | `Detected` | class |  | | One input: what it is and how that was decided (`how`: format, venue and date, each in plain words). |
 | `fetch_iex` | function |  | `(date: str \| dt.date, symbols: Sequence[str] \| str, out: str \| Path \| None = None, *, yes: bool = False, confirm: Callable[[FetchPlan], bool] \| None = None, progress: Progress \| None = None, say: Callable[[str], None] \| None = None, url: str \| None = None, min_free_bytes: int = 2147483648) -> DataResult` | Fetches one IEX DEEP+ day's `symbols` into the dataset `out` (default `iex-<date>`; an existing dataset gains the day). Downloads only with `yes` or when `confirm(plan)` returns True, else `QT-USAGE-001`. `url` streams another location (a mirror, or a local test server) instead of IEX's bucket. |
@@ -433,7 +471,7 @@ Statistics used by evaluation and the scorer (SPEC 4.3 `queuetruth.stats`, 5.5.7
 | `spa_test` | function |  | `(benchmark: np.ndarray, models: np.ndarray, *, b: int = 1000, seed: int = 0, test_id: str = spa, bootstrap: Bootstrap = stationary, block_size: int \| None = None, blocks: np.ndarray \| None = None, indices: np.ndarray \| None = None, studentize: bool = True) -> SpaResult` | Hansen's test of superior predictive ability on losses: H0 = no model beats the benchmark. |
 | `SpaResult` | class |  | | Hansen's SPA test (module docstring). `mean_diff[k] = mean(L_benchmark - L_k)` (positive = model better), `omega[k]` the standard deviation of `sqrt(n) mean_diff[k]`, `t[k] = sqrt(n) mean_diff[k] / omega[k]`. |
 | `spiegelhalter_z` | function | SPEC 4.3 | `(p: np.ndarray, y: np.ndarray) -> TestResult` | Spiegelhalter z test (two-sided normal p-value). |
-| `splitmix64` | function |  | `(x: int) -> int` | One splitmix64 step (adds the golden gamma, then mixes), as `qt_types::splitmix64`. |
+| `splitmix64` | function |  | `(x: int) -> int` | One splitmix64 step (adds the golden gamma, then mixes): `qt_types::splitmix64`. |
 | `stable_seed` | function |  | `(run_seed: int, parts: Sequence[bytes \| str]) -> int` | FNV-1a 64 over `run_seed` (8 LE bytes), then per part its length (4 LE bytes) and bytes; then splitmix64. |
 | `StepFunction` | class |  | | Right-continuous step function: `value[i]` holds on `[time[i], time[i + 1])`; `time[0] = 0` for estimators. |
 | `stepm` | function |  | `(benchmark: np.ndarray, models: np.ndarray, *, alpha: float = 0.05, b: int = 1000, seed: int = 0, test_id: str = stepm, bootstrap: Bootstrap = stationary, block_size: int \| None = None, blocks: np.ndarray \| None = None, indices: np.ndarray \| None = None, studentize: bool = True, recenter: Recenter = upper) -> StepMResult` | Stepwise multiple testing of every model against the benchmark at familywise error `alpha`. |
@@ -570,7 +608,7 @@ hftbacktest / NautilusTrader config text and the IntpOrderLatency npz (SPEC 4.3 
 
 | Name | Kind | Binding | Signature | Description |
 |---|---|---|---|---|
-| `annotate` | function |  | `(cal: CalibrationResult) -> CalibrationResult` | A copy of `cal` with the structured `trust` field (schema 1.1) and its `warnings` ending with the `beats_default` and `verdict` lines (replacing older ones). The assessment is recomputed from the lines and the numbers: an earlier structured field (e.g. the Rust part's, which has no held-out comparison) is replaced. |
+| `annotate` | function |  | `(cal: CalibrationResult) -> CalibrationResult` | A copy of `cal` with the structured `trust` field (schema 1.1) and its `warnings` ending with the `beats_default` and `verdict` lines (replacing older ones), by `qt_calib::trust::annotate`. The assessment is recomputed from the lines and the numbers: an earlier structured field (e.g. the Rust part's, which has no held-out comparison) is replaced. |
 | `assess` | function |  | `(cal: CalibrationResult, fmt: Callable[[int], str] \| None = None) -> Trust` | Exportability of a calibration (see the module doc). The structured `trust` field (schema 1.1) decides when present: its `verdict` / `reasons` and `beats_default` labels win, with texts from the `trust:` lines or the recomputed reasons; without it the assessment is computed from the lines and the numbers. `fmt` writes the horizons in the reason texts (default `dur`, the form stored in the calibration's warnings; displays pass `queuetruth.units.format_duration`). |
 | `export_snippets` | function |  | `(cal: CalibrationResult, latency_npz: str \| None = None) -> Exports` | The `exports` object of a calibration result (snippets + notes; `latency_npz` kept or set). |
 | `ExportNote` | class |  | | A caveat that accompanies an exported snippet (hftbacktest #312/#316, conflated L2, omitted lines). Emitted by `run_export` so `queuetruth export hftbacktest\|nautilus` prints it on stderr (`warning: ...`) next to the text, which keeps the exact SPEC 5.10 layout. |
@@ -639,3 +677,20 @@ HTTP client for the queuetruth service (SPEC 4.5; env `QT_API_URL`, `QT_API_KEY`
 | `Submission` | class |  | | Response of a job-creating POST (`{id, job}`), with `replayed` = the `Idempotent-Replayed` header. |
 
 Constants: `DEFAULT_API_URL`, `ENV_API_KEY`, `ENV_API_URL`, `ESTIMATE_KINDS`, `RUN_KINDS`, `TERMINAL_JOB_STATES`.
+
+## `queuetruth.runner`
+
+One runner for every operation (plan section 5.3, step 8): `run(name, spec, out=..., context=...)`.
+
+| Name | Kind | Binding | Signature | Description |
+|---|---|---|---|---|
+| `check_dataset_tree` | function |  | `(top: Path, inside: Callable[[Path], Path \| None], what: str, *, require_manifest: bool = True) -> None` | A dataset directory: `manifest.json` must exist when `require_manifest` (`QT-INPUT-001`; checked first, so a broad directory such as the root is refused without walking it), and no entry may be a symlink for which `inside` returns None (`QT-CONFIG-001`). At most `MAX_TREE_ENTRIES` entries are walked (`QT-INPUT-002` beyond). |
+| `document_of` | function |  | `(result: Any, name: str) -> dict[str, Any]` | The JSON document of an operation's result: a Pydantic document, a result object with `.doc`, or a dict. |
+| `produced_files` | function |  | `(out: Path \| None) -> list[Path]` | Every file at `out` (a file or a directory; symlinks are not followed), sorted. |
+| `Roots` | class |  | | Allowed roots (real paths). Relative paths start at `base` (default: the first root). `env_hint` names the settings that set the roots, for the error hint. |
+| `run` | function | SPEC 4.3 | `(name: str, spec: BaseModel \| dict[str, Any], *, out: str \| os.PathLike[str] \| None = None, context: RunContext \| None = None) -> RunOutcome` | Runs the operation `name` on `spec` (module docstring). `out` is a directory for the outputs; it replaces the spec's own output field (with the operation's `out_name` inside it, such as `shadows.parquet`). |
+| `RunContext` | class |  | | Who runs the operation, and what it may touch (module docstring). |
+| `RunOutcome` | class |  | | One run: the operation, its JSON `document`, the answer line (`summary`, when the result has one), the warnings it raised, the files it wrote (sorted) and its output location. |
+| `summary_of` | function |  | `(result: Any) -> str \| None` | The answer line of a result: `.summary` of the shared result shape (`queuetruth.results.Result`, what every verb returns), else None. |
+
+Constants: `DATASET_FIELDS`, `MAX_TREE_ENTRIES`.

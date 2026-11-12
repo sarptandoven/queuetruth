@@ -33,11 +33,12 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from queuetruth import backtesters, units
 from queuetruth.compare.detect import BOTS, LiveKind, detect_backtest, detect_live
 from queuetruth.errors import QtError
+from queuetruth.results import Result
 from queuetruth.score.lines import pct as _pct
 
 SCHEMA = "qt.compare"
@@ -62,10 +63,13 @@ REASONS = {
 }
 
 
-@dataclass
-class CompareResult:
+@dataclass(repr=False)
+class CompareResult(Result):
     """The answer of `compare`: `summary` is the first answer line, `doc` the full `qt.compare` document, `orders`
-    one row per order in human units, `out` the output directory."""
+    one row per order in human units, `out` the output directory. The shared result shape
+    (`queuetruth.results.Result`): `table()`, `interval`, `to_html()`, `save(path)` and a compact notebook view."""
+
+    title: ClassVar[str] = "queuetruth compare"
 
     doc: dict[str, Any]
     orders: list[dict[str, Any]] = field(default_factory=list)
@@ -76,17 +80,19 @@ class CompareResult:
         """The answer in one plain sentence."""
         return str(self.doc["answer"])
 
-    def to_dict(self) -> dict[str, Any]:
-        """The `qt.compare` document (JSON-ready)."""
-        return self.doc
+    @property
+    def interval(self) -> str | None:
+        """The share of the backtest's fills that also filled live, with its 95% interval, in words."""
+        f = self.doc.get("fills") or {}
+        if f.get("share") is None or f.get("ci_lo") is None:
+            return None
+        return (
+            f"Backtest fills that also filled live: {_pct(f['share'])} (95% CI {_pct(f['ci_lo'])} to "
+            f"{_pct(f['ci_hi'])})."
+        )
 
-    def table(self) -> Any:
-        """One row per order as a pandas DataFrame (symbols, decimal prices, venue-local times)."""
-        try:
-            import pandas as pd
-        except ImportError as e:
-            raise QtError("QT-CONFIG-001", "CompareResult.table needs pandas", "pip install pandas") from e
-        return pd.DataFrame(self.orders)
+    def _rows(self) -> list[dict[str, Any]]:
+        return self.orders
 
     def text(self, *, max_rows: int = 10) -> str:
         """The terminal report: the answer lines first, then the first orders that differ."""
@@ -99,9 +105,6 @@ class CompareResult:
         from queuetruth.compare.render import html
 
         return html(self.doc, self.orders)
-
-    def _repr_html_(self) -> str:
-        return self.to_html()
 
     def __str__(self) -> str:
         return self.summary
@@ -123,12 +126,12 @@ def _paths(x: str | Path | Sequence[str | Path] | None, what: str) -> list[str]:
 def _ns(v: Any) -> int | None:
     if v is None:
         return None
-    if isinstance(v, int) and not isinstance(v, bool):
-        n = v
-    else:
-        from queuetruth.pm.cli import duration_ns
-
-        n = duration_ns(str(v))
+    if isinstance(v, bool):
+        raise QtError("QT-USAGE-001", f"compare: window must be a duration such as 30s or 1h, got {v!r}")
+    try:
+        n = units.parse_duration(v, what="window", bare_ns=isinstance(v, int))
+    except units.DurationError as e:
+        raise QtError("QT-USAGE-001", f"compare: {e}", "use a duration such as 30s, 1min or 1h") from None
     if n <= 0:
         raise QtError("QT-USAGE-001", f"compare: window must be positive, got {v!r}")
     return n
@@ -383,14 +386,14 @@ def _require_ids(live_dir: Path) -> None:
 
 
 def _score(live_dir: Path, sim: dict[str, Any], out: Path, window_ns: int | None, data: str | None) -> Any:
-    from queuetruth import api
+    from queuetruth.ops.score import score
 
     spec: dict[str, Any] = {"live": {"path": str(live_dir)}, "sim": sim, "out": str(out)}
     if window_ns is not None:
         spec["window_ns"] = int(window_ns)
     if data is not None:
         spec["dataset"] = {"path": str(data)}
-    return api.score(spec).model_dump(mode="json", by_alias=True)
+    return score(spec).model_dump(mode="json", by_alias=True)
 
 
 def _summary(path: Path) -> dict[str, Any] | None:

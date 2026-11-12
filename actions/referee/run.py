@@ -51,7 +51,10 @@ def _classes(fixtures: Path, select: str, skip: str) -> list[str]:
 
 
 def _run(cmd: list[str], **kw) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(cmd, text=True, capture_output=True, check=False, **kw)
+    # `referee` is an advanced command: keep the top-level spelling, which every release understands (the action
+    # may pin an older queuetruth), and hide the deprecation line that newer releases print for it.
+    env = {**(kw.pop("env", None) or os.environ), "QT_NO_DEPRECATION": "1"}
+    return subprocess.run(cmd, text=True, capture_output=True, check=False, env=env, **kw)
 
 
 def main(argv: list[str] | None = None) -> int:

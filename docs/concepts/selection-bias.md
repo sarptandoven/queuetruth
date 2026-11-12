@@ -193,7 +193,7 @@ The tests draw row bootstrap indices in chunks of the same size, so they never h
 
 ## The MCS on the zoo leaderboard
 
-`queuetruth zoo` adds five fields to each leaderboard entry, keyed by horizon (`qt.zoo_summary`, additive, null where
+`queuetruth advanced zoo` adds five fields to each leaderboard entry, keyed by horizon (`qt.zoo_summary`, additive, null where
 undefined):
 
 | Field | Meaning |

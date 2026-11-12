@@ -75,7 +75,7 @@ What the command does:
   100 ms to 5 min: NautilusTrader's default `nt_prob_touch[p=1]` and `nt_queue_l2`, `hbt_power3[n=2]`,
   `hbt_risk_adverse`, `databento_mc[k=-0.8;particles=100]` and the bounds `front_of_queue` and `trade_through_only`
   (`--models all` runs all 16; `--verbose` prints every model's bias). The data cut leaves 5 minutes and 10 s of
-  replay after the last placement, so every order has its full 5-minute label. As in `queuetruth zoo`, an order on
+  replay after the last placement, so every order has its full 5-minute label. As in `queuetruth advanced zoo`, an order on
   which a faithful hftbacktest model stops (its issue #312) is left out of every model, so all models are scored on
   the same orders (211 of 3,000 here; the footnote under the table says so). The NautilusTrader numbers therefore
   depend on which models run: `--models` changes that population.
