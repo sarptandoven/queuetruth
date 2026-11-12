@@ -294,16 +294,13 @@ def _import(lk: LiveKind, paths: list[str], out: Path, imap: Path | None, accoun
 
     if out.exists():
         shutil.rmtree(out)
-    if lk.kind == "venue":
-        spec: dict[str, Any] = {"venue": lk.name, "inputs": [{"path": p} for p in paths], "out": str(out)}
-        if account:
-            spec["account"] = account
-        if imap is not None:
-            spec["instrument_map"] = {"path": str(imap)}
-        return qlive.import_venue(spec)
-    run = backtesters.get(str(lk.name)).import_live
-    assert run is not None
-    return run(paths, str(out), account=account or "main", instrument_map=None if imap is None else str(imap))
+    # one call for every live arm: `live import` picks the venue's or the bot's importer from the importer registry
+    spec: dict[str, Any] = {"venue": lk.name, "inputs": [{"path": p} for p in paths], "out": str(out)}
+    if account or lk.kind == "bot":
+        spec["account"] = account or "main"  # the reconcilers' default account for a bot's run
+    if imap is not None:
+        spec["instrument_map"] = {"path": str(imap)}
+    return qlive.import_venue(spec)
 
 
 def canonical_live(

@@ -24,11 +24,13 @@ from pathlib import Path
 
 from queuetruth import backtesters
 from queuetruth.errors import QtError
+from queuetruth.live import importers as _importers
 
-#: Venue exports `live import` reads (`queuetruth.live.importers.VENUE_IMPORTERS`).
-VENUES = ("binance", "bybit", "okx", "coinbase", "kraken", "deribit", "hyperliquid", "ibkr_flex", "fix44")
-#: Trading bots whose own records are a live run.
-BOTS = ("freqtrade", "hummingbot")
+#: The built-in venue importers and trading bots of the importer registry (`queuetruth.live.importers`), in its list
+#: order: the `--venue` choices (fixed, so the generated grammar does not change with the plugins installed).
+#: `detect_live` also accepts a plugin's venue or bot.
+VENUES: tuple[str, ...] = _importers.names("venue", builtin=True)
+BOTS: tuple[str, ...] = _importers.names("bot", builtin=True)
 _HEAD = 64 * 1024
 _FT_LOG = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}[,.]\d+ - freqtrade\.", re.M)
 _HB_CSV = ("exchange_trade_id", "config_file_path")
@@ -145,14 +147,13 @@ def detect_live(paths: Sequence[str | Path], venue: str | None = None) -> LiveKi
             raise QtError("QT-INPUT-001", f"compare: {p}: no such file or directory")
     if venue is not None:
         v = venue.replace("-", "_").lower()
-        if v in BOTS:
-            return LiveKind("bot", v, detected=False)
-        if v in VENUES:
-            return LiveKind("venue", v, detected=False)
+        for kind in ("bot", "venue"):
+            if v in _importers.names(kind):
+                return LiveKind(kind, v, detected=False)
         raise QtError(
             "QT-USAGE-001",
             f"compare: --venue {venue}: not a venue or bot queuetruth reads",
-            f"one of {', '.join((*VENUES, *BOTS))}",
+            f"one of {', '.join((*_importers.names('venue'), *_importers.names('bot')))}",
         )
     if len(ps) == 1 and ps[0].is_dir() and (ps[0] / "manifest.json").is_file():
         return LiveKind("canonical", None)

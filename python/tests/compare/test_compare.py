@@ -328,3 +328,22 @@ def test_python_api(tmp_path: Path) -> None:
     assert qt.compare.compare is compare  # the subpackage is also the function
     res = qt.compare(BTF / "vbt_orders.csv", STREAM, options={"timeframe": "1h"})  # out: a new temporary directory
     assert res.out is not None and (res.out / "compare.json").is_file()
+
+
+def test_venues_and_bots_come_from_the_importer_registry() -> None:
+    from queuetruth.compare import detect as cd
+    from queuetruth.live import importers as imp
+
+    assert cd.VENUES == imp.names("venue", builtin=True) and cd.BOTS == imp.names("bot", builtin=True)
+
+    def run(paths: list[str], opts: Any) -> Any:  # never called: detection only names the importer
+        raise AssertionError
+
+    imp.register(imp.ImporterDef(name="qt_test_venue", kind="venue", run=run))
+    try:
+        k = detect_live([STREAM], venue="qt-test-venue")
+        assert (k.kind, k.name, k.detected) == ("venue", "qt_test_venue", False)
+    finally:
+        imp.unregister("qt_test_venue")
+    with pytest.raises(QtError):
+        detect_live([STREAM], venue="qt-test-venue")
