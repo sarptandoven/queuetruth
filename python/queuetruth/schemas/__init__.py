@@ -20,9 +20,11 @@ from queuetruth.schemas.specs import SPEC_MODELS
 # isort: split
 # Documents and specs of extension packages that import `queuetruth.schemas` themselves: registered here, after every
 # module of this package is complete, so that `DOC_MODELS` / `SPEC_MODELS` hold them wherever they are imported from.
+from queuetruth.atlas._registry import doc_models as _atlas_doc_models
 from queuetruth.ledger.models import DOCUMENTS as _LEDGER_DOC_MODELS
 from queuetruth.sandbox.models import SANDBOX_DOC_MODELS, SANDBOX_SPEC_MODELS
 
+DOC_MODELS.update(_atlas_doc_models())  # the Fill-Realism Atlas data API (queuetruth.atlas, one module per file)
 DOC_MODELS.update(_LEDGER_DOC_MODELS)
 DOC_MODELS.update(SANDBOX_DOC_MODELS)
 SPEC_MODELS.update(SANDBOX_SPEC_MODELS)

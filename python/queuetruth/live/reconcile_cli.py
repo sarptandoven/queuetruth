@@ -26,6 +26,7 @@ import json
 import sys
 from typing import Any, NoReturn
 
+from queuetruth import backtesters
 from queuetruth.errors import EXIT_ERROR, EXIT_OK, QtError
 
 #: Global flags of the main grammar that take a value (skipped when looking for the command word).
@@ -59,7 +60,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--kind",
         required=True,
-        choices=["freqtrade", "hummingbot", "backtrader", "vectorbt", "lean"],
+        choices=backtesters.Names(reconcile=True),
         help="the bot or backtester",
     )
     p.add_argument(
@@ -151,16 +152,9 @@ def run(args: argparse.Namespace) -> tuple[dict[str, Any], str]:
         kw["window_ns"] = duration_ns(args.window)
     if args.time_tol:
         kw["time_tol_ns"] = duration_ns(args.time_tol)
-    if args.kind == "freqtrade":
-        from queuetruth.live.importers.freqtrade import reconcile_freqtrade as reconcile
-    elif args.kind == "hummingbot":
-        from queuetruth.live.importers.hummingbot import reconcile_hummingbot as reconcile
-    elif args.kind == "backtrader":
-        from queuetruth.live.importers.backtrader import reconcile_backtrader as reconcile
-    elif args.kind == "lean":
-        from queuetruth.live.importers.lean import reconcile_lean as reconcile
-    else:
-        from queuetruth.live.importers.vectorbt import reconcile_vectorbt as reconcile
+    reconcile = backtesters.get(args.kind).reconcile
+    if reconcile is None:
+        raise QtError("QT-USAGE-001", f"reconcile: {args.kind} has no reconciler")
     from queuetruth.live.importers.freqtrade import render_reconcile
 
     report = reconcile(args.sim, args.live, args.out, **kw)

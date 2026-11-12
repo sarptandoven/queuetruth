@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -67,51 +68,86 @@ def atlas(tmp_path: Path) -> Path:
     return d
 
 
+PAGES = ["index.html", "tables.html", "about.html", "symbol.html"]
+
+
 def test_nasdaq_site_reads_answer_first_and_is_deterministic(atlas: Path, tmp_path: Path) -> None:
     out = tmp_path / "site"
     r = S.build(atlas, out, horizon="1s")
-    # one page per library the atlas has (this one has no Databento model)
-    assert r["pages"] == ["index.html", "hftbacktest.html", "nautilustrader.html"] and r["atlas_root"] == "ab" * 32
-    page = (out / "index.html").read_text()
+    # the front page, all numbers, how to read it, the symbol lookup, and one page per library the atlas has (this
+    # one has no Databento model)
+    assert r["pages"] == [*PAGES, "hftbacktest.html", "nautilustrader.html"] and r["atlas_root"] == "ab" * 32
+    tables = (out / "tables.html").read_text()
     # in plain words first: the exact rate, the most optimistic clear model with its relative size, and the closest;
-    # hftbacktest's -0.40 pp is not a finding at 1 s (its interval holds 0), so no "most pessimistic" is named
+    # hftbacktest's -0.40 pp is not a finding at 1 s (its interval holds 0), so no "most pessimistic" is named. The
+    # models have their plain names; the ids are in the tables
     assert (
         "Within 1 s, the exact replay of the real queue fills 11.00% of these orders; the most optimistic fill model, "
-        "NautilusTrader's touch fill model (prob_fill_on_limit) (nt_prob_touch[mode=faithful;p=1]), fills 3.13 "
-        "percentage points more (28% more orders; 95% interval +2.53 to +3.77 pp); the closest is hftbacktest's "
-        "ProbQueue Power3 (hbt_power3[mode=faithful;n=2]), -0.40 pp." in page
+        "NautilusTrader default (touch fill), fills 3.13 percentage points more (28% more orders; 95% interval +2.53 "
+        "to +3.77 pp); the closest is hftbacktest Power3 queue model (n=2), -0.40 pp." in tables
     )
-    assert "pessimistic" not in page
-    assert '+3.13<br><span class="ci">[+2.53, +3.77]' in page
+    assert "pessimistic" not in tables
+    assert '+3.13<br><span class="ci">[+2.53, +3.77]' in tables
     # sorted by |bias| at 1 s: the upper bound first, then NautilusTrader, then hftbacktest
-    t_all = page.split("<h2>Tier ALL</h2>")[1].split("<h2>")[0]
+    t_all = tables.split("<h2>Tier ALL</h2>")[1].split("<h2>")[0].split("<table>")[1]  # the chart's tooltips have ids
     assert t_all.index("front_of_queue") < t_all.index("nt_prob_touch") < t_all.index("hbt_power3")
-    assert page.index("<h2>Tier ALL</h2>") < page.index("<h2>Tier T1_top100</h2>")
-    assert "ab" * 32 in page and "cd" * 32 in page and "Data provided for free by IEX" not in page
-    # each day root with the commit its units ran at (a day from before builds were recorded says so), the site's
-    # own build, and a verify command that works on the published day
-    commit = "https://github.com/sarptandoven/queuetruth/commit/"
-    assert f'<a href="{commit}{"1a" * 20}"><code>{"1a" * 6}</code></a>' in page
-    assert page.count("not recorded") == 1 and f'queuetruth</a> 0.2.0 (<a href="{commit}{"2b" * 20}">' in page
-    assert "verify_unit.py --day DAY_DIR --atlas-manifest atlas_manifest.json" in page
-    # the default source is nasdaq: its days are verified from the Nasdaq release
-    assert "/releases/tag/atlas-days-nasdaq" in page and "fill-realism-atlas.md#verify-a-nasdaq-day" in page
-    assert "<script" not in page and "http://" not in page.replace("https://", "")
-    # the headline is the search and link-preview text
-    assert '<meta property="og:description" content="Within 1 s, the exact replay' in page
+    assert tables.index("<h2>Tier ALL</h2>") < tables.index("<h2>Tier T1_top100</h2>")
+    assert '<meta property="og:description" content="Within 1 s, the exact replay' in tables
+    page = (out / "index.html").read_text()
+    # the front page: the answer first in plain words, one line per library, no model id in the prose
+    lead = page.split('<p class="lead">')[1].split("</p>")[0]
+    assert lead == (
+        "Within 1 second, the real queue on Nasdaq TotalView-ITCH fills 11.00% of small resting orders (all symbols)."
+    )
+    answers = page.split('<ul class="answers">')[1].split("</ul>")[0]
+    assert (
+        "NautilusTrader&#x27;s default (touch fill) fills 3.13 pp more orders than the real queue (28% more fills; "
+        "95% interval +2.53 to +3.77 pp). It is also the closest of its settings in the atlas." in answers
+    )
+    assert (
+        "hftbacktest Power3 queue model (n=2) is not clearly different from the real queue (-0.40 pp; 95% interval "
+        "-0.90 to +0.10 pp)." in answers
+    )
+    assert "[" not in answers and "nt_prob_touch" not in answers
+    # then the chart, then what to do, before the scope, the lookup and the checks
+    order = ["<ul class=\"answers\">", '<svg class="bias wide"', "<h2>What to do</h2>", "<h2>Your symbol</h2>",
+             "<h2>What this covers</h2>", "<h2>Check your own backtester</h2>", '<h2 id="verify">']  # fmt: skip
+    assert [page.index(x) for x in order] == sorted(page.index(x) for x in order)
+    assert "Nasdaq TotalView-ITCH sample days" in page and "4 to 5%" not in page  # the scope of this venue
+    for p in (page, tables):
+        assert "ab" * 32 in p and "cd" * 32 in p and "Data provided for free by IEX" not in p
+        # each day root with the commit its units ran at (a day from before builds were recorded says so), the
+        # site's own build, and a verify command that works on the published day
+        commit = "https://github.com/sarptandoven/queuetruth/commit/"
+        assert f'<a href="{commit}{"1a" * 20}"><code>{"1a" * 6}</code></a>' in p
+        assert p.count("not recorded") == 1 and f'queuetruth</a> 0.2.0 (<a href="{commit}{"2b" * 20}">' in p
+        assert "verify_unit.py --day DAY_DIR --atlas-manifest atlas_manifest.json" in p
+        # the default source is nasdaq: its days are verified from the Nasdaq release
+        assert "/releases/tag/atlas-days-nasdaq" in p and "fill-realism-atlas.md#verify-a-nasdaq-day" in p
+        assert "<script" not in p and "http://" not in p.replace("https://", "")
+        # last built: the newest day of the window when nothing else is given (no wall-clock value)
+        assert "Last built <strong>2020-01-30</strong>, from 2 days from 2019-12-30 to 2020-01-30" in p
+        assert 'href="atlas/v1/manifest.json"' in p and 'href="about.html"' in p
+    # the answer is the search and link-preview text
+    assert '<meta property="og:description" content="Within 1 second, the real queue' in page
     # what a visitor can do next, before the verification section
-    assert page.index("<h2>Check your own backtester</h2>") < page.index("<h2>Verify any number</h2>")
     assert "pipx run queuetruth demo --yes" in page and "referee-your-simulator.md" in page
-    assert "concepts/fill-realism-atlas.md" in page
+    assert "queuetruth atlas --library nautilus --symbol AAPL" in page
+    assert "concepts/fill-realism-atlas.md" in page and 'href="tables.html"' in page
     assert "2 days from 2019-12-30 to 2020-01-30" in page and S.iso_date("10092026") == "2026-10-09"
     data = json.loads((out / "data" / "leaderboard.json").read_text())
     assert len(data["rows"]) == 12 and "attribution" not in data
-    # byte-identical rebuild
+    # byte-identical rebuild, the data API included
     again = tmp_path / "again"
     S.build(atlas, again, horizon="1s")
-    for f in ("index.html", "hftbacktest.html", "nautilustrader.html", "data/leaderboard.json",
-              "data/atlas_manifest.json"):  # fmt: skip
+    files = sorted(p.relative_to(out) for p in out.rglob("*") if p.is_file())
+    assert Path("atlas/v1/manifest.json") in files and Path("symbol.html") in files
+    assert files == sorted(p.relative_to(again) for p in again.rglob("*") if p.is_file())
+    for f in files:
         assert (out / f).read_bytes() == (again / f).read_bytes(), f
+    # `built_at` and SOURCE_DATE_EPOCH set the date
+    S.build(atlas, tmp_path / "dated", horizon="1s", built_at="2026-11-12")
+    assert "Last built <strong>2026-11-12</strong>" in (tmp_path / "dated" / "index.html").read_text()
 
 
 def test_iex_site_carries_the_attribution_and_escapes(atlas: Path, tmp_path: Path) -> None:
@@ -120,7 +156,13 @@ def test_iex_site_carries_the_attribution_and_escapes(atlas: Path, tmp_path: Pat
     page = (out / "index.html").read_text()
     assert S.IEX_ATTRIBUTION in page and S.IEX_TERMS_URL in page
     assert json.loads((out / "data" / "leaderboard.json").read_text())["attribution"] == S.IEX_ATTRIBUTION
-    assert "x&lt;script&gt;" in page and "x<script>" not in page
+    tables = (out / "tables.html").read_text()
+    assert S.IEX_ATTRIBUTION in tables and "x&lt;script&gt;" in tables and "x<script>" not in tables + page
+    for p in ("about.html", "symbol.html"):
+        assert S.IEX_ATTRIBUTION in (out / p).read_text()  # on every page
+    # the data API carries the attribution in its manifest, and every file's sha256
+    api = json.loads((out / "atlas" / "v1" / "manifest.json").read_text())
+    assert api["attribution"] == S.IEX_ATTRIBUTION and api["mode"] == "corrected"
     assert r["rows"] == 1
 
 
@@ -129,7 +171,7 @@ def test_attribution_matches_the_package_and_options_are_checked(atlas: Path, tm
 
     assert S.IEX_ATTRIBUTION == IEX_ATTRIBUTION
     r = S.build(atlas, tmp_path / "s", horizon="1s", per_symbol=True)
-    assert r["pages"] == ["index.html", "hftbacktest.html", "nautilustrader.html", "symbols.html"]
+    assert r["pages"] == [*PAGES, "hftbacktest.html", "nautilustrader.html", "symbols.html"]
     assert "AAPL" in (tmp_path / "s" / "symbols.html").read_text()
     with pytest.raises(SystemExit, match="horizon"):
         S.build(atlas, tmp_path / "x", horizon="60s")
@@ -162,11 +204,11 @@ def test_site_shows_the_pnl_error_when_the_atlas_has_it(atlas: Path, tmp_path: P
     pq.write_table(pa.Table.from_pylist(rows), atlas / "pnl_by_tier.parquet")
     out = tmp_path / "site"
     r = S.build(atlas, out, horizon="1s")
-    page = (out / "index.html").read_text()
+    page = (out / "tables.html").read_text()
     # the P&L sentence is about the 100 most traded symbols (ticks pool there), and names the largest clear error
     assert (
         "Among the 100 most traded symbols, marked to the mid 1 min after each fill, the exact replay makes -1.000 "
-        "ticks per order; hftbacktest's ProbQueue Power3 (hbt_power3[mode=faithful;n=2]) books 0.400 ticks per order "
+        "ticks per order; hftbacktest Power3 queue model (n=2) books 0.400 ticks per order "
         "less (an error of 40% of the exact P&amp;L; 95% interval -0.500 to -0.300), the largest clear P&amp;L error "
         "of a fill model." in page
     )
@@ -181,14 +223,18 @@ def test_site_shows_the_pnl_error_when_the_atlas_has_it(atlas: Path, tmp_path: P
     # hftbacktest's -0.1 tick at 1 s has an interval that reaches 0: no P&L finding is stated
     assert (
         "marked to the mid 1 s after each fill, the exact replay makes -1.000 ticks per order, and no fill model's "
-        "P&amp;L differs from it beyond its 95% interval." in (tmp_path / "s1" / "index.html").read_text()
+        "P&amp;L differs from it beyond its 95% interval." in (tmp_path / "s1" / "tables.html").read_text()
     )
     with pytest.raises(SystemExit, match="P&L horizon"):
         S.build(atlas, tmp_path / "x", horizon="1s", pnl_horizon="10s")
     # without pnl_by_tier the page is what it was
     (atlas / "pnl_by_tier.parquet").unlink()
     S.build(atlas, tmp_path / "plain", horizon="1s")
-    assert "P&amp;L" not in (tmp_path / "plain" / "index.html").read_text()
+    for p in ("index.html", "tables.html", "about.html", "hftbacktest.html"):
+        assert "P&amp;L" not in (tmp_path / "plain" / p).read_text(), p
+    # the front page's "what to do" box gives the closest setting's P&L error with its interval
+    front = (out / "index.html").read_text().split("<h2>What to do</h2>")[1]
+    assert "Its P&amp;L error: -0.400 ticks (95% interval -0.500 to -0.300) per order." in front
 
 
 def test_compat_link_only_when_asked(atlas: Path, tmp_path: Path) -> None:
@@ -303,16 +349,19 @@ def zoo_atlas(atlas: Path) -> Path:
 
 def test_snippets_use_the_libraries_own_names_and_refuse_what_they_cannot_reproduce() -> None:
     assert S.parse_id(PB2) == ("hbt_power2", {"exch": "partial", "mode": "faithful", "n": "2"})
-    assert S.snippet(PB2) == ("hftbacktest BacktestAsset chain", ".power_prob_queue_model2(2).partial_fill_exchange()")
+    assert S.snippet(PB2) == (
+        "hftbacktest BacktestAsset chain",
+        ".power_prob_queue_model2(2).no_partial_fill_exchange()",
+    )
     # the canonical exchange spelling (crates/zoo model_id.rs) and the CLI's alias give the no-partial exchange
     for exch in ("no_partial", "no-partial"):
         assert S.snippet(f"hbt_power[exch={exch};mode=faithful;n=3]")[1] == (
             ".power_prob_queue_model(3).no_partial_fill_exchange()"
         )
-    assert S.snippet(LOG)[1] == ".log_prob_queue_model().partial_fill_exchange()"
-    assert S.snippet("hbt_log2[mode=faithful]")[1] == ".log_prob_queue_model2().partial_fill_exchange()"
+    assert S.snippet(LOG)[1] == ".log_prob_queue_model().no_partial_fill_exchange()"
+    assert S.snippet("hbt_log2[mode=faithful]")[1] == ".log_prob_queue_model2().no_partial_fill_exchange()"
     assert S.snippet("hbt_risk_adverse[exch=partial;mode=faithful]")[1] == (
-        ".risk_adverse_queue_model().partial_fill_exchange()"
+        ".risk_adverse_queue_model().no_partial_fill_exchange()"
     )
     assert S.snippet(TOUCH) == (
         "NautilusTrader BacktestEngine.add_venue keywords",
@@ -324,14 +373,20 @@ def test_snippets_use_the_libraries_own_names_and_refuse_what_they_cannot_reprod
     assert "prob_fill_on_limit=0.3)" in S.snippet("nt_queue_l2_prob_touch[mode=faithful;p=0.3]")[1]
     # Databento's estimator has no library of its own: hftbacktest's expected-value equivalent, n = 1 / (1 + k)
     # with the partial-fill exchange the zoo runs it with, as `queuetruth export hftbacktest` writes it
-    assert S.snippet(DBN)[1] == ".power_prob_queue_model3(5).partial_fill_exchange()"
+    assert S.snippet(DBN)[1] == ".power_prob_queue_model3(5).no_partial_fill_exchange()"
     assert S.snippet("databento_mc[k=-0.95;mode=faithful;particles=100]")[1] == (
-        ".power_prob_queue_model3(20).partial_fill_exchange()"
+        ".power_prob_queue_model3(20).no_partial_fill_exchange()"
     )
     # the same text as the export's own builder for the same family and parameter
-    from queuetruth.export.hftbacktest import EXCHANGES, POWER_BUILDERS
+    from queuetruth.export.hftbacktest import DEFAULT_EXCHANGE, EXCHANGES, HBT_312_URL, POWER_BUILDERS
 
-    assert S.snippet(PB2)[1] == f".{POWER_BUILDERS['power2']}(2).{EXCHANGES['partial']}()"
+    assert S.snippet(PB2)[1] == f".{POWER_BUILDERS['power2']}(2).{EXCHANGES[DEFAULT_EXCHANGE]}()"
+    # whatever exchange the zoo ran, the pasted line uses the one that runs on the released hftbacktest (#312), and
+    # the note says why, with the link
+    for m in (PB2, "hbt_power3[exch=no_partial;mode=faithful;n=2]", DBN):
+        assert S.snippet(m)[1].endswith(".no_partial_fill_exchange()"), m
+    note = S.hbt_note()
+    assert "error 14" in note and f'href="{HBT_312_URL}"' in note and "<code>no_partial_fill_exchange</code>" in note
     assert "prob_fill_on_limit=0.286626)" in S.snippet("nt_queue_l2_prob_touch[mode=faithful;p=0.28662597]")[1]
     # nothing invented: corrected mode, L3 input, k > 0, unknown families and parameters have no snippet
     for m in (PB2.replace("faithful", "corrected"), L3, "databento_mc[k=0.5;mode=faithful]", FRONT, "x[n=2]",
@@ -353,40 +408,40 @@ def test_best_setting_by_tier_says_whether_it_is_still_clearly_off(zoo_atlas: Pa
     assert best[("ALL", "NautilusTrader")]["model_id"] == QPOS and not best[("ALL", "NautilusTrader")]["clearly_off"]
     assert best[("T1_top100", "NautilusTrader")]["clearly_off"]
     assert best[("ALL", "Databento")]["model_id"] == DBN and best[("ALL", "Databento")]["n_settings"] == 1
-    page = (out / "index.html").read_text()
+    page = (out / "tables.html").read_text()
     sec = page.split("<h2>Best setting by tier</h2>")[1].split("<h2>")[0]
     assert page.index("<h2>Best setting by tier</h2>") < page.index("<h2>Tier ALL</h2>")
     assert "closest to 0" in sec and "L3 FIFO model is left out" in sec
     row = sec.split("<tr><td>ALL</td>")[1].split("</tr>")[0]
     assert (
-        '<td><a href="hftbacktest.html">hftbacktest</a></td><td>hftbacktest Power2 n=2<br><code>'
+        '<td><a href="hftbacktest.html">hftbacktest</a></td><td>hftbacktest Power2 queue model (n=2)<br><code>'
         f"{PB2}</code></td>" + '<td class="under">-0.88<br><span class="ci">[-1.20, -0.56]</span></td>'
-        '<td>still clearly off: too pessimistic<br><span class="ci">interval overlaps: hftbacktest Log, '
-        "hftbacktest Power3 n=1</span></td>" in row
+        '<td>still clearly off: too pessimistic<br><span class="ci">interval overlaps: hftbacktest Log queue model, '
+        "hftbacktest Power3 queue model (n=1)</span></td>" in row
     )
-    assert "<code>.power_prob_queue_model2(2).partial_fill_exchange()</code>" in row
+    assert "<code>.power_prob_queue_model2(2).no_partial_fill_exchange()</code>" in row
     assert '<td class="under">-0.088<br>' in row  # its P&L error, with its interval
     nt = sec.split("<tr><td>ALL</td>")[2].split("</tr>")[0]
     assert '<td class="">+0.04<br>' in nt and "<td>no clear difference (95% interval includes 0)</td>" in nt
     assert "queue_position=True</code>" in nt and "DefaultFillModel" in sec
-    assert "<code>.power_prob_queue_model3(5).partial_fill_exchange()</code>" in sec
+    assert "<code>.power_prob_queue_model3(5).no_partial_fill_exchange()</code>" in sec
     assert "<th>closest setting (point estimate)</th>" in sec and "random_seed" in sec and "from 2.0" in sec
     assert best[("ALL", "hftbacktest")]["overlapping"] == [LOG, PW3] and best[("ALL", "Databento")]["overlapping"] == []
     data = json.loads((out / "data" / "leaderboard.json").read_text())
     assert [(b["tier"], b["library"]) for b in data["best_settings"]] == [
         (t, lib) for t in ("ALL", "T1_top100") for lib in ("hftbacktest", "NautilusTrader", "Databento")
     ]
-    assert data["best_settings"][0]["snippet"] == ".power_prob_queue_model2(2).partial_fill_exchange()"
+    assert data["best_settings"][0]["snippet"] == ".power_prob_queue_model2(2).no_partial_fill_exchange()"
     # corrected mode: the closest setting is named, but no library config is offered for it
     S.build(zoo_atlas, tmp_path / "c", mode="corrected")
-    c = (tmp_path / "c" / "index.html").read_text().split("<h2>Best setting by tier</h2>")[1].split("<h2>")[0]
+    c = (tmp_path / "c" / "tables.html").read_text().split("<h2>Best setting by tier</h2>")[1].split("<h2>")[0]
     assert "no library setting reproduces it" in c and "power_prob_queue_model2" not in c
 
 
 def test_one_page_per_library_answers_the_search_question(zoo_atlas: Path, tmp_path: Path) -> None:
     out = tmp_path / "site"
     r = S.build(zoo_atlas, out, source="iex")
-    assert r["pages"] == ["index.html", "hftbacktest.html", "nautilustrader.html", "databento.html"]
+    assert r["pages"] == [*PAGES, "hftbacktest.html", "nautilustrader.html", "databento.html"]
     index = (out / "index.html").read_text()
     assert (
         '<nav class="libs">By library: <a href="hftbacktest.html">hftbacktest</a>, '
@@ -394,16 +449,29 @@ def test_one_page_per_library_answers_the_search_question(zoo_atlas: Path, tmp_p
     )
     hbt = (out / "hftbacktest.html").read_text()
     assert "<title>How accurate is hftbacktest&#x27;s queue model? Fill-Realism Atlas</title>" in hbt
+    # the answer in one plain sentence, then the chart, then what to do, then the details
     lead = (
-        "Within 1 min, the exact replay of the real queue fills 13.00% of these orders. Of hftbacktest's 3 settings "
-        "in the atlas, 3 fill clearly fewer (95% interval excludes 0). The closest point estimate is hftbacktest's "
-        "ProbQueue Power2 "
-        f"({PB2}), -0.88 pp (95% interval -1.20 to -0.56 pp), and it still fills clearly fewer orders than the real "
-        "queue. Its interval overlaps those of 2 other settings (hftbacktest Log, hftbacktest Power3 n=1), so the "
-        "atlas cannot rank them by closeness."
+        "hftbacktest&#x27;s 3 settings in the atlas range from -1.20 to -0.88 pp against the real queue. Closest: "
+        "hftbacktest Power2 queue model (n=2), -0.88 pp, still clearly too pessimistic."
     )
     assert f'<p class="lead">{lead}</p>' in hbt
-    assert '<meta name="description" content="Within 1 min, the exact replay' in hbt
+    order = [f'<p class="lead">{lead}</p>', '<svg class="bias wide"', "<h2>What to do</h2>", "<h2>Details</h2>",
+             "<h2>Best hftbacktest setting by tier</h2>", "<h2>Tier ALL</h2>"]  # fmt: skip
+    assert [hbt.index(x) for x in order] == sorted(hbt.index(x) for x in order)
+    box = hbt.split("<h2>What to do</h2>")[1].split("<h2>")[0]
+    assert "Closest setting: <strong>hftbacktest Power2 queue model (n=2)</strong>, -0.88 pp" in box
+    assert "<pre><code>.power_prob_queue_model2(2).no_partial_fill_exchange()</code></pre>" in box
+    assert f"<summary>Model id and notes</summary><p><code>{PB2}</code></p>" in box
+    assert "stops on <code>partial_fill_exchange</code> with error 14" in box and "issues/312" in box
+    detail = (
+        "Within 1 min, the exact replay of the real queue fills 13.00% of these orders. Of hftbacktest's 3 settings "
+        "in the atlas, 3 fill clearly fewer (95% interval excludes 0). The closest point estimate is hftbacktest "
+        "Power2 queue model (n=2), -0.88 pp (95% interval -1.20 to -0.56 pp), and it still fills clearly fewer orders "
+        "than the real queue. Its interval overlaps those of 2 other settings (hftbacktest Log queue model, "
+        "hftbacktest Power3 queue model (n=1)), so the atlas cannot rank them by closeness."
+    )
+    assert f"<p>{detail}</p>" in hbt
+    assert '<meta name="description" content="hftbacktest&#x27;s 3 settings in the atlas' in hbt
     # only hftbacktest's models (the L3 model is in its table, not in its best settings), across tiers and horizons
     assert all(m in hbt for m in (PB2, PW3, LOG, L3)) and TOUCH not in hbt and DBN not in hbt and FRONT not in hbt
     assert "<h2>Best hftbacktest setting by tier</h2>" in hbt and "<th>1 s</th><th>1 min</th>" in hbt
@@ -413,18 +481,32 @@ def test_one_page_per_library_answers_the_search_question(zoo_atlas: Path, tmp_p
         and "the largest clear P&amp;L error of hftbacktest's models." in hbt
     )
     assert "calibrate-hftbacktest.md" in hbt and '<a href="index.html">Fill-Realism Atlas</a>' in hbt
-    assert S.IEX_ATTRIBUTION in hbt and "<script" not in hbt
+    assert S.IEX_ATTRIBUTION in hbt and "<script" not in hbt and "queuetruth atlas --library hftbacktest" in hbt
     assert "2 days from 2019-12-30 to 2020-01-30" in hbt  # the same ISO dates as the index
     nt = (out / "nautilustrader.html").read_text()
     assert "<title>How accurate is NautilusTrader&#x27;s fill model? Fill-Realism Atlas</title>" in nt
     # a setting whose interval holds 0 is never stated as a difference
     assert (
         "Of NautilusTrader's 2 settings in the atlas, 1 fills clearly more orders (95% interval excludes 0). The "
-        f"closest point estimate is NautilusTrader's queue_position model ({QPOS}), +0.04 pp (95% interval -0.20 to "
-        "+0.28 pp), "
-        "which the atlas cannot tell from the exact replay at this sample size." in nt
+        "closest point estimate is NautilusTrader queue position (queue_position=True), +0.04 pp (95% interval -0.20 "
+        "to +0.28 pp), which the atlas cannot tell from the exact replay at this sample size." in nt
+    )
+    assert (
+        '<p class="lead">NautilusTrader&#x27;s default (touch fill) fills 1.90 pp more orders than the real queue (15% '
+        "more fills; 95% interval +1.50 to +2.30 pp). Closest: NautilusTrader queue position (queue_position=True), "
+        "+0.04 pp, no clear difference from the real queue.</p>" in nt
     )
     assert "integrations/nautilus/README.md" in nt
+    # why hftbacktest's order-level model fills fewer: one plain sentence under its chart and a note on its rows,
+    # linking the findings; only where that model is shown
+    findings = "https://github.com/sarptandoven/queuetruth/blob/main/scripts/scale/findings/l3-fifo-gap.md"
+    assert S.L3_FINDINGS == findings
+    note = hbt.split('<svg class="bias wide"')[1].split("<h2>What to do</h2>")[0]
+    assert "that is hftbacktest&#x27;s own behaviour" not in note  # an HTML constant, written as is
+    assert "that is hftbacktest's own behaviour. The released hftbacktest 2.4.4 gives the same first fills" in note
+    assert "displayed interest fills before hidden at the same price" in note and f'href="{findings}"' in note
+    assert hbt.count(f'(<a href="{findings}">why</a>)') == 2  # its row in each tier's table
+    assert findings not in nt and findings not in (out / "index.html").read_text()
     db = (out / "databento.html").read_text()
     assert "How accurate is Databento&#x27;s queue position estimate?" in db and DBN in db and PB2 not in db
     # no setting clear at all
@@ -443,28 +525,62 @@ def test_one_page_per_library_answers_the_search_question(zoo_atlas: Path, tmp_p
 def test_charts_are_accessible_static_svg_with_the_table_values(zoo_atlas: Path, tmp_path: Path) -> None:
     out = tmp_path / "site"
     S.build(zoo_atlas, out)
-    page = (out / "index.html").read_text()
-    assert page.count("<svg ") == 2 and "<script" not in page  # one chart per tier
+    page = (out / "tables.html").read_text()
+    # one chart per tier, each in two layouts (wide and narrow) of which the page's CSS shows one
+    assert page.count('<svg class="bias wide"') == 2 and page.count('<svg class="bias narrow"') == 2
+    assert "<script" not in page
     t_all = page.split("<h2>Tier ALL</h2>")[1].split("<h2>")[0]
-    svg = t_all.split("<svg ")[1].split("</svg>")[0]
+    svg = t_all.split('<svg class="bias wide"')[1].split("</svg>")[0]
+    narrow = t_all.split('<svg class="bias narrow"')[1].split("</svg>")[0]
     assert t_all.index("<svg ") < t_all.index("<table>")
     assert 'role="img" aria-labelledby="bias-ALL-t" aria-describedby="bias-ALL-d"' in svg
+    assert 'aria-labelledby="bias-ALL-n-t" aria-describedby="bias-ALL-n-d"' in narrow  # ids stay unique
     assert '<title id="bias-ALL-t">Fill-rate bias by model within 1 min, tier ALL</title>' in svg
     assert '<desc id="bias-ALL-d">Fill-rate bias of 7 models at 1 min' in svg  # the bound is not drawn
     assert FRONT in t_all and "front of the queue" not in svg
-    # each value drawn is the value in the table, coloured only when its interval excludes 0
-    assert '<g class="over"><title>NautilusTrader touch p=1: +1.90 pp [+1.50, +2.30]</title>' in svg
-    assert '<g class="plain"><title>NautilusTrader queue_position: +0.04 pp [-0.20, +0.28]</title>' in svg
-    assert '<g class="under"><title>hftbacktest Power2 n=2: -0.88 pp [-1.20, -0.56]</title>' in svg
+    # each value drawn is the value in the table, coloured only when its interval excludes 0; the label is the plain
+    # one, the tooltip adds the model id
+    for drawn in (svg, narrow):
+        assert (
+            '<g class="over"><title>NautilusTrader default (touch fill) (nt_prob_touch[mode=faithful;p=1]): +1.90 pp '
+            "[+1.50, +2.30]</title>" in drawn
+        )
+        qpos = f'<g class="plain"><title>NautilusTrader queue position (queue_position=True) ({QPOS}): +0.04 pp'
+        assert qpos in drawn
+        assert f'<g class="under"><title>hftbacktest Power2 queue model (n=2) ({PB2}): -0.88 pp [-1.20, -0.56]' in drawn
+        assert '<line class="zero"' in drawn and ">0</text>" in drawn and "-2</text>" in drawn and "+2</text>" in drawn
+    # wide: the label right-aligned in its own column, left of every gridline, with its dot, whisker and value on
+    # the same baseline; narrow: the label above, the dot on the line below
+    row = svg.split(f"({PB2}): -0.88 pp")[1].split("</g>")[0]
+    label_y = re.search(r'<text x="430" y="([0-9.]+)" text-anchor="end">hftbacktest Power2 queue model', row)
+    dot_y = re.search(r'<circle class="dot" cx="[0-9.]+" cy="([0-9.]+)"', row)
+    value_y = re.search(r'<text x="996" y="([0-9.]+)" text-anchor="end">-0.88</text>', row)
+    assert label_y and dot_y and value_y
+    assert float(label_y[1]) == float(value_y[1]) == float(dot_y[1]) + 5
+    grid_x = [float(x) for x in re.findall(r'<line class="(?:grid|zero)" x1="([0-9.]+)"', svg)]
+    assert min(grid_x) > 430 and max(grid_x) <= 920
+    nrow = narrow.split(f"({PB2}): -0.88 pp")[1].split("</g>")[0]
+    n_label = float(re.search(r'<text x="4" y="([0-9.]+)">', nrow)[1])
+    n_dot = float(re.search(r'<circle class="dot" cx="[0-9.]+" cy="([0-9.]+)"', nrow)[1])
+    assert n_dot - n_label == 15
     assert '<td class="over">+1.90<br><span class="ci">[+1.50, +2.30]</span></td>' in t_all
-    assert '<line class="zero"' in svg and ">0</text>" in svg and "-2</text>" in svg and "+2</text>" in svg
-    # themed only through the page's colour variables
+    # themed only through the page's colour variables; the narrow layout below 760 px
     assert "svg.bias .over .dot { fill: var(--over); }" in page and 'fill="#' not in svg and 'stroke="#' not in svg
+    assert "min-width: 560px" not in page and "svg.bias.narrow { display: none; max-width: 640px; }" in page
+    assert "@media (max-width: 760px) { svg.bias.wide { display: none; } svg.bias.narrow { display: block; } }" in page
+    # the front page draws every library's settings at the headline horizon in one chart, grouped by library
+    front = (out / "index.html").read_text()
+    assert front.count('<svg class="bias wide"') == 1 and 'aria-labelledby="bias-front-t"' in front
+    fsvg = front.split('<svg class="bias wide"')[1].split("</svg>")[0]
+    groups = [fsvg.index(f'text-anchor="end">{lib}</text>') for lib in ("hftbacktest", "NautilusTrader", "Databento")]
+    assert groups == sorted(groups) and '<text class="group" x="430"' in fsvg
+    assert FRONT not in fsvg and L3 in fsvg  # bounds left out; hftbacktest's order-level model shown
     hbt = (out / "hftbacktest.html").read_text()
-    assert hbt.count("<svg ") == 2 and "NautilusTrader touch" not in hbt.split("<svg ")[1]
+    assert hbt.count('<svg class="bias wide"') == 3
+    assert "NautilusTrader" not in hbt.split('<svg class="bias wide"')[1].split("</svg>")[0]
     assert S.chart([], "x", "t", S60) == ""
     flat = S.chart([_row("ALL", PB2, S60, 0.0, 0.0, 0.0)], "f", "t", S60)  # a zero-width domain still draws
-    assert 'cx="475.0"' in flat
+    assert 'cx="213.0"' in flat and 'cx="686.0"' in flat
 
 
 def test_words_follow_the_interval_and_labels_fit(zoo_atlas: Path, tmp_path: Path) -> None:
@@ -483,10 +599,86 @@ def test_words_follow_the_interval_and_labels_fit(zoo_atlas: Path, tmp_path: Pat
     # a long label is cut with an ellipsis; the row's tooltip keeps all of it
     long = "nt_queue_l2_prob_touch[mode=faithful;p=0.28662597]"
     svg = S.chart([_row("ALL", long, S60, 0.01, 0.0, 0.02)], "l", "t", S60)
-    assert "<title>NautilusTrader queue_position + touch p=0.28662597: +1.00 pp" in svg
-    assert ">NautilusTrader queue_position + touch p\u2026</text>" in svg
+    assert f"<title>NautilusTrader queue position, touch probability 0.286626 ({long}): +1.00 pp" in svg
+    assert ">NautilusTrader queue position, touch probability 0.286626</text>" in svg
+    longer = "x" * 70
+    svg = S.chart([_row("ALL", longer, S60, 0.01, 0.0, 0.02)], "l", "t", S60)
+    assert f"<title>{longer} ({longer}): +1.00 pp" in svg and f">{'x' * 57}\u2026</text>" in svg
     # links are not the colour of "too pessimistic", and the nav marks the current page
     S.build(zoo_atlas, tmp_path / "s")
     hbt = (tmp_path / "s" / "hftbacktest.html").read_text()
     assert "a { color: var(--fg);" in hbt and "a { color: var(--under)" not in hbt
     assert '<span aria-current="page">hftbacktest</span>' in hbt
+
+
+def test_the_data_api_is_written_next_to_the_site_and_read_by_lookup(zoo_atlas: Path, tmp_path: Path) -> None:
+    import hashlib
+
+    import queuetruth as qt
+    from queuetruth.schemas import parse_document
+
+    out = tmp_path / "site"
+    r = S.build(zoo_atlas, out, source="iex", built_at="2026-11-12")
+    base = out / "atlas" / "v1"
+    m = json.loads((base / "manifest.json").read_text())
+    parse_document(m)
+    assert (m["schema"], m["api_version"], m["venue"], m["venue_name"]) == ("qt.atlas_api_manifest", 1, "iex",
+                                                                            "IEX DEEP+")  # fmt: skip
+    assert m["built_at"] == "2026-11-12" and m["atlas_root"] == "ab" * 32
+    assert m["window"] == {"from": "2019-12-30", "to": "2020-01-30"} and m["days"] == ["2019-12-30", "2020-01-30"]
+    assert (m["symbol_days"], m["symbols"], m["headline_horizon"]) == (8, 4, "1min")
+    assert m["attribution"] == S.IEX_ATTRIBUTION and m["verify"].endswith("fill-realism-atlas.md#verify-a-number")
+    # every other file is listed with its sha256, and each is a valid document
+    assert [f["path"] for f in m["files"]] == ["configs.json", "summary.json", "symbols/A.json"]
+    assert r["api"] == {"files": 4, "symbol_shards": 1}
+    for f in m["files"]:
+        data = (base / f["path"]).read_bytes()
+        assert len(data) == f["bytes"] and hashlib.sha256(data).hexdigest() == f["sha256"]
+        parse_document(json.loads(data))
+    # summary: every row of the leaderboard (both modes), in human units, with the P&L where its horizon matches
+    summary = json.loads((base / "summary.json").read_text())
+    assert len(summary["rows"]) == 33 and {x["mode"] for x in summary["rows"]} == {"faithful", "corrected"}
+    touch = next(x for x in summary["rows"] if x["model_id"] == TOUCH and x["tier"] == "ALL" and x["horizon"] == "1min")
+    assert touch["label"] == "NautilusTrader default (touch fill)" and touch["library"] == "nautilus"
+    assert touch["fill_rate_bias_pp"] == {"value": 1.9, "lo": 1.5, "hi": 2.3} and touch["verdict"] == "too_optimistic"
+    assert touch["exact_fill_rate_pct"]["value"] == 13.0 and touch["horizon_seconds"] == 60.0
+    assert touch["pnl_bias_ticks"] == {"value": 0.19, "lo": 0.15, "hi": 0.23} and touch["is_setting"]
+    one_s = next(x for x in summary["rows"] if x["model_id"] == TOUCH and x["horizon"] == "1s")
+    assert one_s["pnl_bias_ticks"] is None  # the atlas has no P&L marked at 1 s
+    assert not next(x for x in summary["rows"] if x["model_id"] == L3)["is_setting"]
+    assert next(x for x in summary["rows"] if x["model_id"] == FRONT)["library"] == "bound"
+    # configs: one per (tier, library), the same as the site's best settings, with the text to paste
+    configs = json.loads((base / "configs.json").read_text())
+    assert [(c["tier"], c["library"]) for c in configs["configs"]] == [
+        (t, lib) for t in ("ALL", "T1_top100") for lib in ("hftbacktest", "nautilus", "databento")
+    ]
+    c = configs["configs"][0]
+    assert c["model_id"] == PB2 and c["config"] == ".power_prob_queue_model2(2).no_partial_fill_exchange()"
+    assert c["verdict"] == "too_pessimistic" and c["overlapping"] == [LOG, PW3]
+    assert c["overlapping_labels"] == ["hftbacktest Log queue model", "hftbacktest Power3 queue model (n=1)"]
+    assert "DefaultFillModel" in configs["notes"]["nautilus"] and "<" not in configs["notes"]["nautilus"]
+    for lib in ("hftbacktest", "databento"):  # the #312 note, as text with its link's address
+        assert (
+            "error 14 (hftbacktest #312 (https://github.com/nkaz001/hftbacktest/issues/312))" in configs["notes"][lib]
+        )
+        assert "<" not in configs["notes"][lib]
+    # symbols: the library settings of the fixture's one symbol at the horizons it has
+    shard = json.loads((base / "symbols" / "A.json").read_text())
+    assert shard["horizons"] == ["1s"] and [s["model_id"] for s in shard["settings"]] == [TOUCH]
+    assert shard["symbols"] == [{"symbol": "AAPL", "tier": "T1_top100", "days": 2,
+                                 "cells": [[[3.0, 2.0, 4.0, 3.1, 1500, 2]]]}]  # fmt: skip
+    # `queuetruth atlas` reads what the site wrote
+    hres = qt.atlas.lookup(library="hftbacktest", source=out)
+    assert "  note: The hftbacktest line goes on your BacktestAsset() chain" in hres.text()
+    assert "hftbacktest #312" in hres.text() and ".no_partial_fill_exchange()" in hres.text()
+    res = qt.atlas.lookup(library="nautilus", source=out)
+    assert res.configs[0]["config"].endswith("queue_position=True") and res.doc["built_at"] == "2026-11-12"
+    assert qt.atlas.lookup(symbol="AAPL", horizon="1s", source=out).rows[0]["fill_rate_bias_pp"]["value"] == 3.0
+    # a rebuild never keeps a shard of a symbol that left the window
+    (base / "symbols" / "Q.json").write_text("{}")
+    S.build(zoo_atlas, out, source="iex", built_at="2026-11-12")
+    assert not (base / "symbols" / "Q.json").exists()
+    # the symbol page reads the shards with a small script and puts the data in as text, never as markup
+    page = (out / "symbol.html").read_text()
+    assert page.count("<script>") == 1 and 'fetch("atlas/v1/symbols/" + key + ".json")' in page
+    assert "innerHTML" not in page and "textContent" in page and "<noscript>" in page and "src=" not in page

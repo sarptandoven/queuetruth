@@ -1926,6 +1926,29 @@
   ],
   [
     "queuetruth",
+    "atlas",
+    "--library",
+    "nautilus",
+    "--symbol",
+    "AAPL",
+    "--tier",
+    "T1_top100",
+    "--horizon",
+    "1min",
+    "--from",
+    "site",
+    "--yes",
+    "--refresh",
+    "--json"
+  ],
+  [
+    "queuetruth",
+    "atlas",
+    "--library",
+    "hftbacktest"
+  ],
+  [
+    "queuetruth",
     "data",
     "add",
     "12302019.NASDAQ_ITCH50.gz",

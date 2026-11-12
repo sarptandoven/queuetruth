@@ -5112,6 +5112,76 @@
   {
     "argv": [
       "queuetruth",
+      "atlas",
+      "--library",
+      "nautilus",
+      "--symbol",
+      "AAPL",
+      "--tier",
+      "T1_top100",
+      "--horizon",
+      "1min",
+      "--from",
+      "site",
+      "--yes",
+      "--refresh",
+      "--json"
+    ],
+    "command": {
+      "path": [
+        "atlas"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "library": "nautilus",
+          "symbol": "AAPL",
+          "tier": "T1_top100",
+          "horizon": "1min",
+          "source": "site",
+          "yes": true,
+          "refresh": true,
+          "json": true
+        }
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "atlas",
+      "--library",
+      "hftbacktest"
+    ],
+    "command": {
+      "path": [
+        "atlas"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "library": "hftbacktest"
+        }
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
       "data",
       "add",
       "12302019.NASDAQ_ITCH50.gz",
