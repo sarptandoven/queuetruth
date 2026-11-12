@@ -163,10 +163,17 @@ Names marked **SPEC 4.3** are the binding public API (SemVer applies to them). O
 listed because their modules export them, but they may change between minor versions. `queuetruth._core` is
 internal.
 
+The verbs (`check`, `fit`, `demo`, `atlas.lookup`, `atlas.calibration`, `data.add`, `data.fetch_iex`) take typed
+keyword arguments in human units (durations such as `"1s"` or `"1min"`) and return results of one shape,
+`queuetruth.results.Result`: `.summary`, `.table()`, `.interval`, `.to_html()`, `.doc`, `.save(path)` and a notebook
+view.
+
 Spec and summary models live in `queuetruth.schemas` and are documented field by field in [Schemas](schemas.md).
 """
 
 PY_MODULES = [
+    "results",
+    "atlas",
     "integrity",
     "units",
     "data",
