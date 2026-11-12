@@ -29,6 +29,12 @@ def _row(r: dict[str, Any]) -> list[str]:
     ]
 
 
+def _table(header: list[str], rows: list[list[str]]) -> list[str]:
+    """A plain aligned text table."""
+    widths = [max(len(r[i]) for r in [header, *rows]) for i in range(len(header))]
+    return ["  ".join(c.ljust(w) for c, w in zip(r, widths, strict=True)).rstrip() for r in [header, *rows]]
+
+
 def differing(orders: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """The orders whose outcome differs between the arms, fills only one side made first."""
     rank = {"backtest_only": 0, "live_only": 1, "backtest_unpaired": 2}
@@ -39,8 +45,6 @@ def differing(orders: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def text(doc: dict[str, Any], orders: list[dict[str, Any]], *, max_rows: int = 10) -> str:
     """The terminal report."""
-    from queuetruth.cli import _table
-
     path = "paired by its reconciler" if doc["path"] == "reconcile" else "scored as the simulator arm"
     lines = list(doc["lines"])
     lines.append("")

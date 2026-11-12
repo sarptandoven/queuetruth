@@ -36,7 +36,7 @@ const OPEN_S: u32 = 34_200;
 const CLOSE_S: u32 = 57_600;
 /// Largest `close_s` (two days), as the other formats.
 const MAX_CLOSE_S: u32 = 172_800;
-const OPTIONS: [&str; 4] = ["open_s", "close_s", "memory_rows", "check_symbol_sequence"];
+pub(crate) const OPTIONS: [&str; 4] = ["open_s", "close_s", "memory_rows", "check_symbol_sequence"];
 /// Core-session transitions within this distance of the expected local time pass the clock check.
 const CLOCK_TOLERANCE_NS: u64 = 300_000_000_000;
 const NS_PER_HOUR: u64 = 3_600_000_000_000;

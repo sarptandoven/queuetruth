@@ -1395,7 +1395,8 @@
               "iex_deep_plus",
               "coinbase_level3",
               "kraken_l3",
-              "hyperliquid_node"
+              "hyperliquid_node",
+              "nyse_ibf"
             ],
             "title": "Format",
             "type": "string"
@@ -2635,7 +2636,8 @@
                   "iex_deep_plus",
                   "coinbase_level3",
                   "kraken_l3",
-                  "hyperliquid_node"
+                  "hyperliquid_node",
+                  "nyse_ibf"
                 ],
                 "type": "string"
               },

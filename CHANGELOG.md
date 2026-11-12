@@ -21,6 +21,13 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   1 s and 10 s, and the latency measured on the live log; then the orders that differ. It writes `orders.csv`
   (symbols, decimal prices, venue-local times), `compare.json` and, with `--html`, `compare.html`. `reconcile` and
   `score` are unchanged.
+- **One guide per backtester for hftbacktest and NautilusTrader.** "Score and calibrate my hftbacktest backtest"
+  (`docs/how-to/calibrate-hftbacktest.md`) merges the plugin page and the calibration recipe and starts with the
+  `queuetruth-hftbacktest` plugin; the old plugin page points to its sections, and the plugin README keeps a short
+  example and links the guide. "Check and calibrate my NautilusTrader backtest" (`docs/how-to/nautilustrader.md`)
+  picks a setting from the atlas, fits `prob_fill_on_limit` with `queuetruth fit --backtester nautilus` (runnable on
+  the synthetic dataset), passes it to `add_venue` with `**qtn.venue_options(cal)` from the `queuetruth-nautilus` plugin, and
+  scores the backtest against live fills. The docs menu lists one page for each.
 - **Realistic fills in Backtrader and LEAN, one line each** (docs/how-to/realistic-fills-backtrader-lean.md).
   `cerebro.broker.set_filler(qt.backtrader.QueueFiller(table="touch.json", tier="T1"))` and
   `security.set_fill_model(qt.lean.QueueFillModel(table="touch.json", tier="T1"))` keep the framework's own limit
@@ -71,6 +78,18 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   menu). The README links the Fill-Realism Atlas from its first screen. `docs/RESULTS.md` has one canonical block
   for the headline Nasdaq number that other pages link. `docs/check_docs.py` flags stale version wording ("v0.1",
   "after release", "next release", "new after 0.1") outside the changelog, design notes and launch drafts.
+- `queuetruth._core.formats()`: the source format registry as JSON, one entry per `IngestSpec.format` (name, CLI
+  spelling, dataset kind, manifest `source_format`, vendor or not, rule sets, default source venue, options, engine
+  crate). The ingest dispatch and the CLI `--format` choices read the same registry (`qt_cli::formats`); ingest
+  outputs are byte-identical.
+- `queuetruth._core.zoo_families()` and `queuetruth.eval.zoo_families()` / `zoo_all_ids()`: the zoo family registry
+  (`crates/zoo/src/families.rs`): per family its simulator library, label, parameters with defaults and ranges,
+  whether it is a particle model, its `--models all` entries, the calibrations that fit it and its library default.
+  The model id grammar, `--models all`, `zoo --list-models`, the service's model checks and the livefill kit read it;
+  zoo outputs are byte-identical.
+- `tools/check_layers.py` checks the import layers of `python/queuetruth` (plan section 5.1), private names used
+  across packages and test code imported by shipped code. Today's exceptions are listed in
+  `tools/check_layers_allow.txt`; a new one fails `make lint` and CI.
 - **Atlas v2: the answer first, a data API and `queuetruth atlas`.** The atlas front page now opens with the exact
   fill rate and one plain sentence per library, then one chart of every library's settings at 1 minute with 95%
   intervals, a "what to do" box per library (closest setting, verdict, config to paste), a symbol lookup, the venue's
@@ -207,6 +226,12 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 - `rustix` 1.1.5 to 1.1.6 in `Cargo.lock` (RUSTSEC-2026-0486: its xattr functions marked unwritten bytes as
   initialized when given a zero-length buffer). Reached only through `tempfile`; 1.1.6 was released on 2026-10-27.
+- The Rust spec mirror rejected the live venues `freqtrade`, `hummingbot`, `sim_freqtrade`, `sim_hummingbot`,
+  `sim_backtrader`, `sim_vectorbt` and `sim_lean`. `LiveVenue` and the CLI venue choices are now generated from the
+  Python model by `make schemas`, and a test round-trips every venue.
+- The service accepts `format: nyse_ibf` for ingest jobs.
+- Reports label datasets ingested from crypto and Tardis captures as vendor data (`VENDOR_FORMATS`), as for ITCH, DBN
+  and IEX: a `synthetic_only` status there describes the venue rules, not the data.
 - **Intervals on short captures.** On data that fits in one or a few half-hours (for example 15 minutes of your own
   ITCH capture), the zoo, its leaderboard, `report` and `zoo-toxicity` bootstrapped over fewer than 5 blocks: every
   95% CI had zero width (`+0.4 pp (95% CI +0.4 to +0.4 pp)`), every cell was starred and `report` said BIASED. With

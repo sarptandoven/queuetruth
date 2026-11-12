@@ -26,7 +26,6 @@ from __future__ import annotations
 import csv
 import datetime as dt
 import json
-import math
 import shutil
 import tempfile
 from collections import Counter
@@ -40,6 +39,7 @@ from zoneinfo import ZoneInfo
 from queuetruth import backtesters
 from queuetruth.compare.detect import BOTS, LiveKind, detect_backtest, detect_live
 from queuetruth.errors import QtError
+from queuetruth.score.lines import pct as _pct
 
 SCHEMA = "qt.compare"
 #: The markout horizons of the answer (100 ms, 1 s, 10 s), as `score` prints them.
@@ -176,10 +176,6 @@ def _wilson(k: int, n: int) -> tuple[float | None, float | None]:
 
     lo, hi = wilson(k, n)
     return float(lo), float(hi)
-
-
-def _pct(x: float | None) -> str:
-    return "n/a" if x is None or not math.isfinite(x) else f"{x * 100:.0f}%"
 
 
 def _ms(v: Any) -> str:
@@ -713,9 +709,9 @@ def _pnl_lines(run: _Run, cur: str | None) -> tuple[list[str], dict[str, Any]]:
 
 
 def _practitioner(doc: dict[str, Any] | None, data: bool) -> list[str]:
-    from queuetruth.cli import _practitioner_lines
+    from queuetruth.score.lines import practitioner_lines
 
-    lines = _practitioner_lines(doc) if doc else []
+    lines = practitioner_lines(doc) if doc else []
     if not data and not any(x.startswith("markouts:") for x in lines):
         lines.append("markouts: need --data (fills are marked to the dataset's mid at 100 ms, 1 s and 10 s).")
     return lines
