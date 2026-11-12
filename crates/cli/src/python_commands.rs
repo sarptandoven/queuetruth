@@ -14,18 +14,22 @@ pub(crate) const PYTHON_GROUPS: &[(&str, &str)] = &[
     ("pm", "prediction-market kit (Kalshi, Polymarket) on your own captures"),
     ("cert", "signing keys and rendering"),
     ("verify", "verify a published result: the Fill-Realism Atlas"),
+    ("data", "bring order-level data in: add files to a dataset, or fetch a free IEX day"),
 ];
 
 /// Long descriptions (`--help`) by command path.
 #[rustfmt::skip]
 pub(crate) const PYTHON_LONG_ABOUT: &[(&[&str], &str)] = &[
-    (&["demo"], "Fetch a small public order-level subset (the first minutes of a Nasdaq TotalView-ITCH or IEX DEEP+ day), place simulated resting orders in the real queue, and show how often NautilusTrader's default fill model fills them compared with the exact replay, by horizon, with base rates. Writes <out>/demo.html and <out>/demo.json."),
+    (&["demo"], "Fetch a small public order-level subset (the first minutes of a Nasdaq TotalView-ITCH or IEX DEEP+ day), place simulated resting orders in the real queue, and show how often your backtester's default fill model (NautilusTrader unless --backtester says otherwise) fills them compared with the exact replay, by horizon, with base rates. Writes <out>/demo.html and <out>/demo.json."),
     (&["forecast"], "Forecast referee: commit forecasts to a hash-chained ledger before their questions resolve, record resolutions, and score proper scores, calibration, skill and executable PnL."),
     (&["pm"], "Prediction-market kit (Kalshi, Polymarket): your own captures -> books, queue calibration and reward-aware market-making PnL. Self-hosted use on your own data only; see `queuetruth.pm.terms`."),
     (&["reconcile"], "A trading bot's simulator arm (Freqtrade backtest or dry run, Hummingbot paper bot) against its live run, or a Backtrader, VectorBT or LEAN backtest against a canonical live log: paired orders, why each differs, and the sim-vs-live scorecard."),
     (&["atlas"], "The Fill-Realism Atlas answer for your library, liquidity tier or symbol: how far each setting fills from the exact replay of the real queue, with its 95% interval, and the closest setting's config to paste. Reads the atlas data API from a local directory or the public site (asks before it downloads)."),
     (&["verify", "atlas"], "Checks a published Fill-Realism Atlas without a checkout: every file of the data API against the sha256 in its manifest, the atlas root against the day roots, and with --day one day's leaves and Merkle proofs. With --unit and --rerun, runs that unit again and compares its leaf with the published one. Asks before it downloads anything."),
     (&["check"], "How wrong is my backtest: replays the backtest's own resting limit orders (hftbacktest, NautilusTrader, Backtrader, VectorBT, LEAN or Freqtrade output) in the exact queue of an order-level dataset and compares them order by order: fills, phantom fills, time to fill and the P&L gap. Without --data, estimates from the Fill-Realism Atlas touch tables how many of a bar backtest's fills the real queue would give, and how much they overstate P&L."),
+    (&["data"], "Bring order-level data in: add files (format, venue and date inferred, days merged, quality checked) or fetch a free IEX DEEP+ day."),
+    (&["data", "add"], "Ingests one or more order-level files (ITCH, IEX DEEP+, DBN, NYSE TAQ Integrated Feed, the crypto captures, Tardis L2) into one dataset: the format, venue and session date are read from the files, several days are merged, and the data-quality checks run. An existing dataset at --out gains the new days."),
+    (&["data", "fetch"], "Streams a free public order-level day (iex: IEX DEEP+ from IEX's public bucket) after you agree, keeps only the symbols you ask for and adds them to a dataset, with IEX's attribution in its manifest. The day's file (several GB) is never stored."),
     (&["fit"], "The parameter that fixes your backtester's fill model: fitted on order-level data (exact queue) or on your live fills, compared with the library default on held-out data. The paste-ready snippet is written only when the fit beats the default; otherwise it says why and what would make it pass."),
     (&["compare"], "My backtest against my live run, order by order: how many of the backtest's fills happened live, the fills only one side made and why, the P&L gap, time to fill, markouts and latency. Reads the backtester and the kind of live run from the files."),
 ];
@@ -36,6 +40,8 @@ pub(crate) const PYTHON_POSITIONAL_HELP: &[(&[&str], &str, &str)] = &[
     (&["certify"], "RUN_DIR...", "run directory, or LABEL=RUN_DIR"),
     (&["cert", "partial-opening"], "opening", "the private qt.commitment_opening"),
     (&["check"], "BACKTEST...", "the backtester's output file(s) of one run"),
+    (&["data", "add"], "FILE...", "order-level files or capture directories"),
+    (&["data", "fetch"], "SOURCE", "the public source: iex"),
 ];
 
 /// The Python-only commands, after `grammar::COMMANDS` in the command table.
@@ -50,6 +56,7 @@ pub(crate) const PYTHON_COMMANDS: &[Cmd] = &[
             Flag { long: "symbols", kind: Kind::Str, to: "_cli.symbols", required: false, help: "comma-separated symbols (default: the source's four liquid names)", short: None, value_name: Some("SYMBOLS") },
             Flag { long: "minutes", kind: Kind::Int, to: "_cli.minutes", required: false, help: "placement window length after 09:35 ET, minutes (default 5)", short: None, value_name: Some("MINUTES") },
             Flag { long: "n", kind: Kind::Int, to: "_cli.n", required: false, help: "simulated orders (default 3000)", short: None, value_name: Some("N") },
+            Flag { long: "backtester", kind: Kind::Enum(&["nautilus", "hftbacktest", "databento"]), to: "_cli.backtester", required: false, help: "the library the answer is about, at its default setting (default nautilus)", short: None, value_name: None },
             Flag { long: "models", kind: Kind::Str, to: "_cli.models", required: false, help: "comma-separated zoo model ids, or all (default: nt_prob_touch[p=1], nt_queue_l2, hbt_power3[n=2], hbt_risk_adverse, databento_mc[k=-0.8;particles=100], front_of_queue, trade_through_only)", short: None, value_name: Some("MODELS") },
             Flag { long: "url", kind: Kind::Str, to: "_cli.url", required: false, help: "stream this http(s) URL instead (a day file or a pre-cut subset)", short: None, value_name: Some("URL") },
             Flag { long: "from-file", kind: Kind::Str, to: "_cli.from_file", required: false, help: "read this local day file or subset instead (gzip or raw)", short: None, value_name: Some("FROM_FILE") },
@@ -564,6 +571,39 @@ pub(crate) const PYTHON_COMMANDS: &[Cmd] = &[
             Flag { long: "html", kind: Kind::Flag, to: "_cli.html", required: false, help: "also write a self-contained report to <out>/check.html", short: None, value_name: None },
         ],
         positional: &[("BACKTEST...", "backtest", true)],
+        globals: Globals::None,
+        hidden: false,
+    },
+    Cmd {
+        path: &["data", "add"],
+        imp: Implementation::Python,
+        about: "ingest order-level files into one dataset, format, venue and date inferred",
+        flags: &[
+            Flag { long: "out", kind: Kind::Str, to: "_cli.out", required: true, help: "the dataset directory (created, or added to)", short: None, value_name: Some("DIR") },
+            Flag { long: "input-format", kind: Kind::Enum(&["itch", "dbn", "etcsv", "parquet", "bitstamp", "bitfinex", "coinbase", "coinbase-level3", "kraken-l3", "hyperliquid-node", "tardis-l2", "iex-deep-plus", "nyse-ibf"]), to: "_cli.input_format", required: false, help: "source format, when it cannot be read from the files", short: None, value_name: None },
+            Flag { long: "venue", kind: Kind::Str, to: "_cli.venue", required: false, help: "venue rule set, when the format does not decide it (nasdaq, cme, generic, ...)", short: None, value_name: Some("VENUE") },
+            Flag { long: "date", kind: Kind::Str, to: "_cli.date", required: false, help: "session date, when neither the name nor a manifest gives it", short: None, value_name: Some("YYYY-MM-DD") },
+            Flag { long: "symbols", kind: Kind::Str, to: "_cli.symbols", required: false, help: "keep only these symbols (comma separated)", short: None, value_name: Some("S,S") },
+            Flag { long: "json", kind: Kind::Flag, to: "_cli.json", required: false, help: "print the full summary as JSON (as --format json)", short: None, value_name: None },
+        ],
+        positional: &[("FILE...", "files", true)],
+        globals: Globals::None,
+        hidden: false,
+    },
+    Cmd {
+        path: &["data", "fetch"],
+        imp: Implementation::Python,
+        about: "fetch a free public day into a dataset (iex: IEX DEEP+)",
+        flags: &[
+            Flag { long: "date", kind: Kind::Str, to: "_cli.date", required: true, help: "the trading day", short: None, value_name: Some("YYYY-MM-DD") },
+            Flag { long: "symbols", kind: Kind::Str, to: "_cli.symbols", required: true, help: "symbols to keep (comma separated)", short: None, value_name: Some("S,S") },
+            Flag { long: "out", kind: Kind::Str, to: "_cli.out", required: false, help: "the dataset directory (default iex-<date>; an existing one gains the day)", short: None, value_name: Some("DIR") },
+            Flag { long: "yes", kind: Kind::Flag, to: "_cli.yes", required: false, help: "download without asking", short: Some('y'), value_name: None },
+            Flag { long: "dry-run", kind: Kind::Flag, to: "_cli.dry_run", required: false, help: "show what would be downloaded and where, then stop", short: None, value_name: None },
+            Flag { long: "url", kind: Kind::Str, to: "_cli.url", required: false, help: "stream this URL instead of IEX's bucket (a mirror of the day's file)", short: None, value_name: Some("URL") },
+            Flag { long: "json", kind: Kind::Flag, to: "_cli.json", required: false, help: "print the full summary as JSON (as --format json)", short: None, value_name: None },
+        ],
+        positional: &[("SOURCE", "source", true)],
         globals: Globals::None,
         hidden: false,
     },

@@ -5324,6 +5324,128 @@
   {
     "argv": [
       "queuetruth",
+      "data",
+      "add",
+      "12302019.NASDAQ_ITCH50.gz",
+      "01302020.NASDAQ_ITCH50.gz",
+      "--out",
+      "nasdaq",
+      "--input-format",
+      "itch",
+      "--venue",
+      "nasdaq",
+      "--date",
+      "2019-12-30",
+      "--symbols",
+      "AAPL,MSFT",
+      "--json"
+    ],
+    "command": {
+      "path": [
+        "data",
+        "add"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "out": "nasdaq",
+          "input_format": "itch",
+          "venue": "nasdaq",
+          "date": "2019-12-30",
+          "symbols": "AAPL,MSFT",
+          "json": true
+        },
+        "files": [
+          "12302019.NASDAQ_ITCH50.gz",
+          "01302020.NASDAQ_ITCH50.gz"
+        ]
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "data",
+      "fetch",
+      "iex",
+      "--date",
+      "2026-10-09",
+      "--symbols",
+      "AAPL,MSFT",
+      "--out",
+      "iex-aapl",
+      "--yes",
+      "--dry-run",
+      "--url",
+      "http://127.0.0.1:8000/day.pcap.gz",
+      "--json"
+    ],
+    "command": {
+      "path": [
+        "data",
+        "fetch"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "date": "2026-10-09",
+          "symbols": "AAPL,MSFT",
+          "out": "iex-aapl",
+          "yes": true,
+          "dry_run": true,
+          "url": "http://127.0.0.1:8000/day.pcap.gz",
+          "json": true
+        },
+        "source": "iex"
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "demo",
+      "--backtester",
+      "hftbacktest",
+      "--minutes",
+      "1"
+    ],
+    "command": {
+      "path": [
+        "demo"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "_cli": {
+          "minutes": 1,
+          "backtester": "hftbacktest"
+        }
+      },
+      "implementation": "python"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
       "compare",
       "--backtest",
       "backtest-result.zip",

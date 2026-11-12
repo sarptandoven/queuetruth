@@ -290,3 +290,38 @@ def test_html_escapes_input_text(first: tuple[DemoSummary, Path]) -> None:
     evil.data.symbols = ["<b>AAPL</b>"]
     page = render_html(evil)
     assert "<script" not in page and "<b>AAPL" not in page and "&lt;script&gt;" in page
+
+
+@pytest.mark.parametrize(
+    ("backtester", "model", "subject", "column"),
+    [
+        ("hftbacktest", "hbt_log2[exch=no_partial]", "hftbacktest's default queue model", "hftbacktest default"),
+        ("databento", "databento_mc[k=-0.8;particles=100]", "Databento's queue estimator", "Databento estimator"),
+    ],
+)
+def test_backtester_answers_about_that_librarys_default(
+    first: tuple[DemoSummary, Path], itch_gz: Path, backtester: str, model: str, subject: str, column: str
+) -> None:
+    from queuetruth.demo.cli import render
+
+    s0, tmp = first
+    s = run_demo(_opts(itch_gz, tmp, f"bt-{backtester}", backtester=backtester))
+    assert A.short_id(s.headline.model_id) == model and s.headline.backtester == backtester
+    assert s.headline.sentence.startswith(f"Within 1 s, {subject} fills ")
+    assert s.spec["backtester"] == backtester and s.run_id != s0.run_id and s.reference is None
+    # the same orders and exact labels as the default run; the headline cells are the zoo's numbers of the model
+    exact = {k: c.exact_fill_rate for k, c in s.headline.cells.items()}
+    assert exact == {k: c.exact_fill_rate for k, c in s0.headline.cells.items()}
+    row = next(m for m in s.models if m.model_id == model)
+    assert {k: c.bias for k, c in row.cells.items()} == {k: c.bias for k, c in s.headline.cells.items()}
+    text = render(s)
+    assert subject in text and column in text and "NautilusTrader default" not in text
+    page = Path(s.outputs.html).read_text()
+    assert column in page and "NautilusTrader default" not in page
+
+
+def test_the_default_backtester_keeps_the_run_id(first: tuple[DemoSummary, Path], itch_gz: Path) -> None:
+    s0, tmp = first
+    s = run_demo(_opts(itch_gz, tmp, "bt-nautilus", backtester="nautilus"))
+    assert s.run_id == s0.run_id and s.headline.sentence == s0.headline.sentence and "backtester" not in s.spec
+    assert s0.headline.backtester == "nautilus"

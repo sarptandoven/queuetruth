@@ -142,6 +142,33 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   `--data` it says what it needs and exits 2; the estimate from the atlas comes later. Guide:
   docs/how-to/check-my-backtest.md.
 
+- **`queuetruth data add FILES --out DATASET`** (and `qt.data.add`): order-level files into one dataset in one
+  command. The format is read from the files' first bytes (ITCH 5.0, IEX DEEP+ pcap and pcapng, DBN plain or zstd,
+  NYSE TAQ Integrated Feed by its product name, Tardis L2 CSV, the Bitstamp, Bitfinex, Coinbase, Kraken and
+  Hyperliquid captures), the venue from the format or the DBN dataset code, and the ITCH session date from the file
+  name or a `manifest.json` next to it (so the demo's cached `subset.itch50.gz` needs no flags). It asks for
+  `--input-format`, `--venue` or `--date` only when a file does not say, and says why. Several files and days go
+  into one dataset, and an existing dataset at `--out` gains the new days; a failed run leaves it as it was. It runs
+  the dq battery on the result and prints the answer first (symbols, dates, records, data quality), then one line
+  per day with its session span in venue-local time, instead of the counter dump of `ingest`. The merge of
+  `scripts/realdata/merge_datasets.py` moved into the package (`queuetruth.data.merge`); the script still works and
+  now keeps the trading halts of every day, not only the first. `ingest` is unchanged. Guide:
+  docs/how-to/add-data.md.
+
+- **`queuetruth data fetch iex --date YYYY-MM-DD --symbols AAPL,MSFT`** (and `qt.data.fetch_iex`): a free IEX DEEP+
+  day from IEX's public bucket, streamed once and never stored, filtered to the symbols you ask for by the Rust IEX
+  split engine, ingested and checked as `data add` does. Nothing is downloaded until you agree (a prompt on a
+  terminal, or `--yes`; `--dry-run` shows the plan). IEX's citation and terms link are recorded in the dataset
+  manifest under the new optional `attribution` field (`qt.dataset_manifest`; absent from datasets without one, so
+  their bytes do not change).
+
+- **`queuetruth demo --backtester hftbacktest|nautilus|databento`**: the demo's answer is about the chosen library's
+  default setting. hftbacktest's is `BacktestAsset()` with no queue model or exchange set (`log_prob_queue_model2()`
+  with `no_partial_fill_exchange()`, the zoo's `hbt_log2[exch=no_partial]`, added to the run); Databento's is the
+  queue estimator of its tutorial (`databento_mc[k=-0.8;particles=100]`). NautilusTrader stays the default, with the
+  same models, answer and run id as before. `--models` must include the chosen library's setting; the error now says
+  so and points to `--backtester`. `qt.demo_summary` gains `headline.backtester`.
+
 - **The statistics practitioners ask for, in `score`** (hftbacktest discussion #332; new how-to
   [Validate my backtest against live fills](docs/how-to/validate-against-live.md)):
   - Time-to-fill survival curves: summary field `ttf_survival` (schema 1.3) holds a Kaplan-Meier curve per arm on the

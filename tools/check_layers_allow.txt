@@ -35,6 +35,10 @@ queuetruth.compare.cli -> queuetruth.live.reconcile_cli._options  # private
 queuetruth.compare.run -> queuetruth.api  # cycle
 queuetruth.compare.run -> queuetruth.check.symbols  # cycle
 queuetruth.compare.run -> queuetruth.pm.cli  # layer
+queuetruth.data.iex -> queuetruth.demo.fetch  # layer
+queuetruth.data.iex -> queuetruth.demo.iex  # layer
+queuetruth.data.iex -> queuetruth.demo.sources  # layer
+queuetruth.data.infer -> queuetruth.demo.sources  # layer
 queuetruth.demo.answer -> queuetruth.api._model_matches  # private
 queuetruth.demo.answer -> queuetruth.eval._cols  # private
 queuetruth.demo.cli -> queuetruth.cli._emit_error  # private

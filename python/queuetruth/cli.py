@@ -1260,6 +1260,7 @@ def main(argv: list[str] | None = None) -> int:
         "reconcile",
         "atlas",
         "check",
+        "data",
         "fit",
         "compare",
     )
@@ -1299,6 +1300,10 @@ def main(argv: list[str] | None = None) -> int:
     from queuetruth.check.cli import maybe_main as check_main  # `check` (Python-only grammar)
 
     if (rc := check_main(args)) is not None:
+        return rc
+    from queuetruth.data.cli import maybe_main as data_main  # `data add`, `data fetch` (Python-only grammar)
+
+    if (rc := data_main(args)) is not None:
         return rc
     from queuetruth.fit.cli import maybe_main as fit_main  # `fit` (Python-only grammar)
 

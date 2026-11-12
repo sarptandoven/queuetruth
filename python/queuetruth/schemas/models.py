@@ -156,6 +156,19 @@ class SourceVintage(QtModel):
     publisher_id: int | None = None
 
 
+class Attribution(QtModel):
+    """1.2: the provider of a dataset's data, its required citation and its terms."""
+
+    #: The source, e.g. `IEX DEEP+ (IEX HIST)`.
+    source: str
+    #: The citation the terms require, verbatim.
+    text: str
+    #: The terms of use.
+    terms_url: str
+    #: Where the data was read from.
+    url: str | None = None
+
+
 class DatasetManifest(QtDoc):
     """`manifest.json` of a dataset directory (SPEC 3.3)."""
 
@@ -177,6 +190,9 @@ class DatasetManifest(QtDoc):
     #: 1.1: data vintage per source file (one entry per input; a list because datasets may have several inputs);
     #: null = not recorded.
     source_vintage: list[SourceVintage] | None = None
+    #: 1.2: who provided the data and on which terms (`queuetruth data fetch iex` records IEX's citation); absent =
+    #: not recorded.
+    attribution: list[Attribution] | None = None
 
 
 class FeedGap(QtModel):

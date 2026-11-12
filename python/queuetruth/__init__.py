@@ -42,8 +42,9 @@ from queuetruth.errors import QtApiError, QtError
 #: command but `fit-hazard` needs.
 _LAZY = {"HazardModel": "queuetruth.model"}
 #: Submodules imported on first access, so `qt.backtrader.QueueFiller` works after `import queuetruth as qt`
-#: (the framework modules import their framework only when used).
-_LAZY_MODULES = ("backtesters", "backtrader", "lean")
+#: (the framework modules import their framework only when used), and `qt.data` (`queuetruth data add`,
+#: `data fetch iex`).
+_LAZY_MODULES = ("backtesters", "backtrader", "data", "lean")
 
 
 def __getattr__(name: str) -> Any:
@@ -106,6 +107,7 @@ __all__ = [
     "calibrate_live",
     "check",
     "compare",
+    "data",
     "export",
     "extract_features",
     "fit",
