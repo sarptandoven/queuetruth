@@ -100,6 +100,7 @@ without the line. `queuetruth help VERB` shows a verb's help.
 | [`queuetruth advanced schema list`](#queuetruth-advanced-schema-list) | list JSON document schemas and Arrow tables |
 | [`queuetruth advanced schema show`](#queuetruth-advanced-schema-show) | print a JSON Schema (qt.<doc>) or an Arrow table schema (qt.<table>) |
 | [`queuetruth advanced doctor`](#queuetruth-advanced-doctor) | check the installation |
+| [`queuetruth advanced run`](#queuetruth-advanced-run) | run any operation from a JSON spec (run --list names them) |
 | [`queuetruth advanced mcp`](#queuetruth-advanced-mcp) | MCP server |
 | [`queuetruth advanced mcp serve`](#queuetruth-advanced-mcp-serve) | MCP stdio server |
 | [`queuetruth advanced forecast`](#queuetruth-advanced-forecast) | forecast referee: hash-chained forecast ledger, proper scores, calibration and executable PnL |
@@ -879,6 +880,7 @@ Commands:
   jobs            HTTP API jobs
   schema          published schemas
   doctor          check the installation
+  run             run any operation from a JSON spec (run --list names them)
   mcp             MCP server
   forecast        forecast referee: hash-chained forecast ledger, proper scores, calibration and executable PnL
   ledger          trial ledger: every run and variant tried, hash-chained
@@ -2162,6 +2164,29 @@ check the installation
 Usage: queuetruth advanced doctor [OPTIONS]
 
 Options:
+  -h, --help                        Print help
+      --log-level <log_level>       stderr log level (default warn) [possible values: error, warn, info, debug]
+      --output-format <human|json>  output format (also --format human|json) [possible values: human, json]
+      --quiet                       no progress or warnings on stderr
+      --seed <seed>                 random seed (default 0)
+      --threads <threads>           worker threads (outputs do not depend on it; default 1)
+      --verbose                     human output: every summary field after the answer; every warning and note on stderr
+```
+
+## queuetruth advanced run
+
+```text
+run any operation from a JSON spec (run --list names them)
+
+Usage: queuetruth advanced run [OPTIONS] [operation]
+
+Arguments:
+  [operation]  operation name, as `run --list` prints it (replay, shadows, score, ...)
+
+Options:
+      --spec <VALUE>                JSON spec file of the operation, or - for standard input
+      --out <VALUE>                 output directory (replaces the spec's output field)
+      --list                        list the operations: name, description, spec schema
   -h, --help                        Print help
       --log-level <log_level>       stderr log level (default warn) [possible values: error, warn, info, debug]
       --output-format <human|json>  output format (also --format human|json) [possible values: human, json]

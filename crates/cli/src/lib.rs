@@ -15,9 +15,12 @@ mod grammar;
 mod human;
 mod live_importers;
 mod native;
+pub mod operations;
 pub mod ops;
 mod python_commands;
+pub mod run_op;
 mod schemas;
+mod spec_check;
 
 use clap::error::ErrorKind;
 use qt_schema::json::ErrorDoc;
@@ -201,7 +204,7 @@ pub fn route(argv: &[String]) -> Routed {
 
 /// Parses argv (including the program name). `advanced CMD ...` parses to the same command as `CMD ...`.
 pub fn parse(argv: &[String]) -> Result<CliCommand, CliExit> {
-    let json_out = wants_json(argv);
+    let json_out = wants_json(argv) || runs_operation_argv(argv);
     let bin: &'static str = match argv.first() {
         Some(p) if p.ends_with("queuetruth-core") => "queuetruth-core",
         _ => "queuetruth",
@@ -271,7 +274,7 @@ pub fn parse(argv: &[String]) -> Result<CliCommand, CliExit> {
         });
     }
     let (args, implementation) = grammar::build_args(cmd, leaf, &m)
-        .map_err(|msg| usage_exit(&msg, None, global.format == OutputFormat::Json))?;
+        .map_err(|msg| usage_exit(&msg, None, json_out || global.format == OutputFormat::Json))?;
     Ok(CliCommand {
         path,
         global,
@@ -449,6 +452,21 @@ pub fn main_with(argv: &[String]) -> (String, String, i32) {
     (out, err, code)
 }
 
+/// argv runs `run <op>` (or `advanced run <op>`), not `run --list`: its usage errors are JSON too.
+fn runs_operation_argv(argv: &[String]) -> bool {
+    let Some(i) = command_index(argv) else {
+        return false;
+    };
+    let at = |j: usize| argv.get(j).map(String::as_str);
+    let run = at(i) == Some("run") || (at(i) == Some(grammar::ADVANCED) && at(i + 1) == Some("run"));
+    run && !argv[i..].iter().any(|a| a == "--list" || a == "--help" || a == "-h")
+}
+
+/// `run <op> --spec FILE`: its document and errors are JSON whatever `--format` says.
+pub fn runs_operation(cmd: &CliCommand) -> bool {
+    cmd.path == ["run"] && !cmd.args.get("list").and_then(Value::as_bool).unwrap_or(false)
+}
+
 fn run_routed(argv: &[String]) -> (String, String, i32) {
     let cmd = match parse(argv) {
         Ok(c) => c,
@@ -460,7 +478,8 @@ fn run_routed(argv: &[String]) -> (String, String, i32) {
             };
         }
     };
-    let json_out = cmd.global.format == OutputFormat::Json;
+    // `run <op>` prints the operation's document, and its errors, as JSON (`run --list` follows --format)
+    let json_out = cmd.global.format == OutputFormat::Json || runs_operation(&cmd);
     if cmd.implementation == Implementation::Python {
         let e = QtError::Usage(format!(
             "`{}` requires the Python package (pip install queuetruth)",

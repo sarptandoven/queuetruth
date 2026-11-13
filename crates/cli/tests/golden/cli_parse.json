@@ -10573,5 +10573,164 @@
       },
       "implementation": "native"
     }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "run",
+      "replay",
+      "--spec",
+      "replay.json",
+      "--out",
+      "out"
+    ],
+    "command": {
+      "path": [
+        "run"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "spec": "replay.json",
+        "out": "out",
+        "operation": "replay"
+      },
+      "implementation": "hybrid"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "advanced",
+      "run",
+      "replay",
+      "--spec",
+      "replay.json",
+      "--out",
+      "out"
+    ],
+    "command": {
+      "path": [
+        "run"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "spec": "replay.json",
+        "out": "out",
+        "operation": "replay"
+      },
+      "implementation": "hybrid"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth-core",
+      "run",
+      "shadows",
+      "--spec",
+      "-"
+    ],
+    "command": {
+      "path": [
+        "run"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "spec": "-",
+        "operation": "shadows"
+      },
+      "implementation": "hybrid"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth-core",
+      "advanced",
+      "run",
+      "shadows",
+      "--spec",
+      "-"
+    ],
+    "command": {
+      "path": [
+        "run"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "spec": "-",
+        "operation": "shadows"
+      },
+      "implementation": "hybrid"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "run",
+      "--list"
+    ],
+    "command": {
+      "path": [
+        "run"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "list": true
+      },
+      "implementation": "hybrid"
+    }
+  },
+  {
+    "argv": [
+      "queuetruth",
+      "advanced",
+      "run",
+      "--list"
+    ],
+    "command": {
+      "path": [
+        "run"
+      ],
+      "global": {
+        "format": "human",
+        "log_level": "warn",
+        "threads": 1,
+        "seed": 0,
+        "quiet": false
+      },
+      "args": {
+        "list": true
+      },
+      "implementation": "hybrid"
+    }
   }
 ]
