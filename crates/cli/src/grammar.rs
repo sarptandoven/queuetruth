@@ -6,6 +6,10 @@
 //! text, the validation and the JSON. Options that are not spec fields (the scorer's evaluation window, job
 //! polling, ...) go under the reserved key `_cli` of the arguments.
 //!
+//! The flags of the commands that map field by field onto their spec (`shadows sample`, `shadows mirror-real`) are
+//! generated from the spec's JSON Schema into `flags_gen.rs` by `crates/cli/gen_flags.py`, with its small table of
+//! overrides; a new spec field becomes a flag through `make generate`.
+//!
 //! The Python-only groups (`demo`, `forecast`, `ledger`, `pm` and the certificate commands), which
 //! `queuetruth.cli.main` runs with their own argparse parsers before this grammar, are the rows of
 //! `python_commands::PYTHON_COMMANDS`, generated from those parsers by `crates/cli/gen_python_commands.py`; they
@@ -153,7 +157,6 @@ const TRAJ: &[&str] = &["none", "ahead", "full"];
 const TRADES: &[&str] = &["before", "after"];
 const MODE: &[&str] = &["faithful", "corrected"];
 const EXCH: &[&str] = &["partial", "no-partial"];
-const ALLOCATION: &[&str] = &["equal", "proportional", "per-partition"];
 const ENTRY: &[&str] = &["exchange-ack", "send-plus-latency"];
 const POPULATION: &[&str] = &["shadows", "real-orders"];
 const SPLIT: &[&str] = &["auto", "days", "blocks"];
@@ -416,40 +419,7 @@ pub(crate) const COMMANDS: &[Cmd] = &[
         path: &["shadows", "sample"],
         imp: Implementation::Native,
         about: "seeded random shadow orders",
-        flags: &[
-            DATA,
-            r("n", Kind::Int, "n", "number of shadows"),
-            r("out", Kind::Str, "out", "output shadow spec file"),
-            f("placements", Kind::Placements, "placements", "OFFSET:WEIGHT,..."),
-            f("qty", Kind::Qty, "qty", "lots:N:WEIGHT,median:WEIGHT"),
-            f("lifetime", Kind::Dur, "lifetime_ns", "shadow lifetime"),
-            f("latency-ns", Kind::Dur, "latency_ns", "shadow latency"),
-            f(
-                "window-open-s",
-                Kind::Int,
-                "window_open_s",
-                "seconds after the open excluded",
-            ),
-            f(
-                "window-close-s",
-                Kind::Int,
-                "window_close_s",
-                "seconds before the close excluded",
-            ),
-            f(
-                "allow-past-end",
-                Kind::NoFlag,
-                "clamp_to_data_end",
-                "do not shorten the placement window so that every life fits in the data",
-            ),
-            f(
-                "allocation",
-                Kind::Enum(ALLOCATION),
-                "allocation",
-                "allocation across instrument-days",
-            ),
-            f("sides", Kind::StrList, "sides", "sides to sample (B,A)"),
-        ],
+        flags: crate::flags_gen::SHADOWS_SAMPLE,
         positional: &[],
         globals: Globals::Seed,
         hidden: false,
@@ -458,17 +428,7 @@ pub(crate) const COMMANDS: &[Cmd] = &[
         path: &["shadows", "mirror-real"],
         imp: Implementation::Native,
         about: "shadows joining directly behind sampled real orders",
-        flags: &[
-            DATA,
-            r("out", Kind::Str, "out", "output shadow spec file"),
-            f("n", Kind::Int, "n", "number of shadows"),
-            f(
-                "no-stratify",
-                Kind::NoFlag,
-                "stratify",
-                "do not stratify by instrument and outcome",
-            ),
-        ],
+        flags: crate::flags_gen::SHADOWS_MIRROR_REAL,
         positional: &[],
         globals: Globals::Seed,
         hidden: false,

@@ -4001,12 +4001,12 @@ File: `schemas/json/qt.mirror_spec.schema.json`.
 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `dataset` | PathRef or DatasetIdRef | yes |  |  |
-| `out` | string or null | no | `null` |  |
-| `n` | integer | no | `3000` |  |
-| `seed` | integer | no | `0` |  |
-| `stratify` | boolean | no | `true` |  |
-| `placement` | const "behind_real" | no | `"behind_real"` |  |
+| `dataset` | PathRef or DatasetIdRef | yes |  | Dataset directory. |
+| `out` | string or null | no | `null` | Output shadow spec file (Parquet). |
+| `n` | integer | no | `3000` | Number of shadows. |
+| `seed` | integer | no | `0` | Random seed. |
+| `stratify` | boolean | no | `true` | Stratify the sampled real orders by instrument and outcome. |
+| `placement` | const "behind_real" | no | `"behind_real"` | Where each shadow joins: behind_real. |
 
 **`DatasetIdRef`** (in `qt.mirror_spec`)
 
@@ -6733,20 +6733,20 @@ File: `schemas/json/qt.shadow_sample_spec.schema.json`.
 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `dataset` | PathRef or DatasetIdRef | yes |  |  |
-| `out` | string or null | no | `null` |  |
-| `n` | integer | yes |  |  |
-| `seed` | integer | no | `0` |  |
-| `allocation` | one of "equal", "proportional", "per_partition" | no | `"equal"` |  |
-| `partition_quotas` | map of integer | no |  |  |
-| `sides` | array of one of "B", "A" | no |  |  |
-| `placements` | array of Placement | no |  |  |
-| `qty` | array of QtyRule | no |  |  |
-| `window_open_s` | integer | no | `300` |  |
-| `window_close_s` | integer | no | `600` |  |
-| `lifetime_ns` | integer | no | `300000000000` |  |
-| `latency_ns` | integer | no | `0` |  |
-| `clamp_to_data_end` | boolean | no | `true` |  |
+| `dataset` | PathRef or DatasetIdRef | yes |  | Dataset directory. |
+| `out` | string or null | no | `null` | Output shadow spec file (Parquet). |
+| `n` | integer | yes |  | Number of shadows. |
+| `seed` | integer | no | `0` | Random seed. |
+| `allocation` | one of "equal", "proportional", "per_partition" | no | `"equal"` | How the shadows are spread across instrument-days. |
+| `partition_quotas` | map of integer | no |  | Shadows per instrument-day with allocation per_partition, by instrument id or instrument id and date; other instrument-days get n. |
+| `sides` | array of one of "B", "A" | no |  | Sides to sample. |
+| `placements` | array of Placement | no |  | Placement offsets in ticks from the best price of the shadow's side, with their weights. |
+| `qty` | array of QtyRule | no |  | Size rules with their weights: a fixed number of lots, or the median order size. |
+| `window_open_s` | integer | no | `300` | Seconds after the open when no shadow is placed. |
+| `window_close_s` | integer | no | `600` | Seconds before the close when no shadow is placed. |
+| `lifetime_ns` | integer | no | `300000000000` | Shadow lifetime: it is cancelled after this. |
+| `latency_ns` | integer | no | `0` | Shadow latency. |
+| `clamp_to_data_end` | boolean | no | `true` | Shorten the placement window so that every life fits in the data; false keeps the window and lives may run past the end. |
 
 **`DatasetIdRef`** (in `qt.shadow_sample_spec`)
 

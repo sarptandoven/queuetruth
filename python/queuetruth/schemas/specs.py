@@ -268,35 +268,51 @@ class ReplaySpec(SpecModel):
 class ShadowSampleSpec(SpecModel):
     """`shadows sample`: seeded random shadow orders."""
 
-    dataset: DatasetRef
-    out: str | None = None
-    n: Annotated[int, Field(ge=0)]
-    seed: NonNegInt = 0
-    allocation: Literal["equal", "proportional", "per_partition"] = "equal"
+    dataset: DatasetRef = Field(description="Dataset directory.")
+    out: str | None = Field(None, description="Output shadow spec file (Parquet).")
+    n: Annotated[int, Field(ge=0, description="Number of shadows.")]
+    seed: NonNegInt = Field(0, description="Random seed.")
+    allocation: Literal["equal", "proportional", "per_partition"] = Field(
+        "equal", description="How the shadows are spread across instrument-days."
+    )
     #: Additive (W1 scale runs), `per_partition` only: shadows per instrument-day by key `"<instrument_id>"` or
     #: `"<instrument_id>_<YYYYMMDD>"` (the dated key wins); other instrument-days get `n`.
-    partition_quotas: dict[str, NonNegInt] = Field(default_factory=dict)
-    sides: list[Literal["B", "A"]] = Field(default_factory=lambda: ["B", "A"])
-    placements: list[Placement] = Field(default_factory=_default_placements)
-    qty: list[QtyRule] = Field(default_factory=_default_qty)
-    window_open_s: NonNegInt = 300
-    window_close_s: NonNegInt = 600
-    lifetime_ns: NonNegInt = 300_000_000_000
-    latency_ns: NonNegInt = 0
+    partition_quotas: dict[str, NonNegInt] = Field(
+        default_factory=dict,
+        description="Shadows per instrument-day with allocation per_partition, by instrument id or "
+        "instrument id and date; other instrument-days get n.",
+    )
+    sides: list[Literal["B", "A"]] = Field(default_factory=lambda: ["B", "A"], description="Sides to sample.")
+    placements: list[Placement] = Field(
+        default_factory=_default_placements,
+        description="Placement offsets in ticks from the best price of the shadow's side, with their weights.",
+    )
+    qty: list[QtyRule] = Field(
+        default_factory=_default_qty,
+        description="Size rules with their weights: a fixed number of lots, or the median order size.",
+    )
+    window_open_s: NonNegInt = Field(300, description="Seconds after the open when no shadow is placed.")
+    window_close_s: NonNegInt = Field(600, description="Seconds before the close when no shadow is placed.")
+    lifetime_ns: NonNegInt = Field(300_000_000_000, description="Shadow lifetime: it is cancelled after this.")
+    latency_ns: NonNegInt = Field(0, description="Shadow latency.")
     #: Place shadows no later than the end of the data minus `latency_ns + lifetime_ns`, so every life fits in the
     #: data (a warning names the shortened window); false keeps the window as it is (lives may run past the end).
-    clamp_to_data_end: bool = True
+    clamp_to_data_end: bool = Field(
+        True,
+        description="Shorten the placement window so that every life fits in the data; false keeps the window "
+        "and lives may run past the end.",
+    )
 
 
 class MirrorSpec(SpecModel):
     """`shadows mirror-real`: shadows joining directly behind sampled real orders."""
 
-    dataset: DatasetRef
-    out: str | None = None
-    n: Annotated[int, Field(ge=0)] = 3000
-    seed: NonNegInt = 0
-    stratify: bool = True
-    placement: Literal["behind_real"] = "behind_real"
+    dataset: DatasetRef = Field(description="Dataset directory.")
+    out: str | None = Field(None, description="Output shadow spec file (Parquet).")
+    n: Annotated[int, Field(ge=0, description="Number of shadows.")] = 3000
+    seed: NonNegInt = Field(0, description="Random seed.")
+    stratify: bool = Field(True, description="Stratify the sampled real orders by instrument and outcome.")
+    placement: Literal["behind_real"] = Field("behind_real", description="Where each shadow joins: behind_real.")
 
 
 class ZooSpec(SpecModel):

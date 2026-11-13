@@ -9,6 +9,7 @@
 #![forbid(unsafe_code)]
 
 mod bench;
+mod flags_gen;
 pub mod formats;
 mod grammar;
 mod human;
