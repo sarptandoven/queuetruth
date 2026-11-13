@@ -10,7 +10,7 @@ referenced from code and scripts.
 
 ## M0: Unblock (now)
 
-- Release 0.3.0 to PyPI and turn on GitHub Pages, so `pip install queuetruth` gives every documented command and the
+- Release to PyPI (0.4.0 is ready) and turn on GitHub Pages, so `pip install queuetruth` gives every documented command and the
   Fill-Realism Atlas (W1) has a public URL.
 - Valid intervals on short captures: with fewer than five bootstrap blocks, `zoo`, `report` and `zoo-toxicity` no
   longer print zero-width intervals or mark every model significant.

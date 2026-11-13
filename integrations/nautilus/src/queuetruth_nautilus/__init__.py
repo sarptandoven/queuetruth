@@ -40,7 +40,7 @@ from queuetruth_nautilus.venue import (
     venue_options,
 )
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "CalibrationRefused",

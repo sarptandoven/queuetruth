@@ -118,5 +118,8 @@ def test_release_refuses_a_bad_version_a_repeat_or_a_bad_fragment(tmp_path: Path
 
 
 def test_the_real_changelog_has_an_unreleased_section() -> None:
+    """The heading is always there; right after a release it has no entries yet, and fragments fill it."""
     out = cl.show()
-    assert out.startswith("## [Unreleased]\n\n### ")
+    assert out == "## [Unreleased]\n" or out.startswith("## [Unreleased]\n\n### ")
+    text = cl.CHANGELOG.read_text(encoding="utf-8")
+    assert text.count("## [Unreleased]\n") == 1 and text.index("## [Unreleased]") < text.index("\n## [0.")

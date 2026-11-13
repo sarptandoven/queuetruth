@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "queuetruth-hftbacktest"
-version = "0.1.0"
+version = "0.2.0"
 description = "Score hftbacktest fills against exact-queue truth and calibrate its queue model with queuetruth"
 readme = "README.md"
 license = "Apache-2.0"
@@ -25,7 +25,7 @@ classifiers = [
 ]
 # queuetruth does the replay, the import, the referee and the calibration. hftbacktest is not a dependency: it runs
 # in its own venv (its numba and numpy pins are not queuetruth's), which `run` calls by path.
-dependencies = ["queuetruth>=0.2.0,<0.4"]
+dependencies = ["queuetruth>=0.4.0,<0.5"]
 
 [project.optional-dependencies]
 test = ["pytest>=8"]

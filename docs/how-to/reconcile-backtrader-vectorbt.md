@@ -18,7 +18,8 @@ reads the backtester and the kind of live records from the files, imports a venu
 answers first. See [Compare my backtest with my live run](compare-backtest-and-live.md). This page shows the
 steps underneath, for scripts and for options `compare` does not expose.
 
-These importers and `queuetruth advanced reconcile` need queuetruth 0.3.0 or later. For a QuantConnect LEAN backtest, see
+These importers need queuetruth 0.3.0 or later; the `queuetruth advanced reconcile` spelling needs 0.4.0 (on 0.3.x
+the command is `queuetruth reconcile`). For a QuantConnect LEAN backtest, see
 [section 7](#7-quantconnect-lean): the same report, from LEAN's result and order-events JSON.
 
 **From the command line or Python.** `queuetruth advanced live import --venue sim-backtrader | sim-vectorbt` writes the
@@ -60,7 +61,7 @@ cerebro.addanalyzer(qt.backtrader.OrderLog)  # writes bt_orders.jsonl; path="run
 cerebro.run()
 ```
 
-`qt.backtrader.OrderLog` needs a queuetruth release after 0.3.0 and imports Backtrader only when you use it. On
+`qt.backtrader.OrderLog` needs queuetruth 0.4.0 or later and imports Backtrader only when you use it. On
 an older release, copy the analyzer from
 [python/queuetruth/backtrader.py](https://github.com/sarptandoven/queuetruth/blob/main/python/queuetruth/backtrader.py)
 (`_order_log_class`): it is the `QtOrderLog` class earlier versions of this page printed, and writes the same lines.

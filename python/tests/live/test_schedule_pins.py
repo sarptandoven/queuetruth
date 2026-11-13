@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import random
+import re
 import sys
 import warnings
 from pathlib import Path
@@ -52,7 +53,26 @@ def _table(t: pa.Table) -> dict[str, Any]:
             metadata=t.schema.metadata,
         )
     )
-    return {"schema": str(t.schema), "columns": h(ints.to_pydict())}
+    return {"schema": _versionless(str(t.schema)), "columns": h(ints.to_pydict())}
+
+
+#: The schema metadata names the engine version that wrote the table. The pins are about the schedule, not the
+#: release that built it, so both sides compare with the version replaced (the pins file itself is never rewritten).
+_ENGINE_VERSION = re.compile(r"qt\.engine_version: '[^']*'")
+
+
+def _versionless(schema: str) -> str:
+    return _ENGINE_VERSION.sub("qt.engine_version: '<engine version>'", schema)
+
+
+def _strip_versions(x: Any) -> Any:
+    if isinstance(x, dict):
+        return {
+            k: (_versionless(v) if k == "schema" and isinstance(v, str) else _strip_versions(v)) for k, v in x.items()
+        }
+    if isinstance(x, list):
+        return [_strip_versions(v) for v in x]
+    return x
 
 
 def _order(key: str, venue: str = "v", **kw: Any) -> dict[str, Any]:
@@ -300,7 +320,7 @@ def outputs(tmp: Path, *, core: bool) -> dict[str, Any]:
 
 
 def _pins() -> dict[str, Any]:
-    return json.loads(PINS_PATH.read_text(encoding="utf-8"))
+    return _strip_versions(json.loads(PINS_PATH.read_text(encoding="utf-8")))
 
 
 def test_live_schedule_is_pinned(tmp_path: Path) -> None:
