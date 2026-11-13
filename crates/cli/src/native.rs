@@ -132,6 +132,17 @@ pub(crate) fn run(cmd: &CliCommand) -> QtResult<NativeOutput> {
         ["export", "l2-npz"] => ok(to_value(&ops::export_l2_npz(&spec::<ExportSpec>(a, "export")?)?)?),
         ["schema", "list"] => ok(ops::schema_list()),
         ["schema", "show"] => ok(ops::schema_show(str_arg(a, "name")?)?),
+        ["run"] => {
+            if a.get("list").and_then(Value::as_bool).unwrap_or(false) {
+                return ok(crate::run_op::list());
+            }
+            let spec = crate::run_op::read_spec(str_arg(a, "spec")?)?;
+            ok(crate::run_op::run(
+                str_arg(a, "operation")?,
+                spec,
+                a.get("out").and_then(Value::as_str),
+            )?)
+        }
         ["doctor"] => {
             let d = ops::doctor();
             let failed = !d.problems.is_empty();

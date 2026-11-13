@@ -2,7 +2,8 @@
 
 `zoo`: `assign_strata`, `evaluate_zoo` (qt.zoo_errors + leaderboard on `common_population`). `baselines`:
 `baseline_predictions`, `join_features`. `leaderboard`: `rank_leaderboard` (by absolute fill-rate bias at a sort
-horizon, default 60 s), `bias_sentence` (one plain-English line per model). Semantics are stated in each submodule.
+horizon, default 60 s), `bias_sentence` (one plain-English line per model). `queuetruth.eval.markouts`: the one
+markout implementation (`markouts`, `PricePath`). Semantics are stated in each submodule.
 """
 
 from __future__ import annotations

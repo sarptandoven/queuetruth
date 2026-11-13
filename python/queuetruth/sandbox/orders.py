@@ -24,7 +24,7 @@ import pyarrow as pa
 
 from queuetruth.errors import QtError
 from queuetruth.sandbox._util import dec, money
-from queuetruth.score._io import make_table
+from queuetruth.schemas.schedule import amend_table, schedule_table
 
 #: Engine end states that end an order (in any replay).
 TERMINAL = {
@@ -157,7 +157,7 @@ def schedule(orders: list[Order], instrument_id: int) -> tuple[pa.Table, pa.Tabl
     """`qt.shadow_spec` and `qt.shadow_amend` tables of `orders` (input order)."""
     rows = [o.shadow_row(instrument_id) for o in orders]
     amends = [{"shadow_id": o.order_id, "ts_send": t, "new_qty": q} for o in orders for t, q in o.reduces]
-    return make_table("qt.shadow_spec", rows), make_table("qt.shadow_amend", amends)
+    return schedule_table(rows), amend_table(amends)
 
 
 def _status_of(end_state: str) -> tuple[str, str | None]:

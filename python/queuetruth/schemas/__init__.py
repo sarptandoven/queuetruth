@@ -9,8 +9,17 @@ from queuetruth.schemas.runid import (
     drop_v1_1_defaults,
     identity_document,
     is_ref,
+    resolve_ref,
     run_id,
     spec_echo,
+)
+from queuetruth.schemas.schedule import (
+    ScheduleAmend,
+    ScheduleLeg,
+    amend_rows,
+    amend_table,
+    schedule_rows,
+    schedule_table,
 )
 from queuetruth.schemas.specs import *  # noqa: F403
 from queuetruth.schemas.specs import SPEC_MODELS
@@ -35,13 +44,20 @@ __all__ = [
     "SCHEMAS",
     "SPEC_MODELS",
     "V1_1_DEFAULTS",  # noqa: F405  (module __getattr__: read from queuetruth._core on first use)
+    "ScheduleAmend",
+    "ScheduleLeg",
+    "amend_rows",
+    "amend_table",
     "arrow",
     "drop_v1_1_defaults",
     "features_schema",
     "identity_document",
     "is_ref",
     "parse_document",
+    "resolve_ref",
     "run_id",
+    "schedule_rows",
+    "schedule_table",
     "spec_echo",
 ]
 
