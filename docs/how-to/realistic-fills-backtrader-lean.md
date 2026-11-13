@@ -6,7 +6,7 @@ real: the price touched your limit and turned back before the queue in front of 
 models keep the backtester's own limit logic and accept each such fill with the probability that the real queue
 filled it.
 
-**You need:** the liquidity tier of your instruments. Nothing else: no order-level data of your own. The fill models
+**You need:** queuetruth 0.4.0 or later and the liquidity tier of your instruments. Nothing else: no order-level data of your own. The fill models
 read the atlas touch tables (`atlas/v1/touch.json`) through the same download-after-consent cache as `queuetruth
 atlas`: pass `yes=True` once and the cached copy works offline from then on. `table="touch.json"` reads a copy you
 saved instead.

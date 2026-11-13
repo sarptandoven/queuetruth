@@ -95,6 +95,12 @@ STEPS: tuple[Step, ...] = (
         fix="make schemas",
     ),
     Step(
+        "pm-schemas",
+        "the prediction-market kit's JSON and Arrow schemas (python/queuetruth/pm/schemas)",
+        _py("-c", "from queuetruth.pm.schemas import export; export()"),
+        ("python/queuetruth/pm/schemas/*.json",),
+    ),
+    Step(
         "rust-specs",
         "Rust spec and document structs from the JSON Schemas (crates/schema/src/specs_gen.rs, json_gen.rs)",
         _py("scripts/gen_rust_specs.py"),

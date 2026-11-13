@@ -120,9 +120,9 @@ install commands and versions are in the `integrations` job of `.github/workflow
   the flags of the advanced commands that map onto their spec, from the spec schemas; a new spec field becomes a
   flag, and a field that cannot needs an override or a reason in that script), `crates/cli/src/operations.rs` (step
   `operations`, `crates/cli/gen_operations.py`: the operation table for `queuetruth-core run`), the CLI golden files,
-  `docs/reference/`,
-  `docs/validated.md` and the README status block, the README chart, and the synthetic zoo, tape, referee and NYSE
-  fixtures. `--only STEP` runs one step. The steps that read the CLI grammar rebuild `queuetruth._core` first when
+  `docs/reference/`, `docs/validated.md` and the README status block, the README chart, the prediction-market kit's
+  schemas, and the synthetic zoo, tape, referee and NYSE fixtures. `--only STEP` runs one step. The steps that read
+  the CLI grammar rebuild `queuetruth._core` first when
   an earlier step changed a Rust file.
 - **Imports go down the layers.** In `python/queuetruth`: contracts, data adapters, engine, models, evaluation,
   operations, interfaces, products. No package imports another's private names. `tools/check_layers.py` (in

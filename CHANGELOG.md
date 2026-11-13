@@ -6,6 +6,21 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-13
+
+Six verbs answer the everyday questions, answer first and with an interval: `queuetruth check` (how wrong your
+backtest is: exactly with order-level data, or from the atlas touch tables without any), `fit` (the parameter that
+fixes your fill model, written only when it beats the default on held-out data), `compare` (backtest against live,
+order by order, with clustered intervals, discordant fills and `--watch` drift alerts), `data` (add files, or fetch a
+free IEX day), `atlas` (the Fill-Realism Atlas for your library and symbols) and `demo`. `--help` lists them first;
+every other command keeps working under `queuetruth advanced`. One line inside each framework (NautilusTrader,
+hftbacktest, Backtrader, LEAN, and `check` for Freqtrade, VectorBT and backtesting.py results), human units in every
+output, one result shape in Python, `queuetruth verify atlas`, and atlas v2 with touch tables and a data API. Inside,
+one way to do each thing: registries for formats, importers, queue models and backtesters, one dataset layer, one
+operation table behind the CLI, the service and MCP, contracts generated from the JSON Schemas, and run ids, seeds,
+the trust rule, the live-calibration likelihood and the prediction-market queue models in Rust. Published numbers
+are unchanged, and every schema change is additive.
+
 ### Added
 
 - **`queuetruth.dataset`: one way to open, read, check and write a dataset.** `open_dataset(path)` opens an
@@ -266,6 +281,90 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   `make test-hftbacktest-plugin` and `make test-extra` (which now also covers `actions/referee/tests`).
 - `make test-nautilus QT_NT_PYTHON=PY1:PY2` runs the queuetruth-nautilus suite once in each named interpreter.
 
+- **`queuetruth compare --watch` and `--once`**: the comparison runs again when new live records arrive (a live
+  directory or a growing file) and prints one line per check with the drift since the baseline window: the
+  fill-share gap, the P&L gap per order and the 1 s markout gap, each with its 95% interval, and an `ALERT:` line
+  when an interval excludes zero and the drift is at least `--alert-pp` (default 2), `--alert-ticks` (default
+  0.25) or `--alert-pnl` (off by default). Exit codes as `fit`: 0 no alert, 1 alert, 2 error. The state is
+  `<out>/watch.json`. No network and no notifications; the how-to shows cron and a CI schedule.
+- **`compare` says what the gap is made of.** A new answer line runs McNemar's test on the discordant fills (the
+  orders only one run filled), clustered by instrument and day (Obuchowski) when there are at least 5 such
+  clusters, and the same line for the exact queue against live with `--data`. With `--data` and a measured
+  latency, the latency is fitted before the queue (as `calibrate-live --latency-from-log`) and the answer says
+  which share of the exact queue's gap to live the latency explains. `compare.json` gains `discordance`,
+  `exact_discordance`, `latency_first` and `fills.interval`.
+
+- **`queuetruth compare --backtest B --live L [--data D]` and `qt.compare(...)`**: your backtest against your live
+  run, order by order, in one command (docs/how-to/compare-backtest-and-live.md). It reads the backtester from the
+  file (through the Backtester registry) and the live run's kind (a canonical live log, a bot's own database and
+  log, or a venue export) from its records, with `--backtester` and `--venue` to say them, then runs the existing
+  comparison: the reconciler for Freqtrade, Hummingbot, Backtrader, VectorBT and LEAN, and `score` with the
+  simulator arm for hftbacktest and NautilusTrader; with `--data` also the markouts, the P&L gap per order and the
+  exact arm. A venue export is imported first. No instrument map is needed for two logs of the same venue; with
+  `--data` the live instruments are matched to the dataset's symbols and only a name that matches none is asked
+  for. The answer comes first: how many of the backtest's fills happened live (with a 95% interval), the fills
+  only one side made and why, the P&L gap, time to fill (Kaplan-Meier, clustered log-rank), markouts at 100 ms,
+  1 s and 10 s, and the latency measured on the live log; then the orders that differ. It writes `orders.csv`
+  (symbols, decimal prices, venue-local times), `compare.json` and, with `--html`, `compare.html`. `reconcile` and
+  `score` are unchanged.
+
+- **`queuetruth advanced run OP --spec FILE` and `queuetruth-core run OP --spec FILE`.** Run any operation of the
+  table from a JSON spec (a file, or `-` for standard input), with `--out DIR` for its outputs. The result document
+  is printed as JSON; errors are `qt.error` documents with the usual exit codes. `run --list` prints the operations
+  with their spec schemas. `queuetruth-core` runs ingest, replay, shadows, shadows_mirror and features without
+  Python and checks every spec against its published JSON Schema; the other operations need the Python package.
+
+- **One line inside each framework, from a fit or from the atlas** (plan section 4.3; docs/how-to/fit-my-backtester.md
+  section 6). `qt.atlas.calibration(library, tier=None, symbol=None)` returns the atlas's closest NautilusTrader,
+  hftbacktest or Databento setting for a liquidity tier (`T1_top100`, or `T1`) or a symbol's tier as the same
+  `FitResult` that `qt.fit(...)` returns, with `source == "atlas"`, where it came from (atlas root, tier, horizon,
+  days) and the atlas verdict. It reads `configs.json` through the same download-after-consent cache as `queuetruth
+  atlas`. Both results now carry `settings` (what to set, in the library's own names; `fit.json` gains the field) and
+  `save(path)`. NautilusTrader: `engine.add_venue(..., **qtn.venue_options(calibration))` takes either result, a
+  `fit.json` or the old inputs (`queuetruth_nautilus.as_calibration`, `from_fit_document`). hftbacktest:
+  `asset = qthbt.configure(asset, calibration)` in `queuetruth-hftbacktest` sets the queue model and exchange on a
+  `BacktestAsset` from either result, a saved `fit.json` or the plugin's own `calibrate` result; it is standard
+  library only, so it runs in the hftbacktest venv. A refused fit raises `CalibrationRefused` unless `force=True`;
+  an atlas setting always warns that it is the atlas, not your data, and whether it is still clearly off.
+- **Backtrader and LEAN fill models without a table file.** `qt.backtrader.QueueFiller(tier="T1")` and
+  `qt.lean.QueueFillModel(tier="T1")` read the atlas touch tables (`qt.atlas.touch_tables`) through the same cache
+  when no `table=` is given (`yes=True` agrees to the download; `atlas=` names a local copy). A tier's short name
+  (`T1`) picks the atlas tier `T1_top100`.
+- **backtesting.py in `queuetruth check`.** `queuetruth check trades.csv` reads the trades of a backtesting.py
+  `Backtest.run()` result (`stats._trades` saved with `to_csv` or `to_json(orient="records")`; backtesting.py 0.6.6
+  columns): each trade is an entry and an exit order, checked as limit orders resting at their fill prices, with the
+  trade's commission split by notional. It is the `backtesting_py` entry of the `queuetruth.backtesters` registry,
+  with its `ImporterDef` in the importer registry (`live import --venue sim-backtesting-py`, generated by `make generate`).
+  backtesting.py is not a dependency; the docs show the two-line exporter.
+- **Docs blocks that need a framework run where it is installed**: `<!-- check-docs: run needs=MODULE -->` runs a
+  block only when the module is importable and skips it with the reason elsewhere. A synthetic atlas data API
+  (`tests/fixtures/atlas_synth`, invented numbers) backs the runnable atlas blocks and the plugin tests.
+
+- **One operation table and one runner.** Every operation (replay, zoo, calibrate, score and the others, and the
+  verbs `check`, `fit`, `compare`, `data`, `atlas`, `demo`) is declared once as an `OperationDef` in
+  `queuetruth.ops.table`, with its spec model, document model, what it touches and its cost.
+  `queuetruth.runner.run(name, spec, out=..., context=...)` validates the spec, keeps paths inside the caller's
+  roots, refuses the network unless allowed and returns the document, the answer line, the warnings and the files.
+  The service's jobs and the MCP run tools call it, so each gives the same document as Python.
+- **The verbs as MCP tools.** With `--allow-run`, `queuetruth mcp serve` also lists `qt_check`, `qt_fit`,
+  `qt_compare`, `qt_data`, `qt_atlas` and `qt_demo`, generated from the table and run in the same sandbox as the
+  other run tools; the first line of their text is the answer. A spec that needs the network is refused unless
+  `QT_MCP_ALLOW_NETWORK=1`. Every existing tool keeps its name, arguments and schemas.
+
+- **Every verb's result reads the same way** (plan section 4.2). `qt.check`, `qt.fit`, `qt.compare`, `qt.atlas.lookup`,
+  `qt.atlas.calibration`, `qt.data.add`, `qt.data.fetch_iex` and the new `qt.demo(backtester=..., minutes="5min")`
+  return results with `.summary` (the line the CLI prints first), `.table()` (a DataFrame in human units through
+  `queuetruth.frames`; nested intervals become `x`, `x_ci_lo`, `x_ci_hi` columns), `.interval` (the interval behind
+  the answer, in words), `.to_html()` (the CLI's page where it writes one), `.doc`, `.save(path)` (`.html`, `.csv`
+  or the JSON document) and a compact notebook view (the answer, the interval and the head of the table). The shared
+  part is `queuetruth.results.Result`; every existing attribute stays. `qt.check`, `qt.fit`, `qt.compare`, `qt.demo`,
+  `qt.atlas.lookup` and `qt.atlas.calibration` show typed signatures (`inspect.signature`, the Python API
+  reference), `qt.check(..., horizon="1s")` takes the P&L horizon and `qt.compare(..., window=...)` its window in any
+  `queuetruth.units` form.
+- **A notebook per framework** in `examples/notebooks/`: NautilusTrader, hftbacktest, Backtrader, LEAN, Freqtrade,
+  VectorBT and backtesting.py, each showing its one line on synthetic data and the synthetic atlas, stored with
+  outputs and an "Open in Colab" badge. A framework that is not installed shows its cell skipped with a message.
+
 ### Changed
 
 - **Durations read the same everywhere.** Text output, report pages and the sentences in summaries write horizons and
@@ -323,6 +422,82 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   Units of 300 peaked near 6.2 GB on every backfill day, so only two fit a 16 GB runner; on 2026-10-09 all 359 units
   of 100 peaked below 2.9 GB, four at a time. The day's tables do not change: per-symbol cells were identical and the
   tier sums equal up to the order of floating-point additions (at most 4e-14 relative).
+
+- **Docs quote the atlas window 2026-10-15 to 2026-11-11, with touch tables.** The README, the docs home page, the
+  atlas concept page and the NautilusTrader guide quote the 20 trading days after the touch-table backfill (265,351
+  symbol-days, 12,456 symbols; the exact queue fills 12.20% of small resting orders within 1 minute). The README and
+  the docs home page add the bar-backtest finding: of the fills a 1-minute-bar backtest books, about 1 in 9 had not
+  happened in the real queue by the end of the bar. The launch drafts use the window's figures throughout.
+
+- **Changelog fragments.** A pull request adds its changelog entry as one file, `changelog.d/<slug>.<section>.md`,
+  instead of editing `CHANGELOG.md`, so parallel pull requests no longer conflict on the changelog.
+  `python tools/changelog.py check` (in `make lint` and CI) validates the fragments, `show` previews the Unreleased
+  section and `release X.Y.Z` folds them into `CHANGELOG.md` at release. Entries already under Unreleased stay.
+
+- **`compare`'s share of the backtest's fills that happened live has a clustered interval.** Orders on the same
+  instrument and day are correlated, so the 95% interval now resamples instrument-by-day clusters. With fewer than
+  5 clusters it keeps the Wilson interval and the answer says why (`orders counted as independent: 2
+  instrument-day clusters, fewer than 5`).
+
+- **Run ids, seeds and the trust rule have one implementation, in Rust.** `queuetruth.schemas.runid.run_id`,
+  `identity_document` and `drop_v1_1_defaults`, `queuetruth.stats.stable_seed` and `bootstrap_seed`, and
+  `queuetruth.export.trust.annotate` call `queuetruth._core` instead of a Python copy. Names, signatures and bytes are
+  unchanged; a spec holding an integer outside 64 bits now raises `ValueError` instead of hashing.
+
+- **`calibrate-live` computes its likelihood in Rust.** The live-fill likelihood and its order-by-grid matrix run in
+  `crates/calib` (`qt_calib::live`); `queuetruth.score.calibrate_live.interval_loglik` keeps its signature. Fitted
+  parameters, intervals and `trust:` lines are unchanged; single likelihood values agree with the earlier NumPy
+  code to within 2e-16 relative.
+
+- **The prediction-market queue models run in Rust.** `queuetruth.pm.queue.Engine` calls `qt_zoo::pm::run` through
+  `queuetruth._core`, and the family lists come from one registry, `qt_zoo::pm::PM_FAMILIES`
+  (`queuetruth._core.pm_families()`). `Model`, `SimOrder`, `OrderResult` and `Engine` keep their names and
+  signatures. Fills, end states and the `pm calibrate` and `pm score` documents are unchanged; queue estimates of the
+  `power` and `log` families can differ in the last bit where NumPy used its AVX-512 kernels.
+
+- **One markouts function and one schedule builder.** Every markout (the scorer, the toxicity evaluation, the
+  prediction-market score, the sandbox and the shortfall decomposition) now comes from
+  `queuetruth.eval.markouts.markouts`, with the price path, censoring at the end of data, the sign convention and
+  the units as explicit settings. Every order schedule is built by `queuetruth.schemas.schedule` from one validated
+  row type (`ScheduleLeg`, `ScheduleAmend`). Every published number is unchanged, bit for bit.
+- **`read_schedule` checks its rows.** A schedule leg or amend with a missing column, a wrong type or a value out
+  of range is now `QT-INPUT-002` naming the leg, before the replay program is written.
+
+- The results of `check`, `compare`, `fit` and `data add` print a one-line `repr`
+  (`CheckResult('Your backtest filled ...')`) instead of the whole document, and `CheckResult` and `CompareResult`
+  in a notebook show the compact view; `to_html()` is the full page as before. `CheckResult.table()`,
+  `CompareResult.table()` and `DataResult.table()` now build the DataFrame through `queuetruth.frames` (nullable
+  integer and boolean dtypes).
+- `check` without data names the venue its touch tables come from as the atlas manifest names it (the published
+  atlas still reads "IEX DEEP+"), instead of always saying IEX DEEP+; the `qt.check_estimate` document gains
+  `atlas.venue_name`.
+
+- **Rust document structs generated from the JSON Schemas.** `crates/schema/src/json_gen.rs` is written by
+  `scripts/gen_rust_specs.py` (step `rust-specs` of `make generate`) from the document schemas, as the spec structs
+  are; `json.rs` keeps only the tag types, aliases and methods.
+
+- **Rust spec structs generated from the JSON Schemas.** `crates/schema/src/specs_gen.rs` is written by
+  `scripts/gen_rust_specs.py` (step `rust-specs` of `make generate`) from `schemas/json/qt.*_spec.schema.json`, so the
+  Rust mirrors of the specs can no longer drift from the published contract. `specs.rs` keeps only methods and checks.
+
+- **`queuetruth --help` shows the six verbs first.** It lists `demo`, `atlas`, `check`, `fit`, `compare` and
+  `data`, then the helpers `why` (also spelled `explain`), `report` and `verify`, then `advanced`. Every other
+  command runs as `queuetruth advanced CMD ...` with the same output, exit code and JSON; `queuetruth help advanced`
+  lists them. `queuetruth verify cert` is `verify-cert` as a `verify` subcommand. The CLI reference and the guides
+  use the new spellings, and `queuetruth data add` where it does the job of `ingest`.
+- **Operations moved into `queuetruth.ops`, one module per operation.** `queuetruth.api` re-exports every name it
+  had, so `qt.<name>` and `queuetruth.api.<name>` keep working.
+
+### Deprecated
+
+- `qt.check(..., markout=...)` is now `horizon=` and warns (`DeprecationWarning`); `queuetruth check --markout` is
+  unchanged.
+
+- **Advanced commands at the top level.** `queuetruth ingest`, `replay`, `shadows`, `zoo`, `calibrate`, `score`,
+  `reconcile`, `verify-cert` and the other commands under `advanced` still work at the top level and print one line
+  on stderr after the command, naming the new spelling and the verb that does the job where one does (for example
+  `zoo` and `shadows` -> `check`, `calibrate` and `export` -> `fit`, `ingest` and `dq` -> `data add`). `--quiet` or
+  `QT_NO_DEPRECATION=1` hides it; help and `doctor`, `mcp` and `bench` never print it.
 
 ### Fixed
 
@@ -386,6 +561,17 @@ The Python package, the Rust crates and `queuetruth._core` always share one vers
   once instead of once per group. Every output file is byte-identical to before (two real days, under both flag
   policies): 4.6 GB at peak and 13 minutes against 12.7 GB and 19 minutes. The 20 kept days combine in 42 minutes
   at 9.3 GB.
+
+- **Numbers in Rust-written `trust:` lines use Python's `.6g` form exactly.** `calibrate` wrote `0.00001` for
+  `1e-05`, `1000000` where rounding reaches `1e+06`, `0` for `-0` and `NaN` for `nan`; it now writes what Python
+  writes.
+
+- **Rust reads documents that leave out optional fields.** 55 optional fields of the JSON documents (for example
+  `qt.error` `hint`, `qt.job` `started_at`) were required by the Rust mirrors although the schemas allow them to be
+  absent; they now read as `null`. Rust still writes every field.
+
+- **`ShadowSampleSpec.partition_quotas` keeps its key order in Rust.** The Rust mirror sorted the keys when it wrote
+  the spec back; it now keeps them in the order given, as the schema and the Python model do.
 
 ## [0.3.0] - 2026-11-07
 
