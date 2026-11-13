@@ -448,9 +448,36 @@ fn calibration_view(v: &Value) -> Option<String> {
 /// Renders a command's summary for a terminal: the `why` event table (UTC times, decimal prices, bid/ask, the fill
 /// row marked, a conclusion line) and the calibration verdict lead; other commands (and `--verbose`, appended) use
 /// `render_human`.
+/// `run --list`: one line per operation (name, spec schema, description); `*` marks the ones `queuetruth-core`
+/// runs without Python.
+fn operations_view(v: &Value) -> Option<String> {
+    let rows = v.get("operations")?.as_array()?;
+    let name = |r: &Value| r.get("name").and_then(Value::as_str).unwrap_or("").to_owned();
+    let schema = |r: &Value| r.get("spec_schema").and_then(Value::as_str).unwrap_or("-").to_owned();
+    let w1 = rows.iter().map(|r| name(r).len()).max().unwrap_or(0) + 1;
+    let w2 = rows.iter().map(|r| schema(r).len()).max().unwrap_or(0);
+    let mut out =
+        String::from("operations (queuetruth advanced run NAME --spec FILE; * also runs in queuetruth-core):\n");
+    for r in rows {
+        let star = if r.get("native").and_then(Value::as_bool) == Some(true) {
+            "*"
+        } else {
+            ""
+        };
+        let desc = r.get("description").and_then(Value::as_str).unwrap_or("");
+        out.push_str(&format!(
+            "  {:<w1$}  {:<w2$}  {desc}\n",
+            format!("{}{star}", name(r)),
+            schema(r)
+        ));
+    }
+    Some(out.trim_end().to_owned())
+}
+
 pub fn render_human_cmd(cmd: &crate::CliCommand, v: &Value) -> String {
     let p: Vec<&str> = cmd.path.iter().map(String::as_str).collect();
     let view = match p.as_slice() {
+        ["run"] => operations_view(v),
         ["why"] => why_view(cmd, v),
         ["calibrate", _] => calibration_view(v),
         _ => None,

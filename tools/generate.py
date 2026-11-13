@@ -17,15 +17,16 @@ The steps, in order (a later step reads what an earlier one writes):
    Schemas and samples
 4. openapi: service/openapi.json
 5. python-commands: the clap rows of the Python-only command groups
-6. extension: rebuilds `queuetruth._core` (`make develop`) when a step above changed a Rust file; the steps
+6. operations: the operation table (`queuetruth.ops.table()`) as Rust rows for `queuetruth-core run`
+7. extension: rebuilds `queuetruth._core` (`make develop`) when a step above changed a Rust file; the steps
    below read the CLI grammar through it (write mode only)
-7. cli-golden: the CLI parse golden files (`QT_BLESS=1 cargo test -p queuetruth-cli --test cli_parse`)
-8. reference: docs/reference/*.md (CLI, Python API, HTTP API, MCP, schemas, importers)
-9. validated: docs/validated.md and the README status block
-10. readme-chart: docs/assets/fill-bias-1s.svg from docs/RESULTS.md
-11. zoo-fixtures: the O-ZOO-2 / O-ZOO-4 parity fixtures (python/tests/zoo/gen_fixtures.py)
-12. synth-fixtures: the synthetic tapes, own orders and referee fixtures (`make fixtures`)
-13. nyse-fixtures: the synthetic NYSE Integrated Feed days (`QT_BLESS=1 cargo test -p queuetruth-ingest`)
+8. cli-golden: the CLI parse golden files (`QT_BLESS=1 cargo test -p queuetruth-cli --test cli_parse`)
+9. reference: docs/reference/*.md (CLI, Python API, HTTP API, MCP, schemas, importers)
+10. validated: docs/validated.md and the README status block
+11. readme-chart: docs/assets/fill-bias-1s.svg from docs/RESULTS.md
+12. zoo-fixtures: the O-ZOO-2 / O-ZOO-4 parity fixtures (python/tests/zoo/gen_fixtures.py)
+13. synth-fixtures: the synthetic tapes, own orders and referee fixtures (`make fixtures`)
+14. nyse-fixtures: the synthetic NYSE Integrated Feed days (`QT_BLESS=1 cargo test -p queuetruth-ingest`)
 
 Not run here, on purpose: scripts/reference/gen_all.py (reference values from SciPy, statsmodels and R, frozen and
 recorded with their versions in PROVENANCE.json), and the one-off fixture writers that need an outside tool
@@ -111,6 +112,12 @@ STEPS: tuple[Step, ...] = (
         "clap rows of the Python-only command groups",
         _py("crates/cli/gen_python_commands.py"),
         ("crates/cli/src/python_commands.rs",),
+    ),
+    Step(
+        "operations",
+        "the operation table as Rust rows, for queuetruth-core run",
+        _py("crates/cli/gen_operations.py"),
+        ("crates/cli/src/operations.rs",),
     ),
     Step(
         "extension",

@@ -28,6 +28,11 @@ and runs the native commands (`ingest`, `replay`, `shadows sample`, `shadows mir
 `export l2-npz`, `referee fixtures`, `fixtures synth`) and the Rust part of the hybrid commands. Python-only commands
 exit 2 there with `QT-USAGE-001`. `queuetruth-core` standalone binaries are attached to each GitHub release.
 
+Every operation also runs from a JSON spec, without a command of its own: `queuetruth advanced run replay --spec
+replay.json` (or `--spec -` for standard input) prints the result document as JSON, and `queuetruth advanced run
+--list` names the operations and their spec schemas. `queuetruth-core run OP --spec FILE` does the same for ingest,
+replay, shadows, shadows_mirror and features, and checks the spec against its published JSON Schema first.
+
 Check the install:
 
 <!-- check-docs: run -->

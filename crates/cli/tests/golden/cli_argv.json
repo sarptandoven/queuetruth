@@ -4035,5 +4035,50 @@
     "100",
     "--out",
     "why.json"
+  ],
+  [
+    "queuetruth",
+    "run",
+    "replay",
+    "--spec",
+    "replay.json",
+    "--out",
+    "out"
+  ],
+  [
+    "queuetruth",
+    "advanced",
+    "run",
+    "replay",
+    "--spec",
+    "replay.json",
+    "--out",
+    "out"
+  ],
+  [
+    "queuetruth-core",
+    "run",
+    "shadows",
+    "--spec",
+    "-"
+  ],
+  [
+    "queuetruth-core",
+    "advanced",
+    "run",
+    "shadows",
+    "--spec",
+    "-"
+  ],
+  [
+    "queuetruth",
+    "run",
+    "--list"
+  ],
+  [
+    "queuetruth",
+    "advanced",
+    "run",
+    "--list"
   ]
 ]
